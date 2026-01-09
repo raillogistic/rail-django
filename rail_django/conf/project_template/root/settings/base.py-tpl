@@ -21,12 +21,12 @@ if os.environ.get('RAIL_STARTAPP') != 'true':
 
 # Application definition
 INSTALLED_APPS += [
-    '{{ project_name }}',
+    'root',
 ]
 
-ROOT_URLCONF = '{{ project_name }}.urls'
+ROOT_URLCONF = 'root.urls'
 
-WSGI_APPLICATION = '{{ project_name }}.wsgi.application'
+WSGI_APPLICATION = 'root.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
