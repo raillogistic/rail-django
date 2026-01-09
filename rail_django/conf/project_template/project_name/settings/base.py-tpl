@@ -1,4 +1,3 @@
-
 import sys
 import os
 from pathlib import Path
@@ -41,3 +40,246 @@ STATIC_URL = '/static/'
 
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 MEDIA_URL = '/media/'
+
+
+# Rail Django Configuration
+# Overriding defaults from rail_django.conf.framework_settings
+# This dictionary controls the behavior of the auto-generated GraphQL schema.
+RAIL_DJANGO_GRAPHQL = {
+    "schema_settings": {
+        # Apps to exclude from schema generation (e.g. ['django.contrib.auth'])
+        "excluded_apps": [],
+        # Specific models to exclude from schema (e.g. ['auth.Permission'])
+        "excluded_models": [],
+        # Enable GraphQL introspection (recommended False in production)
+        "enable_introspection": True,
+        # Enable GraphiQL interactive interface (recommended False in production)
+        "enable_graphiql": True,
+        # Auto-refresh schema when models change (Development only)
+        "auto_refresh_on_model_change": False,
+        # Auto-refresh schema after migrations are applied
+        "auto_refresh_on_migration": True,
+        # Build schema immediately on server startup
+        "prebuild_on_startup": False,
+        # Require authentication for all queries by default
+        "authentication_required": True,
+        # Enable pagination globally for list queries
+        "enable_pagination": True,
+        # Convert all field names to camelCase (e.g. my_field -> myField)
+        "auto_camelcase": False,
+        # Disable generation of security-related mutations (login, etc.)
+        "disable_security_mutations": False,
+        # Show metadata fields in schema
+        "show_metadata": False,
+        # List of custom query extension classes to add
+        "query_extensions": [],
+    },
+    "type_generation_settings": {
+        # Fields to exclude globally by name from all types
+        "exclude_fields": {},
+        # Deprecated: alias for exclude_fields
+        "excluded_fields": {},
+        # Explicitly include only these fields in types (None = include all)
+        "include_fields": None,
+        # Custom mappings for specific field types (Django field -> GraphQL type)
+        "custom_field_mappings": {},
+        # Generate filter inputs for types automatically
+        "generate_filters": True,
+        # Enable filtering on lists
+        "enable_filtering": True,
+        # CamelCase conversion for generated types
+        "auto_camelcase": False,
+        # Add descriptions from model help_text to schema
+        "generate_descriptions": True,
+    },
+    "query_settings": {
+        # Generate filter arguments for queries
+        "generate_filters": True,
+        # Generate ordering arguments for queries
+        "generate_ordering": True,
+        # Generate pagination arguments for queries
+        "generate_pagination": True,
+        # Enable pagination logic in resolvers
+        "enable_pagination": True,
+        # Enable ordering logic in resolvers
+        "enable_ordering": True,
+        # Use Relay-style connections (Node interface) instead of simple lists
+        "use_relay": False,
+        # Default number of items per page
+        "default_page_size": 20,
+        # Maximum allowed items per page
+        "max_page_size": 100,
+        # Extra lookup fields for specific models (e.g. {'User': ['email']})
+        "additional_lookup_fields": {},
+    },
+    "mutation_settings": {
+        # Auto-generate create mutations for models
+        "generate_create": True,
+        # Auto-generate update mutations for models
+        "generate_update": True,
+        # Auto-generate delete mutations for models
+        "generate_delete": True,
+        # Auto-generate bulk operation mutations
+        "generate_bulk": False,
+        # Enable execution of create mutations
+        "enable_create": True,
+        # Enable execution of update mutations
+        "enable_update": True,
+        # Enable execution of delete mutations
+        "enable_delete": True,
+        # Enable execution of bulk operations
+        "enable_bulk_operations": False,
+        # Enable mutations based on custom model methods
+        "enable_method_mutations": True,
+        # Batch size for bulk operations
+        "bulk_batch_size": 100,
+        # Fields required for update operations (e.g. {'User': ['email']})
+        "required_update_fields": {},
+        # Enable handling of nested relationships in mutations
+        "enable_nested_relations": True,
+        # Configuration for nested relations (e.g. depth, strategy)
+        "nested_relations_config": {},
+        # Configuration for specific nested fields
+        "nested_field_config": {},
+    },
+    "performance_settings": {
+        # Optimize DB queries using select_related/prefetch_related
+        "enable_query_optimization": True,
+        # Use select_related where possible
+        "enable_select_related": True,
+        # Use prefetch_related where possible
+        "enable_prefetch_related": True,
+        # Use .only() to fetch only requested fields (defer others)
+        "enable_only_fields": True,
+        # Use .defer() for large/unused fields
+        "enable_defer_fields": False,
+        # Enable DataLoader for batching queries (N+1 problem solver)
+        "enable_dataloader": True,
+        # Batch size for DataLoader
+        "dataloader_batch_size": 100,
+        # Maximum depth of GraphQL query allowed
+        "max_query_depth": 10,
+        # Maximum complexity score of query allowed
+        "max_query_complexity": 1000,
+        # Analyze query cost before execution
+        "enable_query_cost_analysis": False,
+        # Timeout for query execution in seconds
+        "query_timeout": 30,
+    },
+    "security_settings": {
+        # Enable authentication checks
+        "enable_authentication": True,
+        # Enable authorization (permissions) checks
+        "enable_authorization": True,
+        # Enable rate limiting
+        "enable_rate_limiting": False,
+        # Requests per minute limit
+        "rate_limit_requests_per_minute": 60,
+        # Requests per hour limit
+        "rate_limit_requests_per_hour": 1000,
+        # Enable limiting query depth (security layer)
+        "enable_query_depth_limiting": True,
+        # "max_query_depth": 10,  # Unused: This is controlled by performance_settings.max_query_depth
+        # "enable_introspection": True,  # Unused: Controlled by schema_settings.enable_introspection
+        # "enable_graphiql": True,  # Unused: Controlled by schema_settings.enable_graphiql
+        # Allowed CORS origins
+        "allowed_origins": ["*"],
+        # Enable CSRF protection
+        "enable_csrf_protection": True,
+        # Enable CORS headers
+        "enable_cors": True,
+        # Check field-level permissions
+        "enable_field_permissions": True,
+        # Check object-level permissions
+        "enable_object_permissions": True,
+        # Validate and sanitize input
+        "enable_input_validation": True,
+        # Enable SQL injection protection mechanisms
+        "enable_sql_injection_protection": True,
+        # Enable XSS protection mechanisms
+        "enable_xss_protection": True,
+        # Session timeout in minutes
+        "session_timeout_minutes": 30,
+        # Max file upload size in bytes (10MB)
+        "max_file_upload_size": 10485760,
+        # Allowed file extensions for upload
+        "allowed_file_types": [".jpg", ".jpeg", ".png", ".pdf", ".txt"],
+    },
+    "middleware_settings": {
+        # Enable authentication middleware
+        "enable_authentication_middleware": True,
+        # Enable logging middleware
+        "enable_logging_middleware": True,
+        # Enable performance tracking middleware
+        "enable_performance_middleware": True,
+        # Enable error handling middleware
+        "enable_error_handling_middleware": True,
+        # Enable rate limiting middleware
+        "enable_rate_limiting_middleware": True,
+        # Enable input validation middleware
+        "enable_validation_middleware": True,
+        # Enable CORS middleware
+        "enable_cors_middleware": True,
+        # Log all GraphQL queries
+        "log_queries": True,
+        # Log all GraphQL mutations
+        "log_mutations": True,
+        # Log all GraphQL errors
+        "log_errors": True,
+        # Log performance metrics
+        "log_performance": True,
+        # Threshold for logging slow queries (ms)
+        "performance_threshold_ms": 1000,
+        # Enable query complexity analysis middleware
+        "enable_query_complexity_middleware": True,
+    },
+    "error_handling": {
+        # Return detailed error messages (False for production)
+        "enable_detailed_errors": False,
+        # Enable logging of errors
+        "enable_error_logging": True,
+        # Enable reporting errors to external services
+        "enable_error_reporting": True,
+        # Enable Sentry integration if installed
+        "enable_sentry_integration": False,
+        # Mask internal server errors with generic message
+        "mask_internal_errors": True,
+        # Include stack trace in errors (False for production)
+        "include_stack_trace": False,
+        # Prefix for custom error codes
+        "error_code_prefix": "RAIL_GQL",
+        # Maximum length of error message to return
+        "max_error_message_length": 500,
+        # Enable categorization of errors (validation, permission, etc.)
+        "enable_error_categorization": True,
+        # Enable metrics for error rates
+        "enable_error_metrics": True,
+        # Log level for errors
+        "log_level": "ERROR",
+    },
+    "custom_scalars": {
+        # Enable custom scalar types
+        "DateTime": {"enabled": True},
+        "Date": {"enabled": True},
+        "Time": {"enabled": True},
+        "JSON": {"enabled": True},
+        "UUID": {"enabled": True},
+        "Email": {"enabled": True},
+        "URL": {"enabled": True},
+        "Phone": {"enabled": True},
+        "Decimal": {"enabled": True},
+        "Binary": {"enabled": True},
+    },
+    "monitoring_settings": {
+        # Enable application metrics
+        "enable_metrics": False,
+        # Backend for metrics (e.g. 'prometheus')
+        "metrics_backend": "prometheus",
+    },
+    "schema_registry": {
+        # Enable schema registry for distributed schemas
+        "enable_registry": False,
+        # Packages to auto-discover schemas from
+        "auto_discover_packages": [],
+    },
+}

@@ -92,9 +92,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "rate_limit_requests_per_minute": 60,
         "rate_limit_requests_per_hour": 1000,
         "enable_query_depth_limiting": True,
-        "max_query_depth": 10,
-        "enable_introspection": True,
-        "enable_graphiql": True,
+        # "max_query_depth": 10,  # Unused: This is controlled by performance_settings.max_query_depth
+        # "enable_introspection": True,  # Unused: Controlled by schema_settings.enable_introspection
+        # "enable_graphiql": True,  # Unused: Controlled by schema_settings.enable_graphiql
         "allowed_origins": ["*"],
         "enable_csrf_protection": True,
         "enable_cors": True,
