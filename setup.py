@@ -37,6 +37,7 @@ setup(
         "twilio>=8.10.0",
         "sentry-sdk>=2.0.0",
         "django-fsm>=2.8.1",
+        "django-environ==0.11.2",
     ],
     entry_points={
         "console_scripts": [
