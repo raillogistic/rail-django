@@ -47,4 +47,3 @@ This reference maps the main modules to their responsibilities.
 
 - `middleware/auth_middleware.py`: JWT auth and rate limiting
 - `middleware/performance.py`: performance monitoring
-- `middleware/performance_middleware.py`: alternate performance middleware

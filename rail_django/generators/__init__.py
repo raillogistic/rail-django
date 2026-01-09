@@ -8,7 +8,6 @@ The generators support:
 - Type generation with customizable naming conventions
 - Query generation with filtering and pagination
 - Mutation generation with validation and permissions
-- File upload handling
 - Nested operations
 - Custom scalars
 - Model inheritance
