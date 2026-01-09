@@ -40,11 +40,23 @@ class BaseAPIView(View):
         if self.auth_required:
             auth_response = self._authenticate_request(request)
             if auth_response is not None:
+                self._audit_request(
+                    request,
+                    auth_response,
+                    path_params=kwargs,
+                    extra_data={"auth_failed": True},
+                )
                 return auth_response
 
         if self.rate_limit_enabled and request.method != "OPTIONS":
             rate_limit_response = self._check_rate_limit(request)
             if rate_limit_response is not None:
+                self._audit_request(
+                    request,
+                    rate_limit_response,
+                    path_params=kwargs,
+                    extra_data={"rate_limited": True},
+                )
                 return rate_limit_response
 
         response = super().dispatch(request, *args, **kwargs)
@@ -71,6 +83,7 @@ class BaseAPIView(View):
             response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
 
+        self._audit_request(request, response, path_params=kwargs)
         return response
 
     def _check_rate_limit(self, request: HttpRequest) -> Optional[JsonResponse]:
@@ -174,6 +187,90 @@ class BaseAPIView(View):
                 return json.loads(request.body.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Error parsing JSON body: {e}")
+        return None
+
+    def _audit_request(
+        self,
+        request: HttpRequest,
+        response: JsonResponse,
+        *,
+        path_params: Optional[Dict[str, Any]] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if request.method == "OPTIONS":
+            return
+
+        try:
+            from ..extensions.audit import AuditEventType, log_audit_event
+        except Exception:
+            return
+
+        body_data = None
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            body_data = self.parse_json_body(request)
+
+        event_type = self._get_audit_event_type(request, body_data, AuditEventType)
+
+        additional_data: Dict[str, Any] = {
+            "component": "schema_api",
+            "view": self.__class__.__name__,
+            "status_code": response.status_code,
+        }
+        if path_params:
+            additional_data["path_params"] = path_params
+        if isinstance(body_data, dict) and body_data.get("action"):
+            additional_data["action"] = body_data.get("action")
+        if extra_data:
+            additional_data.update(extra_data)
+
+        success = response.status_code < 400
+        error_message = None
+        if not success:
+            error_message = self._extract_error_message(response)
+
+        log_audit_event(
+            request,
+            event_type,
+            success=success,
+            error_message=error_message,
+            additional_data=additional_data,
+        )
+
+    def _get_audit_event_type(
+        self,
+        request: HttpRequest,
+        body_data: Optional[Dict[str, Any]],
+        audit_enum: Any,
+    ) -> Any:
+        method = request.method.upper()
+        view_name = self.__class__.__name__
+
+        if method in {"GET", "HEAD", "OPTIONS"}:
+            return audit_enum.DATA_ACCESS
+        if method in {"PUT", "PATCH"}:
+            return audit_enum.UPDATE
+        if method == "DELETE":
+            return audit_enum.DELETE
+        if method == "POST":
+            if view_name in {"SchemaManagementAPIView", "SchemaDiscoveryAPIView"}:
+                action = body_data.get("action") if isinstance(body_data, dict) else None
+                if action == "clear_all":
+                    return audit_enum.DELETE
+                return audit_enum.UPDATE
+            return audit_enum.CREATE
+        return audit_enum.DATA_ACCESS
+
+    def _extract_error_message(self, response: JsonResponse) -> Optional[str]:
+        try:
+            payload = json.loads(response.content.decode("utf-8"))
+        except Exception:
+            return None
+
+        if isinstance(payload, dict):
+            data = payload.get("data", payload)
+            if isinstance(data, dict):
+                return data.get("message") or data.get("error")
+            return payload.get("message") or payload.get("error")
         return None
 
     def _require_admin(self, request: HttpRequest) -> Optional[JsonResponse]:

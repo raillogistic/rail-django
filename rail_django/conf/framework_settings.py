@@ -128,3 +128,6 @@ CORS_ALLOWED_ORIGINS = (
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = LIBRARY_DEFAULTS
 APPEND_SLASH = True
+
+# Audit logging defaults
+AUDIT_STORE_IN_DATABASE = True

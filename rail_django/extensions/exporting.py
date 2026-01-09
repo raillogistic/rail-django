@@ -83,6 +83,12 @@ except ImportError:
     permission_manager = None
 
 try:
+    from .audit import AuditEventType, log_audit_event
+except ImportError:
+    AuditEventType = None
+    log_audit_event = None
+
+try:
     from ..security.field_permissions import (
         FieldAccessLevel,
         FieldContext,
@@ -1029,22 +1035,42 @@ class ExportView(View):
                 f"Export request from user: {request.user.username} (ID: {request.user.id})"
             )
 
+        audit_details = {"action": "export"}
+
         try:
             export_settings = _get_export_settings()
             rate_limit_response = self._check_rate_limit(request, export_settings)
             if rate_limit_response is not None:
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="Rate limit exceeded",
+                    details=audit_details,
+                )
                 return rate_limit_response
 
             # Parse JSON payload
             try:
                 data = json.loads(request.body)
             except json.JSONDecodeError:
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="Invalid JSON payload",
+                    details=audit_details,
+                )
                 return JsonResponse({"error": "Invalid JSON payload"}, status=400)
 
             # Validate required parameters
             required_fields = ["app_name", "model_name", "file_extension", "fields"]
             for field in required_fields:
                 if field not in data:
+                    self._log_export_event(
+                        request,
+                        success=False,
+                        error_message=f"Missing required field: {field}",
+                        details=audit_details,
+                    )
                     return JsonResponse(
                         {"error": f"Missing required field: {field}"}, status=400
                     )
@@ -1053,20 +1079,41 @@ class ExportView(View):
             model_name = data["model_name"]
             file_extension = data["file_extension"].lower()
             fields = data["fields"]
+            audit_details.update(
+                {
+                    "app_name": app_name,
+                    "model_name": model_name,
+                    "file_extension": file_extension,
+                }
+            )
 
             # Validate file extension
             if file_extension in ["excel", "xlsx"]:
                 file_extension = "xlsx"
             if file_extension not in ["xlsx", "csv"]:
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message='file_extension must be "xlsx" or "csv"',
+                    details=audit_details,
+                )
                 return JsonResponse(
                     {"error": 'file_extension must be "xlsx" or "csv"'}, status=400
                 )
+            audit_details["file_extension"] = file_extension
 
             # Validate fields format
             if not isinstance(fields, list) or not fields:
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="fields must be a non-empty list",
+                    details=audit_details,
+                )
                 return JsonResponse(
                     {"error": "fields must be a non-empty list"}, status=400
                 )
+            audit_details["fields_count"] = len(fields)
 
             # Validate field configurations
             for i, field_config in enumerate(fields):
@@ -1074,6 +1121,12 @@ class ExportView(View):
                     continue  # String format is valid
                 elif isinstance(field_config, dict):
                     if "accessor" not in field_config:
+                        self._log_export_event(
+                            request,
+                            success=False,
+                            error_message="Invalid field configuration",
+                            details=audit_details,
+                        )
                         return JsonResponse(
                             {
                                 "error": f"Invalid field configuration at index {i}: dict format must contain 'accessor' key"
@@ -1081,6 +1134,12 @@ class ExportView(View):
                             status=400,
                         )
                 else:
+                    self._log_export_event(
+                        request,
+                        success=False,
+                        error_message="Invalid field configuration",
+                        details=audit_details,
+                    )
                     return JsonResponse(
                         {
                             "error": f"Invalid field configuration at index {i}: field must be string or dict with accessor/title"
@@ -1094,6 +1153,12 @@ class ExportView(View):
             variables = data.get("variables") or {}
 
             if not isinstance(variables, dict):
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="variables must be an object of filter parameters",
+                    details=audit_details,
+                )
                 return JsonResponse(
                     {"error": "variables must be an object of filter parameters"},
                     status=400,
@@ -1101,7 +1166,14 @@ class ExportView(View):
 
             max_rows, max_rows_error = self._resolve_max_rows(data, export_settings)
             if max_rows_error is not None:
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="Invalid max_rows",
+                    details=audit_details,
+                )
                 return max_rows_error
+            audit_details["max_rows"] = max_rows
 
             # Generate default filename if not provided
             if not filename:
@@ -1114,6 +1186,13 @@ class ExportView(View):
                 request, exporter.model, export_settings
             )
             if permission_response is not None:
+                audit_details["model_label"] = exporter.model._meta.label
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="Export not permitted",
+                    details=audit_details,
+                )
                 return permission_response
 
             parsed_fields = exporter.validate_fields(
@@ -1136,6 +1215,12 @@ class ExportView(View):
                 file_ext = "xlsx"
             else:  # csv
                 if export_settings.get("stream_csv", True):
+                    audit_details["stream_csv"] = True
+                    self._log_export_event(
+                        request,
+                        success=True,
+                        details=audit_details,
+                    )
                     return self._stream_csv_response(
                         exporter=exporter,
                         parsed_fields=parsed_fields,
@@ -1154,6 +1239,7 @@ class ExportView(View):
                 )
                 content_type = "text/csv; charset=utf-8"
                 file_ext = "csv"
+                audit_details["stream_csv"] = False
 
             # Create HTTP response with file download
             response = HttpResponse(content, content_type=content_type)
@@ -1165,16 +1251,57 @@ class ExportView(View):
             logger.info(
                 f"Successfully exported {model_name} data to {file_extension} format"
             )
+            self._log_export_event(
+                request,
+                success=True,
+                details=audit_details,
+            )
             return response
 
         except ExportError as e:
             logger.error(f"Export error: {e}")
             message = str(e)
             status = 403 if "denied" in message.lower() else 400
+            self._log_export_event(
+                request,
+                success=False,
+                error_message=message,
+                details=audit_details,
+            )
             return JsonResponse({"error": message}, status=status)
         except Exception as e:
             logger.error(f"Unexpected error during export: {e}")
+            self._log_export_event(
+                request,
+                success=False,
+                error_message="Internal server error",
+                details=audit_details,
+            )
             return JsonResponse({"error": "Internal server error"}, status=500)
+
+    def _log_export_event(
+        self,
+        request: Any,
+        *,
+        success: bool,
+        error_message: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Log an audit event for export activity."""
+        if not log_audit_event or not AuditEventType:
+            return
+
+        audit_details = {"action": "export"}
+        if details:
+            audit_details.update(details)
+
+        log_audit_event(
+            request,
+            AuditEventType.DATA_ACCESS,
+            success=success,
+            error_message=error_message,
+            additional_data=audit_details,
+        )
 
     def _get_rate_limit_identifier(self, request) -> str:
         """Resolve the rate limit identifier for the request."""

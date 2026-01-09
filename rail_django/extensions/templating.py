@@ -98,6 +98,12 @@ try:
 except ImportError:
     jwt_required = None
 
+try:
+    from .audit import AuditEventType, log_audit_event
+except ImportError:
+    AuditEventType = None
+    log_audit_event = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -759,6 +765,13 @@ class PdfTemplateView(View):
             PDF response or JSON error when unavailable.
         """
         if not WEASYPRINT_AVAILABLE:
+            self._log_template_event(
+                request,
+                success=False,
+                error_message="WeasyPrint is not installed",
+                template_path=template_path,
+                pk=pk,
+            )
             return JsonResponse(
                 {
                     "error": "WeasyPrint is not installed",
@@ -769,6 +782,13 @@ class PdfTemplateView(View):
 
         template_def = template_registry.get(template_path)
         if not template_def:
+            self._log_template_event(
+                request,
+                success=False,
+                error_message="Template not found",
+                template_path=template_path,
+                pk=pk,
+            )
             return JsonResponse(
                 {"error": "Template not found", "template": template_path}, status=404
             )
@@ -776,6 +796,14 @@ class PdfTemplateView(View):
         try:
             instance = template_def.model.objects.get(pk=pk)
         except template_def.model.DoesNotExist:
+            self._log_template_event(
+                request,
+                success=False,
+                error_message="Instance not found",
+                template_def=template_def,
+                template_path=template_path,
+                pk=pk,
+            )
             return JsonResponse(
                 {
                     "error": "Instance not found",
@@ -787,6 +815,14 @@ class PdfTemplateView(View):
 
         denial = self._authorize_template_access(request, template_def, instance)
         if denial:
+            self._log_template_event(
+                request,
+                success=False,
+                error_message="Forbidden",
+                template_def=template_def,
+                template_path=template_path,
+                pk=pk,
+            )
             return denial
 
         client_data = _extract_client_data(request, template_def)
@@ -803,6 +839,14 @@ class PdfTemplateView(View):
                 pk,
                 exc,
             )
+            self._log_template_event(
+                request,
+                success=False,
+                error_message=str(exc),
+                template_def=template_def,
+                template_path=template_path,
+                pk=pk,
+            )
             return JsonResponse(
                 {"error": "Failed to render PDF", "detail": str(exc)}, status=500
             )
@@ -810,6 +854,13 @@ class PdfTemplateView(View):
         filename = f"{template_def.model._meta.model_name}-{pk}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
+        self._log_template_event(
+            request,
+            success=True,
+            template_def=template_def,
+            template_path=template_path,
+            pk=pk,
+        )
         return response
 
     def _build_context(
@@ -945,6 +996,37 @@ class PdfTemplateView(View):
         )
 
         return HTML(string=html, base_url=str(settings.BASE_DIR)).write_pdf()
+
+    def _log_template_event(
+        self,
+        request: HttpRequest,
+        *,
+        success: bool,
+        error_message: Optional[str] = None,
+        template_def: Optional[TemplateDefinition] = None,
+        template_path: Optional[str] = None,
+        pk: Optional[str] = None,
+    ) -> None:
+        """Log an audit event for template rendering."""
+        if not log_audit_event or not AuditEventType:
+            return
+
+        details = {
+            "action": "template_render",
+            "template_path": template_path,
+            "pk": pk,
+        }
+        if template_def:
+            details["model"] = template_def.model._meta.label
+            details["title"] = template_def.title
+
+        log_audit_event(
+            request,
+            AuditEventType.DATA_ACCESS,
+            success=success,
+            error_message=error_message,
+            additional_data=details,
+        )
 
 
 def template_urlpatterns():

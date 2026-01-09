@@ -45,6 +45,10 @@ class AuditEventType(Enum):
     MFA_SUCCESS = "mfa_success"
     MFA_FAILURE = "mfa_failure"
     UI_ACTION = "ui_action"
+    DATA_ACCESS = "data_access"
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
 
 
 class AuditSeverity(Enum):
@@ -100,12 +104,35 @@ class AuditEvent:
         return data
 
 
-# Remove the model definition - it's now in apps.core.models
-# Use lazy import to defer model access until Django apps are ready
-def get_audit_event_model():
-    """Lazy import for AuditEventModel to avoid AppRegistryNotReady errors."""
-    from apps.core.models import AuditEventModel
+class AuditEventModel(models.Model):
+    """Persisted audit event for database storage."""
 
+    event_type = models.CharField(max_length=64, db_index=True)
+    severity = models.CharField(max_length=32)
+    user_id = models.IntegerField(null=True, blank=True)
+    username = models.CharField(max_length=150, null=True, blank=True)
+    client_ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(db_index=True)
+    request_path = models.TextField(null=True, blank=True)
+    request_method = models.CharField(max_length=16, null=True, blank=True)
+    additional_data = models.JSONField(null=True, blank=True, default=dict)
+    session_id = models.CharField(max_length=128, null=True, blank=True)
+    success = models.BooleanField(default=True)
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        app_label = "rail_django"
+        verbose_name = "Audit Event"
+        verbose_name_plural = "Audit Events"
+        ordering = ["-timestamp"]
+
+    def __str__(self) -> str:
+        return f"{self.event_type} @ {self.timestamp.isoformat()}"
+
+
+def get_audit_event_model():
+    """Return the audit model used for database storage."""
     return AuditEventModel
 
 
@@ -610,6 +637,82 @@ class AuditLogger:
 
 # Instance globale du logger d'audit
 audit_logger = AuditLogger()
+
+
+def log_audit_event(
+    request: Optional[HttpRequest],
+    event_type: AuditEventType,
+    *,
+    severity: Optional[AuditSeverity] = None,
+    user: Optional["AbstractUser"] = None,
+    success: bool = True,
+    error_message: Optional[str] = None,
+    additional_data: Optional[Dict[str, Any]] = None,
+    request_path: Optional[str] = None,
+    request_method: Optional[str] = None,
+) -> None:
+    """Log a generic audit event with standard request metadata."""
+    if not audit_logger.enabled:
+        return
+
+    resolved_event_type = event_type
+    if isinstance(event_type, str):
+        try:
+            resolved_event_type = AuditEventType(event_type)
+        except ValueError:
+            resolved_event_type = AuditEventType.DATA_ACCESS
+
+    if severity is None:
+        if resolved_event_type in (
+            AuditEventType.CREATE,
+            AuditEventType.UPDATE,
+            AuditEventType.DELETE,
+        ):
+            severity = AuditSeverity.MEDIUM
+        else:
+            severity = AuditSeverity.LOW
+
+    if user is None and request is not None:
+        user = getattr(request, "user", None)
+
+    user_id = None
+    username = None
+    if user and getattr(user, "is_authenticated", False):
+        user_id = getattr(user, "id", None)
+        if hasattr(user, "get_username"):
+            username = user.get_username()
+        else:
+            username = getattr(user, "username", None)
+
+    client_ip = audit_logger._get_client_ip(request) if request is not None else "Unknown"
+    user_agent = (
+        request.META.get("HTTP_USER_AGENT", "Unknown") if request is not None else "Unknown"
+    )
+    resolved_path = request_path or (request.path if request is not None else "")
+    resolved_method = request_method or (request.method if request is not None else "SYSTEM")
+    session_id = (
+        request.session.session_key
+        if request is not None and hasattr(request, "session")
+        else None
+    )
+
+    event = AuditEvent(
+        event_type=resolved_event_type,
+        severity=severity,
+        user_id=user_id,
+        username=username,
+        client_ip=client_ip,
+        user_agent=user_agent,
+        timestamp=datetime.now(timezone.utc),
+        request_path=resolved_path,
+        request_method=resolved_method,
+        additional_data=additional_data,
+        session_id=session_id,
+        success=success,
+        error_message=error_message,
+    )
+
+    audit_logger.log_event(event)
 
 
 class FrontendAuditEventInput(graphene.InputObjectType):

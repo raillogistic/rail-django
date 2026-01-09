@@ -12,8 +12,10 @@ from rail_django.extensions.reporting import (
     ReportingReportBlock,
     ReportingVisualization,
 )
+from rail_django.extensions.audit import AuditEventModel
 
 __all__ = [
+    "AuditEventModel",
     "ReportingDataset",
     "ReportingVisualization",
     "ReportingReport",
