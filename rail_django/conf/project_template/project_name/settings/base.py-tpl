@@ -41,6 +41,16 @@ STATIC_URL = '/static/'
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 MEDIA_URL = '/media/'
 
+# Email Configuration
+# https://docs.djangoproject.com/en/4.2/topics/email/
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
+
 
 # Rail Django Configuration
 # Overriding defaults from rail_django.conf.framework_settings
@@ -282,4 +292,54 @@ RAIL_DJANGO_GRAPHQL = {
         # Packages to auto-discover schemas from
         "auto_discover_packages": [],
     },
+}
+
+# Rail Django Templating Configuration
+
+# This dictionary controls the behavior of the PDF templating system (WeasyPrint-based).
+
+RAIL_DJANGO_GRAPHQL_TEMPLATING = {
+
+    # Default templates to use when not specified in the decorator
+
+    "default_header_template": "pdf/default_header.html",
+
+    "default_footer_template": "pdf/default_footer.html",
+
+    # URL prefix for template endpoints (exposed under /api/)
+
+    "url_prefix": "templates",
+
+    
+
+    # Default styling configuration for all generated PDFs
+
+    "default_template_config": {
+
+        "page_size": "A4",
+
+        "orientation": "portrait",
+
+        "margin": "20mm",
+
+        "padding": "12mm",
+
+        "font_family": "Arial, sans-serif",
+
+        "font_size": "12pt",
+
+        "text_color": "#222222",
+
+        "background_color": "#ffffff",
+
+        "header_spacing": "10mm",
+
+        "footer_spacing": "12mm",
+
+        "content_spacing": "8mm",
+
+        "extra_css": "",
+
+    },
+
 }
