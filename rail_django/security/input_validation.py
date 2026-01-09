@@ -48,6 +48,8 @@ class InputValidator:
     """
 
     # Patterns dangereux à détecter
+    # WARNING: Blacklisting is not a complete security solution. 
+    # Always use whitelist-based sanitization (like 'bleach' below) for untrusted HTML.
     DANGEROUS_PATTERNS = [
         r'<script[^>]*>.*?</script>',  # Scripts JavaScript
         r'javascript:',  # URLs JavaScript

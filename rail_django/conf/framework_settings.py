@@ -13,13 +13,13 @@ from rail_django.defaults import LIBRARY_DEFAULTS
 BASE_DIR = Path(os.getcwd())
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Default fallback key - projects MUST override this.
-SECRET_KEY = "django-insecure-framework-default-key-change-me"
+# Default fallback key - projects MUST override this or set env var.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-framework-default-key-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 # Application definition
 INSTALLED_APPS = [
@@ -114,7 +114,8 @@ GRAPHENE = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
+CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if os.environ.get("CORS_ALLOWED_ORIGINS") else []
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = LIBRARY_DEFAULTS

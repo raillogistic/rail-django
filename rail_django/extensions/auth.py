@@ -428,7 +428,8 @@ def set_auth_cookies(request, access_token=None, refresh_token=None):
         request._set_auth_cookies = []
 
     # Force secure=False in DEBUG mode to allow cookies on localhost HTTP
-    secure = getattr(settings, "SESSION_COOKIE_SECURE", False)
+    # Default to True in production (DEBUG=False) unless explicitly disabled
+    secure = getattr(settings, "JWT_COOKIE_SECURE", not getattr(settings, "DEBUG", False))
     if getattr(settings, "DEBUG", False):
         secure = False
 

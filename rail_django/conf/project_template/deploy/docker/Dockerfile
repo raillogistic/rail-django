@@ -3,7 +3,7 @@
 ###########
 
 # pull official base image
-FROM python:3.8-slim as builder
+FROM python:3.11-slim as builder
 
 # set work directory
 WORKDIR /app
@@ -29,7 +29,7 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.t
 #########
 
 # pull official base image
-FROM python:3.8-slim
+FROM python:3.11-slim
 
 # create directory for the app user
 RUN mkdir -p /home/app
@@ -46,7 +46,7 @@ RUN mkdir $APP_HOME/mediafiles
 WORKDIR $APP_HOME
 
 # install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends libpq5 netcat-openbsd && \
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
