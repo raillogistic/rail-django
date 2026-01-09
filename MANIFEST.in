@@ -1,0 +1,6 @@
+include requirements.txt
+recursive-include rail_django/conf *
+recursive-include rail_django/templates *
+recursive-include rail_django/static *
+global-exclude __pycache__
+global-exclude *.py[co]
