@@ -21,7 +21,6 @@ from .views.graphql_views import (
     MultiSchemaGraphQLView,
     SchemaListView,
 )
-from .views.health_views import HealthCheckView, HealthDashboardView, PerformanceView
 
 urlpatterns = [
     # Main GraphQL endpoint (backward compatibility)
@@ -38,11 +37,6 @@ urlpatterns = [
         GraphQLPlaygroundView.as_view(),
         name="schema-playground",
     ),
-    # Health monitoring endpoints
-    path("health/", HealthCheckView.as_view(), name="health-check"),
-    path("health/dashboard/", HealthDashboardView.as_view(), name="health-dashboard"),
-    # Performance monitoring
-    path("graphql/performance/", PerformanceView.as_view(), name="performance-metrics"),
     # REST API for schema management
     path("api/v1/", include("rail_django.api.urls", namespace="schema_api")),
 ]

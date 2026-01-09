@@ -12,8 +12,9 @@ from rail_django.conf.framework_settings import *
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Add the 'apps' directory to the Python path
-sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
+# Add the 'apps' directory to the Python path if not in startapp mode
+if os.environ.get('RAIL_STARTAPP') != 'true':
+    sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/

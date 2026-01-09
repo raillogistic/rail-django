@@ -25,6 +25,9 @@ def main():
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
                 
+            # Signal to settings.py that we are in startapp mode to avoid import conflicts
+            os.environ['RAIL_STARTAPP'] = 'true'
+
             # Append the target directory to the arguments
             sys.argv.append(target_dir)
 
