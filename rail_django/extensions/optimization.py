@@ -130,27 +130,32 @@ class QueryAnalyzer:
         return result
 
     def _extract_requested_fields(self, info: GraphQLResolveInfo) -> Set[str]:
-        """Extract requested fields from GraphQL query."""
+        """Extract requested fields from GraphQL query including nested fields."""
+        requested_fields = set()
+
+        def extract_fields(selection_set, parent_path=""):
+            if not selection_set:
+                return
+
+            for selection in selection_set.selections:
+                # Handle field selections
+                if hasattr(selection, "name") and hasattr(selection.name, "value"):
+                    field_name = selection.name.value
+                    current_path = f"{parent_path}__{field_name}" if parent_path else field_name
+                    requested_fields.add(current_path)
+                    
+                    # Recurse if there are sub-selections
+                    if hasattr(selection, "selection_set") and selection.selection_set:
+                        extract_fields(selection.selection_set, current_path)
+                        
+                # Handle inline fragments and fragment spreads
+                elif hasattr(selection, "selection_set") and selection.selection_set:
+                    # For fragments, we continue with the same parent path
+                    extract_fields(selection.selection_set, parent_path)
+
         try:
-            # Extract field names directly from the selection set
-            # This is more reliable than using collect_fields which has version compatibility issues
-            requested_fields = set()
-
             if info.field_nodes and info.field_nodes[0].selection_set:
-                for selection in info.field_nodes[0].selection_set.selections:
-                    # Handle field selections
-                    if hasattr(selection, "name") and hasattr(selection.name, "value"):
-                        requested_fields.add(selection.name.value)
-                    # Handle inline fragments and fragment spreads
-                    elif (
-                        hasattr(selection, "selection_set") and selection.selection_set
-                    ):
-                        for sub_selection in selection.selection_set.selections:
-                            if hasattr(sub_selection, "name") and hasattr(
-                                sub_selection.name, "value"
-                            ):
-                                requested_fields.add(sub_selection.name.value)
-
+                extract_fields(info.field_nodes[0].selection_set)
             return requested_fields
         except Exception as e:
             logger.warning(f"Failed to extract requested fields: {e}")
@@ -159,17 +164,33 @@ class QueryAnalyzer:
     def _get_select_related_fields(
         self, model: Type[models.Model], requested_fields: Set[str]
     ) -> List[str]:
-        """Determine which fields should use select_related."""
+        """Determine which fields should use select_related, including nested ones."""
         select_related = []
 
-        for field_name in requested_fields:
-            try:
-                field = model._meta.get_field(field_name)
-                if isinstance(field, (ForeignKey, OneToOneField)):
-                    select_related.append(field_name)
-            except FieldDoesNotExist:
-                # Field might be a reverse relationship or method
-                continue
+        for field_path in requested_fields:
+            # We only care about potential relationship paths
+            current_model = model
+            parts = field_path.split("__")
+            valid_path = []
+            
+            # Check if this path corresponds to a chain of ForeignKeys/OneToOneFields
+            is_valid_chain = True
+            for part in parts:
+                try:
+                    field = current_model._meta.get_field(part)
+                    if isinstance(field, (ForeignKey, OneToOneField)):
+                        valid_path.append(part)
+                        current_model = field.related_model
+                    else:
+                        # Encountered a non-relation or non-forward-relation field
+                        is_valid_chain = False
+                        break
+                except FieldDoesNotExist:
+                    is_valid_chain = False
+                    break
+            
+            if is_valid_chain and valid_path:
+                select_related.append("__".join(valid_path))
 
         return select_related
 
@@ -178,52 +199,56 @@ class QueryAnalyzer:
     ) -> List[str]:
         """Determine which fields should use prefetch_related."""
         prefetch_related = []
+        
+        # We look for the *first* point in a path where a prefetch is needed.
+        # Nested prefetches are handled by the fact that the prefetch query itself
+        # can be optimized (though complex nested prefetch logic is hard to automate perfectly).
+        # For now, we identify direct prefetch candidates on the current model.
+        
+        # We also want to support explicit nested prefetch paths if possible, 
+        # but standard prefetch_related strings work for that.
 
-        for field_name in requested_fields:
-            try:
-                field = model._meta.get_field(field_name)
-                if isinstance(field, ManyToManyField):
-                    prefetch_related.append(field_name)
-            except FieldDoesNotExist:
-                # Check for reverse relationships
-                # For modern Django versions, use related_objects
-                if hasattr(model._meta, "related_objects"):
-                    for rel in model._meta.related_objects:
-                        if rel.get_accessor_name() == field_name:
-                            if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
-                                prefetch_related.append(field_name)
-                            break
-                # Fallback for Django versions that use get_fields() with related fields
-                elif hasattr(model._meta, "get_fields"):
+        for field_path in requested_fields:
+            parts = field_path.split("__")
+            current_model = model
+            current_path = []
+            
+            # Traverse the path to find where we hit a ManyToMany or Reverse Relation
+            for i, part in enumerate(parts):
+                try:
+                    field = None
+                    is_prefetch_needed = False
+                    
+                    # Check forward fields
                     try:
-                        for field in model._meta.get_fields():
-                            if hasattr(field, "related_model") and hasattr(
-                                field, "get_accessor_name"
-                            ):
-                                if field.get_accessor_name() == field_name:
-                                    if (
-                                        hasattr(field, "many_to_many")
-                                        and field.many_to_many
-                                    ):
-                                        prefetch_related.append(field_name)
-                                    elif (
-                                        hasattr(field, "one_to_many")
-                                        and field.one_to_many
-                                    ):
-                                        prefetch_related.append(field_name)
+                        field = current_model._meta.get_field(part)
+                        if isinstance(field, ManyToManyField):
+                            is_prefetch_needed = True
+                        elif isinstance(field, (ForeignKey, OneToOneField)):
+                            # Forward relation, continue traversing but don't prefetch yet
+                            current_model = field.related_model
+                    except FieldDoesNotExist:
+                        # Check reverse relationships
+                         if hasattr(current_model._meta, "related_objects"):
+                            for rel in current_model._meta.related_objects:
+                                if rel.get_accessor_name() == part:
+                                    is_prefetch_needed = True
+                                    field = rel
+                                    current_model = rel.related_model
                                     break
-                    except AttributeError:
-                        pass
-                else:
-                    # Final fallback for very old Django versions
-                    try:
-                        for rel in model._meta.get_all_related_objects():
-                            if rel.get_accessor_name() == field_name:
-                                if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
-                                    prefetch_related.append(field_name)
-                                break
-                    except AttributeError:
-                        pass
+                    
+                    current_path.append(part)
+                    
+                    if is_prefetch_needed:
+                        # We found a point requiring prefetch.
+                        # The full path up to here is the prefetch string.
+                        prefetch_related.append("__".join(current_path))
+                        # We stop traversing this path for the *root* queryset optimization 
+                        # because subsequent segments belong to the prefetched queryset's own optimization.
+                        break
+                        
+                except Exception:
+                    break
 
         return prefetch_related
 

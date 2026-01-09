@@ -224,8 +224,18 @@ class QueryGenerator:
             if not isinstance(instance, models.Model):
                 return instance
             field_defs = list(instance._meta.concrete_fields)
-            field_names = [field.name for field in field_defs]
-            snapshot = {name: getattr(instance, name, None) for name in field_names}
+            
+            snapshot = {}
+            for field in field_defs:
+                # Optimization: For relation fields (ForeignKeys/OneToOne), use attname (the ID)
+                # to avoid triggering a database query to fetch the related object.
+                # We store it under field.name so permission rules match correctly.
+                if field.is_relation and (field.many_to_one or field.one_to_one):
+                    val = getattr(instance, field.attname, None)
+                else:
+                    val = getattr(instance, field.name, None)
+                snapshot[field.name] = val
+
             masked = mask_sensitive_fields(
                 snapshot, context_user, model, instance=instance
             )

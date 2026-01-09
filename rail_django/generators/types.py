@@ -612,6 +612,10 @@ class TypeGenerator:
                 # Add resolver that handles different relationship types with filtering
                 def make_resolver(field_name, rel_info, related_model):
                     def resolver(self, info, filters=None):
+                        # Optimization: Use prefetch cache if available and no filters
+                        if not filters and hasattr(self, "_prefetched_objects_cache") and field_name in self._prefetched_objects_cache:
+                            return self._prefetched_objects_cache[field_name]
+
                         related_obj = getattr(self, field_name)
                         # For OneToOne fields, return the single object or None
                         if rel_info.relationship_type == "OneToOneField":
@@ -705,6 +709,10 @@ class TypeGenerator:
             # Add resolver that handles different relationship types with filtering
             def make_resolver(accessor_name, is_one_to_one, related_model):
                 def resolver(self, info, filters=None):
+                    # Optimization: Use prefetch cache if available and no filters (for lists)
+                    if not is_one_to_one and not filters and hasattr(self, "_prefetched_objects_cache") and accessor_name in self._prefetched_objects_cache:
+                        return self._prefetched_objects_cache[accessor_name]
+
                     # For OneToOne reverse relationships, handle DoesNotExist exceptions
                     if is_one_to_one:
                         try:
