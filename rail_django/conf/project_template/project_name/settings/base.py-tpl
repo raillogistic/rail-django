@@ -294,6 +294,44 @@ RAIL_DJANGO_GRAPHQL = {
     },
 }
 
+# Rail Django Multi-Schema Configuration
+# Define specific settings for different GraphQL schemas/endpoints.
+# These override the global defaults in RAIL_DJANGO_GRAPHQL.
+RAIL_DJANGO_GRAPHQL_SCHEMAS = {
+    # 1. Auth Schema: Publicly accessible for login/registration
+    "auth": {
+        "schema_settings": {
+            "authentication_required": False,
+            "enable_graphiql": False, # No UI needed for auth endpoint
+        },
+        "mutation_settings": {
+            # Disable generic CRUD mutations to keep this endpoint focused on Auth
+            "generate_create": False,
+            "generate_update": False,
+            "generate_delete": False,
+        }
+    },
+    
+    # 2. Default API Schema ("gql"): Secure, requires token
+    "default": {
+        "schema_settings": {
+            "authentication_required": True,
+            "enable_graphiql": False, # Disable UI for the API endpoint
+        },
+    },
+
+    # 3. GraphiQL Schema: For exploration, closed in production
+    "graphiql": {
+        "schema_settings": {
+            "authentication_required": True, # Still require auth to explore
+            "enable_graphiql": True,
+            # In production, this entire schema could be disabled or restricted at the view level
+            # by setting 'enable_introspection': False via env var if desired.
+            "enable_introspection": True,
+        },
+    },
+}
+
 # Rail Django Templating Configuration
 
 # This dictionary controls the behavior of the PDF templating system (WeasyPrint-based).
