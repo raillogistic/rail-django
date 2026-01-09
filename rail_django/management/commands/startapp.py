@@ -1,0 +1,35 @@
+import os
+from django.core.management.commands.startapp import Command as StartAppCommand
+import rail_django
+
+class Command(StartAppCommand):
+    help = (
+        "Creates a Django app directory structure for the given app name "
+        "in the current directory or optionally in the given directory."
+    )
+
+    def add_arguments(self, parser):
+        super().add_arguments(parser)
+        parser.add_argument(
+            "--minimal",
+            action="store_true",
+            help="Create a minimal app structure (no admin, apps, views).",
+        )
+
+    def handle(self, **options):
+        if options.get("minimal"):
+            # If minimal flag is set, force the template to our minimal one
+            # unless the user explicitly provided another template (which would be ambiguous, 
+            # but let's assume --minimal takes precedence or acts as a shortcut)
+            
+            # If user provided --template, we might want to warn or error, 
+            # but simply overriding it is effective for this specific flag.
+            
+            template_path = os.path.join(
+                os.path.dirname(rail_django.__file__),
+                "conf",
+                "app_template_minimal"
+            )
+            options["template"] = template_path
+
+        super().handle(**options)
