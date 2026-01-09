@@ -1,12 +1,12 @@
 """
-Système d'audit et de journalisation pour Django GraphQL.
+SystÃƒÂ¨me d'audit et de journalisation pour Django GraphQL.
 
 Ce module fournit :
-- Journalisation des événements de sécurité
-- Audit des accès aux données
-- Traçabilité des modifications
-- Détection d'anomalies
-- Rapports de sécurité
+- Journalisation des ÃƒÂ©vÃƒÂ©nements de sÃƒÂ©curitÃƒÂ©
+- Audit des accÃƒÂ¨s aux donnÃƒÂ©es
+- TraÃƒÂ§abilitÃƒÂ© des modifications
+- DÃƒÂ©tection d'anomalies
+- Rapports de sÃƒÂ©curitÃƒÂ©
 """
 
 import hashlib
@@ -32,8 +32,54 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _resolve_request(context: Any) -> Optional[Any]:
+    if context is None:
+        return None
+    if hasattr(context, "META") and hasattr(context, "method"):
+        return context
+    request = getattr(context, "request", None)
+    if request is not None:
+        return request
+    return None
+
+
+def _resolve_user(context: Any, request: Any) -> Optional[Any]:
+    user = getattr(context, "user", None)
+    if user is not None:
+        return user
+    if request is not None:
+        return getattr(request, "user", None)
+    return None
+
+
+def _snapshot_instance_fields(instance: models.Model) -> Dict[str, Any]:
+    snapshot: Dict[str, Any] = {}
+    for field in getattr(instance._meta, "concrete_fields", []):
+        try:
+            if field.is_relation and (field.many_to_one or field.one_to_one):
+                snapshot[field.name] = getattr(instance, field.attname, None)
+            else:
+                snapshot[field.name] = getattr(instance, field.name, None)
+        except Exception:
+            snapshot[field.name] = None
+    return snapshot
+
+
+def _classify_exception(exc: Exception):
+    message = str(exc).lower()
+    if isinstance(exc, PermissionError):
+        return AuditEventType.PERMISSION_DENIED, AuditSeverity.WARNING
+    if "rate limit" in message:
+        return AuditEventType.RATE_LIMIT_EXCEEDED, AuditSeverity.WARNING
+    if "introspection" in message:
+        return AuditEventType.INTROSPECTION_ATTEMPT, AuditSeverity.WARNING
+    if "permission" in message or "authentication" in message or "not permitted" in message:
+        return AuditEventType.PERMISSION_DENIED, AuditSeverity.WARNING
+    return AuditEventType.SYSTEM_ERROR, AuditSeverity.ERROR
+
+
 class AuditEventType(Enum):
-    """Types d'événements d'audit."""
+    """Types d'ÃƒÂ©vÃƒÂ©nements d'audit."""
 
     # Authentification
     LOGIN_SUCCESS = "login_success"
@@ -50,7 +96,7 @@ class AuditEventType(Enum):
     ROLE_ASSIGNED = "role_assigned"
     ROLE_REMOVED = "role_removed"
 
-    # Accès aux données
+    # AccÃƒÂ¨s aux donnÃƒÂ©es
     DATA_ACCESS = "data_access"
     DATA_EXPORT = "data_export"
     SENSITIVE_DATA_ACCESS = "sensitive_data_access"
@@ -61,20 +107,20 @@ class AuditEventType(Enum):
     DELETE = "delete"
     BULK_OPERATION = "bulk_operation"
 
-    # Sécurité
+    # SÃƒÂ©curitÃƒÂ©
     SECURITY_VIOLATION = "security_violation"
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     SUSPICIOUS_ACTIVITY = "suspicious_activity"
     INTROSPECTION_ATTEMPT = "introspection_attempt"
 
-    # Système
+    # SystÃƒÂ¨me
     SYSTEM_ERROR = "system_error"
     CONFIGURATION_CHANGE = "configuration_change"
     SCHEMA_CHANGE = "schema_change"
 
 
 class AuditSeverity(Enum):
-    """Niveaux de gravité des événements d'audit."""
+    """Niveaux de gravitÃƒÂ© des ÃƒÂ©vÃƒÂ©nements d'audit."""
 
     INFO = "info"
     WARNING = "warning"
@@ -84,7 +130,7 @@ class AuditSeverity(Enum):
 
 @dataclass
 class AuditEvent:
-    """Événement d'audit."""
+    """Ãƒâ€°vÃƒÂ©nement d'audit."""
 
     event_type: AuditEventType
     severity: AuditSeverity
@@ -101,24 +147,24 @@ class AuditEvent:
     query_hash: Optional[str] = None
     variables: Optional[Dict[str, Any]] = None
 
-    # Données affectées
+    # DonnÃƒÂ©es affectÃƒÂ©es
     model_name: Optional[str] = None
     object_id: Optional[str] = None
     field_name: Optional[str] = None
     old_value: Optional[Any] = None
     new_value: Optional[Any] = None
 
-    # Métadonnées
+    # MÃƒÂ©tadonnÃƒÂ©es
     message: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
 
-    # Sécurité
+    # SÃƒÂ©curitÃƒÂ©
     risk_score: Optional[int] = None
     threat_indicators: Optional[List[str]] = None
 
     def __post_init__(self):
-        """Initialise les valeurs par défaut."""
+        """Initialise les valeurs par dÃƒÂ©faut."""
         if self.timestamp is None:
             self.timestamp = django_timezone.now()
 
@@ -143,7 +189,7 @@ class AuditLogger:
         self._event_handlers = {}
         self._risk_calculators = {}
 
-        # Configuration par défaut
+        # Configuration par dÃƒÂ©faut
         self.sensitive_fields = {
             "password",
             "token",
@@ -169,11 +215,11 @@ class AuditLogger:
             "mfa_disable",
         }
 
-        # Enregistrer les calculateurs de risque par défaut
+        # Enregistrer les calculateurs de risque par dÃƒÂ©faut
         self._setup_default_risk_calculators()
 
     def _setup_default_risk_calculators(self):
-        """Configure les calculateurs de risque par défaut."""
+        """Configure les calculateurs de risque par dÃƒÂ©faut."""
         self.register_risk_calculator(
             AuditEventType.LOGIN_FAILURE, self._calculate_login_failure_risk
         )
@@ -188,23 +234,23 @@ class AuditLogger:
 
     def log_event(self, event: AuditEvent):
         """
-        Enregistre un événement d'audit.
+        Enregistre un ÃƒÂ©vÃƒÂ©nement d'audit.
 
         Args:
-            event: Événement à enregistrer
+            event: Ãƒâ€°vÃƒÂ©nement ÃƒÂ  enregistrer
         """
         # Calculer le score de risque si non fourni
         if event.risk_score is None:
             event.risk_score = self._calculate_risk_score(event)
 
-        # Masquer les données sensibles
+        # Masquer les donnÃƒÂ©es sensibles
         sanitized_event = self._sanitize_event(event)
 
         # Enregistrer dans les logs
         log_data = asdict(sanitized_event)
         log_data["timestamp"] = sanitized_event.timestamp.isoformat()
 
-        # Choisir le niveau de log approprié
+        # Choisir le niveau de log appropriÃƒÂ©
         if event.severity == AuditSeverity.CRITICAL:
             self.logger.critical(json.dumps(log_data, cls=DjangoJSONEncoder))
         elif event.severity == AuditSeverity.ERROR:
@@ -214,23 +260,28 @@ class AuditLogger:
         else:
             self.logger.info(json.dumps(log_data, cls=DjangoJSONEncoder))
 
-        # Exécuter les gestionnaires d'événements
+        # ExÃƒÂ©cuter les gestionnaires d'ÃƒÂ©vÃƒÂ©nements
         self._execute_event_handlers(sanitized_event)
 
-        # Détecter les anomalies
+        # DÃƒÂ©tecter les anomalies
         self._detect_anomalies(sanitized_event)
 
     def _sanitize_event(self, event: AuditEvent) -> AuditEvent:
         """
-        Masque les données sensibles dans un événement.
+        Masque les donnÃƒÂ©es sensibles dans un ÃƒÂ©vÃƒÂ©nement.
 
         Args:
-            event: Événement à masquer
+            event: Ãƒâ€°vÃƒÂ©nement ÃƒÂ  masquer
 
         Returns:
-            Événement masqué
+            Ãƒâ€°vÃƒÂ©nement masquÃƒÂ©
         """
         sanitized = AuditEvent(**asdict(event))
+
+        if sanitized.old_value is not None:
+            sanitized.old_value = self._mask_sensitive_payload(sanitized.old_value)
+        if sanitized.new_value is not None:
+            sanitized.new_value = self._mask_sensitive_payload(sanitized.new_value)
 
         # Masquer les valeurs sensibles
         if (
@@ -246,7 +297,7 @@ class AuditLogger:
         if sanitized.variables:
             sanitized.variables = self._mask_sensitive_variables(sanitized.variables)
 
-        # Masquer les détails sensibles
+        # Masquer les dÃƒÂ©tails sensibles
         if sanitized.details:
             sanitized.details = self._mask_sensitive_details(sanitized.details)
 
@@ -257,10 +308,10 @@ class AuditLogger:
         Masque les variables sensibles.
 
         Args:
-            variables: Variables à masquer
+            variables: Variables ÃƒÂ  masquer
 
         Returns:
-            Variables masquées
+            Variables masquÃƒÂ©es
         """
         masked = {}
         for key, value in variables.items():
@@ -281,34 +332,39 @@ class AuditLogger:
 
     def _mask_sensitive_details(self, details: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Masque les détails sensibles.
+        Masque les dÃƒÂ©tails sensibles.
 
         Args:
-            details: Détails à masquer
+            details: DÃƒÂ©tails ÃƒÂ  masquer
 
         Returns:
-            Détails masqués
+            DÃƒÂ©tails masquÃƒÂ©s
         """
         return self._mask_sensitive_variables(details)
 
+    def _mask_sensitive_payload(self, payload: Any) -> Any:
+        if isinstance(payload, (dict, list)):
+            return self._mask_sensitive_variables(payload)
+        return payload
+
     def _calculate_risk_score(self, event: AuditEvent) -> int:
         """
-        Calcule le score de risque d'un événement.
+        Calcule le score de risque d'un ÃƒÂ©vÃƒÂ©nement.
 
         Args:
-            event: Événement à évaluer
+            event: Ãƒâ€°vÃƒÂ©nement ÃƒÂ  ÃƒÂ©valuer
 
         Returns:
             Score de risque (0-100)
         """
-        # Utiliser un calculateur spécifique si disponible
+        # Utiliser un calculateur spÃƒÂ©cifique si disponible
         if event.event_type in self._risk_calculators:
             return self._risk_calculators[event.event_type](event)
 
-        # Calcul par défaut
+        # Calcul par dÃƒÂ©faut
         base_score = 0
 
-        # Score basé sur la gravité
+        # Score basÃƒÂ© sur la gravitÃƒÂ©
         severity_scores = {
             AuditSeverity.INFO: 10,
             AuditSeverity.WARNING: 30,
@@ -317,7 +373,7 @@ class AuditLogger:
         }
         base_score += severity_scores.get(event.severity, 10)
 
-        # Score basé sur le type d'événement
+        # Score basÃƒÂ© sur le type d'ÃƒÂ©vÃƒÂ©nement
         if event.event_type in [
             AuditEventType.LOGIN_FAILURE,
             AuditEventType.PERMISSION_DENIED,
@@ -325,11 +381,11 @@ class AuditLogger:
         ]:
             base_score += 20
 
-        # Score basé sur l'accès aux données sensibles
+        # Score basÃƒÂ© sur l'accÃƒÂ¨s aux donnÃƒÂ©es sensibles
         if event.field_name and event.field_name.lower() in self.sensitive_fields:
             base_score += 15
 
-        # Score basé sur les opérations à haut risque
+        # Score basÃƒÂ© sur les opÃƒÂ©rations ÃƒÂ  haut risque
         if (
             event.operation_name
             and event.operation_name.lower() in self.high_risk_operations
@@ -340,20 +396,20 @@ class AuditLogger:
 
     def _calculate_login_failure_risk(self, event: AuditEvent) -> int:
         """
-        Calcule le risque pour les échecs de connexion.
+        Calcule le risque pour les ÃƒÂ©checs de connexion.
 
         Args:
-            event: Événement d'échec de connexion
+            event: Ãƒâ€°vÃƒÂ©nement d'ÃƒÂ©chec de connexion
 
         Returns:
             Score de risque
         """
         base_score = 30
 
-        # Vérifier les tentatives répétées
+        # VÃƒÂ©rifier les tentatives rÃƒÂ©pÃƒÂ©tÃƒÂ©es
         if event.ip_address:
-            # Cette logique devrait être implémentée avec un cache ou une base de données
-            # pour compter les tentatives récentes
+            # Cette logique devrait ÃƒÂªtre implÃƒÂ©mentÃƒÂ©e avec un cache ou une base de donnÃƒÂ©es
+            # pour compter les tentatives rÃƒÂ©centes
             pass
 
         return base_score
@@ -363,14 +419,14 @@ class AuditLogger:
         Calcule le risque pour les refus de permission.
 
         Args:
-            event: Événement de refus de permission
+            event: Ãƒâ€°vÃƒÂ©nement de refus de permission
 
         Returns:
             Score de risque
         """
         base_score = 40
 
-        # Augmenter le score pour les tentatives d'accès à des données sensibles
+        # Augmenter le score pour les tentatives d'accÃƒÂ¨s ÃƒÂ  des donnÃƒÂ©es sensibles
         if event.field_name and event.field_name.lower() in self.sensitive_fields:
             base_score += 20
 
@@ -378,17 +434,17 @@ class AuditLogger:
 
     def _calculate_sensitive_data_risk(self, event: AuditEvent) -> int:
         """
-        Calcule le risque pour l'accès aux données sensibles.
+        Calcule le risque pour l'accÃƒÂ¨s aux donnÃƒÂ©es sensibles.
 
         Args:
-            event: Événement d'accès aux données sensibles
+            event: Ãƒâ€°vÃƒÂ©nement d'accÃƒÂ¨s aux donnÃƒÂ©es sensibles
 
         Returns:
             Score de risque
         """
         base_score = 50
 
-        # Augmenter le score pour certains types de données
+        # Augmenter le score pour certains types de donnÃƒÂ©es
         if event.field_name:
             field_lower = event.field_name.lower()
             if any(
@@ -407,20 +463,20 @@ class AuditLogger:
         self, event_type: AuditEventType, calculator: callable
     ):
         """
-        Enregistre un calculateur de risque personnalisé.
+        Enregistre un calculateur de risque personnalisÃƒÂ©.
 
         Args:
-            event_type: Type d'événement
+            event_type: Type d'ÃƒÂ©vÃƒÂ©nement
             calculator: Fonction de calcul du risque
         """
         self._risk_calculators[event_type] = calculator
 
     def register_event_handler(self, event_type: AuditEventType, handler: callable):
         """
-        Enregistre un gestionnaire d'événement.
+        Enregistre un gestionnaire d'ÃƒÂ©vÃƒÂ©nement.
 
         Args:
-            event_type: Type d'événement
+            event_type: Type d'ÃƒÂ©vÃƒÂ©nement
             handler: Fonction de gestion
         """
         if event_type not in self._event_handlers:
@@ -429,78 +485,78 @@ class AuditLogger:
 
     def _execute_event_handlers(self, event: AuditEvent):
         """
-        Exécute les gestionnaires d'événements.
+        ExÃƒÂ©cute les gestionnaires d'ÃƒÂ©vÃƒÂ©nements.
 
         Args:
-            event: Événement à traiter
+            event: Ãƒâ€°vÃƒÂ©nement ÃƒÂ  traiter
         """
         handlers = self._event_handlers.get(event.event_type, [])
         for handler in handlers:
             try:
                 handler(event)
             except Exception as e:
-                logger.error(f"Erreur dans le gestionnaire d'événement: {e}")
+                logger.error(f"Erreur dans le gestionnaire d'ÃƒÂ©vÃƒÂ©nement: {e}")
 
     def _detect_anomalies(self, event: AuditEvent):
         """
-        Détecte les anomalies dans les événements.
+        DÃƒÂ©tecte les anomalies dans les ÃƒÂ©vÃƒÂ©nements.
 
         Args:
-            event: Événement à analyser
+            event: Ãƒâ€°vÃƒÂ©nement ÃƒÂ  analyser
         """
-        # Détecter les tentatives de connexion suspectes
+        # DÃƒÂ©tecter les tentatives de connexion suspectes
         if event.event_type == AuditEventType.LOGIN_FAILURE:
             self._detect_brute_force_attempts(event)
 
-        # Détecter les accès anormaux aux données
+        # DÃƒÂ©tecter les accÃƒÂ¨s anormaux aux donnÃƒÂ©es
         if event.event_type == AuditEventType.SENSITIVE_DATA_ACCESS:
             self._detect_unusual_data_access(event)
 
-        # Détecter les violations de sécurité répétées
+        # DÃƒÂ©tecter les violations de sÃƒÂ©curitÃƒÂ© rÃƒÂ©pÃƒÂ©tÃƒÂ©es
         if event.event_type == AuditEventType.SECURITY_VIOLATION:
             self._detect_repeated_violations(event)
 
     def _detect_brute_force_attempts(self, event: AuditEvent):
         """
-        Détecte les tentatives de force brute.
+        DÃƒÂ©tecte les tentatives de force brute.
 
         Args:
-            event: Événement d'échec de connexion
+            event: Ãƒâ€°vÃƒÂ©nement d'ÃƒÂ©chec de connexion
         """
-        # Cette logique devrait être implémentée avec un système de cache
+        # Cette logique devrait ÃƒÂªtre implÃƒÂ©mentÃƒÂ©e avec un systÃƒÂ¨me de cache
         # pour compter les tentatives par IP/utilisateur
         pass
 
     def _detect_unusual_data_access(self, event: AuditEvent):
         """
-        Détecte les accès inhabituels aux données.
+        DÃƒÂ©tecte les accÃƒÂ¨s inhabituels aux donnÃƒÂ©es.
 
         Args:
-            event: Événement d'accès aux données
+            event: Ãƒâ€°vÃƒÂ©nement d'accÃƒÂ¨s aux donnÃƒÂ©es
         """
-        # Analyser les patterns d'accès habituels de l'utilisateur
+        # Analyser les patterns d'accÃƒÂ¨s habituels de l'utilisateur
         pass
 
     def _detect_repeated_violations(self, event: AuditEvent):
         """
-        Détecte les violations répétées.
+        DÃƒÂ©tecte les violations rÃƒÂ©pÃƒÂ©tÃƒÂ©es.
 
         Args:
-            event: Événement de violation
+            event: Ãƒâ€°vÃƒÂ©nement de violation
         """
-        # Compter les violations récentes du même utilisateur
+        # Compter les violations rÃƒÂ©centes du mÃƒÂªme utilisateur
         pass
 
 
 def audit_graphql_operation(operation_type: str = None):
     """
-    Décorateur pour auditer les opérations GraphQL.
+    DÃƒÂ©corateur pour auditer les opÃƒÂ©rations GraphQL.
 
     Args:
-        operation_type: Type d'opération (optionnel)
+        operation_type: Type d'opÃƒÂ©ration (optionnel)
 
     Returns:
-        Décorateur d'audit
+        DÃƒÂ©corateur d'audit
     """
 
     def decorator(func):
@@ -516,10 +572,32 @@ def audit_graphql_operation(operation_type: str = None):
             if not info:
                 return func(*args, **kwargs)
 
-            user = getattr(info.context, "user", None)
-            request = getattr(info.context, "request", None)
+            context = getattr(info, "context", None)
+            request = _resolve_request(context)
+            user = _resolve_user(context, request)
 
-            # Créer l'événement d'audit
+            op_value = None
+            if info.operation and getattr(info.operation, "operation", None):
+                op_value = info.operation.operation.value
+
+            gql_operation_name = None
+            if info.operation and getattr(info.operation, "name", None):
+                gql_operation_name = getattr(info.operation.name, "value", None)
+
+            details = {}
+            schema_name = getattr(context, "schema_name", None)
+            if schema_name:
+                details["schema_name"] = schema_name
+            if gql_operation_name:
+                details["operation_name"] = gql_operation_name
+            if request is not None:
+                details["request_path"] = getattr(request, "path", None)
+                details["request_method"] = getattr(request, "method", None)
+
+            session_id = None
+            if request is not None and hasattr(request, "session"):
+                session_id = getattr(request.session, "session_key", None)
+
             event = AuditEvent(
                 event_type=AuditEventType.DATA_ACCESS,
                 severity=AuditSeverity.INFO,
@@ -528,25 +606,32 @@ def audit_graphql_operation(operation_type: str = None):
                 username=user.username if user and user.is_authenticated else None,
                 ip_address=get_client_ip(request) if request else None,
                 user_agent=request.META.get("HTTP_USER_AGENT") if request else None,
+                session_id=session_id,
                 operation_name=info.field_name,
-                operation_type=operation_type or info.operation.operation.value,
+                operation_type=operation_type or op_value,
                 query_hash=hash_query(info.operation) if info.operation else None,
                 variables=info.variable_values,
+                details=details or None,
             )
 
             try:
                 result = func(*args, **kwargs)
 
-                # Auditer le succès
+                # Auditer le succÃƒÂ¨s
                 audit_logger.log_event(event)
 
                 return result
 
             except Exception as e:
-                # Auditer l'échec
-                event.event_type = AuditEventType.SYSTEM_ERROR
-                event.severity = AuditSeverity.ERROR
+                event.event_type, event.severity = _classify_exception(e)
                 event.message = str(e)
+                if isinstance(e, GraphQLError):
+                    error_code = (getattr(e, "extensions", {}) or {}).get("code")
+                    if error_code:
+                        event.details = dict(event.details or {})
+                        event.details["error_code"] = str(error_code)
+                event.details = dict(event.details or {})
+                event.details["error_type"] = e.__class__.__name__
                 audit_logger.log_event(event)
 
                 raise
@@ -558,20 +643,12 @@ def audit_graphql_operation(operation_type: str = None):
 
 def audit_data_modification(model_class: type, operation: str):
     """
-    Décorateur pour auditer les modifications de données.
-
-    Args:
-        model_class: Classe du modèle
-        operation: Type d'opération (create, update, delete)
-
-    Returns:
-        Décorateur d'audit
+    Decorator to audit data modifications.
     """
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Extraire le contexte
             info = None
             instance = None
 
@@ -581,27 +658,36 @@ def audit_data_modification(model_class: type, operation: str):
                 elif isinstance(arg, model_class):
                     instance = arg
 
-            user = getattr(info.context, "user", None) if info else None
-            request = getattr(info.context, "request", None) if info else None
+            context = getattr(info, "context", None) if info else None
+            request = _resolve_request(context)
+            user = _resolve_user(context, request)
 
-            # Capturer l'état avant modification
-            old_values = {}
+            old_values = None
             if instance and operation in ["update", "delete"]:
-                for field in model_class._meta.get_fields():
-                    if hasattr(instance, field.name):
-                        old_values[field.name] = getattr(instance, field.name)
+                old_values = _snapshot_instance_fields(instance)
 
             try:
                 result = func(*args, **kwargs)
 
-                # Capturer l'état après modification
-                new_values = {}
-                if instance and operation in ["create", "update"]:
-                    for field in model_class._meta.get_fields():
-                        if hasattr(instance, field.name):
-                            new_values[field.name] = getattr(instance, field.name)
+                if instance is None and isinstance(result, model_class):
+                    instance = result
 
-                # Créer l'événement d'audit
+                new_values = None
+                if instance and operation in ["create", "update"]:
+                    new_values = _snapshot_instance_fields(instance)
+
+                details = {"operation": operation, "model": model_class.__name__}
+                schema_name = getattr(context, "schema_name", None)
+                if schema_name:
+                    details["schema_name"] = schema_name
+                if request is not None:
+                    details["request_path"] = getattr(request, "path", None)
+                    details["request_method"] = getattr(request, "method", None)
+
+                session_id = None
+                if request is not None and hasattr(request, "session"):
+                    session_id = getattr(request.session, "session_key", None)
+
                 event_type_map = {
                     "create": AuditEventType.CREATE,
                     "update": AuditEventType.UPDATE,
@@ -609,21 +695,19 @@ def audit_data_modification(model_class: type, operation: str):
                 }
 
                 event = AuditEvent(
-                    event_type=event_type_map.get(
-                        operation, AuditEventType.DATA_ACCESS
-                    ),
+                    event_type=event_type_map.get(operation, AuditEventType.DATA_ACCESS),
                     severity=AuditSeverity.INFO,
                     timestamp=django_timezone.now(),
                     user_id=user.id if user and user.is_authenticated else None,
                     username=user.username if user and user.is_authenticated else None,
                     ip_address=get_client_ip(request) if request else None,
+                    user_agent=request.META.get("HTTP_USER_AGENT") if request else None,
+                    session_id=session_id,
                     model_name=model_class.__name__,
-                    object_id=str(instance.pk)
-                    if instance and hasattr(instance, "pk")
-                    else None,
-                    old_value=old_values if old_values else None,
-                    new_value=new_values if new_values else None,
-                    details={"operation": operation, "model": model_class.__name__},
+                    object_id=str(instance.pk) if instance and hasattr(instance, "pk") else None,
+                    old_value=old_values,
+                    new_value=new_values,
+                    details=details,
                 )
 
                 audit_logger.log_event(event)
@@ -631,16 +715,30 @@ def audit_data_modification(model_class: type, operation: str):
                 return result
 
             except Exception as e:
-                # Auditer l'échec
+                event_type, severity = _classify_exception(e)
+                session_id = None
+                if request is not None and hasattr(request, "session"):
+                    session_id = getattr(request.session, "session_key", None)
+                error_details = {"operation": operation, "error": str(e), "error_type": e.__class__.__name__}
+                schema_name = getattr(context, "schema_name", None)
+                if schema_name:
+                    error_details["schema_name"] = schema_name
+                if request is not None:
+                    error_details["request_path"] = getattr(request, "path", None)
+                    error_details["request_method"] = getattr(request, "method", None)
+
                 event = AuditEvent(
-                    event_type=AuditEventType.SYSTEM_ERROR,
-                    severity=AuditSeverity.ERROR,
+                    event_type=event_type,
+                    severity=severity,
                     timestamp=django_timezone.now(),
                     user_id=user.id if user and user.is_authenticated else None,
                     username=user.username if user and user.is_authenticated else None,
+                    ip_address=get_client_ip(request) if request else None,
+                    user_agent=request.META.get("HTTP_USER_AGENT") if request else None,
+                    session_id=session_id,
                     model_name=model_class.__name__,
-                    message=f"Erreur lors de {operation}: {str(e)}",
-                    details={"operation": operation, "error": str(e)},
+                    message=f"Error during {operation}: {str(e)}",
+                    details=error_details,
                 )
 
                 audit_logger.log_event(event)
@@ -654,10 +752,10 @@ def audit_data_modification(model_class: type, operation: str):
 
 def get_client_ip(request) -> Optional[str]:
     """
-    Récupère l'adresse IP du client.
+    RÃƒÂ©cupÃƒÂ¨re l'adresse IP du client.
 
     Args:
-        request: Requête HTTP
+        request: RequÃƒÂªte HTTP
 
     Returns:
         Adresse IP du client
@@ -676,13 +774,13 @@ def get_client_ip(request) -> Optional[str]:
 
 def hash_query(operation) -> str:
     """
-    Génère un hash pour une opération GraphQL.
+    GÃƒÂ©nÃƒÂ¨re un hash pour une opÃƒÂ©ration GraphQL.
 
     Args:
-        operation: Opération GraphQL
+        operation: OpÃƒÂ©ration GraphQL
 
     Returns:
-        Hash de l'opération
+        Hash de l'opÃƒÂ©ration
     """
     if not operation:
         return ""

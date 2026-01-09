@@ -116,6 +116,33 @@ def build_mutation_error(message: str, field: Optional[str] = None) -> MutationE
     return MutationError(field=_normalize_field_path(field), message=str(message))
 
 
+def _wrap_with_audit(
+    model: Type[models.Model], operation: str, func: Callable
+) -> Callable:
+    try:
+        from ..security.audit_logging import audit_data_modification
+    except Exception:
+        return func
+    return audit_data_modification(model, operation)(func)
+
+
+def _infer_audit_operation(name: Optional[str]) -> str:
+    if not name:
+        return "update"
+    lowered = name.lower()
+    if lowered.startswith(("create", "add", "register", "signup", "import")):
+        return "create"
+    if lowered.startswith(("delete", "remove", "archive", "purge", "clear")):
+        return "delete"
+    if lowered.startswith(("update", "set", "edit", "patch", "upsert", "enable", "disable")):
+        return "update"
+    if "delete" in lowered or "remove" in lowered:
+        return "delete"
+    if "create" in lowered or "add" in lowered:
+        return "create"
+    return "update"
+
+
 class MutationGenerator:
     """
     Creates GraphQL mutations for Django models, supporting CRUD operations
@@ -226,7 +253,11 @@ class MutationGenerator:
                         return cls(ok=False, object=None, errors=validation_errors)
 
                     # Handle nested create with comprehensive validation and transaction management
-                    instance = nested_handler.handle_nested_create(model, input)
+                    def _perform_create(info, payload):
+                        return nested_handler.handle_nested_create(model, payload)
+
+                    audited_create = _wrap_with_audit(model, "create", _perform_create)
+                    instance = audited_create(info, input)
 
                     return cls(ok=True, object=instance, errors=None)
 
@@ -562,9 +593,11 @@ class MutationGenerator:
                         return cls(ok=False, object=None, errors=validation_errors)
 
                     # Handle nested update with comprehensive validation and transaction management
-                    instance = nested_handler.handle_nested_update(
-                        model, update_data, instance
-                    )
+                    def _perform_update(info, target, payload):
+                        return nested_handler.handle_nested_update(model, payload, target)
+
+                    audited_update = _wrap_with_audit(model, "update", _perform_update)
+                    instance = audited_update(info, instance, update_data)
 
                     return UpdateMutation(ok=True, object=instance, errors=[])
 
@@ -842,8 +875,12 @@ class MutationGenerator:
                     graphql_meta.ensure_operation_access(
                         "delete", info=info, instance=instance
                     )
-                    deleted_instance = instance  # Store reference before deletion
-                    instance.delete()
+                    def _perform_delete(info, target):
+                        target.delete()
+                        return target
+
+                    audited_delete = _wrap_with_audit(model, "delete", _perform_delete)
+                    deleted_instance = audited_delete(info, instance)
                     return cls(ok=True, object=deleted_instance, errors=[])
 
                 except model.DoesNotExist:
@@ -898,11 +935,15 @@ class MutationGenerator:
             ) -> "BulkCreateMutation":
                 try:
                     graphql_meta.ensure_operation_access("bulk_create", info=info)
+                    def _perform_create(info, payload):
+                        return model.objects.create(**payload)
+
+                    audited_create = _wrap_with_audit(model, "create", _perform_create)
                     instances = []
                     for input_data in inputs:
                         # Normalize enum inputs (GraphQL Enum -> underlying Django values)
                         input_data = cls._normalize_enum_inputs(input_data, model)
-                        instance = model.objects.create(**input_data)
+                        instance = audited_create(info, input_data)
                         instances.append(instance)
 
                     return cls(ok=True, objects=instances, errors=[])
@@ -1037,6 +1078,14 @@ class MutationGenerator:
             ) -> "BulkUpdateMutation":
                 try:
                     graphql_meta.ensure_operation_access("bulk_update", info=info)
+                    def _perform_update(info, target, payload):
+                        for field, value in payload.items():
+                            setattr(target, field, value)
+                        target.full_clean()
+                        target.save()
+                        return target
+
+                    audited_update = _wrap_with_audit(model, "update", _perform_update)
                     instances = []
                     for input_data in inputs:
                         instance = model.objects.get(pk=input_data["id"])
@@ -1047,10 +1096,7 @@ class MutationGenerator:
                         update_data = cls._normalize_enum_inputs(
                             input_data["data"], model
                         )
-                        for field, value in update_data.items():
-                            setattr(instance, field, value)
-                        instance.full_clean()
-                        instance.save()
+                        instance = audited_update(info, instance, update_data)
                         instances.append(instance)
 
                     return cls(ok=True, objects=instances, errors=[])
@@ -1152,7 +1198,14 @@ class MutationGenerator:
                         graphql_meta.ensure_operation_access(
                             "bulk_delete", info=info, instance=inst
                         )
-                    instances.delete()
+
+                    def _perform_delete(info, target):
+                        target.delete()
+                        return target
+
+                    audited_delete = _wrap_with_audit(model, "delete", _perform_delete)
+                    for inst in deleted_instances:
+                        audited_delete(info, inst)
                     return cls(ok=True, objects=deleted_instances, errors=[])
 
                 except model.DoesNotExist as exc:
@@ -1290,12 +1343,17 @@ class MutationGenerator:
                         k: v for k, v in kwargs.items() if k in method_params
                     }
 
-                    # Execute method with filtered arguments
-                    result = method_func(**filtered_kwargs)
+                    def _perform_method(info, target, payload):
+                        result = method_func(**payload)
+                        if isinstance(result, models.Model):
+                            result.save()
+                        return result
 
-                    # Handle model instance results
-                    if isinstance(result, models.Model):
-                        result.save()
+                    audit_operation = _infer_audit_operation(method_name)
+                    audited_method = _wrap_with_audit(
+                        model, audit_operation, _perform_method
+                    )
+                    result = audited_method(info, instance, filtered_kwargs)
 
                     return cls(ok=True, result=result, errors=[])
 
@@ -1540,32 +1598,39 @@ class MutationGenerator:
 
                 # Wrap in transaction if atomic is True
                 if atomic:
-                    return cls._atomic_mutate(model, method_name, id, input)
+                    return cls._atomic_mutate(model, method_name, id, input, info)
                 else:
-                    return cls._non_atomic_mutate(model, method_name, id, input)
+                    return cls._non_atomic_mutate(model, method_name, id, input, info)
 
             @classmethod
             @transaction.atomic
-            def _atomic_mutate(cls, model, method_name, id, input):
-                return cls._execute_method(model, method_name, id, input)
+            def _atomic_mutate(cls, model, method_name, id, input, info):
+                return cls._execute_method(model, method_name, id, input, info)
 
             @classmethod
-            def _non_atomic_mutate(cls, model, method_name, id, input):
-                return cls._execute_method(model, method_name, id, input)
+            def _non_atomic_mutate(cls, model, method_name, id, input, info):
+                return cls._execute_method(model, method_name, id, input, info)
 
             @classmethod
-            def _execute_method(cls, model, method_name, id, input):
+            def _execute_method(cls, model, method_name, id, input, info):
                 try:
                     instance = model.objects.get(pk=id)
                     method_func = getattr(instance, method_name)
 
-                    if input:
-                        result = method_func(**input)
-                    else:
-                        result = method_func()
+                    def _perform_method(info, target, payload):
+                        if payload:
+                            result = method_func(**payload)
+                        else:
+                            result = method_func()
+                        if isinstance(result, models.Model):
+                            result.save()
+                        return result
 
-                    if isinstance(result, models.Model):
-                        result.save()
+                    audit_operation = _infer_audit_operation(method_name)
+                    audited_method = _wrap_with_audit(
+                        model, audit_operation, _perform_method
+                    )
+                    result = audited_method(info, instance, input)
 
                     return cls(ok=True, result=result, errors=[])
 

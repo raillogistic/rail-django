@@ -175,6 +175,13 @@ class GraphQLAuditMiddleware(BaseMiddleware):
         except Exception:
             return next_resolver(root, info, **kwargs)
 
+        audit_wrapper = None
+        try:
+            from ..security.audit_logging import audit_graphql_operation
+            audit_wrapper = audit_graphql_operation
+        except Exception:
+            audit_wrapper = None
+
         operation_type = info.operation.operation.value if info.operation else "unknown"
         event_type = self._resolve_event_type(operation_type, info.field_name, AuditEventType)
 
@@ -196,8 +203,12 @@ class GraphQLAuditMiddleware(BaseMiddleware):
         success = True
         error_message = None
 
+        resolver = next_resolver
+        if audit_wrapper is not None:
+            resolver = audit_wrapper(operation_type)(next_resolver)
+
         try:
-            result = next_resolver(root, info, **kwargs)
+            result = resolver(root, info, **kwargs)
             return result
         except Exception as exc:
             success = False

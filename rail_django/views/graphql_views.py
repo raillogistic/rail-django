@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from django.conf import settings
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.utils import timezone as django_timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
@@ -347,9 +348,45 @@ class MultiSchemaGraphQLView(GraphQLView):
                 query_text = ""
 
         if "__schema" in query_text or "__type" in query_text:
+            self._audit_introspection_attempt(request, schema_info, query_text)
             return False
 
         return True
+
+    def _audit_introspection_attempt(
+        self, request: HttpRequest, schema_info: Dict[str, Any], query_text: str
+    ) -> None:
+        try:
+            from ..security.audit_logging import (
+                AuditEvent,
+                AuditEventType,
+                AuditSeverity,
+                audit_logger,
+                get_client_ip,
+            )
+        except Exception:
+            return
+
+        user = getattr(request, "user", None)
+        details = {
+            "schema_name": getattr(schema_info, "name", None),
+            "request_path": getattr(request, "path", None),
+            "request_method": getattr(request, "method", None),
+            "query_length": len(query_text or ""),
+        }
+
+        event = AuditEvent(
+            event_type=AuditEventType.INTROSPECTION_ATTEMPT,
+            severity=AuditSeverity.WARNING,
+            timestamp=django_timezone.now(),
+            user_id=user.id if user and user.is_authenticated else None,
+            username=user.username if user and user.is_authenticated else None,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT"),
+            message="Introspection disabled for schema",
+            details=details,
+        )
+        audit_logger.log_event(event)
 
     def _introspection_disabled_response(self) -> JsonResponse:
         """Return a 403 response when introspection is disabled."""
