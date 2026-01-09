@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
-from ..conf import get_setting
+from ..config_proxy import get_setting
 from .performance import get_complexity_analyzer
 from .security import get_auth_manager, get_input_validator, get_rate_limiter
 

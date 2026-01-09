@@ -21,6 +21,7 @@ env/*
 .Python
 build/
 develop-eggs/
+rail_django.egg-info/
 downloads/
 eggs/
 .eggs/

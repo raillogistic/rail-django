@@ -17,7 +17,7 @@ from django.db import IntegrityError
 from graphql.error import GraphQLError
 from graphql.execution import ExecutionResult
 
-from ..conf import get_setting
+from ..config_proxy import get_setting
 
 logger = logging.getLogger(__name__)
 

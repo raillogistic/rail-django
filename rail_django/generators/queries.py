@@ -19,7 +19,7 @@ try:
 except Exception:
     DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
-from ..conf import get_query_generator_settings
+from ..config_proxy import get_query_generator_settings
 from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
 from ..core.security import get_authz_manager

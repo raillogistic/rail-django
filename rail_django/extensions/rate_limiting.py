@@ -19,7 +19,7 @@ from django.core.cache import cache
 from graphql import GraphQLError
 import graphene
 
-from rail_django.conf import get_settings_proxy
+from rail_django.config_proxy import get_settings_proxy
 
 logger = logging.getLogger(__name__)
 

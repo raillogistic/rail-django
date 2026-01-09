@@ -21,6 +21,8 @@ setup(
         "django-cors-headers>=4.0.0",
         "weasyprint==60.1",
         "pillow==10.4.0",
+        "PyJWT==2.9.0",
+        "bleach==6.1.0",
     ],
     entry_points={
         "console_scripts": [

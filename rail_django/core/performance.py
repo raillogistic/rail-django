@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Type, Union
 from django.conf import settings as django_settings
 from django.db import models
 
-from ..conf import get_setting
+from ..config_proxy import get_setting
 
 logger = logging.getLogger(__name__)
 

@@ -27,7 +27,7 @@ from graphene import Scalar
 from graphql.error import GraphQLError
 from graphql.language import ast
 
-from ..conf import get_setting
+from ..config_proxy import get_setting
 
 
 class DateTime(Scalar):

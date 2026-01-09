@@ -80,7 +80,7 @@ class SchemaBuilder:
         # Load settings using the new configuration system
         if settings is None:
             try:
-                from ..conf import get_core_schema_settings
+                from ..config_proxy import get_core_schema_settings
                 from .settings import SchemaSettings
 
                 # Get schema-specific settings
@@ -146,7 +146,7 @@ class SchemaBuilder:
     def mutation_generator(self):
         """Lazy-loaded mutation generator."""
         if self._mutation_generator is None:
-            from ..conf import get_mutation_generator_settings
+            from ..config_proxy import get_mutation_generator_settings
             from ..generators.mutations import MutationGenerator
 
             mutation_settings = get_mutation_generator_settings(self.schema_name)
@@ -715,7 +715,7 @@ class SchemaBuilder:
                 security_mutations = {}
                 try:
                     # Use hierarchical settings system to get disable_security_mutations
-                    from ..conf import get_setting
+                    from ..config_proxy import get_setting
                     from ..extensions.auth import (
                         LoginMutation,
                         LogoutMutation,

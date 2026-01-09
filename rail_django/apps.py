@@ -57,7 +57,7 @@ class AppConfig(BaseAppConfig):
         """Setup performance monitoring if enabled."""
         try:
             # Use hierarchical settings proxy and new lowercase keys
-            from .conf import get_settings_proxy
+            from .config_proxy import get_settings_proxy
 
             settings = get_settings_proxy()
 
@@ -75,7 +75,7 @@ class AppConfig(BaseAppConfig):
         """Configure Django signals for automatic schema generation."""
         try:
             # Use hierarchical settings proxy and new lowercase keys
-            from .conf import get_settings_proxy
+            from .config_proxy import get_settings_proxy
 
             settings = get_settings_proxy()
 
@@ -105,7 +105,7 @@ class AppConfig(BaseAppConfig):
         """Initialize the schema registry."""
         try:
             # Use hierarchical settings proxy and new lowercase keys
-            from .conf import get_settings_proxy
+            from .config_proxy import get_settings_proxy
 
             settings = get_settings_proxy()
 

@@ -13,7 +13,7 @@ from ..core.meta import get_model_graphql_meta
 from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
 from ..core.performance import get_query_optimizer
 from ..core.error_handling import get_error_handler
-from ..conf import get_mutation_generator_settings
+from ..config_proxy import get_mutation_generator_settings
 import inspect
 import re
 from typing import Any, Callable, Dict, List, Optional, Type, Union, get_origin

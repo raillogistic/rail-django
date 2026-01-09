@@ -43,21 +43,21 @@ LIBRARY_NAME = __title__
 # Lazy imports to avoid circular dependencies and improve startup time
 def get_settings():
     """Get library settings with lazy import."""
-    from .conf import settings_proxy
+    from .config_proxy import settings_proxy
 
     return settings_proxy
 
 
 def get_schema_settings(schema_name: str):
     """Get settings for a specific schema with lazy import."""
-    from .conf import get_settings_for_schema
+    from .config_proxy import get_settings_for_schema
 
     return get_settings_for_schema(schema_name)
 
 
 def configure_schema(**overrides):
     """Configure schema settings with lazy import."""
-    from .conf import configure_schema_settings
+    from .config_proxy import configure_schema_settings
 
     return configure_schema_settings
 
@@ -133,7 +133,7 @@ def __getattr__(name):
         return ConfigLoader
     elif name == "settings":
         # Export the hierarchical SettingsProxy as 'settings'
-        from .conf import settings_proxy
+        from .config_proxy import settings_proxy
 
         return settings_proxy
     else:

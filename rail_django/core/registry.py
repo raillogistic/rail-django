@@ -122,7 +122,7 @@ class SchemaRegistry:
             # Configure schema settings in Django settings for hierarchical access
             schema_settings = modified_kwargs.get("settings", settings) or {}
             if schema_settings:
-                from ..conf import configure_schema_settings
+                from ..config_proxy import configure_schema_settings
 
                 # Flatten nested settings structure for configure_schema_settings
                 flattened_settings = {}
@@ -254,7 +254,7 @@ class SchemaRegistry:
 
             # Import SchemaBuilder to avoid circular imports
             try:
-                from ..conf import configure_schema_settings, get_schema_settings
+                from ..config_proxy import configure_schema_settings, get_schema_settings
                 from .schema import SchemaBuilder
                 from .settings import SchemaSettings
 

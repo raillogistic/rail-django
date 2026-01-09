@@ -25,7 +25,7 @@ from django.utils.encoding import force_str
 from graphql import GraphQLError
 from rail_django.plugins import base
 
-from ..conf import get_core_schema_settings
+from ..config_proxy import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
 from ..utils.graphql_meta import get_model_graphql_meta
@@ -2442,7 +2442,7 @@ class ModelMetadataExtractor:
             List of MutationMetadata objects
         """
         try:
-            from ..conf import get_mutation_generator_settings
+            from ..config_proxy import get_mutation_generator_settings
             from ..generators.mutations import MutationGenerator
             from ..generators.types import TypeGenerator
 

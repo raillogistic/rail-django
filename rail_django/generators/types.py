@@ -28,7 +28,7 @@ if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
 from datetime import date
 
-from ..conf import get_mutation_generator_settings, get_type_generator_settings
+from ..config_proxy import get_mutation_generator_settings, get_type_generator_settings
 from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
 from ..core.scalars import Binary as BinaryScalar
