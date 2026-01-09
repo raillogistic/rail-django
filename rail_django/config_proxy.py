@@ -90,7 +90,9 @@ class SettingsProxy:
         if self.schema_name not in schema_settings:
             return None
 
-        schema_config = schema_settings[self.schema_name]
+        schema_config = self._normalize_legacy_sections(
+            schema_settings[self.schema_name]
+        )
         return self._get_nested_value(schema_config, key)
 
     def _get_django_setting(self, key: str) -> Any:
@@ -103,7 +105,9 @@ class SettingsProxy:
         Returns:
             The setting value or None if not found
         """
-        django_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        django_settings = self._normalize_legacy_sections(
+            getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        )
         return self._get_nested_value(django_settings, key)
 
     def _get_library_default(self, key: str) -> Any:
@@ -141,6 +145,24 @@ class SettingsProxy:
             current = current[k]
 
         return current
+
+    def _normalize_legacy_sections(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize legacy settings keys to current names."""
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+
+        if "TYPE_SETTINGS" in data and "type_generation_settings" not in data:
+            normalized["type_generation_settings"] = data["TYPE_SETTINGS"]
+
+        if "PERFORMANCE" in data and "performance_settings" not in data:
+            normalized["performance_settings"] = data["PERFORMANCE"]
+
+        if "SECURITY" in data and "security_settings" not in data:
+            normalized["security_settings"] = data["SECURITY"]
+
+        return normalized
 
     def set(self, key: str, value: Any) -> None:
         """

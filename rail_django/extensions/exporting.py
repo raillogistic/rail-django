@@ -45,12 +45,20 @@ import json
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from django.apps import apps
+from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
-from django.http import HttpResponse, JsonResponse
+from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
+from django.db.models.fields.reverse_related import (
+    ManyToManyRel,
+    ManyToOneRel,
+    OneToOneRel,
+)
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -68,6 +76,23 @@ try:
 except ImportError:
     jwt_required = None
 
+try:
+    from .permissions import OperationType, permission_manager
+except ImportError:
+    OperationType = None
+    permission_manager = None
+
+try:
+    from ..security.field_permissions import (
+        FieldAccessLevel,
+        FieldContext,
+        field_permission_manager,
+    )
+except ImportError:
+    FieldAccessLevel = None
+    FieldContext = None
+    field_permission_manager = None
+
 # Optional Excel support
 try:
     import openpyxl
@@ -79,6 +104,85 @@ except ImportError:
     EXCEL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+EXPORT_DEFAULTS = {
+    "max_rows": 5000,
+    "stream_csv": True,
+    "csv_chunk_size": 1000,
+    "rate_limit": {
+        "enable": True,
+        "window_seconds": 60,
+        "max_requests": 30,
+    },
+    "allowed_models": [],
+    "allowed_fields": {},
+    "require_model_permissions": True,
+    "require_field_permissions": True,
+    "required_permissions": [],
+}
+
+
+def _get_export_settings() -> Dict[str, Any]:
+    """Return merged export settings with defaults applied."""
+    export_settings = getattr(settings, "RAIL_DJANGO_EXPORT", None)
+    if export_settings is None:
+        export_settings = (
+            getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
+        ).get("export_settings", {})
+
+    merged = dict(EXPORT_DEFAULTS)
+    if isinstance(export_settings, dict):
+        merged.update(export_settings)
+        rate_limit_override = export_settings.get("rate_limit")
+        rate_limit = dict(EXPORT_DEFAULTS["rate_limit"])
+        if isinstance(rate_limit_override, dict):
+            rate_limit.update(rate_limit_override)
+        merged["rate_limit"] = rate_limit
+
+    return merged
+
+
+def _model_key_candidates(model: type) -> List[str]:
+    """Return possible identifiers for a model."""
+    return [
+        model._meta.label_lower,
+        f"{model._meta.app_label}.{model.__name__}",
+        model.__name__,
+        model._meta.model_name,
+    ]
+
+
+def _normalize_allowed_list(values: Iterable[Any]) -> List[str]:
+    """Normalize allowlist values into lowercase strings."""
+    return [str(value).strip().lower() for value in values if str(value).strip()]
+
+
+def _is_model_allowed(model: type, export_settings: Dict[str, Any]) -> bool:
+    """Check if the model is allowed for export."""
+    allowed_models = export_settings.get("allowed_models") or []
+    if not allowed_models:
+        return True
+
+    allowed = set(_normalize_allowed_list(allowed_models))
+    return any(key.lower() in allowed for key in _model_key_candidates(model))
+
+
+def _get_allowed_fields(model: type, export_settings: Dict[str, Any]) -> List[str]:
+    """Return the allowed field accessors for a model, if configured."""
+    allowed_fields = export_settings.get("allowed_fields") or {}
+    if not isinstance(allowed_fields, dict):
+        return []
+
+    candidates = {key.lower() for key in _model_key_candidates(model)}
+    for key, fields in allowed_fields.items():
+        if not key:
+            continue
+        if str(key).strip().lower() in candidates:
+            if isinstance(fields, (list, tuple, set)):
+                return [str(field).strip() for field in fields if str(field).strip()]
+            return []
+
+    return []
 
 
 class ExportError(Exception):
@@ -147,15 +251,185 @@ class ModelExporter:
                 f"Model '{self.model_name}' not found in app '{self.app_name}': {e}"
             )
 
+    def _normalize_ordering(self, ordering: Optional[Union[str, List[str]]]) -> List[str]:
+        """Normalize ordering input into a list of field expressions."""
+        if not ordering:
+            return []
+        if isinstance(ordering, str):
+            return [ordering]
+        if isinstance(ordering, (list, tuple)):
+            return [item for item in ordering if isinstance(item, str) and item]
+        return []
+
+    def _resolve_model_field(
+        self, model_class: type, field_name: str
+    ) -> Optional[models.Field]:
+        """Resolve a field or reverse relation on a model."""
+        try:
+            return model_class._meta.get_field(field_name)
+        except FieldDoesNotExist:
+            pass
+
+        related_objects = getattr(model_class._meta, "related_objects", [])
+        for relation in related_objects:
+            if relation.get_accessor_name() == field_name:
+                return relation
+
+        return None
+
+    def _collect_related_paths(self, accessors: Iterable[str]) -> Dict[str, List[str]]:
+        """Collect select_related and prefetch_related paths for accessors."""
+        select_related: Set[str] = set()
+        prefetch_related: Set[str] = set()
+
+        for accessor in accessors:
+            if not accessor:
+                continue
+            parts = accessor.split(".")
+            current_model = self.model
+            path_parts: List[str] = []
+            prefetch_mode = False
+
+            for part in parts:
+                if part.endswith("()"):
+                    break
+                field = self._resolve_model_field(current_model, part)
+                if not field:
+                    break
+
+                path_parts.append(part)
+
+                if isinstance(field, (ForeignKey, OneToOneField)):
+                    if prefetch_mode:
+                        prefetch_related.add("__".join(path_parts))
+                    else:
+                        select_related.add("__".join(path_parts))
+                    current_model = field.related_model
+                    continue
+
+                if isinstance(field, (ManyToManyField, ManyToOneRel, ManyToManyRel, OneToOneRel)):
+                    prefetch_mode = True
+                    prefetch_related.add("__".join(path_parts))
+                    related_model = getattr(field, "related_model", None)
+                    if related_model:
+                        current_model = related_model
+                    continue
+
+                break
+
+        return {
+            "select_related": sorted(select_related),
+            "prefetch_related": sorted(prefetch_related),
+        }
+
+    def _apply_related_optimizations(
+        self, queryset: models.QuerySet, accessors: Iterable[str]
+    ) -> models.QuerySet:
+        """Apply select_related/prefetch_related based on accessors."""
+        related_paths = self._collect_related_paths(accessors)
+        if related_paths["select_related"]:
+            queryset = queryset.select_related(*related_paths["select_related"])
+        if related_paths["prefetch_related"]:
+            queryset = queryset.prefetch_related(*related_paths["prefetch_related"])
+        return queryset
+
+    def _has_field_access(self, user: Any, accessor: str) -> bool:
+        """Check field-level access permissions if configured."""
+        if not field_permission_manager or not FieldContext or not FieldAccessLevel:
+            return True
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if getattr(user, "is_superuser", False):
+            return True
+
+        current_model = self.model
+        for part in accessor.split("."):
+            if part.endswith("()"):
+                break
+            context = FieldContext(
+                user=user,
+                field_name=part,
+                operation_type="read",
+                model_class=current_model,
+            )
+            access_level = field_permission_manager.get_field_access_level(context)
+            if access_level == FieldAccessLevel.NONE:
+                return False
+
+            field = self._resolve_model_field(current_model, part)
+            related_model = getattr(field, "related_model", None) if field else None
+            if related_model:
+                current_model = related_model
+            else:
+                break
+
+        return True
+
+    def validate_fields(
+        self,
+        fields: List[Union[str, Dict[str, str]]],
+        *,
+        user: Optional[Any] = None,
+        export_settings: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, str]]:
+        """Validate and normalize fields based on allowlist and permissions."""
+        export_settings = export_settings or _get_export_settings()
+        allowed_fields = _get_allowed_fields(self.model, export_settings)
+        require_field_permissions = bool(
+            export_settings.get("require_field_permissions", True)
+        )
+
+        parsed_fields: List[Dict[str, str]] = []
+        denied_fields: List[str] = []
+
+        for field_config in fields:
+            parsed_field = self.parse_field_config(field_config)
+            accessor = parsed_field.get("accessor", "").strip()
+            if not accessor:
+                denied_fields.append("<empty>")
+                continue
+
+            if allowed_fields:
+                base_accessor = accessor.split(".")[0]
+                if accessor not in allowed_fields and base_accessor not in allowed_fields:
+                    denied_fields.append(accessor)
+                    continue
+
+            if (
+                user is not None
+                and require_field_permissions
+                and not self._has_field_access(user, accessor)
+            ):
+                denied_fields.append(accessor)
+                continue
+
+            parsed_fields.append(parsed_field)
+
+        if denied_fields:
+            raise ExportError(
+                "Export denied for fields: " + ", ".join(sorted(set(denied_fields)))
+            )
+
+        if not parsed_fields:
+            raise ExportError("No exportable fields were provided")
+
+        return parsed_fields
+
     def get_queryset(
-        self, variables: Optional[Dict[str, Any]] = None, ordering: Optional[str] = None
+        self,
+        variables: Optional[Dict[str, Any]] = None,
+        ordering: Optional[Union[str, List[str]]] = None,
+        fields: Optional[Iterable[str]] = None,
+        max_rows: Optional[int] = None,
     ) -> models.QuerySet:
         """
         Get the filtered and ordered queryset using GraphQL filters.
 
         Args:
             variables: Dictionary of filter kwargs (e.g., {'title__icontains': 'test'})
-            ordering: Django ORM ordering expression (e.g., 'created_at' or '-id')
+            ordering: Django ORM ordering expression(s)
+            fields: Field accessors for select_related/prefetch_related optimization
+            max_rows: Optional max rows cap
 
         Returns:
             Filtered and ordered queryset
@@ -171,8 +445,16 @@ class ModelExporter:
                 queryset = self.apply_graphql_filters(queryset, variables)
 
             # Apply ordering
-            if ordering:
-                queryset = queryset.order_by(ordering)
+            ordering_fields = self._normalize_ordering(ordering)
+            if ordering_fields:
+                queryset = queryset.order_by(*ordering_fields)
+
+            # Apply relation optimizations based on requested fields
+            if fields:
+                queryset = self._apply_related_optimizations(queryset, fields)
+
+            if max_rows is not None and max_rows > 0:
+                queryset = queryset[:max_rows]
 
             return queryset
 
@@ -542,7 +824,9 @@ class ModelExporter:
         self,
         fields: List[Union[str, Dict[str, str]]],
         variables: Optional[Dict[str, Any]] = None,
-        ordering: Optional[str] = None,
+        ordering: Optional[Union[str, List[str]]] = None,
+        max_rows: Optional[int] = None,
+        parsed_fields: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Export model data to CSV format with flexible field format support.
@@ -550,7 +834,8 @@ class ModelExporter:
         Args:
             fields: List of field definitions (string or dict format)
             variables: Filter variables
-            ordering: Ordering expression
+            ordering: Ordering expression(s)
+            max_rows: Optional max rows cap
 
         Returns:
             CSV content as string
@@ -559,19 +844,25 @@ class ModelExporter:
         writer = csv.writer(output)
 
         # Parse field configurations
-        parsed_fields = []
-        for field_config in fields:
-            parsed_field = self.parse_field_config(field_config)
-            parsed_fields.append(parsed_field)
+        if parsed_fields is None:
+            parsed_fields = []
+            for field_config in fields:
+                parsed_field = self.parse_field_config(field_config)
+                parsed_fields.append(parsed_field)
 
         # Write headers
         headers = [parsed_field["title"] for parsed_field in parsed_fields]
         writer.writerow(headers)
 
         # Write data rows
-        queryset = self.get_queryset(variables, ordering)
+        queryset = self.get_queryset(
+            variables,
+            ordering,
+            fields=[field["accessor"] for field in parsed_fields],
+            max_rows=max_rows,
+        )
 
-        for instance in queryset:
+        for instance in queryset.iterator():
             row = []
             for parsed_field in parsed_fields:
                 accessor = parsed_field["accessor"]
@@ -585,7 +876,9 @@ class ModelExporter:
         self,
         fields: List[Union[str, Dict[str, str]]],
         variables: Optional[Dict[str, Any]] = None,
-        ordering: Optional[str] = None,
+        ordering: Optional[Union[str, List[str]]] = None,
+        max_rows: Optional[int] = None,
+        parsed_fields: Optional[List[Dict[str, str]]] = None,
     ) -> bytes:
         """
         Export model data to Excel format with flexible field format support.
@@ -593,7 +886,8 @@ class ModelExporter:
         Args:
             fields: List of field definitions (string or dict format)
             variables: Filter variables
-            ordering: Ordering expression
+            ordering: Ordering expression(s)
+            max_rows: Optional max rows cap
 
         Returns:
             Excel file content as bytes
@@ -618,10 +912,11 @@ class ModelExporter:
         header_alignment = Alignment(horizontal="center", vertical="center")
 
         # Parse field configurations
-        parsed_fields = []
-        for field_config in fields:
-            parsed_field = self.parse_field_config(field_config)
-            parsed_fields.append(parsed_field)
+        if parsed_fields is None:
+            parsed_fields = []
+            for field_config in fields:
+                parsed_field = self.parse_field_config(field_config)
+                parsed_fields.append(parsed_field)
 
         # Write headers
         headers = [parsed_field["title"] for parsed_field in parsed_fields]
@@ -638,9 +933,14 @@ class ModelExporter:
             )
 
         # Write data rows
-        queryset = self.get_queryset(variables, ordering)
+        queryset = self.get_queryset(
+            variables,
+            ordering,
+            fields=[field["accessor"] for field in parsed_fields],
+            max_rows=max_rows,
+        )
 
-        for row_num, instance in enumerate(queryset, 2):
+        for row_num, instance in enumerate(queryset.iterator(), 2):
             for col_num, parsed_field in enumerate(parsed_fields, 1):
                 accessor = parsed_field["accessor"]
                 value = self.get_field_value(instance, accessor)
@@ -705,7 +1005,7 @@ class ExportView(View):
         {
             "app_name": "blog",
             "model_name": "Post",
-            "file_extension": "excel",  // or "csv"
+            "file_extension": "xlsx",  // or "csv"
             "filename": "posts_export",  // optional
             "fields": [
                 "title",
@@ -730,6 +1030,11 @@ class ExportView(View):
             )
 
         try:
+            export_settings = _get_export_settings()
+            rate_limit_response = self._check_rate_limit(request, export_settings)
+            if rate_limit_response is not None:
+                return rate_limit_response
+
             # Parse JSON payload
             try:
                 data = json.loads(request.body)
@@ -750,6 +1055,8 @@ class ExportView(View):
             fields = data["fields"]
 
             # Validate file extension
+            if file_extension in ["excel", "xlsx"]:
+                file_extension = "xlsx"
             if file_extension not in ["xlsx", "csv"]:
                 return JsonResponse(
                     {"error": 'file_extension must be "xlsx" or "csv"'}, status=400
@@ -783,8 +1090,18 @@ class ExportView(View):
 
             # Optional parameters
             filename = data.get("filename")
-            ordering = data.get("ordering", [])
-            variables = data.get("variables", {})
+            ordering = data.get("ordering")
+            variables = data.get("variables") or {}
+
+            if not isinstance(variables, dict):
+                return JsonResponse(
+                    {"error": "variables must be an object of filter parameters"},
+                    status=400,
+                )
+
+            max_rows, max_rows_error = self._resolve_max_rows(data, export_settings)
+            if max_rows_error is not None:
+                return max_rows_error
 
             # Generate default filename if not provided
             if not filename:
@@ -793,16 +1110,49 @@ class ExportView(View):
 
             # Create exporter and generate file
             exporter = ModelExporter(app_name, model_name)
+            permission_response = self._enforce_model_permissions(
+                request, exporter.model, export_settings
+            )
+            if permission_response is not None:
+                return permission_response
+
+            parsed_fields = exporter.validate_fields(
+                fields, user=getattr(request, "user", None), export_settings=export_settings
+            )
+            ordering_fields = exporter._normalize_ordering(ordering)
+            ordering_value = ordering_fields or None
 
             if file_extension == "xlsx":
-                content = exporter.export_to_excel(fields, variables, ordering)
+                content = exporter.export_to_excel(
+                    fields,
+                    variables,
+                    ordering_value,
+                    max_rows=max_rows,
+                    parsed_fields=parsed_fields,
+                )
                 content_type = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 file_ext = "xlsx"
             else:  # csv
-                content = exporter.export_to_csv(fields, variables, ordering)
-                content_type = "text/csv"
+                if export_settings.get("stream_csv", True):
+                    return self._stream_csv_response(
+                        exporter=exporter,
+                        parsed_fields=parsed_fields,
+                        variables=variables,
+                        ordering=ordering_value,
+                        max_rows=max_rows,
+                        filename=filename,
+                        chunk_size=int(export_settings.get("csv_chunk_size", 1000)),
+                    )
+                content = exporter.export_to_csv(
+                    fields,
+                    variables,
+                    ordering_value,
+                    max_rows=max_rows,
+                    parsed_fields=parsed_fields,
+                )
+                content_type = "text/csv; charset=utf-8"
                 file_ext = "csv"
 
             # Create HTTP response with file download
@@ -819,10 +1169,187 @@ class ExportView(View):
 
         except ExportError as e:
             logger.error(f"Export error: {e}")
-            return JsonResponse({"error": str(e)}, status=400)
+            message = str(e)
+            status = 403 if "denied" in message.lower() else 400
+            return JsonResponse({"error": message}, status=status)
         except Exception as e:
             logger.error(f"Unexpected error during export: {e}")
             return JsonResponse({"error": "Internal server error"}, status=500)
+
+    def _get_rate_limit_identifier(self, request) -> str:
+        """Resolve the rate limit identifier for the request."""
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            return f"user:{user.id}"
+
+        forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        if forwarded_for:
+            ip_address = forwarded_for.split(",")[0].strip()
+        else:
+            ip_address = request.META.get("REMOTE_ADDR", "unknown")
+
+        return f"ip:{ip_address}"
+
+    def _check_rate_limit(
+        self, request: Any, export_settings: Dict[str, Any]
+    ) -> Optional[JsonResponse]:
+        """Apply a basic rate limit using Django cache."""
+        config = export_settings.get("rate_limit") or {}
+        if not config.get("enable", True):
+            return None
+
+        window_seconds = int(config.get("window_seconds", 60))
+        max_requests = int(config.get("max_requests", 30))
+        identifier = self._get_rate_limit_identifier(request)
+        cache_key = f"rail:export_rl:{identifier}"
+
+        count = cache.get(cache_key)
+        if count is None:
+            cache.add(cache_key, 1, timeout=window_seconds)
+            return None
+
+        if int(count) >= max_requests:
+            return JsonResponse(
+                {"error": "Rate limit exceeded", "retry_after": window_seconds},
+                status=429,
+            )
+
+        try:
+            cache.incr(cache_key)
+        except ValueError:
+            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
+        return None
+
+    def _resolve_max_rows(
+        self, data: Dict[str, Any], export_settings: Dict[str, Any]
+    ) -> Tuple[Optional[int], Optional[JsonResponse]]:
+        """Resolve max rows with request override and config cap."""
+        config_max_rows = export_settings.get("max_rows", None)
+        requested_max = data.get("max_rows", data.get("limit"))
+
+        if config_max_rows is not None:
+            try:
+                config_max_rows = int(config_max_rows)
+            except (TypeError, ValueError):
+                config_max_rows = None
+        if config_max_rows is not None and config_max_rows <= 0:
+            config_max_rows = None
+
+        if requested_max is None:
+            return config_max_rows, None
+
+        try:
+            requested_max = int(requested_max)
+        except (TypeError, ValueError):
+            return None, JsonResponse(
+                {"error": "max_rows must be an integer"}, status=400
+            )
+
+        if requested_max <= 0:
+            return config_max_rows, None
+
+        if config_max_rows is None:
+            return requested_max, None
+
+        return min(requested_max, config_max_rows), None
+
+    def _enforce_model_permissions(
+        self, request: Any, model: type, export_settings: Dict[str, Any]
+    ) -> Optional[JsonResponse]:
+        """Check model allowlist and permissions."""
+        if not _is_model_allowed(model, export_settings):
+            return JsonResponse(
+                {"error": "Model export not allowed", "model": model._meta.label},
+                status=403,
+            )
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return JsonResponse(
+                {"error": "Authentication required for export"}, status=401
+            )
+
+        if not export_settings.get("require_model_permissions", True):
+            return None
+
+        if getattr(user, "is_superuser", False):
+            return None
+
+        required_permissions = export_settings.get("required_permissions") or []
+        if required_permissions:
+            if not any(user.has_perm(perm) for perm in required_permissions):
+                return JsonResponse(
+                    {"error": "Insufficient permissions for export"}, status=403
+                )
+            return None
+
+        if permission_manager and OperationType:
+            result = permission_manager.check_operation_permission(
+                user, model._meta.label_lower, OperationType.READ
+            )
+            if not result.allowed:
+                return JsonResponse(
+                    {
+                        "error": "Insufficient permissions for export",
+                        "detail": result.reason,
+                    },
+                    status=403,
+                )
+
+        view_perm = f"{model._meta.app_label}.view_{model._meta.model_name}"
+        if not user.has_perm(view_perm):
+            return JsonResponse(
+                {"error": "Insufficient permissions for export"}, status=403
+            )
+
+        return None
+
+    def _stream_csv_response(
+        self,
+        *,
+        exporter: ModelExporter,
+        parsed_fields: List[Dict[str, str]],
+        variables: Dict[str, Any],
+        ordering: Optional[Union[str, List[str]]],
+        max_rows: Optional[int],
+        filename: str,
+        chunk_size: int,
+    ) -> StreamingHttpResponse:
+        """Stream a CSV export response."""
+        headers = [field["title"] for field in parsed_fields]
+        accessors = [field["accessor"] for field in parsed_fields]
+
+        if chunk_size <= 0:
+            chunk_size = 1000
+
+        queryset = exporter.get_queryset(
+            variables,
+            ordering,
+            fields=accessors,
+            max_rows=max_rows,
+        ).iterator(chunk_size=chunk_size)
+
+        def row_generator():
+            output = io.StringIO()
+            writer = csv.writer(output)
+
+            writer.writerow(headers)
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            for instance in queryset:
+                row = [exporter.get_field_value(instance, accessor) for accessor in accessors]
+                writer.writerow(row)
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        response = StreamingHttpResponse(
+            row_generator(), content_type="text/csv; charset=utf-8"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
+        return response
 
     @method_decorator(jwt_required if jwt_required else lambda f: f)
     def get(self, request):
@@ -847,13 +1374,14 @@ class ExportView(View):
             "required_parameters": {
                 "app_name": "string - Name of the Django app containing the model",
                 "model_name": "string - Name of the Django model to export",
-                "file_extension": 'string - Either "excel" or "csv"',
+                "file_extension": 'string - Either "xlsx" or "csv"',
                 "fields": "array - List of field configurations (string or dict format)",
             },
             "optional_parameters": {
                 "filename": "string - Custom filename (default: ModelName_timestamp)",
                 "ordering": "array - List of Django ORM ordering expressions",
                 "variables": "object - GraphQL filter parameters",
+                "max_rows": "integer - Optional cap for rows exported (bounded by server settings)",
             },
             "field_formats": {
                 "string": "Uses field name as accessor and verbose_name as title",
@@ -878,7 +1406,7 @@ class ExportView(View):
                 "payload": {
                     "app_name": "blog",
                     "model_name": "Post",
-                    "file_extension": "excel",
+                    "file_extension": "xlsx",
                     "filename": "blog_posts_export",
                     "fields": [
                         "title",
@@ -930,7 +1458,7 @@ def export_model_to_csv(
     model_name: str,
     fields: List[Union[str, Dict[str, str]]],
     variables: Optional[Dict[str, Any]] = None,
-    ordering: Optional[str] = None,
+    ordering: Optional[Union[str, List[str]]] = None,
 ) -> str:
     """
     Programmatically export model data to CSV format with flexible field format support.
@@ -954,7 +1482,7 @@ def export_model_to_excel(
     model_name: str,
     fields: List[Union[str, Dict[str, str]]],
     variables: Optional[Dict[str, Any]] = None,
-    ordering: Optional[str] = None,
+    ordering: Optional[Union[str, List[str]]] = None,
 ) -> bytes:
     """
     Programmatically export model data to Excel format with flexible field format support.

@@ -99,11 +99,15 @@ JWT_ACCESS_TOKEN_LIFETIME = 3600
 JWT_REFRESH_TOKEN_LIFETIME = 86400
 JWT_AUTH_COOKIE = "jwt"
 JWT_REFRESH_COOKIE = "refresh_token"
+JWT_ALLOW_COOKIE_AUTH = True
+JWT_ENFORCE_CSRF = True  # Require CSRF token for cookie-based auth on unsafe methods
+CSRF_COOKIE_NAME = "csrftoken"
 ```
 
 ## Performance and monitoring settings
 
 ```python
+GRAPHQL_PERFORMANCE_ENABLED = False
 GRAPHQL_SLOW_QUERY_THRESHOLD = 1.0
 GRAPHQL_COMPLEXITY_THRESHOLD = 100
 GRAPHQL_MEMORY_THRESHOLD = 100.0
@@ -115,6 +119,47 @@ GRAPHQL_PERFORMANCE_HEADERS = False
 ```python
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = ["https://example.com"]
+```
+
+## Schema API settings
+
+The schema management REST endpoints require JWT access tokens and admin
+permissions. You can tune the API behavior with:
+
+```python
+GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS = ["rail_django.manage_schema"]
+GRAPHQL_SCHEMA_API_RATE_LIMIT = {
+    "enable": True,
+    "window_seconds": 60,
+    "max_requests": 60,
+}
+GRAPHQL_SCHEMA_API_CORS_ENABLED = True
+GRAPHQL_SCHEMA_API_CORS_ALLOWED_ORIGINS = ["https://admin.example.com"]
+```
+
+## Export settings
+
+Export settings can be defined under `RAIL_DJANGO_EXPORT` (preferred) or
+`RAIL_DJANGO_GRAPHQL["export_settings"]`.
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "max_rows": 5000,
+    "stream_csv": True,
+    "csv_chunk_size": 1000,
+    "rate_limit": {
+        "enable": True,
+        "window_seconds": 60,
+        "max_requests": 30,
+    },
+    "allowed_models": ["blog.Post", "auth.User"],
+    "allowed_fields": {
+        "blog.Post": ["id", "title", "author.username", "created_at"],
+    },
+    "require_model_permissions": True,
+    "require_field_permissions": True,
+    "required_permissions": ["blog.export_post"],
+}
 ```
 
 ## SettingsProxy internals

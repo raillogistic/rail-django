@@ -13,6 +13,12 @@ from typing import Any, Dict, List, Optional, Type, Union
 from django.conf import settings as django_settings
 from django.db import models
 
+try:
+    from ..extensions.optimization import QueryOptimizationConfig, QueryOptimizer as SelectionOptimizer
+except Exception:
+    QueryOptimizationConfig = None
+    SelectionOptimizer = None
+
 from ..config_proxy import get_setting
 
 logger = logging.getLogger(__name__)
@@ -66,6 +72,29 @@ class QueryOptimizer:
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
         self.settings = PerformanceSettings.from_schema(schema_name)
+        self._selection_optimizer = self._build_selection_optimizer()
+
+    def _build_selection_optimizer(self):
+        """Build a selection-set driven optimizer when available."""
+        if not SelectionOptimizer or not QueryOptimizationConfig:
+            return None
+
+        config = QueryOptimizationConfig(
+            enable_select_related=self.settings.enable_select_related,
+            enable_prefetch_related=self.settings.enable_prefetch_related,
+            max_prefetch_depth=self.settings.max_query_depth,
+            auto_optimize_queries=self.settings.enable_query_optimization,
+            enable_schema_caching=False,
+            enable_query_caching=False,
+            enable_field_caching=False,
+            enable_complexity_analysis=self.settings.enable_query_cost_analysis,
+            max_query_complexity=self.settings.max_query_complexity,
+            max_query_depth=self.settings.max_query_depth,
+            query_timeout=self.settings.query_timeout,
+            enable_performance_monitoring=False,
+            log_slow_queries=False,
+        )
+        return SelectionOptimizer(config)
 
     def optimize_queryset(self, queryset: models.QuerySet, info: Any = None) -> models.QuerySet:
         """
@@ -81,19 +110,16 @@ class QueryOptimizer:
         if not self.settings.enable_query_optimization:
             return queryset
 
+        if info is not None and self._selection_optimizer is not None:
+            try:
+                return self._selection_optimizer.optimize_queryset(
+                    queryset, info, queryset.model
+                )
+            except Exception:
+                # Fall back to default queryset without blanket prefetching
+                return queryset
+
         optimized_qs = queryset
-
-        # Apply select_related optimization
-        if self.settings.enable_select_related:
-            select_related_fields = self._get_select_related_fields(queryset.model, info)
-            if select_related_fields:
-                optimized_qs = optimized_qs.select_related(*select_related_fields)
-
-        # Apply prefetch_related optimization
-        if self.settings.enable_prefetch_related:
-            prefetch_fields = self._get_prefetch_related_fields(queryset.model, info)
-            if prefetch_fields:
-                optimized_qs = optimized_qs.prefetch_related(*prefetch_fields)
 
         # Apply only() optimization
         if self.settings.enable_only_fields:
@@ -108,30 +134,6 @@ class QueryOptimizer:
                 optimized_qs = optimized_qs.defer(*defer_fields)
 
         return optimized_qs
-
-    def _get_select_related_fields(self, model: Type[models.Model], info: Any = None) -> List[str]:
-        """Get fields that should be select_related."""
-        select_related_fields = []
-
-        # Analyze model relationships
-        for field in model._meta.get_fields():
-            if isinstance(field, (models.ForeignKey, models.OneToOneField)):
-                select_related_fields.append(field.name)
-
-        return select_related_fields
-
-    def _get_prefetch_related_fields(self, model: Type[models.Model], info: Any = None) -> List[str]:
-        """Get fields that should be prefetch_related."""
-        prefetch_fields = []
-
-        # Analyze reverse relationships
-        for field in model._meta.get_fields():
-            if isinstance(field, (models.ManyToManyField, models.ForeignKey)) and field.many_to_many:
-                prefetch_fields.append(field.name)
-            elif hasattr(field, 'related_name') and field.related_name:
-                prefetch_fields.append(field.related_name)
-
-        return prefetch_fields
 
     def _get_only_fields(self, model: Type[models.Model], info: Any = None) -> List[str]:
         """Get fields that should be included in only()."""

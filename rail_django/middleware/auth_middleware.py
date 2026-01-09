@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional, Union, Tuple
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
@@ -64,6 +65,11 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         self.jwt_header_name = getattr(
             settings, "JWT_AUTH_HEADER_NAME", "HTTP_AUTHORIZATION"
         )
+        self.allow_cookie_auth = getattr(settings, "JWT_ALLOW_COOKIE_AUTH", True)
+        self.enforce_csrf = getattr(
+            settings, "JWT_ENFORCE_CSRF", not getattr(settings, "DEBUG", False)
+        )
+        self.csrf_cookie_name = getattr(settings, "CSRF_COOKIE_NAME", "csrftoken")
         self.enable_audit_logging = getattr(
             settings, "GRAPHQL_ENABLE_AUDIT_LOGGING", True
         )
@@ -111,6 +117,15 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         auth_method = "anonymous"
 
         if token:
+            token_source = getattr(request, "_jwt_token_source", "header")
+            if (
+                token_source == "cookie"
+                and self.enforce_csrf
+                and request.method not in ("GET", "HEAD", "OPTIONS", "TRACE")
+                and not self._is_csrf_token_valid(request)
+            ):
+                return self._csrf_failed_response()
+
             user = self._authenticate_jwt_token(token, request)
             if user:
                 auth_method = "jwt"
@@ -224,21 +239,28 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             if lower.startswith(f"{prefix_lower} "):
                 parts = header.split(" ", 1)
                 if len(parts) == 2 and parts[1]:
+                    request._jwt_token_source = "header"
                     return parts[1]
 
         # Vérifier les cookies (optionnel)
         if cookie_name:
+            if not self.allow_cookie_auth:
+                return None
             token = request.COOKIES.get(cookie_name)
             if token:
                 if self.debug_mode:
                     logger.debug("Auth Middleware - Token found in cookie")
+                request._jwt_token_source = "cookie"
                 return token
             else:
                 if self.debug_mode:
                     logger.debug("Auth Middleware - Token NOT found in cookie")
 
         # Vérifier les paramètres de requête (pour les WebSockets)
-        return request.GET.get("token")
+        token = request.GET.get("token")
+        if token:
+            request._jwt_token_source = "query"
+        return token
 
     def _authenticate_jwt_token(
         self, token: str, request: HttpRequest
@@ -272,7 +294,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             # Valider le token JWT
             from ..extensions.auth import JWTManager
 
-            payload = JWTManager.verify_token(token)
+            payload = JWTManager.verify_token(token, expected_type="access")
 
             if not payload:
                 return None
@@ -435,6 +457,34 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             return real_ip
 
         return request.META.get("REMOTE_ADDR", "Unknown")
+
+    def _is_csrf_token_valid(self, request: HttpRequest) -> bool:
+        """Validate double-submit CSRF token for cookie-based auth."""
+        header_token = (
+            request.META.get("HTTP_X_CSRFTOKEN")
+            or request.META.get("HTTP_X_CSRF_TOKEN")
+            or request.META.get("HTTP_XSRF_TOKEN")
+        )
+        cookie_token = request.COOKIES.get(self.csrf_cookie_name)
+        if not header_token or not cookie_token:
+            return False
+        return header_token == cookie_token
+
+    def _csrf_failed_response(self) -> HttpResponse:
+        """Return a JSON response for failed CSRF validation."""
+        import json
+
+        payload = {
+            "errors": [
+                {
+                    "message": "CSRF validation failed",
+                    "code": "CSRF_FAILED",
+                }
+            ]
+        }
+        return HttpResponse(
+            json.dumps(payload), content_type="application/json", status=403
+        )
 
     def _send_to_audit_system(self, log_data: Dict[str, Any]) -> None:
         """
@@ -646,22 +696,20 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
         Returns:
             True si la limite est dépassée
         """
-        now = int(time.time())
-        state = self._rate_state.get(cache_key)
+        full_key = f"rail:graphql_rl:{cache_key}"
+        count = cache.get(full_key)
+        if count is None:
+            cache.add(full_key, 1, timeout=int(window))
+            return False
 
-        if not state:
-            state = {"window_start": now, "count": 0}
-        else:
-            # Reset window if expired
-            if now - state.get("window_start", now) >= int(window):
-                state["window_start"] = now
-                state["count"] = 0
+        if int(count) >= int(limit):
+            return True
 
-        # Increment and check
-        state["count"] += 1
-        self._rate_state[cache_key] = state
-
-        return state["count"] > int(limit)
+        try:
+            cache.incr(full_key)
+        except ValueError:
+            cache.set(full_key, int(count) + 1, timeout=int(window))
+        return False
 
     def _get_client_ip(self, request: HttpRequest) -> str:
         """

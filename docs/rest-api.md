@@ -17,16 +17,18 @@ Base path: `/api/v1/`
 - `GET /api/v1/health/` registry health summary
 - `GET /api/v1/metrics/` registry metrics
 
-Example: list schemas
+Example: list schemas (JWT required)
 
 ```bash
-curl -s http://localhost:8000/api/v1/schemas/
+curl -s http://localhost:8000/api/v1/schemas/ \
+  -H "Authorization: Bearer <jwt>"
 ```
 
-Example: register a schema
+Example: register a schema (admin permissions required)
 
 ```bash
 curl -s -X POST http://localhost:8000/api/v1/schemas/ \
+  -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "reporting",
@@ -43,8 +45,10 @@ curl -s -X POST http://localhost:8000/api/v1/schemas/ \
   }'
 ```
 
-Note: schema management endpoints are unauthenticated by default in the
-library. Protect them with your own auth/permissions in production.
+Note: list/detail endpoints require a JWT access token; create/update/delete,
+discovery, and metrics endpoints require admin permissions. Health remains
+public. Configure required permissions with
+`GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS`.
 
 ## Schema list endpoint (non-REST)
 
@@ -83,11 +87,18 @@ curl -s -X POST http://localhost:8000/api/v1/export/ \
     "filename": "posts",
     "fields": ["title", "author.username", {"accessor": "slug", "title": "Slug"}],
     "ordering": ["-created_at"],
+    "max_rows": 10000,
     "variables": {
       "status__exact": "published"
     }
   }'
 ```
+
+Notes:
+
+- Exports enforce `RAIL_DJANGO_EXPORT` settings for allowlists, row limits,
+  and rate limiting.
+- CSV responses may stream when `stream_csv` is enabled.
 
 ## PDF templating endpoints
 

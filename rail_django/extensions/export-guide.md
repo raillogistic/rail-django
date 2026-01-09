@@ -455,6 +455,38 @@ fields = ["id", "title", "created_at"]  # Minimal field set
 3. **Rate Limiting**: Implement rate limiting to prevent abuse
 4. **Data Sanitization**: Be cautious with user-provided field accessors
 
+### Built-in Guardrails
+
+The export endpoint supports server-side guardrails with `RAIL_DJANGO_EXPORT`
+(or `RAIL_DJANGO_GRAPHQL["export_settings"]`):
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "max_rows": 5000,
+    "stream_csv": True,
+    "csv_chunk_size": 1000,
+    "rate_limit": {
+        "enable": True,
+        "window_seconds": 60,
+        "max_requests": 30,
+    },
+    "allowed_models": ["blog.Post"],
+    "allowed_fields": {
+        "blog.Post": ["id", "title", "author.username", "created_at"],
+    },
+    "require_model_permissions": True,
+    "require_field_permissions": True,
+    "required_permissions": ["blog.export_post"],
+}
+```
+
+When enabled, the endpoint:
+
+- Caps rows (with optional request overrides via `max_rows`)
+- Blocks non-allowlisted models/fields
+- Enforces model and field permissions
+- Applies cache-backed rate limits
+
 ### Example Security Implementation
 
 ```python

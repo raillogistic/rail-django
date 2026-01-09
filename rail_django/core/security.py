@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.utils import timezone
 
 from ..config_proxy import get_setting
@@ -223,7 +224,32 @@ class RateLimiter:
         Returns:
             True if within limits, False if rate limited
         """
-        # Rate limiting disabled: always allow
+        if not self.settings.enable_rate_limiting:
+            return True
+
+        if window == "minute":
+            limit = int(self.settings.rate_limit_requests_per_minute)
+            window_seconds = 60
+        elif window == "hour":
+            limit = int(self.settings.rate_limit_requests_per_hour)
+            window_seconds = 3600
+        else:
+            limit = int(self.settings.rate_limit_requests_per_minute)
+            window_seconds = 60
+
+        cache_key = f"rail:rate:{window}:{identifier}"
+        count = cache.get(cache_key)
+        if count is None:
+            cache.add(cache_key, 1, timeout=window_seconds)
+            return True
+
+        if int(count) >= limit:
+            return False
+
+        try:
+            cache.incr(cache_key)
+        except ValueError:
+            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
         return True
 
     def get_client_identifier(self, request: Any) -> str:

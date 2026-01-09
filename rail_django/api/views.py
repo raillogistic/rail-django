@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -31,17 +32,119 @@ logger = logging.getLogger(__name__)
 class BaseAPIView(View):
     """Base class for API views with common functionality."""
 
+    auth_required = False
+    rate_limit_enabled = False
+
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         """Handle CORS and common headers."""
+        if self.auth_required:
+            auth_response = self._authenticate_request(request)
+            if auth_response is not None:
+                return auth_response
+
+        if self.rate_limit_enabled and request.method != "OPTIONS":
+            rate_limit_response = self._check_rate_limit(request)
+            if rate_limit_response is not None:
+                return rate_limit_response
+
         response = super().dispatch(request, *args, **kwargs)
 
         # Add CORS headers if enabled
-        if getattr(settings, 'GRAPHQL_SCHEMA_API_CORS_ENABLED', True):
-            response['Access-Control-Allow-Origin'] = '*'
-            response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        if getattr(settings, "GRAPHQL_SCHEMA_API_CORS_ENABLED", True):
+            allow_all = bool(getattr(settings, "CORS_ALLOW_ALL_ORIGINS", False))
+            if allow_all and not getattr(settings, "DEBUG", False):
+                allow_all = False
+
+            allowed_origins = getattr(
+                settings, "GRAPHQL_SCHEMA_API_CORS_ALLOWED_ORIGINS", None
+            )
+            if allowed_origins is None:
+                allowed_origins = getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+
+            origin = request.META.get("HTTP_ORIGIN")
+            if allow_all:
+                response["Access-Control-Allow-Origin"] = "*"
+            elif origin and origin in allowed_origins:
+                response["Access-Control-Allow-Origin"] = origin
+                response["Vary"] = "Origin"
+
+            response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
 
         return response
+
+    def _check_rate_limit(self, request: HttpRequest) -> Optional[JsonResponse]:
+        """Apply a basic rate limit using Django cache."""
+        config = getattr(settings, "GRAPHQL_SCHEMA_API_RATE_LIMIT", {}) or {}
+        if not config.get("enable", True):
+            return None
+
+        window_seconds = int(config.get("window_seconds", 60))
+        max_requests = int(config.get("max_requests", 60))
+
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            identifier = f"user:{user.id}"
+        else:
+            identifier = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            if not identifier:
+                identifier = request.META.get("REMOTE_ADDR", "unknown")
+            identifier = f"ip:{identifier}"
+
+        cache_key = f"rail:schema_api_rl:{self.__class__.__name__}:{identifier}"
+        count = cache.get(cache_key)
+        if count is None:
+            cache.add(cache_key, 1, timeout=window_seconds)
+            return None
+
+        if int(count) >= max_requests:
+            return self.error_response(
+                "Rate limit exceeded", status=429, details={"retry_after": window_seconds}
+            )
+
+        try:
+            cache.incr(cache_key)
+        except ValueError:
+            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
+        return None
+
+    def _authenticate_request(self, request: HttpRequest) -> Optional[JsonResponse]:
+        """Authenticate request using JWT access tokens."""
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth_header:
+            return self.error_response("Authentication required", status=401)
+
+        if not (auth_header.startswith("Bearer ") or auth_header.startswith("Token ")):
+            return self.error_response("Invalid authorization header", status=401)
+
+        parts = auth_header.split(" ", 1)
+        if len(parts) != 2 or not parts[1]:
+            return self.error_response("Invalid token format", status=401)
+
+        token = parts[1]
+        try:
+            from ..extensions.auth import JWTManager
+            from django.contrib.auth import get_user_model
+
+            payload = JWTManager.verify_token(token, expected_type="access")
+            if not payload:
+                return self.error_response("Invalid or expired token", status=401)
+
+            user_id = payload.get("user_id") or payload.get("sub")
+            if not user_id:
+                return self.error_response("Invalid token payload", status=401)
+
+            User = get_user_model()
+            user = User.objects.filter(id=user_id, is_active=True).first()
+            if not user:
+                return self.error_response("User not found or inactive", status=401)
+
+            request.user = user
+            request.jwt_payload = payload
+            return None
+        except Exception as exc:
+            logger.warning("API authentication failed: %s", exc)
+            return self.error_response("Authentication failed", status=401)
 
     def options(self, request: HttpRequest, *args, **kwargs):
         """Handle preflight requests."""
@@ -73,9 +176,31 @@ class BaseAPIView(View):
             logger.error(f"Error parsing JSON body: {e}")
         return None
 
+    def _require_admin(self, request: HttpRequest) -> Optional[JsonResponse]:
+        """Ensure the request is authenticated and authorized for management actions."""
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return self.error_response("Authentication required", status=401)
+
+        if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+            return None
+
+        required_perms = getattr(
+            settings,
+            "GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS",
+            ["rail_django.manage_schema"],
+        )
+        if required_perms and not any(user.has_perm(perm) for perm in required_perms):
+            return self.error_response("Admin permissions required", status=403)
+
+        return None
+
 
 class SchemaListAPIView(BaseAPIView):
     """API view for listing and creating schemas."""
+
+    auth_required = True
+    rate_limit_enabled = True
 
     def get(self, request: HttpRequest) -> JsonResponse:
         """
@@ -145,6 +270,10 @@ class SchemaListAPIView(BaseAPIView):
 
     def post(self, request: HttpRequest) -> JsonResponse:
         """Create a new schema."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             data = json.loads(request.body)
 
@@ -170,6 +299,9 @@ class SchemaListAPIView(BaseAPIView):
 
 class SchemaDetailAPIView(BaseAPIView):
     """API view for individual schema operations."""
+
+    auth_required = True
+    rate_limit_enabled = True
 
     def get(self, request: HttpRequest, schema_name: str) -> JsonResponse:
         """Get detailed information about a specific schema."""
@@ -213,6 +345,10 @@ class SchemaDetailAPIView(BaseAPIView):
 
     def put(self, request: HttpRequest, schema_name: str) -> JsonResponse:
         """Update a schema configuration."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             # Check if schema exists
             if not schema_registry.schema_exists(schema_name):
@@ -254,6 +390,10 @@ class SchemaDetailAPIView(BaseAPIView):
 
     def delete(self, request: HttpRequest, schema_name: str) -> JsonResponse:
         """Delete a schema registration."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             success = schema_registry.unregister_schema(schema_name)
             if not success:
@@ -271,8 +411,15 @@ class SchemaDetailAPIView(BaseAPIView):
 class SchemaManagementAPIView(BaseAPIView):
     """API view for schema management operations."""
 
+    auth_required = True
+    rate_limit_enabled = True
+
     def post(self, request: HttpRequest) -> JsonResponse:
         """Execute management actions."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             data = json.loads(request.body)
 
@@ -315,8 +462,15 @@ class SchemaManagementAPIView(BaseAPIView):
 class SchemaDiscoveryAPIView(BaseAPIView):
     """API view for schema discovery operations."""
 
+    auth_required = True
+    rate_limit_enabled = True
+
     def post(self, request: HttpRequest) -> JsonResponse:
         """Trigger schema auto-discovery."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             discovered_count = schema_registry.auto_discover_schemas()
 
@@ -392,8 +546,15 @@ class SchemaHealthAPIView(BaseAPIView):
 class SchemaMetricsAPIView(BaseAPIView):
     """API view for schema metrics and statistics."""
 
+    auth_required = True
+    rate_limit_enabled = True
+
     def get(self, request: HttpRequest) -> JsonResponse:
         """Get detailed metrics about schema registry."""
+        admin_check = self._require_admin(request)
+        if admin_check:
+            return admin_check
+
         try:
             schemas = schema_registry.list_schemas()
 

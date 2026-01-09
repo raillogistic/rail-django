@@ -321,7 +321,6 @@ DEFAULT_MIDDLEWARE = [
     RateLimitingMiddleware,
     ValidationMiddleware,
     QueryComplexityMiddleware,
-    CachingMiddleware,
     PerformanceMiddleware,
     LoggingMiddleware,
     ErrorHandlingMiddleware,

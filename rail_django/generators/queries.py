@@ -128,8 +128,8 @@ class QueryGenerator:
         self._query_fields: Dict[str, graphene.Field] = {}
 
         # Initialize performance optimization
-        self.optimizer = get_optimizer()
-        self.performance_monitor = get_performance_monitor()
+        self.optimizer = get_optimizer(schema_name)
+        self.performance_monitor = get_performance_monitor(schema_name)
 
     @property
     def filter_generator(self):
@@ -520,6 +520,8 @@ class QueryGenerator:
                     queryset = filterset.qs
 
                 # Apply ordering
+                offset = kwargs.get("offset")
+                limit = kwargs.get("limit")
                 order_by = self._normalize_ordering_specs(
                     kwargs.get("order_by"), ordering_config
                 )
@@ -532,12 +534,22 @@ class QueryGenerator:
                     if db_specs:
                         queryset = queryset.order_by(*db_specs)
                     if prop_specs:
+                        prop_limit = getattr(
+                            self.settings, "max_property_ordering_results", None
+                        )
+                        if prop_limit:
+                            if offset is not None and offset > prop_limit:
+                                return []
+                            effective_limit = (
+                                limit if limit is not None else prop_limit
+                            )
+                            effective_limit = min(effective_limit, prop_limit)
+                            slice_end = (offset or 0) + effective_limit
+                            queryset = queryset[:slice_end]
                         items = list(queryset)
                         items = self._apply_property_ordering(items, prop_specs)
 
                 # Apply pagination
-                offset = kwargs.get("offset")
-                limit = kwargs.get("limit")
                 if items is not None:
                     # In-memory pagination on sorted list
                     if offset is not None and limit is not None:
@@ -697,6 +709,18 @@ class QueryGenerator:
             queryset = manager.all()
             graphql_meta.ensure_operation_access(operation_name, info=info)
 
+            try:
+                page = int(kwargs.get("page", 1))
+            except Exception:
+                page = 1
+            try:
+                per_page = int(
+                    kwargs.get("per_page", self.settings.default_page_size)
+                )
+            except Exception:
+                per_page = self.settings.default_page_size
+            per_page = max(1, min(per_page, self.settings.max_page_size))
+
             # Apply query optimization first
             queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
@@ -748,12 +772,16 @@ class QueryGenerator:
                 if db_specs:
                     queryset = queryset.order_by(*db_specs)
                 if prop_specs:
+                    prop_limit = getattr(
+                        self.settings, "max_property_ordering_results", None
+                    )
+                    if prop_limit:
+                        max_items = min(prop_limit, page * per_page)
+                        queryset = queryset[:max_items]
                     items = list(queryset)
                     items = self._apply_property_ordering(items, prop_specs)
 
             # Calculate pagination values
-            page = kwargs.get("page", 1)
-            per_page = kwargs.get("per_page", self.settings.default_page_size)
             if items is not None:
                 total_count = len(items)
             else:
@@ -998,29 +1026,36 @@ class QueryGenerator:
                 queryset = queryset.order_by(value_path)
 
             queryset = queryset[:limit]
+            entries = list(queryset)
+
+            related_map = {}
+            if (
+                isinstance(field, (ForeignKey, OneToOneField))
+                and not getattr(field, "choices", None)
+            ):
+                raw_ids = [entry.get(value_path) for entry in entries]
+                related_ids = [raw_id for raw_id in raw_ids if raw_id is not None]
+                if related_ids:
+                    try:
+                        related_model = field.remote_field.model
+                        related_map = related_model._default_manager.using(queryset.db).in_bulk(
+                            related_ids
+                        )
+                    except Exception:
+                        related_map = {}
 
             buckets = []
-            for entry in queryset:
+            for entry in entries:
                 raw_value = entry.get(value_path)
                 label_value = raw_value
                 if getattr(field, "choices", None):
                     label_value = dict(field.flatchoices).get(raw_value, raw_value)
                 if raw_value is None:
                     label_value = "Non renseigné"
-                elif isinstance(
-                    field, (ForeignKey, OneToOneField)
-                ) and raw_value is not None:
-                    try:
-                        related_model = field.remote_field.model
-                        related_obj = (
-                            related_model._default_manager.using(queryset.db)
-                            .filter(pk=raw_value)
-                            .first()
-                        )
-                        if related_obj:
-                            label_value = str(related_obj)
-                    except Exception:
-                        label_value = label_value
+                elif isinstance(field, (ForeignKey, OneToOneField)) and raw_value is not None:
+                    related_obj = related_map.get(raw_value)
+                    if related_obj:
+                        label_value = str(related_obj)
 
                 buckets.append(
                     GroupingBucketType(

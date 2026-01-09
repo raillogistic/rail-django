@@ -64,9 +64,16 @@ class MultiSchemaGraphQLView(GraphQLView):
             # Apply schema-specific configuration
             self._configure_for_schema(schema_info)
 
+            # Apply GraphQL middleware for this schema
+            self._configure_middleware(schema_name)
+
             # Check authentication requirements
             if not self._check_authentication(request, schema_info):
                 return self._authentication_required_response()
+
+            # Enforce introspection settings
+            if not self._allow_introspection(request, schema_info):
+                return self._introspection_disabled_response()
 
             # Set the schema for this request
             self.schema = self._get_schema_instance(schema_name, schema_info)
@@ -102,7 +109,7 @@ class MultiSchemaGraphQLView(GraphQLView):
                     # Validate JWT token using JWTManager
                     from ..extensions.auth import JWTManager
 
-                    payload = JWTManager.verify_token(token)
+                    payload = JWTManager.verify_token(token, expected_type="access")
 
                     if payload:
                         # Get user from payload, support standard 'sub' claim fallback
@@ -182,42 +189,29 @@ class MultiSchemaGraphQLView(GraphQLView):
         try:
             from ..core.registry import schema_registry
 
-            builder = schema_registry.get_schema_builder(schema_name)
-            current_version = getattr(builder, "get_schema_version", lambda: 0)()
-
-            # If cached and version matches, return cached instance
-            cached_entry = self._schema_cache.get(schema_name)
-            if isinstance(cached_entry, dict):
-                cached_version = cached_entry.get("version", -1)
-                if cached_version == current_version:
-                    return cached_entry.get("schema")
-            elif cached_entry is not None:
-                # Backward compatibility: cached plain instance without version
-                # Refresh cache to include version metadata
-                schema_instance = builder.get_schema()
-                self._schema_cache[schema_name] = {
-                    "version": current_version,
-                    "schema": schema_instance,
-                }
-                logger.debug(
-                    f"Initialized versioned schema cache for '{schema_name}' (version {current_version})"
-                )
-                return schema_instance
-
-            # Not cached or version mismatch: fetch and cache fresh instance
-            schema_instance = builder.get_schema()
-            self._schema_cache[schema_name] = {
-                "version": current_version,
-                "schema": schema_instance,
-            }
+            schema_instance = schema_registry.get_schema_instance(schema_name)
             logger.debug(
-                f"Schema cache refreshed for '{schema_name}' (version {current_version})"
+                f"Schema instance loaded for '{schema_name}' via shared cache."
             )
             return schema_instance
 
         except Exception as e:
             logger.error(f"Error getting schema instance for '{schema_name}': {e}")
             raise
+
+    def _configure_middleware(self, schema_name: str) -> None:
+        """Configure the GraphQL middleware stack for this schema."""
+        try:
+            from ..core.middleware import get_middleware_stack
+            from ..core.registry import schema_registry
+
+            builder = schema_registry.get_schema_builder(schema_name)
+            builder_middleware = list(getattr(builder, "get_middleware", lambda: [])())
+            core_middleware = get_middleware_stack(schema_name)
+            self.middleware = builder_middleware + core_middleware
+        except Exception as e:
+            logger.warning(f"Failed to configure middleware for '{schema_name}': {e}")
+            self.middleware = []
 
     def _configure_for_schema(self, schema_info: Dict[str, Any]):
         """
@@ -226,7 +220,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         Args:
             schema_info: Schema information dictionary
         """
-        schema_settings = getattr(schema_info, "settings", {}) or {}
+        schema_settings = self._get_effective_schema_settings(schema_info)
 
         # Configure GraphiQL
         self.graphiql = schema_settings.get("enable_graphiql", True)
@@ -251,7 +245,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         Returns:
             True if authentication is satisfied, False otherwise
         """
-        schema_settings = getattr(schema_info, "settings", {}) or {}
+        schema_settings = self._get_effective_schema_settings(schema_info)
         auth_required = schema_settings.get("authentication_required", False)
 
         if not auth_required:
@@ -294,7 +288,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             # Validate JWT token using JWTManager
             from ..extensions.auth import JWTManager
 
-            payload = JWTManager.verify_token(token)
+            payload = JWTManager.verify_token(token, expected_type="access")
 
             if not payload:
                 return False
@@ -321,6 +315,55 @@ class MultiSchemaGraphQLView(GraphQLView):
             logger = logging.getLogger(__name__)
             logger.warning(f"Token validation failed: {str(e)}")
             return False
+
+    def _get_effective_schema_settings(self, schema_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve schema settings using defaults plus schema overrides."""
+        schema_settings = getattr(schema_info, "settings", {}) or {}
+        try:
+            from dataclasses import asdict
+            from ..core.settings import SchemaSettings
+
+            resolved_settings = asdict(SchemaSettings.from_schema(schema_info.name))
+            return {**resolved_settings, **schema_settings}
+        except Exception:
+            return schema_settings
+
+    def _allow_introspection(
+        self, request: HttpRequest, schema_info: Dict[str, Any]
+    ) -> bool:
+        """Return False when introspection is disabled and query uses it."""
+        schema_settings = self._get_effective_schema_settings(schema_info)
+        if schema_settings.get("enable_introspection", True):
+            return True
+
+        query_text = ""
+        if request.method == "GET":
+            query_text = request.GET.get("query", "")
+        elif request.body:
+            try:
+                body = json.loads(request.body.decode("utf-8"))
+                query_text = body.get("query", "") or ""
+            except Exception:
+                query_text = ""
+
+        if "__schema" in query_text or "__type" in query_text:
+            return False
+
+        return True
+
+    def _introspection_disabled_response(self) -> JsonResponse:
+        """Return a 403 response when introspection is disabled."""
+        return JsonResponse(
+            {
+                "errors": [
+                    {
+                        "message": "Introspection is disabled for this schema",
+                        "extensions": {"code": "INTROSPECTION_DISABLED"},
+                    }
+                ]
+            },
+            status=403,
+        )
 
     def _schema_not_found_response(self, schema_name: str) -> JsonResponse:
         """Return a 404 response for unknown schemas."""
@@ -454,6 +497,14 @@ class GraphQLPlaygroundView(View):
 
             # Check if GraphiQL is enabled for this schema
             schema_settings = getattr(schema_info, "settings", {}) or {}
+            try:
+                from dataclasses import asdict
+                from ..core.settings import SchemaSettings
+
+                resolved_settings = asdict(SchemaSettings.from_schema(schema_name))
+                schema_settings = {**resolved_settings, **schema_settings}
+            except Exception:
+                pass
             if not schema_settings.get("enable_graphiql", True):
                 return HttpResponse(
                     f"GraphQL Playground is disabled for schema '{schema_name}'",
@@ -488,6 +539,17 @@ class GraphQLPlaygroundView(View):
             schema_info, "description", f"GraphQL Playground for {schema_name}"
         )
 
+        playground_version = "1.7.28"
+        playground_base = (
+            f"https://cdn.jsdelivr.net/npm/graphql-playground-react@{playground_version}/build"
+        )
+        css_sri = (
+            "sha384-xb+UHILNN4fV3NgQMTjXk0x9A80U0hmkraTFvucUYTILJymGT8E1Aq2278NSi5+3"
+        )
+        js_sri = (
+            "sha384-ardaO17esJ2ZxvY24V1OE6X4j+Z3WKgGMptrlDLmD+2w/JC3nbQ5ZfKGY2zfOPEE"
+        )
+
         return f"""
         <!DOCTYPE html>
         <html>
@@ -495,9 +557,9 @@ class GraphQLPlaygroundView(View):
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <title>{schema_description}</title>
-            <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/graphql-playground-react/build/static/css/index.css" />
-            <link rel="shortcut icon" href="//cdn.jsdelivr.net/npm/graphql-playground-react/build/favicon.png" />
-            <script src="//cdn.jsdelivr.net/npm/graphql-playground-react/build/static/js/middleware.js"></script>
+            <link rel="stylesheet" href="{playground_base}/static/css/index.css" integrity="{css_sri}" crossorigin="anonymous" />
+            <link rel="shortcut icon" href="{playground_base}/favicon.png" />
+            <script src="{playground_base}/static/js/middleware.js" integrity="{js_sri}" crossorigin="anonymous"></script>
         </head>
         <body>
             <div id="root">
@@ -508,7 +570,7 @@ class GraphQLPlaygroundView(View):
                     img {{ width: 78px; height: 78px; }}
                     .title {{ font-weight: 400; }}
                 </style>
-                <img src="//cdn.jsdelivr.net/npm/graphql-playground-react/build/logo.png" alt="" />
+                <img src="{playground_base}/logo.png" alt="" />
                 <div class="loading"> Loading
                     <span class="title">GraphQL Playground</span>
                 </div>

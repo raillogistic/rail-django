@@ -50,6 +50,25 @@ class ConfigLoader:
     """
 
     @staticmethod
+    def _normalize_legacy_sections(config: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize legacy section names to current settings keys."""
+        if not isinstance(config, dict):
+            return config
+
+        normalized = dict(config)
+
+        if "TYPE_SETTINGS" in config and "type_generation_settings" not in config:
+            normalized["type_generation_settings"] = config["TYPE_SETTINGS"]
+
+        if "PERFORMANCE" in config and "performance_settings" not in config:
+            normalized["performance_settings"] = config["PERFORMANCE"]
+
+        if "SECURITY" in config and "security_settings" not in config:
+            normalized["security_settings"] = config["SECURITY"]
+
+        return normalized
+
+    @staticmethod
     def get_rail_django_settings() -> Dict[str, Any]:
         """
         Get rail_django settings from Django settings with defaults.
@@ -57,7 +76,9 @@ class ConfigLoader:
         Returns:
             Dictionary containing merged rail_django configuration
         """
-        user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        user_settings = ConfigLoader._normalize_legacy_sections(
+            getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        )
 
         # Get environment from Django settings or default to 'development'
         environment = getattr(settings, "ENVIRONMENT", "development")
@@ -85,7 +106,9 @@ class ConfigLoader:
         if environment is None:
             environment = getattr(settings, "ENVIRONMENT", "development")
 
-        user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        user_settings = ConfigLoader._normalize_legacy_sections(
+            getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        )
         # Pass user_settings as custom_settings to ensure proper merging and avoid
         # passing a dict as schema_name which causes TypeError: unhashable type: 'dict'
         return get_merged_settings(
@@ -108,7 +131,9 @@ class ConfigLoader:
         if environment is None:
             environment = getattr(settings, "ENVIRONMENT", "development")
 
-        user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        user_settings = ConfigLoader._normalize_legacy_sections(
+            getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        )
         # Pass user_settings as custom_settings to ensure proper merging order
         return get_merged_settings(
             custom_settings=user_settings, environment=environment
@@ -217,7 +242,7 @@ class ConfigLoader:
             if schema_name
             else ConfigLoader.get_global_settings(environment)
         )
-        return config.get("PERFORMANCE_SETTINGS", {})
+        return config.get("performance_settings", config.get("PERFORMANCE", {}))
 
     @staticmethod
     def get_security_settings(
@@ -238,7 +263,7 @@ class ConfigLoader:
             if schema_name
             else ConfigLoader.get_global_settings(environment)
         )
-        return config.get("SECURITY_SETTINGS", {})
+        return config.get("security_settings", config.get("SECURITY", {}))
 
     @staticmethod
     def get_error_handling_settings(
@@ -514,8 +539,8 @@ class ConfigLoader:
             "query_settings",
             "mutation_settings",
             "type_generation_settings",
-            "PERFORMANCE_SETTINGS",
-            "SECURITY_SETTINGS",
+            "performance_settings",
+            "security_settings",
             "ERROR_HANDLING_SETTINGS",
             "CACHING_SETTINGS",
             "FILE_UPLOAD_SETTINGS",

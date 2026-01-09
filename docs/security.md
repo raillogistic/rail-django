@@ -15,6 +15,9 @@ JWT_ACCESS_TOKEN_LIFETIME = 3600
 JWT_REFRESH_TOKEN_LIFETIME = 86400
 JWT_AUTH_COOKIE = "jwt"
 JWT_REFRESH_COOKIE = "refresh_token"
+JWT_ALLOW_COOKIE_AUTH = True
+JWT_ENFORCE_CSRF = True
+CSRF_COOKIE_NAME = "csrftoken"
 ```
 
 Auth mutations (if enabled): `login`, `refresh_token`, `logout`, `register`.
@@ -50,6 +53,9 @@ There are two levels:
 Rate limiting should be backed by shared cache/Redis in production. In-memory
 limits only apply per process.
 
+The built-in rate limiters now use Django cache by default, so make sure
+`CACHES` is configured for a shared backend in production.
+
 ## Introspection and GraphiQL
 
 Production should disable introspection and GraphiQL:
@@ -67,7 +73,8 @@ RAIL_DJANGO_GRAPHQL = {
 
 The library uses `django-cors-headers` when configured. Do not leave
 `CORS_ALLOW_ALL_ORIGINS = True` in production. If you use cookie auth, do not
-`csrf_exempt` sensitive endpoints.
+`csrf_exempt` sensitive endpoints. Cookie-based JWT auth enforces CSRF by
+default outside DEBUG (`JWT_ENFORCE_CSRF`).
 
 ## Audit logging
 

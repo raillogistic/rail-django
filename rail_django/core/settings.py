@@ -30,6 +30,25 @@ def _merge_settings_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _normalize_legacy_settings(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Map legacy section names to current settings keys."""
+    if not isinstance(config, dict):
+        return config
+
+    normalized = dict(config)
+
+    if "TYPE_SETTINGS" in config and "type_generation_settings" not in config:
+        normalized["type_generation_settings"] = config["TYPE_SETTINGS"]
+
+    if "PERFORMANCE" in config and "performance_settings" not in config:
+        normalized["performance_settings"] = config["PERFORMANCE"]
+
+    if "SECURITY" in config and "security_settings" not in config:
+        normalized["security_settings"] = config["SECURITY"]
+
+    return normalized
+
+
 def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
     """
     Get settings from schema registry for a specific schema.
@@ -44,8 +63,10 @@ def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
         from .registry import schema_registry
 
         schema_info = schema_registry.get_schema(schema_name)
+        if not schema_info:
+            return {}
 
-        return schema_info.settings if schema_info else {}
+        return _normalize_legacy_settings(schema_info.settings)
     except (ImportError, AttributeError):
         return {}
 
@@ -60,10 +81,12 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Global settings for the schema
     """
-    rail_settings = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
+    rail_settings = _normalize_legacy_settings(
+        getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
+    )
     # Primary: schema-scoped settings (e.g., {"default": { ... }})
     if schema_name in rail_settings:
-        return rail_settings.get(schema_name, {})
+        return _normalize_legacy_settings(rail_settings.get(schema_name, {}))
 
     # Fallback: legacy/global settings (unscoped)
     # If the dictionary already looks like a settings block with known keys,
@@ -100,9 +123,16 @@ def _get_library_defaults() -> Dict[str, Any]:
         Dict[str, Any]: Library default settings
     """
     try:
-        from ..defaults import LIBRARY_DEFAULTS
+        from ..defaults import LIBRARY_DEFAULTS, get_environment_defaults, merge_settings
 
-        return LIBRARY_DEFAULTS.copy()
+        environment = getattr(django_settings, "ENVIRONMENT", None)
+        if not environment:
+            environment = (
+                "production" if not getattr(django_settings, "DEBUG", False) else "development"
+            )
+
+        env_defaults = get_environment_defaults(environment)
+        return merge_settings(LIBRARY_DEFAULTS, env_defaults)
     except ImportError:
         return {}
 
@@ -206,6 +236,9 @@ class QueryGeneratorSettings:
 
     # Maximum number of buckets returned by grouping queries
     max_grouping_buckets: int = 200
+
+    # Maximum number of rows to load when ordering by Python properties
+    max_property_ordering_results: int = 2000
 
     # Additional fields to use for lookups (e.g., slug, uuid)
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)

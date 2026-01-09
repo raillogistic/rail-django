@@ -543,7 +543,9 @@ class FieldPermissionManager:
 
 
 def field_permission_required(
-    field_name: str, access_level: FieldAccessLevel = FieldAccessLevel.READ
+    field_name: str,
+    access_level: FieldAccessLevel = FieldAccessLevel.READ,
+    model_class: Optional[type] = None,
 ):
     """
     Décorateur pour vérifier les permissions d'accès à un champ.
@@ -576,12 +578,29 @@ def field_permission_required(
             if not user or not user.is_authenticated:
                 raise GraphQLError("Authentification requise")
 
+            resolved_model_class = model_class
+            if resolved_model_class is None and instance is not None:
+                resolved_model_class = instance.__class__
+            if resolved_model_class is None and info is not None:
+                try:
+                    graphene_type = getattr(info, "return_type", None)
+                    meta = getattr(
+                        getattr(graphene_type, "graphene_type", None), "_meta", None
+                    )
+                    resolved_model_class = getattr(meta, "model", None)
+                except Exception:
+                    resolved_model_class = None
+            if resolved_model_class is None:
+                raise GraphQLError(
+                    "Model class is required for field permission checks"
+                )
+
             context = FieldContext(
                 user=user,
                 instance=instance,
                 field_name=field_name,
                 operation_type="read",
-                model_class=model_class,
+                model_class=resolved_model_class,
             )
 
             user_access_level = field_permission_manager.get_field_access_level(context)

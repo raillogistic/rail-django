@@ -54,6 +54,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "use_relay": False,
         "default_page_size": 20,
         "max_page_size": 100,
+        "max_property_ordering_results": 2000,
         "additional_lookup_fields": {},
     },
     "mutation_settings": {

@@ -3,7 +3,7 @@ Performance Optimization System for Django GraphQL Auto-Generation
 
 This module provides comprehensive performance optimization features including:
 - N+1 Query Prevention with automatic select_related and prefetch_related
-- Multi-level caching strategies (schema, query, field-level)
+- Caching hooks retained for compatibility (caching is disabled in this project)
 - Query complexity analysis and optimization
 - Resource usage monitoring and timeout handling
 """
@@ -45,9 +45,9 @@ class QueryOptimizationConfig:
     auto_optimize_queries: bool = True
 
     # Caching
-    enable_schema_caching: bool = True
-    enable_query_caching: bool = True
-    enable_field_caching: bool = True
+    enable_schema_caching: bool = False
+    enable_query_caching: bool = False
+    enable_field_caching: bool = False
     cache_timeout: int = 300  # 5 minutes
 
     # Query Optimization
@@ -229,7 +229,7 @@ class QueryAnalyzer:
                             current_model = field.related_model
                     except FieldDoesNotExist:
                         # Check reverse relationships
-                         if hasattr(current_model._meta, "related_objects"):
+                        if hasattr(current_model._meta, "related_objects"):
                             for rel in current_model._meta.related_objects:
                                 if rel.get_accessor_name() == part:
                                     is_prefetch_needed = True
@@ -548,20 +548,21 @@ def optimize_query(
     complexity_limit: Optional[int] = None,
 ):
     """
-    Décorateur pour optimiser automatiquement les requêtes GraphQL.
+    Decorator for optimizing GraphQL queries.
 
     Args:
-        enable_caching: Active le cache pour cette requête
-        cache_timeout: Durée de vie du cache en secondes
-        user_specific_cache: Cache spécifique à l'utilisateur
-        complexity_limit: Limite de complexité pour cette requête
+        enable_caching: Ignored (caching disabled in this project)
+        cache_timeout: Ignored (caching disabled in this project)
+        user_specific_cache: Ignored (caching disabled in this project)
+        complexity_limit: Optional complexity limit for the query
     """
 
     def decorator(resolver_func: Callable) -> Callable:
         @wraps(resolver_func)
         def wrapper(root, info: GraphQLResolveInfo, **kwargs):
-            optimizer = get_optimizer()
-            performance_monitor = get_performance_monitor()
+            schema_name = getattr(info.context, "schema_name", None)
+            optimizer = get_optimizer(schema_name)
+            performance_monitor = get_performance_monitor(schema_name)
 
             # Démarrer le monitoring
             start_time = time.time()
@@ -615,19 +616,63 @@ def optimize_query(
 _optimization_config = QueryOptimizationConfig()
 _query_optimizer = QueryOptimizer(_optimization_config)
 _performance_monitor = PerformanceMonitor(_optimization_config)
+_optimizer_by_schema: Dict[str, QueryOptimizer] = {}
+_monitor_by_schema: Dict[str, PerformanceMonitor] = {}
 
 
-def get_optimizer() -> QueryOptimizer:
-    """Get the global query optimizer instance."""
-    return _query_optimizer
+def _build_optimizer_config(schema_name: Optional[str]) -> QueryOptimizationConfig:
+    """Build optimizer config from performance settings."""
+    from ..config_proxy import get_settings_proxy
+
+    proxy = get_settings_proxy(schema_name)
+    perf_settings = proxy.get("performance_settings", {}) or {}
+
+    return QueryOptimizationConfig(
+        enable_select_related=perf_settings.get("enable_select_related", True),
+        enable_prefetch_related=perf_settings.get("enable_prefetch_related", True),
+        max_prefetch_depth=perf_settings.get("max_query_depth", 3),
+        auto_optimize_queries=perf_settings.get("enable_query_optimization", True),
+        enable_schema_caching=False,
+        enable_query_caching=False,
+        enable_field_caching=False,
+        cache_timeout=perf_settings.get("cache_timeout", 300),
+        enable_complexity_analysis=perf_settings.get("enable_query_cost_analysis", False),
+        max_query_complexity=perf_settings.get("max_query_complexity", 1000),
+        max_query_depth=perf_settings.get("max_query_depth", 10),
+        query_timeout=perf_settings.get("query_timeout", 30),
+        enable_performance_monitoring=bool(
+            perf_settings.get("enable_performance_monitoring", False)
+        ),
+        log_slow_queries=bool(perf_settings.get("log_slow_queries", False)),
+        slow_query_threshold=float(perf_settings.get("slow_query_threshold", 1.0)),
+    )
+
+
+def get_optimizer(schema_name: Optional[str] = None) -> QueryOptimizer:
+    """Get a query optimizer instance for a schema (selection-set driven)."""
+    if not schema_name:
+        return _query_optimizer
+
+    if schema_name not in _optimizer_by_schema:
+        config = _build_optimizer_config(schema_name)
+        _optimizer_by_schema[schema_name] = QueryOptimizer(config)
+
+    return _optimizer_by_schema[schema_name]
 
 
 ## get_cache_manager removed: caching not supported
 
 
-def get_performance_monitor() -> PerformanceMonitor:
-    """Get the global performance monitor instance."""
-    return _performance_monitor
+def get_performance_monitor(schema_name: Optional[str] = None) -> PerformanceMonitor:
+    """Get a performance monitor instance."""
+    if not schema_name:
+        return _performance_monitor
+
+    if schema_name not in _monitor_by_schema:
+        config = _build_optimizer_config(schema_name)
+        _monitor_by_schema[schema_name] = PerformanceMonitor(config)
+
+    return _monitor_by_schema[schema_name]
 
 
 def configure_optimization(config: QueryOptimizationConfig) -> None:
@@ -637,5 +682,7 @@ def configure_optimization(config: QueryOptimizationConfig) -> None:
     _optimization_config = config
     _query_optimizer = QueryOptimizer(config)
     _performance_monitor = PerformanceMonitor(config)
+    _optimizer_by_schema.clear()
+    _monitor_by_schema.clear()
 
     logger.info("Performance optimization configured")

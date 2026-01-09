@@ -285,54 +285,48 @@ def get_performance_aggregator() -> PerformanceAggregator:
 
 class GraphQLPerformanceMiddleware(MiddlewareMixin):
     """
-    Middleware pour surveiller les performances des requêtes GraphQL.
-
-    Ce middleware collecte des métriques détaillées sur chaque requête GraphQL
-    et les agrège pour fournir des insights sur les performances.
+    Middleware for monitoring GraphQL request performance.
     """
 
     def __init__(self, get_response):
         super().__init__(get_response)
-        self.aggregator = get_performance_aggregator()
-        self.performance_monitor = get_performance_monitor()
+        self.enabled = getattr(settings, "GRAPHQL_PERFORMANCE_ENABLED", settings.DEBUG)
+        self.aggregator = get_performance_aggregator() if self.enabled else None
+        self.performance_monitor = get_performance_monitor() if self.enabled else None
 
     def process_request(self, request):
-        """Traite le début d'une requête."""
-        # Générer un ID unique pour la requête
+        """Handle the start of a request."""
+        if not self.enabled or not self._is_graphql_request(request):
+            return None
+
         request._graphql_request_id = f"req_{int(time.time() * 1000)}_{id(request)}"
         request._graphql_start_time = time.time()
 
-        # Initialiser les métriques de la requête
         request._graphql_metrics = RequestMetrics(
             request_id=request._graphql_request_id,
             query_name="unknown",
             start_time=request._graphql_start_time,
-            user_id=getattr(request.user, "id", None)
-            if hasattr(request, "user")
-            else None,
+            user_id=getattr(request.user, "id", None) if hasattr(request, "user") else None,
         )
 
         return None
 
     def process_response(self, request, response):
-        """Traite la fin d'une requête."""
-        if not hasattr(request, "_graphql_metrics"):
+        """Handle the end of a request."""
+        if not self.enabled or not hasattr(request, "_graphql_metrics"):
             return response
 
-        # Finaliser les métriques
         end_time = time.time()
         metrics = request._graphql_metrics
         metrics.end_time = end_time
         metrics.execution_time = end_time - metrics.start_time
 
-        # No cache in project: set cache metrics to zero
         metrics.cache_hits = 0
         metrics.cache_misses = 0
 
-        # Ajouter les métriques à l'agrégateur
-        self.aggregator.add_metrics(metrics)
+        if self.aggregator:
+            self.aggregator.add_metrics(metrics)
 
-        # Ajouter des headers de performance si configuré
         if getattr(settings, "GRAPHQL_PERFORMANCE_HEADERS", False):
             response["X-GraphQL-Execution-Time"] = f"{metrics.execution_time:.3f}"
             if metrics.query_complexity:
@@ -341,20 +335,28 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         return response
 
     def process_exception(self, request, exception):
-        """Traite les exceptions."""
-        if hasattr(request, "_graphql_metrics"):
-            metrics = request._graphql_metrics
-            metrics.errors.append(str(exception))
+        """Handle exceptions."""
+        if not self.enabled or not hasattr(request, "_graphql_metrics"):
+            return None
 
-            # Finaliser les métriques même en cas d'erreur
-            end_time = time.time()
-            metrics.end_time = end_time
-            metrics.execution_time = end_time - metrics.start_time
+        metrics = request._graphql_metrics
+        metrics.errors.append(str(exception))
 
-            # Ajouter les métriques à l'agrégateur
+        end_time = time.time()
+        metrics.end_time = end_time
+        metrics.execution_time = end_time - metrics.start_time
+
+        if self.aggregator:
             self.aggregator.add_metrics(metrics)
 
         return None
+
+    def _is_graphql_request(self, request) -> bool:
+        """Return True when the request targets GraphQL."""
+        if request.path.endswith("/graphql/") or request.path.endswith("/graphql"):
+            return True
+        content_type = getattr(request, "content_type", "")
+        return bool(content_type and "graphql" in content_type.lower())
 
 
 class GraphQLPerformanceView(View):

@@ -13,9 +13,7 @@ and new multi-schema functionality.
 """
 
 from django.urls import include, path
-from graphene_django.views import GraphQLView
-
-from .schema import schema
+from .schema import schema as _default_schema  # ensure default schema registry init
 from .views.graphql_views import (
     GraphQLPlaygroundView,
     MultiSchemaGraphQLView,
@@ -24,7 +22,7 @@ from .views.graphql_views import (
 
 urlpatterns = [
     # Main GraphQL endpoint (backward compatibility)
-    path("graphql/", GraphQLView.as_view(schema=schema, graphiql=True), name="graphql"),
+    path("graphql/", MultiSchemaGraphQLView.as_view(), name="graphql"),
     # Multi-schema GraphQL endpoints
     path(
         "graphql/<str:schema_name>/",

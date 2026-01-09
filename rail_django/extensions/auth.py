@@ -376,7 +376,9 @@ class JWTManager:
         }
 
     @classmethod
-    def verify_token(cls, token: str) -> Optional[Dict[str, Any]]:
+    def verify_token(
+        cls, token: str, expected_type: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Vérifie et décode un token JWT.
 
@@ -388,6 +390,13 @@ class JWTManager:
         """
         try:
             payload = jwt.decode(token, cls.get_jwt_secret(), algorithms=["HS256"])
+            if expected_type and payload.get("type") != expected_type:
+                logger.warning(
+                    "Token JWT refused: expected type '%s', got '%s'",
+                    expected_type,
+                    payload.get("type"),
+                )
+                return None
             return payload
         except jwt.ExpiredSignatureError:
             logger.warning("Token JWT expiré")
@@ -407,7 +416,7 @@ class JWTManager:
         Returns:
             Nouveau token d'accès ou None si le refresh token est invalide
         """
-        payload = cls.verify_token(refresh_token)
+        payload = cls.verify_token(refresh_token, expected_type="refresh")
         if not payload or payload.get("type") != "refresh":
             return None
 
@@ -673,7 +682,9 @@ class RefreshTokenMutation(graphene.Mutation):
                 )
 
             # Récupération de l'utilisateur pour le retourner
-            payload = JWTManager.verify_token(token_data["token"])
+            payload = JWTManager.verify_token(
+                token_data["token"], expected_type="access"
+            )
             User = get_user_model()
             user = User.objects.get(id=payload["user_id"])
             permissions = token_data.get(
@@ -792,7 +803,7 @@ def get_user_from_token(token: str) -> Optional["AbstractUser"]:
     Returns:
         Instance User ou None si le token est invalide
     """
-    payload = JWTManager.verify_token(token)
+    payload = JWTManager.verify_token(token, expected_type="access")
     if not payload:
         return None
 

@@ -183,6 +183,19 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+### Schema Management API
+The REST endpoints under `/api/v1/` require a JWT access token and admin
+permissions.
+
+```python
+GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS = ["rail_django.manage_schema"]
+GRAPHQL_SCHEMA_API_RATE_LIMIT = {
+    "enable": True,
+    "window_seconds": 60,
+    "max_requests": 60,
+}
+```
+
 ### Multi-Schema Configuration
 For complex apps, you often need different APIs for different consumers (e.g., Public Auth, Mobile App, Admin Panel).
 
@@ -431,6 +444,9 @@ Rail Django includes a full JWT implementation.
 2.  **Authenticate Requests:**
     Add header: `Authorization: Bearer <your_token>`
 
+    If you use cookie-based JWTs, keep CSRF protection enabled and set:
+    `JWT_ALLOW_COOKIE_AUTH=True`, `JWT_ENFORCE_CSRF=True`.
+
 3.  **Refresh Token:**
     ```graphql
     mutation {
@@ -494,7 +510,7 @@ dashboard_data = audit_logger.get_security_report(hours=24)
 ### Data Exporting (Excel/CSV)
 Don't write CSV writers manually. Use the export endpoint.
 
-**Endpoint:** `POST /api/export/`
+**Endpoint:** `POST /api/v1/export/`
 **Payload:**
 ```json
 {
@@ -506,10 +522,14 @@ Don't write CSV writers manually. Use the export endpoint.
         "category.name", 
         {"accessor": "price", "title": "Unit Price"}
     ],
+    "max_rows": 10000,
     "variables": {"is_active": true}
 }
 ```
 This returns a binary stream of the generated Excel file.
+
+Guardrails (allowlists, row caps, rate limiting) are configured via
+`RAIL_DJANGO_EXPORT` in settings.
 
 ### Health Monitoring
 Expose a health check for Kubernetes or Load Balancers.
@@ -583,6 +603,11 @@ The framework sees you asked for `category` and adds `.select_related('category'
 For complex cases where auto-optimization fails (e.g. calculated properties or cross-service calls), enable DataLoaders in settings.
 `"enable_dataloader": True`
 
+### Performance Middleware
+Enable request-level metrics with:
+`GRAPHQL_PERFORMANCE_ENABLED=True`
+Optional headers: `GRAPHQL_PERFORMANCE_HEADERS=True`
+
 ### Complexity Limiting
 Prevent malicious users from crashing your server with massive queries.
 
@@ -610,6 +635,9 @@ Ensure these are set in production (see `.env.example`):
 *   `DJANGO_DEBUG`: **Must** be `False`.
 *   `ALLOWED_HOSTS`: List of valid domains.
 *   `DATABASE_URL`: Connection string for PostgreSQL.
+*   Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
+*   Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
+*   Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
 
 ### Production Checklist
 1.  [ ] **HTTPS:** Ensure SSL is enabled (use Nginx or Load Balancer).

@@ -66,7 +66,7 @@ def jwt_required(view_func: Callable) -> Callable:
             }, status=401)
 
         # Verify JWT token
-        payload = JWTManager.verify_token(token)
+        payload = JWTManager.verify_token(token, expected_type="access")
         if not payload:
             return JsonResponse({
                 'error': 'Invalid or expired token',
@@ -143,7 +143,7 @@ def jwt_optional(view_func: Callable) -> Callable:
         if auth_header and (auth_header.startswith('Bearer ') or auth_header.startswith('Token ')):
             try:
                 token = auth_header.split(' ')[1]
-                payload = JWTManager.verify_token(token)
+                payload = JWTManager.verify_token(token, expected_type="access")
 
                 if payload:
                     user_id = payload.get('user_id')
@@ -187,7 +187,7 @@ def get_user_from_jwt(request: HttpRequest) -> Optional[Dict[str, Any]]:
 
     try:
         token = auth_header.split(' ')[1]
-        payload = JWTManager.verify_token(token)
+        payload = JWTManager.verify_token(token, expected_type="access")
 
         if not payload:
             return None

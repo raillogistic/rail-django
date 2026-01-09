@@ -38,6 +38,13 @@ from ..utils.history import serialize_history_changes
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
 
+try:
+    from promise import Promise
+    from promise.dataloader import DataLoader
+except Exception:
+    Promise = None
+    DataLoader = None
+
 
 @convert_django_field.register(models.BinaryField)
 def convert_binary_field(field, registry=None):
@@ -48,6 +55,48 @@ def convert_binary_field(field, registry=None):
     description = get_django_field_description(field)
     required = not field.null
     return scalar_cls(description=description, required=required)
+
+
+if DataLoader:
+    class RelatedObjectsLoader(DataLoader):
+        """Batch loader for reverse foreign key relations."""
+
+        def __init__(
+            self,
+            related_model: Type[models.Model],
+            relation_field: str,
+            db_alias: Optional[str] = None,
+        ):
+            super().__init__()
+            self.related_model = related_model
+            self.relation_field = relation_field
+            self.db_alias = db_alias
+
+        def batch_load_fn(self, keys):
+            if Promise is None:
+                return keys
+
+            results_map = {key: [] for key in keys}
+            if not keys:
+                return Promise.resolve([[] for _ in keys])
+
+            filter_kwargs = {f"{self.relation_field}__in": keys}
+            queryset = self.related_model._default_manager.using(self.db_alias).filter(
+                **filter_kwargs
+            )
+
+            for obj in queryset:
+                key = getattr(obj, f"{self.relation_field}_id", None)
+                if key is None:
+                    try:
+                        key = getattr(obj, self.relation_field).pk
+                    except Exception:
+                        key = None
+                results_map.setdefault(key, []).append(obj)
+
+            return Promise.resolve([results_map.get(key, []) for key in keys])
+else:
+    RelatedObjectsLoader = None
 
 
 class TypeGenerator:
@@ -660,7 +709,11 @@ class TypeGenerator:
         # Add custom resolvers for ALL reverse relationships to return direct model lists
         # instead of relay connections (including Django's default _set relationships)
         reverse_relations = self._get_reverse_relations(model)
-        for accessor_name, related_model in reverse_relations.items():
+        for accessor_name, rel_info in reverse_relations.items():
+            related_model = rel_info.get("model")
+            relation = rel_info.get("relation")
+            if related_model is None:
+                continue
             if not self._should_include_field(model, accessor_name):
                 continue
 
@@ -677,15 +730,13 @@ class TypeGenerator:
 
             # Check if this is a OneToOne reverse relationship
             is_one_to_one_reverse = False
-            if hasattr(model._meta, "related_objects"):
-                for rel in model._meta.related_objects:
-                    if rel.get_accessor_name() == accessor_name:
-                        # Import OneToOneRel to check relationship type
-                        from django.db.models.fields.reverse_related import OneToOneRel
+            if relation is not None:
+                try:
+                    from django.db.models.fields.reverse_related import OneToOneRel
 
-                        if isinstance(rel, OneToOneRel):
-                            is_one_to_one_reverse = True
-                            break
+                    is_one_to_one_reverse = isinstance(relation, OneToOneRel)
+                except Exception:
+                    is_one_to_one_reverse = False
 
             # Add the field - single object for OneToOne, list for others
             if is_one_to_one_reverse:
@@ -707,7 +758,7 @@ class TypeGenerator:
                 )
 
             # Add resolver that handles different relationship types with filtering
-            def make_resolver(accessor_name, is_one_to_one, related_model):
+            def make_resolver(accessor_name, is_one_to_one, related_model, relation):
                 def resolver(self, info, filters=None):
                     # Optimization: Use prefetch cache if available and no filters (for lists)
                     if not is_one_to_one and not filters and hasattr(self, "_prefetched_objects_cache") and accessor_name in self._prefetched_objects_cache:
@@ -724,6 +775,22 @@ class TypeGenerator:
                     else:
                         related_obj = getattr(self, accessor_name)
                         queryset = related_obj.all()
+
+                        if (
+                            relation is not None
+                            and self.query_optimizer.settings.enable_dataloader
+                        ):
+                            loader = self._get_relation_dataloader(
+                                info.context,
+                                related_model,
+                                relation,
+                                getattr(self, "_state", None),
+                            )
+                            if loader:
+                                parent_id = getattr(self, "pk", None)
+                                if parent_id is None:
+                                    return []
+                                return loader.load(parent_id)
 
                         # Apply filters if provided
                         if filters:
@@ -755,7 +822,7 @@ class TypeGenerator:
                 return count_resolver
 
             type_attrs[f"resolve_{accessor_name}"] = make_resolver(
-                accessor_name, is_one_to_one_reverse, related_model
+                accessor_name, is_one_to_one_reverse, related_model, relation
             )
 
             # Add count resolver only for non-OneToOne relationships
@@ -1295,14 +1362,14 @@ class TypeGenerator:
 
     def _get_reverse_relations(
         self, model: Type[models.Model]
-    ) -> Dict[str, Type[models.Model]]:
+    ) -> Dict[str, Dict[str, Any]]:
         """
         Get reverse relationships for a model (e.g., comments for Post).
 
         Returns:
             Dict mapping field names to related models
         """
-        reverse_relations = {}
+        reverse_relations: Dict[str, Dict[str, Any]] = {}
 
         # For modern Django versions, use related_objects
         if hasattr(model._meta, "related_objects"):
@@ -1321,7 +1388,10 @@ class TypeGenerator:
                     "historical"
                 ):
                     continue
-                reverse_relations[accessor_name] = rel.related_model
+                reverse_relations[accessor_name] = {
+                    "model": rel.related_model,
+                    "relation": rel,
+                }
         # Fallback for Django versions that use get_fields() with related fields
         elif hasattr(model._meta, "get_fields"):
             try:
@@ -1339,7 +1409,10 @@ class TypeGenerator:
                                 "history"
                             ) or accessor_name.startswith("historical"):
                                 continue
-                            reverse_relations[accessor_name] = field.related_model
+                            reverse_relations[accessor_name] = {
+                                "model": field.related_model,
+                                "relation": field,
+                            }
             except AttributeError:
                 # If get_fields doesn't work as expected, continue without reverse relations
                 pass
@@ -1359,12 +1432,51 @@ class TypeGenerator:
                             "history"
                         ) or accessor_name.startswith("historical"):
                             continue
-                        reverse_relations[accessor_name] = rel.related_model
+                        reverse_relations[accessor_name] = {
+                            "model": rel.related_model,
+                            "relation": rel,
+                        }
             except AttributeError:
                 # If get_all_related_objects doesn't exist, skip reverse relations
                 pass
 
         return reverse_relations
+
+    def _get_relation_dataloader(
+        self,
+        context: Any,
+        related_model: Type[models.Model],
+        relation: Any,
+        state: Any,
+    ):
+        """Return a cached DataLoader for a reverse foreign key relation."""
+        if not RelatedObjectsLoader or not context or relation is None:
+            return None
+
+        try:
+            from django.db.models.fields.reverse_related import ManyToOneRel
+
+            if not isinstance(relation, ManyToOneRel):
+                return None
+        except Exception:
+            return None
+
+        relation_field = getattr(relation.field, "name", None)
+        if not relation_field:
+            return None
+
+        db_alias = getattr(state, "db", None)
+        loader_key = f"reverse:{related_model._meta.label_lower}:{relation_field}:{db_alias or 'default'}"
+
+        if not hasattr(context, "_rail_dataloaders"):
+            context._rail_dataloaders = {}
+
+        if loader_key not in context._rail_dataloaders:
+            context._rail_dataloaders[loader_key] = RelatedObjectsLoader(
+                related_model, relation_field, db_alias
+            )
+
+        return context._rail_dataloaders[loader_key]
 
     def _get_or_create_nested_input_type(
         self,

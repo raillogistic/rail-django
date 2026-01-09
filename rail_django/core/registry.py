@@ -51,6 +51,7 @@ class SchemaRegistry:
     def __init__(self):
         self._schemas: Dict[str, SchemaInfo] = {}
         self._schema_builders: Dict[str, Any] = {}
+        self._schema_instance_cache: Dict[str, Dict[str, Any]] = {}
         self._discovery_hooks: List[Callable] = []
         self._lock = threading.Lock()
         self._initialized = False
@@ -157,6 +158,8 @@ class SchemaRegistry:
                 del self._schemas[name]
                 if name in self._schema_builders:
                     del self._schema_builders[name]
+                if name in self._schema_instance_cache:
+                    del self._schema_instance_cache[name]
                 logger.info(f"Unregistered schema: {name}")
                 return True
             return False
@@ -317,6 +320,31 @@ class SchemaRegistry:
                 raise
 
         return self._schema_builders[name]
+
+    def get_schema_instance(self, name: str):
+        """
+        Get a cached schema instance for a schema name.
+
+        Args:
+            name: Schema name
+
+        Returns:
+            GraphQL schema instance
+        """
+        builder = self.get_schema_builder(name)
+        current_version = getattr(builder, "get_schema_version", lambda: 0)()
+
+        cached = self._schema_instance_cache.get(name)
+        if cached and cached.get("version") == current_version:
+            return cached.get("schema")
+
+        schema_instance = builder.get_schema()
+        with self._lock:
+            self._schema_instance_cache[name] = {
+                "version": current_version,
+                "schema": schema_instance,
+            }
+        return schema_instance
 
     def discover_schemas(self) -> None:
         """
@@ -534,6 +562,7 @@ class SchemaRegistry:
         with self._lock:
             self._schemas.clear()
             self._schema_builders.clear()
+            self._schema_instance_cache.clear()
             logger.info("Cleared all schemas")
 
     def get_models_for_schema(self, name: str) -> List[Type[models.Model]]:
@@ -654,6 +683,7 @@ class SchemaRegistry:
         with self._lock:
             self._schemas.clear()
             self._schema_builders.clear()
+            self._schema_instance_cache.clear()
             logger.info("Cleared all schemas from registry")
 
 

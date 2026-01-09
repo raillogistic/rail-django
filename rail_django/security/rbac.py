@@ -438,14 +438,13 @@ class RoleManager:
 
         # Vérifier les limites de rôle
         group_model = _get_group_model()
+        group, created = group_model.objects.get_or_create(name=role_name)
 
         if role_def.max_users:
-            current_count = group_model.objects.get(name=role_name).user_set.count()
-            if current_count >= role_def.max_users:
+            current_count = group.user_set.count()
+            if current_count >= role_def.max_users and not group.user_set.filter(id=user.id).exists():
                 raise ValueError(f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'")
 
-        # Créer le groupe Django si nécessaire
-        group, created = group_model.objects.get_or_create(name=role_name)
         user.groups.add(group)
 
         # Cache removed: no invalidation needed
