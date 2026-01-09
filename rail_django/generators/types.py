@@ -757,10 +757,6 @@ class TypeGenerator:
                     accessor_name, is_one_to_one_reverse
                 )
 
-            # Add the accessor name to excluded fields to prevent Django from
-            # generating the default Connection field
-            exclude_fields.append(accessor_name)
-
         # Add @property methods as GraphQL fields
         properties = introspector.properties
         for prop_name, prop_info in properties.items():
