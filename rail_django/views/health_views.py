@@ -7,6 +7,7 @@ and API endpoints for health data retrieval.
 
 import json
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -41,10 +42,13 @@ class HealthDashboardView(View):
         try:
             # Obtenir les données de santé initiales
             health_checker = HealthChecker()
+            comprehensive_report = health_checker.get_comprehensive_health_report()
+            health_status = health_checker.get_health_report(
+                comprehensive_report=comprehensive_report
+            )
             initial_data = {
-                "health_status": health_checker.get_health_report(),
-                # Convert dataclass to plain dict for JSON serialization
-                "system_metrics": health_checker.get_system_metrics().__dict__,
+                "health_status": health_status,
+                "system_metrics": comprehensive_report.get("system_metrics", {}),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -93,20 +97,18 @@ class HealthAPIView(View):
             health_checker = HealthChecker()
 
             # Obtenir toutes les métriques de santé
-            schema_health = health_checker.check_schema_health()
-            database_health = health_checker.check_database_health()
-            cache_health = health_checker.check_cache_health()
+            comprehensive_report = health_checker.get_comprehensive_health_report()
+            health_status = health_checker.get_health_report(
+                comprehensive_report=comprehensive_report
+            )
+            components = comprehensive_report.get("components", {})
 
             health_data = {
-                "health_status": health_checker.get_health_report(),
-                "system_metrics": health_checker.get_system_metrics().__dict__,
-                "schema_health": getattr(schema_health, "to_dict", lambda: schema_health)(),
-                "database_health": [
-                    getattr(status, "to_dict", lambda: status)() for status in database_health
-                ],
-                "cache_health": [
-                    getattr(status, "to_dict", lambda: status)() for status in cache_health
-                ],
+                "health_status": health_status,
+                "system_metrics": comprehensive_report.get("system_metrics", {}),
+                "schema_health": components.get("schema", {}),
+                "database_health": components.get("databases", []),
+                "cache_health": components.get("caches", []),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -143,32 +145,42 @@ class HealthAPIView(View):
 
             # Traiter différents types de requêtes
             response_data = {"data": {}}
+            needs_report = any(
+                key in query
+                for key in ("healthStatus", "schemaHealth", "databaseHealth", "cacheHealth")
+            )
+            comprehensive_report = (
+                health_checker.get_comprehensive_health_report() if needs_report else None
+            )
+            components = (
+                comprehensive_report.get("components", {}) if comprehensive_report else {}
+            )
 
             if "healthStatus" in query:
-                response_data["data"]["healthStatus"] = (
-                    health_checker.get_health_report()
+                response_data["data"]["healthStatus"] = health_checker.get_health_report(
+                    comprehensive_report=comprehensive_report
                 )
 
             if "systemMetrics" in query:
-                response_data["data"]["systemMetrics"] = (
-                    health_checker.get_system_metrics().__dict__
-                )
+                if comprehensive_report is not None:
+                    response_data["data"]["systemMetrics"] = comprehensive_report.get(
+                        "system_metrics", {}
+                    )
+                else:
+                    response_data["data"]["systemMetrics"] = asdict(
+                        health_checker.get_system_metrics()
+                    )
 
             if "schemaHealth" in query:
-                sh = health_checker.check_schema_health()
-                response_data["data"]["schemaHealth"] = getattr(sh, "to_dict", lambda: sh)()
+                response_data["data"]["schemaHealth"] = components.get("schema", {})
 
             if "databaseHealth" in query:
-                dbh = health_checker.check_database_health()
-                response_data["data"]["databaseHealth"] = [
-                    getattr(status, "to_dict", lambda: status)() for status in dbh
-                ]
+                response_data["data"]["databaseHealth"] = components.get(
+                    "databases", []
+                )
 
             if "cacheHealth" in query:
-                ch = health_checker.check_cache_health()
-                response_data["data"]["cacheHealth"] = [
-                    getattr(status, "to_dict", lambda: status)() for status in ch
-                ]
+                response_data["data"]["cacheHealth"] = components.get("caches", [])
 
             return JsonResponse(response_data)
 
@@ -194,7 +206,10 @@ def health_check_endpoint(request):
     """
     try:
         health_checker = HealthChecker()
-        health_report = health_checker.get_health_report()
+        cache_ttl = getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", None)
+        health_report = health_checker.get_health_report(
+            use_cache=True, ttl_seconds=cache_ttl
+        )
 
         # Déterminer le code de statut HTTP basé sur la santé
         status_code = 200
@@ -243,12 +258,13 @@ def health_metrics_endpoint(request):
     try:
         health_checker = HealthChecker()
         metrics = health_checker.get_system_metrics()
+        metrics_dict = asdict(metrics)
 
         return JsonResponse(
             {
-                "metrics": metrics,
+                "metrics": metrics_dict,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "collection_time_ms": metrics.get("collection_time_ms", 0),
+                "collection_time_ms": metrics_dict.get("collection_time_ms", 0),
             }
         )
 
@@ -273,11 +289,13 @@ def health_components_endpoint(request):
     """
     try:
         health_checker = HealthChecker()
+        comprehensive_report = health_checker.get_comprehensive_health_report()
+        report_components = comprehensive_report.get("components", {})
 
         components = {
-            "schema": health_checker.check_schema_health(),
-            "database": health_checker.check_database_health(),
-            "cache": health_checker.check_cache_health(),
+            "schema": report_components.get("schema", {}),
+            "database": report_components.get("databases", []),
+            "cache": report_components.get("caches", []),
         }
 
         return JsonResponse(

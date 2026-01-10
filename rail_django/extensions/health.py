@@ -6,7 +6,9 @@ for the GraphQL system including schema validation, database connectivity,
 cache system status, and performance metrics.
 """
 
+import copy
 import logging
+import threading
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -69,6 +71,7 @@ class SystemMetrics:
     active_connections: int
     cache_hit_rate: float
     uptime_seconds: float
+    collection_time_ms: float = 0.0
 
 
 class HealthChecker:
@@ -83,9 +86,61 @@ class HealthChecker:
     - Performance metrics
     """
 
+    _process_start_time = time.time()
+    _cache_lock = threading.Lock()
+    _system_metrics_cache: Optional[SystemMetrics] = None
+    _system_metrics_cache_ts: float = 0.0
+    _health_report_cache: Optional[Dict[str, Any]] = None
+    _health_report_cache_ts: float = 0.0
+
     def __init__(self):
-        self.start_time = time.time()
+        self.start_time = self._process_start_time
         self._cache_stats = {"hits": 0, "misses": 0}
+
+    def _resolve_cache_ttl(
+        self, ttl_seconds: Optional[float], setting_name: str, default: float
+    ) -> float:
+        if ttl_seconds is None:
+            ttl_seconds = getattr(settings, setting_name, default)
+        try:
+            ttl_value = float(ttl_seconds)
+        except (TypeError, ValueError):
+            ttl_value = 0.0
+        return max(0.0, ttl_value)
+
+    def _get_cached_system_metrics(self, ttl_seconds: float) -> Optional[SystemMetrics]:
+        if ttl_seconds <= 0:
+            return None
+        now = time.monotonic()
+        cache_owner = type(self)
+        with cache_owner._cache_lock:
+            cached = cache_owner._system_metrics_cache
+            if cached and (now - cache_owner._system_metrics_cache_ts) <= ttl_seconds:
+                return cached
+        return None
+
+    def _set_cached_system_metrics(self, metrics: SystemMetrics) -> None:
+        cache_owner = type(self)
+        with cache_owner._cache_lock:
+            cache_owner._system_metrics_cache = SystemMetrics(**asdict(metrics))
+            cache_owner._system_metrics_cache_ts = time.monotonic()
+
+    def _get_cached_health_report(self, ttl_seconds: float) -> Optional[Dict[str, Any]]:
+        if ttl_seconds <= 0:
+            return None
+        now = time.monotonic()
+        cache_owner = type(self)
+        with cache_owner._cache_lock:
+            cached = cache_owner._health_report_cache
+            if cached and (now - cache_owner._health_report_cache_ts) <= ttl_seconds:
+                return cached
+        return None
+
+    def _set_cached_health_report(self, report: Dict[str, Any]) -> None:
+        cache_owner = type(self)
+        with cache_owner._cache_lock:
+            cache_owner._health_report_cache = copy.deepcopy(report)
+            cache_owner._health_report_cache_ts = time.monotonic()
 
     def check_schema_health(self) -> HealthStatus:
         """
@@ -237,16 +292,27 @@ class HealthChecker:
         # Cache health checks disabled; return empty list to avoid misleading status
         return []
 
-    def get_system_metrics(self) -> SystemMetrics:
+    def get_system_metrics(
+        self, *, use_cache: bool = True, ttl_seconds: Optional[float] = None
+    ) -> SystemMetrics:
         """
         Get comprehensive system performance metrics.
 
         Returns:
             SystemMetrics: Current system resource usage and performance data
         """
+        ttl_value = self._resolve_cache_ttl(
+            ttl_seconds, "HEALTH_METRICS_CACHE_TTL_SECONDS", 5.0
+        )
+        if use_cache:
+            cached = self._get_cached_system_metrics(ttl_value)
+            if cached:
+                return SystemMetrics(**asdict(cached))
+
+        start_time = time.perf_counter()
         try:
             # CPU usage
-            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_percent = psutil.cpu_percent(interval=0.0)
 
             # Memory usage
             memory = psutil.virtual_memory()
@@ -266,8 +332,9 @@ class HealthChecker:
 
             # Uptime
             uptime_seconds = time.time() - self.start_time
+            collection_time_ms = (time.perf_counter() - start_time) * 1000
 
-            return SystemMetrics(
+            metrics = SystemMetrics(
                 cpu_usage_percent=cpu_percent,
                 memory_usage_percent=memory_percent,
                 memory_used_mb=memory_used_mb,
@@ -276,12 +343,16 @@ class HealthChecker:
                 active_connections=active_connections,
                 cache_hit_rate=cache_hit_rate,
                 uptime_seconds=uptime_seconds,
+                collection_time_ms=collection_time_ms,
             )
+            if use_cache and ttl_value > 0:
+                self._set_cached_system_metrics(metrics)
+            return metrics
 
         except Exception as e:
             logger.error(f"Failed to get system metrics: {e}")
             # Return default metrics on error
-            return SystemMetrics(
+            metrics = SystemMetrics(
                 cpu_usage_percent=0.0,
                 memory_usage_percent=0.0,
                 memory_used_mb=0.0,
@@ -290,22 +361,36 @@ class HealthChecker:
                 active_connections=0,
                 cache_hit_rate=0.0,
                 uptime_seconds=time.time() - self.start_time,
+                collection_time_ms=(time.perf_counter() - start_time) * 1000,
             )
+            if use_cache and ttl_value > 0:
+                self._set_cached_system_metrics(metrics)
+            return metrics
 
-    def get_comprehensive_health_report(self) -> Dict[str, Any]:
+    def get_comprehensive_health_report(
+        self, *, use_cache: bool = True, ttl_seconds: Optional[float] = None
+    ) -> Dict[str, Any]:
         """
         Generate a comprehensive health report for all system components.
 
         Returns:
             Dict[str, Any]: Complete health report with all components and metrics
         """
-        report_start_time = time.time()
+        ttl_value = self._resolve_cache_ttl(
+            ttl_seconds, "HEALTH_REPORT_CACHE_TTL_SECONDS", 5.0
+        )
+        if use_cache:
+            cached_report = self._get_cached_health_report(ttl_value)
+            if cached_report:
+                return copy.deepcopy(cached_report)
+
+        report_start_time = time.perf_counter()
 
         # Collect all health checks
         schema_health = self.check_schema_health()
         database_health = self.check_database_health()
         cache_health = self.check_cache_health()
-        system_metrics = self.get_system_metrics()
+        system_metrics = self.get_system_metrics(use_cache=use_cache)
 
         # Determine overall system health
         all_statuses = [schema_health] + database_health + cache_health
@@ -325,10 +410,10 @@ class HealthChecker:
         else:
             overall_status = "healthy"
 
-        return {
+        report = {
             "overall_status": overall_status,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "report_generation_time_ms": (time.time() - report_start_time) * 1000,
+            "report_generation_time_ms": (time.perf_counter() - report_start_time) * 1000,
             "summary": {
                 "total_components": len(all_statuses),
                 "healthy": healthy_count,
@@ -345,8 +430,18 @@ class HealthChecker:
                 all_statuses, system_metrics
             ),
         }
+        if use_cache and ttl_value > 0:
+            self._set_cached_health_report(report)
 
-    def get_health_report(self) -> Dict[str, Any]:
+        return report
+
+    def get_health_report(
+        self,
+        *,
+        use_cache: bool = True,
+        ttl_seconds: Optional[float] = None,
+        comprehensive_report: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
 
         Purpose: Provide a backward-compatible health report wrapper.
@@ -366,24 +461,11 @@ class HealthChecker:
             True
         """
         try:
-            comprehensive = self.get_comprehensive_health_report()
-
-            summary = comprehensive.get("summary", {})
-            # Map summary counters to top-level keys expected by legacy callers
-            return {
-                "overall_status": comprehensive.get("overall_status"),
-                "timestamp": comprehensive.get("timestamp"),
-                "report_generation_time_ms": comprehensive.get(
-                    "report_generation_time_ms"
-                ),
-                "healthy_components": summary.get("healthy", 0),
-                "degraded_components": summary.get("degraded", 0),
-                "unhealthy_components": summary.get("unhealthy", 0),
-                "total_components": summary.get("total_components", 0),
-                "components": comprehensive.get("components", {}),
-                "system_metrics": comprehensive.get("system_metrics", {}),
-                "recommendations": comprehensive.get("recommendations", []),
-            }
+            if comprehensive_report is None:
+                comprehensive_report = self.get_comprehensive_health_report(
+                    use_cache=use_cache, ttl_seconds=ttl_seconds
+                )
+            return self._summarize_report(comprehensive_report)
         except Exception as e:
             logger.error(f"Failed to generate health report: {e}")
             # Provide a minimal fallback structure
@@ -401,6 +483,22 @@ class HealthChecker:
                     "Health report generation failed; check system logs for details"
                 ],
             }
+
+    def _summarize_report(self, comprehensive: Dict[str, Any]) -> Dict[str, Any]:
+        summary = comprehensive.get("summary", {})
+        # Map summary counters to top-level keys expected by legacy callers
+        return {
+            "overall_status": comprehensive.get("overall_status"),
+            "timestamp": comprehensive.get("timestamp"),
+            "report_generation_time_ms": comprehensive.get("report_generation_time_ms"),
+            "healthy_components": summary.get("healthy", 0),
+            "degraded_components": summary.get("degraded", 0),
+            "unhealthy_components": summary.get("unhealthy", 0),
+            "total_components": summary.get("total_components", 0),
+            "components": comprehensive.get("components", {}),
+            "system_metrics": comprehensive.get("system_metrics", {}),
+            "recommendations": comprehensive.get("recommendations", []),
+        }
 
     def _get_database_info(self, conn, db_alias: str) -> Dict[str, Any]:
         """Get additional database information."""
@@ -554,6 +652,7 @@ class SystemMetricsType(ObjectType):
     active_connections = Int()
     cache_hit_rate = Float()
     uptime_seconds = Float()
+    collection_time_ms = Float()
 
 
 class HealthReportType(ObjectType):
@@ -800,6 +899,7 @@ class HealthQuery(ObjectType):
                 active_connections=metrics.active_connections,
                 cache_hit_rate=metrics.cache_hit_rate,
                 uptime_seconds=metrics.uptime_seconds,
+                collection_time_ms=metrics.collection_time_ms,
             )
         except Exception as e:
             logger.error(f"System metrics query failed: {e}")
@@ -812,6 +912,7 @@ class HealthQuery(ObjectType):
                 active_connections=0,
                 cache_hit_rate=0.0,
                 uptime_seconds=0.0,
+                collection_time_ms=0.0,
             )
 
 

@@ -321,6 +321,10 @@ class SchemaRegistry:
 
         return self._schema_builders[name]
 
+    def get_cached_schema_builder(self, name: str):
+        """Return a cached schema builder without creating a new one."""
+        return self._schema_builders.get(name)
+
     def get_schema_instance(self, name: str):
         """
         Get a cached schema instance for a schema name.

@@ -35,6 +35,8 @@ class BaseAPIView(View):
 
     auth_required = False
     rate_limit_enabled = False
+    _json_body_cache_attr = "_rail_json_body_cache"
+    _json_body_cache_set_attr = "_rail_json_body_cache_set"
 
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         """Handle CORS and common headers."""
@@ -160,12 +162,19 @@ class BaseAPIView(View):
 
     def parse_json_body(self, request: HttpRequest) -> Optional[Dict[str, Any]]:
         """Parse JSON body from request."""
+        if getattr(request, self._json_body_cache_set_attr, False):
+            return getattr(request, self._json_body_cache_attr, None)
+
+        parsed_body = None
         try:
-            if request.content_type == 'application/json' and request.body:
-                return json.loads(request.body.decode('utf-8'))
+            content_type = (request.content_type or "").lower()
+            if request.body and (not content_type or content_type.startswith("application/json")):
+                parsed_body = json.loads(request.body.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Error parsing JSON body: {e}")
-        return None
+        setattr(request, self._json_body_cache_attr, parsed_body)
+        setattr(request, self._json_body_cache_set_attr, True)
+        return parsed_body
 
     def _audit_request(
         self,
@@ -350,7 +359,9 @@ class SchemaListAPIView(BaseAPIView):
             return admin_check
 
         try:
-            data = json.loads(request.body)
+            data = self.parse_json_body(request)
+            if data is None:
+                return self.error_response('Invalid JSON body', status=400)
 
             # Validate input data
             validated_data = SchemaSerializer.validate_create_data(data)
@@ -363,8 +374,6 @@ class SchemaListAPIView(BaseAPIView):
                 'schema': SchemaSerializer.serialize_schema_detailed(schema_info)
             }, status=201)
 
-        except json.JSONDecodeError:
-            return self.error_response('Invalid JSON body', status=400)
         except ValueError as e:
             return self.error_response(str(e), status=400)
         except Exception as e:
@@ -385,16 +394,14 @@ class SchemaDetailAPIView(BaseAPIView):
             if not schema_info:
                 return self.error_response(f"Schema '{schema_name}' not found", status=404)
 
-            # Get schema builder info if available
-            builder_info = None
-            try:
-                builder = schema_registry.get_schema_builder(schema_name)
-                if builder:
-                    builder_info = {
-                        'has_builder': True,
-                        'builder_type': type(builder).__name__
-                    }
-            except Exception:
+            # Get schema builder info if available without instantiating
+            builder = schema_registry.get_cached_schema_builder(schema_name)
+            if builder:
+                builder_info = {
+                    'has_builder': True,
+                    'builder_type': type(builder).__name__
+                }
+            else:
                 builder_info = {'has_builder': False}
 
             schema_data = {
@@ -496,7 +503,9 @@ class SchemaManagementAPIView(BaseAPIView):
             return admin_check
 
         try:
-            data = json.loads(request.body)
+            data = self.parse_json_body(request)
+            if data is None:
+                return self.error_response('Invalid JSON body', status=400)
 
             # Validate action data
             validated_data = ManagementActionSerializer.validate_action_data(data)
@@ -525,8 +534,6 @@ class SchemaManagementAPIView(BaseAPIView):
             else:
                 return self.error_response(f'Unknown action: {action}', status=400)
 
-        except json.JSONDecodeError:
-            return self.error_response('Invalid JSON body', status=400)
         except ValueError as e:
             return self.error_response(str(e), status=400)
         except Exception as e:

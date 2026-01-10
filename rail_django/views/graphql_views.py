@@ -97,38 +97,17 @@ class MultiSchemaGraphQLView(GraphQLView):
         """
         context = super().get_context(request)
 
-        # Check for JWT token authentication (case-insensitive, robust parsing)
-        raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
-        auth_header = raw_auth.strip()
-        header_lower = auth_header.lower()
-        if header_lower.startswith("bearer ") or header_lower.startswith("token "):
-            try:
-                # Extract token from header
-                parts = auth_header.split(" ", 1)
-                token = parts[1] if len(parts) == 2 else None
-                if token:
-                    # Validate JWT token using JWTManager
-                    from ..extensions.auth import JWTManager
-
-                    payload = JWTManager.verify_token(token, expected_type="access")
-
-                    if payload:
-                        # Get user from payload, support standard 'sub' claim fallback
-                        user_id = payload.get("user_id") or payload.get("sub")
-                        if user_id:
-                            from django.contrib.auth import get_user_model
-
-                            User = get_user_model()
-
-                            user = User.objects.filter(id=user_id, is_active=True).first()
-                            if user:
-                                # Inject authenticated user into context
-                                context.user = user
-                                # Also set on request for compatibility
-                                request.user = user
-            except Exception as e:
-                # Log the error for debugging but don't expose details
-                logger.warning(f"JWT authentication failed: {str(e)}")
+        existing_user = getattr(request, "user", None)
+        if existing_user is not None and getattr(existing_user, "is_authenticated", False):
+            context.user = existing_user
+        else:
+            # Check for JWT token authentication (case-insensitive, robust parsing)
+            raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
+            auth_header = raw_auth.strip()
+            header_lower = auth_header.lower()
+            if header_lower.startswith("bearer ") or header_lower.startswith("token "):
+                if self._validate_token(auth_header, {}, request=request):
+                    context.user = getattr(request, "user", None)
 
         # Add schema name to context for metadata hierarchy
         schema_match = getattr(request, "resolver_match", None)
@@ -260,12 +239,15 @@ class MultiSchemaGraphQLView(GraphQLView):
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
             # Custom token validation logic can be added here
-            return self._validate_token(auth_header, schema_settings)
+            return self._validate_token(auth_header, schema_settings, request=request)
 
         return False
 
     def _validate_token(
-        self, auth_header: str, schema_settings: Dict[str, Any]
+        self,
+        auth_header: str,
+        schema_settings: Dict[str, Any],
+        request: Optional[HttpRequest] = None,
     ) -> bool:
         """
         Validate authentication token for schema access.
@@ -295,25 +277,25 @@ class MultiSchemaGraphQLView(GraphQLView):
                 return False
 
             # Check if user exists and is active
-            user_id = payload.get("user_id")
+            user_id = payload.get("user_id") or payload.get("sub")
             if not user_id:
                 return False
 
             from django.contrib.auth import get_user_model
 
             User = get_user_model()
-
-            try:
-                user = User.objects.get(id=user_id)
-                return user.is_active
-            except User.DoesNotExist:
+            user = User.objects.filter(id=user_id, is_active=True).first()
+            if not user:
                 return False
+
+            if request is not None:
+                request.user = user
+                request.jwt_payload = payload
+
+            return True
 
         except Exception as e:
             # Log the error for debugging but don't expose details
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Token validation failed: {str(e)}")
             return False
 

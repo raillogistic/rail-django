@@ -156,7 +156,7 @@ class HealthCheckerTestCase(TestCase):
                 total=100 * 1024 * 1024,
             )
 
-            result = self.health_checker.get_system_metrics()
+            result = self.health_checker.get_system_metrics(use_cache=False)
 
             self.assertIsInstance(result, SystemMetrics)
             self.assertEqual(result.cpu_usage_percent, 25.5)
@@ -199,7 +199,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report()
+            result = self.health_checker.get_health_report(use_cache=False)
 
             self.assertIsInstance(result, dict)
             self.assertEqual(result["overall_status"], "degraded")
@@ -244,7 +244,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report()
+            result = self.health_checker.get_health_report(use_cache=False)
 
             self.assertEqual(result["overall_status"], "healthy")
             self.assertEqual(result["healthy_components"], 3)
@@ -287,7 +287,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report()
+            result = self.health_checker.get_health_report(use_cache=False)
 
             self.assertEqual(result["overall_status"], "unhealthy")
             self.assertEqual(result["healthy_components"], 1)
@@ -312,9 +312,12 @@ class HealthViewsTestCase(TestCase):
                 "overall_status": "healthy",
                 "healthy_components": 3,
             }
-            mock_instance.get_system_metrics.return_value = {
-                "cpu_usage_percent": 25.0,
-                "memory_usage_percent": 60.0,
+            mock_instance.get_comprehensive_health_report.return_value = {
+                "system_metrics": {
+                    "cpu_usage_percent": 25.0,
+                    "memory_usage_percent": 60.0,
+                },
+                "components": {},
             }
 
             response = self.client.get("/health/")
@@ -327,10 +330,14 @@ class HealthViewsTestCase(TestCase):
         with patch("rail_django.views.health_views.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
             mock_instance.get_health_report.return_value = {"overall_status": "healthy"}
-            mock_instance.get_system_metrics.return_value = {"cpu_usage_percent": 25.0}
-            mock_instance.check_schema_health.return_value = {"status": "healthy"}
-            mock_instance.check_database_health.return_value = {"status": "healthy"}
-            mock_instance.check_cache_health.return_value = {"status": "healthy"}
+            mock_instance.get_comprehensive_health_report.return_value = {
+                "system_metrics": {"cpu_usage_percent": 25.0},
+                "components": {
+                    "schema": {"status": "healthy"},
+                    "databases": [],
+                    "caches": [],
+                },
+            }
 
             response = self.client.get("/health/api/")
 
@@ -345,7 +352,10 @@ class HealthViewsTestCase(TestCase):
         with patch("rail_django.views.health_views.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
             mock_instance.get_health_report.return_value = {"overall_status": "healthy"}
-            mock_instance.get_system_metrics.return_value = {"cpu_usage_percent": 25.0}
+            mock_instance.get_comprehensive_health_report.return_value = {
+                "system_metrics": {"cpu_usage_percent": 25.0},
+                "components": {},
+            }
 
             graphql_query = {
                 "query": "query { healthStatus systemMetrics }",
@@ -403,11 +413,17 @@ class HealthViewsTestCase(TestCase):
         """Test de l'endpoint des métriques système."""
         with patch("rail_django.views.health_views.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_system_metrics.return_value = {
-                "cpu_usage_percent": 25.0,
-                "memory_usage_percent": 60.0,
-                "collection_time_ms": 50,
-            }
+            mock_instance.get_system_metrics.return_value = SystemMetrics(
+                cpu_usage_percent=25.0,
+                memory_usage_percent=60.0,
+                memory_used_mb=1024.0,
+                memory_available_mb=2048.0,
+                disk_usage_percent=45.0,
+                active_connections=10,
+                cache_hit_rate=0.0,
+                uptime_seconds=3600.0,
+                collection_time_ms=50.0,
+            )
 
             response = self.client.get("/health/metrics/")
 
@@ -420,9 +436,13 @@ class HealthViewsTestCase(TestCase):
         """Test de l'endpoint du statut des composants."""
         with patch("rail_django.views.health_views.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.check_schema_health.return_value = {"status": "healthy"}
-            mock_instance.check_database_health.return_value = {"status": "healthy"}
-            mock_instance.check_cache_health.return_value = {"status": "degraded"}
+            mock_instance.get_comprehensive_health_report.return_value = {
+                "components": {
+                    "schema": {"status": "healthy"},
+                    "databases": [{"status": "healthy"}],
+                    "caches": [{"status": "degraded"}],
+                }
+            }
 
             response = self.client.get("/health/components/")
 
@@ -431,7 +451,7 @@ class HealthViewsTestCase(TestCase):
             self.assertIn("components", data)
             self.assertEqual(data["total_components"], 3)
             self.assertEqual(data["components"]["schema"]["status"], "healthy")
-            self.assertEqual(data["components"]["cache"]["status"], "degraded")
+            self.assertEqual(data["components"]["cache"][0]["status"], "degraded")
 
     def test_health_history_view_get(self):
         """Test de la vue d'historique de santé."""
