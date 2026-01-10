@@ -6,6 +6,7 @@ complex forms with nested fields.
 """
 
 import hashlib
+import inspect
 import json
 import logging
 import threading
@@ -29,7 +30,6 @@ from ..config_proxy import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
 from ..utils.graphql_meta import get_model_graphql_meta
-# Caching removed: no cache imports
 
 # Remove imports that cause AppRegistryNotReady error
 # from ..core.security import AuthorizationManager
@@ -57,7 +57,7 @@ except Exception:  # pragma: no cover - optional dependency during early startup
 
 logger = logging.getLogger(__name__)
 
-## Metadata cache configuration removed: caching is not supported.
+# In-process metadata caches (disabled when DEBUG=True).
 
 # Lightweight, targeted cache for model_table metadata only
 _table_cache_lock = threading.RLock()
@@ -74,6 +74,19 @@ _table_cache_policy = {
     "timeout_seconds": 600,
     "max_entries": 1000,
     "cache_authenticated": False,
+}
+_metadata_cache_lock = threading.RLock()
+_metadata_cache: Dict[str, Dict[str, Any]] = {}
+_metadata_cache_stats = {
+    "hits": 0,
+    "misses": 0,
+    "sets": 0,
+    "deletes": 0,
+    "invalidations": 0,
+}
+_metadata_cache_policy = {
+    "timeout_seconds": 600,
+    "max_entries": 1000,
 }
 
 _metadata_version_lock = threading.RLock()
@@ -260,25 +273,157 @@ def _get_user_cache_key(user: Any) -> Optional[str]:
         return None
 
 
+def _is_debug_mode() -> bool:
+    try:
+        from django.conf import settings as django_settings
+
+        return bool(getattr(django_settings, "DEBUG", False))
+    except Exception:
+        return False
+
+
+def _self_cache_token(instance: Any) -> str:
+    class_name = instance.__class__.__name__
+    schema_name = getattr(instance, "schema_name", None)
+    max_depth = getattr(instance, "max_depth", None)
+    parts = [class_name]
+    if schema_name is not None:
+        parts.append(f"schema={schema_name}")
+    if max_depth is not None:
+        parts.append(f"depth={max_depth}")
+    return ":".join(parts)
+
+
+def _normalize_cache_value(value: Any) -> str:
+    if value is None:
+        return "none"
+    if isinstance(value, (str, int, float, bool)):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_normalize_cache_value(item) for item in value) + "]"
+    if isinstance(value, set):
+        return "{" + ",".join(sorted(_normalize_cache_value(item) for item in value)) + "}"
+    if isinstance(value, dict):
+        items = sorted(
+            (
+                _normalize_cache_value(key),
+                _normalize_cache_value(val),
+            )
+            for key, val in value.items()
+        )
+        return "{" + ",".join(f"{key}:{val}" for key, val in items) + "}"
+    if hasattr(value, "_meta") and getattr(value._meta, "label_lower", None):
+        return f"model:{value._meta.label_lower}"
+    if hasattr(value, "model") and hasattr(value, "name"):
+        model = getattr(value, "model", None)
+        if model and getattr(model, "_meta", None) and getattr(model._meta, "label_lower", None):
+            return f"field:{model._meta.label_lower}.{value.name}"
+    return repr(value)
+
+
+def _get_metadata_cache_timeout(timeout: Optional[int]) -> int:
+    default_timeout = int(_metadata_cache_policy.get("timeout_seconds", 600))
+    if timeout is None:
+        return default_timeout
+    try:
+        timeout_val = int(timeout)
+    except (TypeError, ValueError):
+        return default_timeout
+    return timeout_val if timeout_val > 0 else default_timeout
+
+
+def _make_metadata_cache_key(
+    func, bound_args: inspect.BoundArguments, user_specific: bool, user_cache_key: Optional[str]
+) -> str:
+    parts: List[str] = [f"{func.__module__}.{func.__qualname__}"]
+    for name, value in bound_args.arguments.items():
+        if name == "self":
+            parts.append(f"self={_self_cache_token(value)}")
+        elif name == "user":
+            if user_specific:
+                parts.append(f"user={user_cache_key or 'anon'}")
+        else:
+            parts.append(f"{name}={_normalize_cache_value(value)}")
+    raw_key = "|".join(parts)
+    digest = hashlib.sha1(raw_key.encode("utf-8")).hexdigest()
+    return f"metadata:{digest}"
+
+
 def cache_metadata(
     timeout: int = None,
     user_specific: bool = True,
     invalidate_on_model_change: bool = True,
 ):
     """
-    Decorator retained for API compatibility. Caching is removed; this is a no-op
-    that simply executes the wrapped function.
+    Cache metadata extraction results when DEBUG is False.
 
     Args:
-        timeout: Ignored
-        user_specific: Ignored
-        invalidate_on_model_change: Ignored
+        timeout: Cache TTL in seconds (falls back to default when <= 0).
+        user_specific: Whether to include the user in the cache key.
+        invalidate_on_model_change: Reserved for future invalidation controls.
     """
 
     def decorator(func):
+        signature = None
+        try:
+            signature = inspect.signature(func)
+        except Exception:
+            signature = None
+
         @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            return func(self, *args, **kwargs)
+        def wrapper(*args, **kwargs):
+            if func.__name__ == "extract_model_table_metadata":
+                return func(*args, **kwargs)
+            if _is_debug_mode():
+                return func(*args, **kwargs)
+            if signature is None:
+                return func(*args, **kwargs)
+            try:
+                bound_args = signature.bind_partial(*args, **kwargs)
+                bound_args.apply_defaults()
+            except Exception:
+                return func(*args, **kwargs)
+
+            user = bound_args.arguments.get("user")
+            user_authenticated = bool(user and getattr(user, "is_authenticated", False))
+            user_cache_key = _get_user_cache_key(user) if user_specific else None
+            if user_specific and user_authenticated and not user_cache_key:
+                return func(*args, **kwargs)
+
+            cache_key = _make_metadata_cache_key(
+                func, bound_args, user_specific=user_specific, user_cache_key=user_cache_key
+            )
+            now = time.time()
+            with _metadata_cache_lock:
+                entry = _metadata_cache.get(cache_key)
+                if entry and entry.get("expires_at", 0) > now:
+                    _metadata_cache_stats["hits"] += 1
+                    cached = entry.get("value")
+                    return cached
+                _metadata_cache_stats["misses"] += 1
+
+            result = func(*args, **kwargs)
+
+            timeout_seconds = _get_metadata_cache_timeout(timeout)
+            with _metadata_cache_lock:
+                _metadata_cache[cache_key] = {
+                    "value": result,
+                    "expires_at": now + timeout_seconds,
+                    "created_at": now,
+                }
+                _metadata_cache_stats["sets"] += 1
+                max_entries = _metadata_cache_policy.get("max_entries", 1000) or 0
+                if max_entries > 0 and len(_metadata_cache) > max_entries:
+                    excess = len(_metadata_cache) - max_entries
+                    oldest = sorted(
+                        _metadata_cache.items(),
+                        key=lambda kv: kv[1].get("created_at", 0),
+                    )[:excess]
+                    for key, _ in oldest:
+                        _metadata_cache.pop(key, None)
+                        _metadata_cache_stats["deletes"] += 1
+
+            return result
 
         return wrapper
 
@@ -296,26 +441,30 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
     Example:
         >>> invalidate_metadata_cache(model_name="Product", app_name="inventory")
     """
-    global _table_cache
+    global _table_cache, _metadata_cache
     with _table_cache_lock:
-        if not _table_cache:
-            return
-        keys_to_delete = []
-        for k in list(_table_cache.keys()):
-            parts = k.split(":")
-            cache_app = parts[3] if len(parts) > 3 else None
-            cache_model = parts[4] if len(parts) > 4 else None
-            if model_name or app_name:
-                if (not app_name or app_name == cache_app) and (
-                    not model_name or model_name == cache_model
-                ):
+        if _table_cache:
+            keys_to_delete = []
+            for k in list(_table_cache.keys()):
+                parts = k.split(":")
+                cache_app = parts[3] if len(parts) > 3 else None
+                cache_model = parts[4] if len(parts) > 4 else None
+                if model_name or app_name:
+                    if (not app_name or app_name == cache_app) and (
+                        not model_name or model_name == cache_model
+                    ):
+                        keys_to_delete.append(k)
+                else:
                     keys_to_delete.append(k)
-            else:
-                keys_to_delete.append(k)
-        for k in keys_to_delete:
-            _table_cache.pop(k, None)
-            _table_cache_stats["deletes"] += 1
+            for k in keys_to_delete:
+                _table_cache.pop(k, None)
+                _table_cache_stats["deletes"] += 1
         _table_cache_stats["invalidations"] += 1
+    with _metadata_cache_lock:
+        if _metadata_cache:
+            _metadata_cache_stats["deletes"] += len(_metadata_cache)
+            _metadata_cache.clear()
+        _metadata_cache_stats["invalidations"] += 1
     if app_name and model_name:
         _bump_metadata_version(app_name=app_name, model_name=model_name)
     else:
@@ -4180,14 +4329,11 @@ class ModelTableExtractor:
     ) -> Optional[ModelTableMetadata]:
         # Refresh cache policy from settings on each call to reflect dynamic changes without restart.
         _load_table_cache_policy()
+        debug_mode = _is_debug_mode()
         user_authenticated = bool(user and getattr(user, "is_authenticated", False))
         user_cache_key = _get_user_cache_key(user) if user_authenticated else None
         cache_enabled = (not user_authenticated) or bool(user_cache_key)
-        cache_enabled = cache_enabled and bool(_table_cache_policy.get("enabled", True))
-        cache_authenticated_allowed = bool(
-            _table_cache_policy.get("cache_authenticated", False)
-        )
-        if user_authenticated and not cache_authenticated_allowed:
+        if debug_mode:
             cache_enabled = False
         cache_key = None
         if cache_enabled:
