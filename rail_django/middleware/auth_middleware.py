@@ -12,7 +12,6 @@ from typing import Any, Dict, Optional, Union, Tuple
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
@@ -20,6 +19,13 @@ from django.utils.deprecation import MiddlewareMixin
 from ..rate_limiting import get_rate_limiter
 
 logger = logging.getLogger(__name__)
+
+
+def _get_anonymous_user():
+    # Import lazily to avoid AppRegistryNotReady during Django app loading.
+    from django.contrib.auth.models import AnonymousUser
+
+    return AnonymousUser()
 
 # Ensure middleware logs are visible during development
 # If project LOGGING is not configured for this module, attach a console handler in DEBUG.
@@ -136,7 +142,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
                 self._log_authentication_event(request, None, "invalid_token", "jwt")
 
         # Injecter l'utilisateur dans le contexte de la requête
-        request.user = user or AnonymousUser()
+        request.user = user or _get_anonymous_user()
         request.auth_method = auth_method
         request.auth_timestamp = datetime.now(timezone.utc)
 
@@ -559,7 +565,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         except Exception as e:
             logger.warning(f"Could not create debug user, using AnonymousUser: {e}")
             # Fallback vers un utilisateur anonyme avec des permissions étendues
-            request.user = AnonymousUser()
+            request.user = _get_anonymous_user()
             request.auth_method = "debug_anonymous"
             request.auth_timestamp = datetime.now(timezone.utc)
 

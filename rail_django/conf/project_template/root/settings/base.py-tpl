@@ -20,23 +20,20 @@ if os.environ.get('RAIL_STARTAPP') != 'true':
 
 # Application definition
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Third-party apps
-    'graphene_django',
-    'django_filters',
-    'corsheaders',
-    # Rail Django apps
-    'rail_django',
-    'rail_django.core',
-    'rail_django.generators',
-    'rail_django.extensions',
+    "graphene_django",
+    "django_filters",
+    "corsheaders",
+    # Rail Django app
+    "rail_django",
     # Project apps
-    'root',
+    "root",
 ]
 
 MIDDLEWARE = [

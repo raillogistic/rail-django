@@ -318,7 +318,7 @@ class RateLimiter:
 
 
 class InputValidator:
-    \"\"\"Compatibility wrapper for unified input validation.\"\"\"
+    """Compatibility wrapper for unified input validation."""
 
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
