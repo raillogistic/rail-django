@@ -181,9 +181,12 @@ def _load_table_cache_policy() -> None:
         )
 
 
-def _get_table_cache_timeout() -> int:
-    """Return current cache timeout for table metadata."""
-    return _table_cache_policy.get("timeout_seconds", 600)
+def _get_table_cache_timeout() -> Optional[int]:
+    """Return cache timeout for table metadata (None means no expiry)."""
+    if not _is_debug_mode():
+        return None
+    timeout_val = int(_table_cache_policy.get("timeout_seconds", 600))
+    return timeout_val if timeout_val > 0 else 600
 
 
 def _make_table_cache_key(
@@ -321,7 +324,9 @@ def _normalize_cache_value(value: Any) -> str:
     return repr(value)
 
 
-def _get_metadata_cache_timeout(timeout: Optional[int]) -> int:
+def _get_metadata_cache_timeout(timeout: Optional[int]) -> Optional[int]:
+    if not _is_debug_mode():
+        return None
     default_timeout = int(_metadata_cache_policy.get("timeout_seconds", 600))
     if timeout is None:
         return default_timeout
@@ -355,10 +360,10 @@ def cache_metadata(
     invalidate_on_model_change: bool = True,
 ):
     """
-    Cache metadata extraction results when DEBUG is False.
+    Cache metadata extraction results when DEBUG is False with no expiry.
 
     Args:
-        timeout: Cache TTL in seconds (falls back to default when <= 0).
+        timeout: Cache TTL in seconds (ignored when DEBUG is False).
         user_specific: Whether to include the user in the cache key.
         invalidate_on_model_change: Reserved for future invalidation controls.
     """
@@ -396,7 +401,8 @@ def cache_metadata(
             now = time.time()
             with _metadata_cache_lock:
                 entry = _metadata_cache.get(cache_key)
-                if entry and entry.get("expires_at", 0) > now:
+                expires_at = entry.get("expires_at") if entry else None
+                if entry and (expires_at is None or expires_at > now):
                     _metadata_cache_stats["hits"] += 1
                     cached = entry.get("value")
                     return cached
@@ -405,10 +411,11 @@ def cache_metadata(
             result = func(*args, **kwargs)
 
             timeout_seconds = _get_metadata_cache_timeout(timeout)
+            expires_at = None if timeout_seconds is None else now + timeout_seconds
             with _metadata_cache_lock:
                 _metadata_cache[cache_key] = {
                     "value": result,
-                    "expires_at": now + timeout_seconds,
+                    "expires_at": expires_at,
                     "created_at": now,
                 }
                 _metadata_cache_stats["sets"] += 1
@@ -4356,7 +4363,8 @@ class ModelTableExtractor:
                 now = time.time()
                 with _table_cache_lock:
                     entry = _table_cache.get(cache_key)
-                    if entry and entry.get("expires_at", 0) > now:
+                    expires_at = entry.get("expires_at") if entry else None
+                    if entry and (expires_at is None or expires_at > now):
                         _table_cache_stats["hits"] += 1
                         cached = entry.get("value")
                         if cached is not None:
@@ -5130,10 +5138,11 @@ class ModelTableExtractor:
             try:
                 timeout = _get_table_cache_timeout()
                 now = time.time()
+                expires_at = None if timeout is None else now + timeout
                 with _table_cache_lock:
                     _table_cache[cache_key] = {
                         "value": metadata,
-                        "expires_at": now + timeout,
+                        "expires_at": expires_at,
                         "created_at": now,
                     }
                     _table_cache_stats["sets"] += 1
