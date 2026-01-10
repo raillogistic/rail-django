@@ -43,10 +43,9 @@ RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
         "enable_authentication": True,
         "enable_authorization": True,
-        "enable_rate_limiting": False,
-        "rate_limit_requests_per_minute": 60,
-        "rate_limit_requests_per_hour": 1000,
         "enable_input_validation": True,
+        "input_allow_html": False,
+        "input_failure_severity": "high",
     },
     "middleware_settings": {
         "enable_query_complexity_middleware": True,
@@ -104,6 +103,28 @@ JWT_ENFORCE_CSRF = True  # Require CSRF token for cookie-based auth on unsafe me
 CSRF_COOKIE_NAME = "csrftoken"
 ```
 
+## Input validation settings
+
+Input validation uses a unified sanitizer with allowlisted HTML and pattern
+detection. Configure it under `security_settings`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_input_validation": True,
+        "enable_sql_injection_protection": True,
+        "enable_xss_protection": True,
+        "input_allow_html": False,
+        "input_allowed_html_tags": ["p", "br", "strong", "em", "u", "ul", "li"],
+        "input_allowed_html_attributes": {"*": ["class"], "a": ["href", "title"]},
+        "input_max_string_length": 10000,
+        "input_truncate_long_strings": False,
+        "input_failure_severity": "high",
+        "input_pattern_scan_limit": 10000,
+    }
+}
+```
+
 ## Performance and monitoring settings
 
 ```python
@@ -128,14 +149,72 @@ permissions. You can tune the API behavior with:
 
 ```python
 GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS = ["rail_django.manage_schema"]
-GRAPHQL_SCHEMA_API_RATE_LIMIT = {
-    "enable": True,
-    "window_seconds": 60,
-    "max_requests": 60,
-}
 GRAPHQL_SCHEMA_API_CORS_ENABLED = True
 GRAPHQL_SCHEMA_API_CORS_ALLOWED_ORIGINS = ["https://admin.example.com"]
 ```
+
+Rate limiting for these endpoints is configured under
+`RAIL_DJANGO_RATE_LIMITING["contexts"]["schema_api"]` (legacy
+`GRAPHQL_SCHEMA_API_RATE_LIMIT` is still supported when the central config is
+unset).
+
+## Rate limiting
+
+Rate limiting is configured via the centralized limiter:
+
+```python
+RAIL_DJANGO_RATE_LIMITING = {
+    "enabled": True,
+    "contexts": {
+        "graphql": {
+            "enabled": True,
+            "rules": [
+                {"name": "user_minute", "scope": "user_or_ip", "limit": 600, "window_seconds": 60},
+                {"name": "user_hour", "scope": "user_or_ip", "limit": 36000, "window_seconds": 3600},
+                {"name": "ip_hour_backstop", "scope": "ip", "limit": 500000, "window_seconds": 3600},
+            ],
+        },
+        "graphql_login": {
+            "enabled": True,
+            "rules": [
+                {"name": "login_ip", "scope": "ip", "limit": 60, "window_seconds": 900},
+            ],
+        },
+        "schema_api": {
+            "enabled": True,
+            "rules": [
+                {"name": "schema_api_minute", "scope": "user_or_ip", "limit": 120, "window_seconds": 60},
+                {"name": "schema_api_hour", "scope": "user_or_ip", "limit": 2000, "window_seconds": 3600},
+            ],
+        },
+    },
+}
+```
+
+Optional schema overrides can be provided with `RAIL_DJANGO_RATE_LIMITING_SCHEMAS`:
+
+```python
+RAIL_DJANGO_RATE_LIMITING_SCHEMAS = {
+    "default": {
+        "contexts": {
+            "graphql": {
+                "rules": [
+                    {"name": "user_minute", "scope": "user_or_ip", "limit": 300, "window_seconds": 60},
+                ]
+            }
+        }
+    }
+}
+```
+
+Legacy keys are still supported when `RAIL_DJANGO_RATE_LIMITING` is unset:
+
+- `RAIL_DJANGO_GRAPHQL["security_settings"].enable_rate_limiting`
+- `RAIL_DJANGO_GRAPHQL["security_settings"].rate_limit_requests_per_minute`
+- `RAIL_DJANGO_GRAPHQL["security_settings"].rate_limit_requests_per_hour`
+- `GRAPHQL_REQUESTS_LIMIT` / `GRAPHQL_REQUESTS_WINDOW`
+- `AUTH_LOGIN_ATTEMPTS_LIMIT` / `AUTH_LOGIN_ATTEMPTS_WINDOW`
+- `GRAPHQL_SCHEMA_API_RATE_LIMIT`
 
 ## Export settings
 
@@ -178,4 +257,5 @@ max_depth = get_setting("performance_settings.max_query_depth", 10)
 - `schema_settings.auto_camelcase` controls GraphQL field naming.
 - `schema_settings.enable_introspection` and `schema_settings.enable_graphiql`
   should be disabled in production.
-- Caching has been removed from this codebase; cache-related settings are ignored.
+- Caching helpers were removed, but rate limiting uses Django cache; configure
+  `CACHES` with a shared backend in production.

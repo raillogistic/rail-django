@@ -19,11 +19,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union, Tuple
 
 from django.conf import settings
 from django.db import transaction
-from graphql import GraphQLSchema, build_ast_schema, validate
+from graphql import GraphQLSchema, build_ast_schema, validate_schema
 
 from ..debugging import DebugHooks, PerformanceMonitor
 from ..introspection import SchemaComparison, SchemaIntrospector
-from ..validation import SchemaValidator, ValidationResult
+from ..validation import SchemaInfo, SchemaValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -197,12 +197,13 @@ class SchemaManager:
 
             # Validate schema
             if not force:
-                validation_result = self.validator.validate_schema(
+                schema_info = SchemaInfo(
                     name=name,
                     schema=schema,
                     version=version,
                     description=description
                 )
+                validation_result = self.validator.validate_schema(schema_info)
 
                 if not validation_result.is_valid:
                     raise ValueError(f"Schema validation failed: {validation_result.errors}")
@@ -366,11 +367,13 @@ class SchemaManager:
 
                     # Validate new schema
                     if not force:
-                        validation_result = self.validator.validate_schema(
+                        schema_info = SchemaInfo(
                             name=name,
                             schema=schema,
-                            version=version or current_metadata.version
+                            version=version or current_metadata.version,
+                            description=description or current_metadata.description
                         )
+                        validation_result = self.validator.validate_schema(schema_info)
 
                         if not validation_result.is_valid:
                             raise ValueError(
@@ -655,7 +658,7 @@ class SchemaManager:
 
         # Check schema validity
         try:
-            validation_errors = validate(schema, [])
+            validation_errors = validate_schema(schema)
             if validation_errors:
                 issues.extend([str(error) for error in validation_errors])
                 health.status = 'critical'

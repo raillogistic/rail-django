@@ -11,42 +11,26 @@ Example:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from typing import Any, Dict, Optional
 
-from django.core.cache import cache
 from graphql import GraphQLError
 import graphene
 
 from rail_django.config_proxy import get_settings_proxy
+from rail_django.rate_limiting import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
 
-def _build_key(
-    scope: str, field_name: str, user_id: Optional[int], ip_addr: Optional[str]
-) -> str:
-    """
-    Purpose: Build a stable cache key for rate limiting
-    Args:
-        scope (str): either "per_user" or "per_ip"
-        field_name (str): GraphQL field being resolved
-        user_id (Optional[int]): authenticated user id if available
-        ip_addr (Optional[str]): client IP address or None
-    Returns:
-        str: hashed cache key prefixed with 'gql_rl:'
-    Raises:
-        None
-    Example:
-        >>> _build_key("per_user", "createOrder", 42, None)
-        'gql_rl:...'
-    """
-    base = f"{scope}:{field_name}:{user_id or 'anon'}:{ip_addr or 'noip'}"
-    return "gql_rl:" + hashlib.sha256(base.encode("utf-8")).hexdigest()
+def _is_root_field(info: Any) -> bool:
+    path = getattr(info, "path", None)
+    if path is None:
+        return True
+    return getattr(path, "prev", None) is None
 
 
-def _get_rate_limit_settings() -> Dict[str, Any]:
+def _get_rate_limit_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Purpose: Retrieve rate limiting settings from hierarchical settings proxy
     Args: None
@@ -57,24 +41,41 @@ def _get_rate_limit_settings() -> Dict[str, Any]:
         >>> rl.get("enable", False)
         False
     """
-    proxy = get_settings_proxy()
-    schema_name: str = proxy.get("DEFAULT_SCHEMA") or "default"
-    rl_settings: Dict[str, Any] = (
-        proxy.get(f"schema_settings.{schema_name}.security_settings.rate_limiting")
-        or {}
-    )
-    # Apply sane defaults
+    if not schema_name:
+        proxy = get_settings_proxy()
+        schema_name = proxy.get("DEFAULT_SCHEMA") or "default"
+    limiter = get_rate_limiter(schema_name)
+    if not limiter.is_enabled("graphql"):
+        return {
+            "enable": False,
+            "window_seconds": 60,
+            "max_requests": 0,
+            "scope": "user_or_ip",
+        }
+
+    rules = limiter.get_rules("graphql")
+    if not rules:
+        return {
+            "enable": False,
+            "window_seconds": 60,
+            "max_requests": 0,
+            "scope": "user_or_ip",
+        }
+
+    preferred = [rule for rule in rules if rule.scope in {"user_or_ip", "user"}]
+    candidate_rules = preferred or rules
+    rule = sorted(candidate_rules, key=lambda r: (r.window_seconds, r.limit))[0]
     return {
-        "enable": bool(rl_settings.get("enable", False)),
-        "window_seconds": int(rl_settings.get("window_seconds", 60)),
-        "max_requests": int(rl_settings.get("max_requests", 100)),
-        "scope": (rl_settings.get("scope") or "per_user"),
+        "enable": True,
+        "window_seconds": int(rule.window_seconds),
+        "max_requests": int(rule.limit),
+        "scope": rule.scope,
     }
 
 
 def rate_limit_middleware(next_fn, root, info, **kwargs):
     """
-    Purpose: Graphene middleware to enforce per-field request rate limits
+    Purpose: Graphene middleware to enforce per-request rate limits at root fields
     Args:
         next_fn: callable, next resolver in chain
         root: Any, resolver root
@@ -90,33 +91,24 @@ def rate_limit_middleware(next_fn, root, info, **kwargs):
         >>> #                            middleware=[rate_limit_middleware])
     """
     try:
-        rl = _get_rate_limit_settings()
-        if not rl.get("enable", False):
+        schema_name = getattr(info.context, "schema_name", None)
+        limiter = get_rate_limiter(schema_name)
+        if not limiter.is_enabled("graphql"):
             return next_fn(root, info, **kwargs)
 
-        user = getattr(info.context, "user", None)
-        user_id: Optional[int] = (
-            getattr(user, "id", None)
-            if (user and getattr(user, "is_authenticated", False))
-            else None
-        )
-        ip_addr: Optional[str] = info.context.META.get(
-            "HTTP_X_FORWARDED_FOR", ""
-        ).split(",")[0].strip() or info.context.META.get("REMOTE_ADDR")
-        scope = rl.get("scope", "per_user")
-        key = _build_key(
-            scope=scope,
-            field_name=getattr(info, "field_name", "unknown"),
-            user_id=user_id,
-            ip_addr=ip_addr,
-        )
-        count = cache.get(key, 0)
+        if not _is_root_field(info):
+            return next_fn(root, info, **kwargs)
 
-        if count >= rl.get("max_requests", 100):
+        result = limiter.check("graphql", request=info.context)
+        if not result.allowed:
             raise GraphQLError("Rate limit exceeded. Please retry later.")
 
-        # Increment with TTL window
-        cache.set(key, int(count) + 1, timeout=rl.get("window_seconds", 60))
+        field_name = getattr(info, "field_name", "") or ""
+        if field_name.lower() == "login":
+            login_result = limiter.check("graphql_login", request=info.context)
+            if not login_result.allowed:
+                raise GraphQLError("Rate limit exceeded. Please retry later.")
+
         return next_fn(root, info, **kwargs)
     except GraphQLError:
         raise
@@ -203,7 +195,8 @@ class SecurityQuery(graphene.ObjectType):
         Example:
             >>> SecurityQuery.resolve_rate_limiting(info)
         """
-        config = _get_rate_limit_settings()
+        schema_name = getattr(info.context, "schema_name", None)
+        config = _get_rate_limit_settings(schema_name)
         # Map keys directly to GraphQL fields
         return RateLimitInfo(
             enable=bool(config.get("enable", False)),

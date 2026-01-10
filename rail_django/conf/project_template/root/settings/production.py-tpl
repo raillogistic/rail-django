@@ -97,11 +97,33 @@ AUDIT_ALERT_THRESHOLDS = {
 # LIMITATION DE DÉBIT
 # =============================================================================
 
-GRAPHQL_ENABLE_AUTH_RATE_LIMITING = True
-AUTH_LOGIN_ATTEMPTS_LIMIT = 5
-AUTH_LOGIN_ATTEMPTS_WINDOW = 900  # 15 minutes
-GRAPHQL_REQUESTS_LIMIT = 100
-GRAPHQL_REQUESTS_WINDOW = 3600  # 1 heure
+# Centralized, context-aware rate limiting tuned for active users and shared IPs.
+RAIL_DJANGO_RATE_LIMITING = {
+    "enabled": True,
+    "contexts": {
+        "graphql": {
+            "enabled": True,
+            "rules": [
+                {"name": "user_minute", "scope": "user_or_ip", "limit": 600, "window_seconds": 60},
+                {"name": "user_hour", "scope": "user_or_ip", "limit": 36000, "window_seconds": 3600},
+                {"name": "ip_hour_backstop", "scope": "ip", "limit": 500000, "window_seconds": 3600},
+            ],
+        },
+        "graphql_login": {
+            "enabled": True,
+            "rules": [
+                {"name": "login_ip", "scope": "ip", "limit": 60, "window_seconds": 900},
+            ],
+        },
+        "schema_api": {
+            "enabled": True,
+            "rules": [
+                {"name": "schema_api_minute", "scope": "user_or_ip", "limit": 120, "window_seconds": 60},
+                {"name": "schema_api_hour", "scope": "user_or_ip", "limit": 2000, "window_seconds": 3600},
+            ],
+        },
+    },
+}
 
 # =============================================================================
 # AUTHENTIFICATION MULTI-FACTEURS (MFA)

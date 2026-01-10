@@ -72,6 +72,7 @@ class ValidationErrorHandler:
     def __init__(self):
         self.errors: List[ValidationError] = []
         self.warnings: List[ValidationError] = []
+        self.infos: List[ValidationError] = []
 
     def add_error(self, field: str, message: str, code: str = 'VALIDATION_ERROR'):
         """Add a validation error."""
@@ -88,6 +89,7 @@ class ValidationErrorHandler:
     def add_info(self, field: str, message: str, code: str = 'VALIDATION_INFO'):
         """Add a validation info message."""
         info = ValidationError(field=field, message=message, code=code, severity='info')
+        self.infos.append(info)
         logger.info(f"Validation info for field '{field}': {message}")
 
     def has_errors(self) -> bool:
@@ -103,6 +105,7 @@ class ValidationErrorHandler:
         return {
             'error_count': len(self.errors),
             'warning_count': len(self.warnings),
+            'info_count': len(self.infos),
             'errors': [
                 {
                     'field': error.field,
@@ -120,13 +123,23 @@ class ValidationErrorHandler:
                     'severity': warning.severity
                 }
                 for warning in self.warnings
+            ],
+            'infos': [
+                {
+                    'field': info.field,
+                    'message': info.message,
+                    'code': info.code,
+                    'severity': info.severity
+                }
+                for info in self.infos
             ]
         }
 
     def clear(self):
-        """Clear all errors and warnings."""
+        """Clear all errors, warnings, and info messages."""
         self.errors.clear()
         self.warnings.clear()
+        self.infos.clear()
 
     def raise_if_errors(self):
         """Raise SchemaValidationError if there are any errors."""

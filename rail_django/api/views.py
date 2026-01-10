@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import HttpRequest, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+
+from ..rate_limiting import get_rate_limiter
 
 from ..core.registry import schema_registry
 from ..plugins.base import plugin_manager
@@ -87,38 +88,15 @@ class BaseAPIView(View):
         return response
 
     def _check_rate_limit(self, request: HttpRequest) -> Optional[JsonResponse]:
-        """Apply a basic rate limit using Django cache."""
-        config = getattr(settings, "GRAPHQL_SCHEMA_API_RATE_LIMIT", {}) or {}
-        if not config.get("enable", True):
-            return None
-
-        window_seconds = int(config.get("window_seconds", 60))
-        max_requests = int(config.get("max_requests", 60))
-
-        user = getattr(request, "user", None)
-        if user and getattr(user, "is_authenticated", False):
-            identifier = f"user:{user.id}"
-        else:
-            identifier = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-            if not identifier:
-                identifier = request.META.get("REMOTE_ADDR", "unknown")
-            identifier = f"ip:{identifier}"
-
-        cache_key = f"rail:schema_api_rl:{self.__class__.__name__}:{identifier}"
-        count = cache.get(cache_key)
-        if count is None:
-            cache.add(cache_key, 1, timeout=window_seconds)
-            return None
-
-        if int(count) >= max_requests:
+        """Apply a basic rate limit using the shared limiter."""
+        limiter = get_rate_limiter()
+        result = limiter.check("schema_api", request=request)
+        if not result.allowed:
             return self.error_response(
-                "Rate limit exceeded", status=429, details={"retry_after": window_seconds}
+                "Rate limit exceeded",
+                status=429,
+                details={"retry_after": result.retry_after},
             )
-
-        try:
-            cache.incr(cache_key)
-        except ValueError:
-            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
         return None
 
     def _authenticate_request(self, request: HttpRequest) -> Optional[JsonResponse]:

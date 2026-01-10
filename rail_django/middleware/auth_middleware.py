@@ -17,6 +17,8 @@ from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
+from ..rate_limiting import get_rate_limiter
+
 logger = logging.getLogger(__name__)
 
 # Ensure middleware logs are visible during development
@@ -583,14 +585,7 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
         self.get_response = get_response
 
         # Configuration de la limitation de débit
-        self.login_attempts_limit = getattr(settings, "AUTH_LOGIN_ATTEMPTS_LIMIT", 5)
-        self.login_attempts_window = getattr(
-            settings, "AUTH_LOGIN_ATTEMPTS_WINDOW", 900
-        )  # 15 minutes
-        self.graphql_requests_limit = getattr(settings, "GRAPHQL_REQUESTS_LIMIT", 100)
-        self.graphql_requests_window = getattr(
-            settings, "GRAPHQL_REQUESTS_WINDOW", 3600
-        )  # 1 heure
+        self.rate_limiter = get_rate_limiter()
 
         # Mode debug - bypass rate limiting when DEBUG=True
         self.debug_mode = getattr(settings, "DEBUG", False)
@@ -621,25 +616,21 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
         # Stocker la requête pour l'audit
         self._current_request = request
 
-        client_ip = self._get_client_ip(request)
-
         # Vérifier la limite générale des requêtes GraphQL
-        if self._is_rate_limited(
-            f"graphql_requests_{client_ip}",
-            self.graphql_requests_limit,
-            self.graphql_requests_window,
-        ):
-            return self._create_rate_limit_response("Trop de requêtes GraphQL")
+        result = self.rate_limiter.check("graphql", request=request)
+        if not result.allowed:
+            return self._create_rate_limit_response(
+                "Trop de requêtes GraphQL",
+                retry_after=result.retry_after,
+            )
 
         # Vérifier spécifiquement les tentatives de connexion
         if self._is_login_request(request):
-            if self._is_rate_limited(
-                f"login_attempts_{client_ip}",
-                self.login_attempts_limit,
-                self.login_attempts_window,
-            ):
+            result = self.rate_limiter.check("graphql_login", request=request)
+            if not result.allowed:
                 return self._create_rate_limit_response(
-                    "Trop de tentatives de connexion"
+                    "Trop de tentatives de connexion",
+                    retry_after=result.retry_after,
                 )
 
         return None
@@ -726,7 +717,9 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
             return forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR", "Unknown")
 
-    def _create_rate_limit_response(self, message: str) -> HttpResponse:
+    def _create_rate_limit_response(
+        self, message: str, retry_after: Optional[int] = None
+    ) -> HttpResponse:
         """
         Crée une réponse HTTP 429 pour la limitation de débit.
 
@@ -756,5 +749,6 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
         response = HttpResponse(
             json.dumps(response_data), content_type="application/json", status=429
         )
-        response["Retry-After"] = "900"  # 15 minutes
+        if retry_after is not None:
+            response["Retry-After"] = str(int(retry_after))
         return response

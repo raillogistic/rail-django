@@ -31,7 +31,8 @@ importing them in your schema build or including their URLs.
 
 ## Rate limiting (`rail_django.extensions.rate_limiting`)
 
-- Graphene middleware that throttles GraphQL fields using the cache.
+- Graphene middleware that applies request-level rate limiting at root fields.
+- Uses the centralized limiter configuration (`RAIL_DJANGO_RATE_LIMITING`).
 
 ## MFA (`rail_django.extensions.mfa`)
 

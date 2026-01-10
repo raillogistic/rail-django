@@ -12,10 +12,11 @@ from .error_handlers import (
     SchemaValidationError,
     ValidationErrorHandler,
 )
-from .schema_validator import SchemaValidator, ValidationResult
+from .schema_validator import SchemaInfo, SchemaValidator, ValidationResult
 
 __all__ = [
     'SchemaValidator',
+    'SchemaInfo',
     'ValidationResult',
     'SchemaRegistryError',
     'SchemaValidationError',

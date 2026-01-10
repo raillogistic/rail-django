@@ -18,6 +18,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from ..config_proxy import get_setting
+from ..security.input_validation import InputValidator as UnifiedInputValidator
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -44,6 +45,37 @@ class SecuritySettings:
     enable_input_validation: bool = True
     enable_sql_injection_protection: bool = True
     enable_xss_protection: bool = True
+    input_allow_html: bool = False
+    input_allowed_html_tags: List[str] = field(
+        default_factory=lambda: [
+            "p",
+            "br",
+            "strong",
+            "em",
+            "u",
+            "ol",
+            "ul",
+            "li",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "blockquote",
+        ]
+    )
+    input_allowed_html_attributes: Dict[str, List[str]] = field(
+        default_factory=lambda: {
+            "*": ["class"],
+            "a": ["href", "title"],
+            "img": ["src", "alt", "width", "height"],
+        }
+    )
+    input_max_string_length: Optional[int] = None
+    input_truncate_long_strings: bool = False
+    input_failure_severity: str = "high"
+    input_pattern_scan_limit: int = 10000
     session_timeout_minutes: int = 30
     max_file_upload_size: int = 10485760  # 10MB
     allowed_file_types: List[str] = field(
@@ -286,87 +318,21 @@ class RateLimiter:
 
 
 class InputValidator:
-    """Validate GraphQL inputs for security."""
+    \"\"\"Compatibility wrapper for unified input validation.\"\"\"
 
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
-        self.settings = SecuritySettings.from_schema(schema_name)
+        self._validator = UnifiedInputValidator(schema_name)
 
     def validate_input(self, input_data: Dict[str, Any]) -> List[str]:
-        """
-        Validate input data for security issues.
+        report = self._validator.validate_payload(input_data)
+        return report.error_messages()
 
-        Args:
-            input_data: Input data to validate
+    def validate_payload(self, input_data: Any) -> Any:
+        return self._validator.validate_payload(input_data)
 
-        Returns:
-            List of validation errors
-        """
-        errors = []
-
-        if not self.settings.enable_input_validation:
-            return errors
-
-        # Check for SQL injection patterns
-        if self.settings.enable_sql_injection_protection:
-            sql_errors = self._check_sql_injection(input_data)
-            errors.extend(sql_errors)
-
-        # Check for XSS patterns
-        if self.settings.enable_xss_protection:
-            xss_errors = self._check_xss(input_data)
-            errors.extend(xss_errors)
-
-        return errors
-
-    def _check_sql_injection(self, data: Any, path: str = "") -> List[str]:
-        """Check for SQL injection patterns."""
-        errors = []
-        sql_patterns = [
-            "union select", "drop table", "delete from", "insert into",
-            "update set", "exec ", "execute ", "sp_", "xp_"
-        ]
-
-        if isinstance(data, str):
-            lower_data = data.lower()
-            for pattern in sql_patterns:
-                if pattern in lower_data:
-                    errors.append(
-                        f"Potential SQL injection detected in {path or 'input'}: {pattern}")
-
-        elif isinstance(data, dict):
-            for key, value in data.items():
-                errors.extend(self._check_sql_injection(value, f"{path}.{key}" if path else key))
-
-        elif isinstance(data, list):
-            for i, item in enumerate(data):
-                errors.extend(self._check_sql_injection(item, f"{path}[{i}]" if path else f"[{i}]"))
-
-        return errors
-
-    def _check_xss(self, data: Any, path: str = "") -> List[str]:
-        """Check for XSS patterns."""
-        errors = []
-        xss_patterns = [
-            "<script", "javascript:", "onload=", "onerror=", "onclick=",
-            "onmouseover=", "onfocus=", "onblur=", "onchange=", "onsubmit="
-        ]
-
-        if isinstance(data, str):
-            lower_data = data.lower()
-            for pattern in xss_patterns:
-                if pattern in lower_data:
-                    errors.append(f"Potential XSS detected in {path or 'input'}: {pattern}")
-
-        elif isinstance(data, dict):
-            for key, value in data.items():
-                errors.extend(self._check_xss(value, f"{path}.{key}" if path else key))
-
-        elif isinstance(data, list):
-            for i, item in enumerate(data):
-                errors.extend(self._check_xss(item, f"{path}[{i}]" if path else f"[{i}]"))
-
-        return errors
+    def validate_and_sanitize(self, model_name: Optional[str], input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self._validator.validate_input(model_name, input_data)
 
 
 # Global instances

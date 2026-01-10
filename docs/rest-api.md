@@ -50,6 +50,10 @@ discovery, and metrics endpoints require admin permissions. Health remains
 public. Configure required permissions with
 `GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS`.
 
+Rate limiting for these endpoints is controlled by
+`RAIL_DJANGO_RATE_LIMITING["contexts"]["schema_api"]` (legacy
+`GRAPHQL_SCHEMA_API_RATE_LIMIT` works when the central config is unset).
+
 ## Schema list endpoint (non-REST)
 
 - `GET /schemas/` returns a simple list of schemas with metadata.

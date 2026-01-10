@@ -42,6 +42,7 @@ from .graphql_security import (
 from .input_validation import (
     GraphQLInputSanitizer,
     InputValidator,
+    ValidationReport,
     ValidationResult,
     ValidationSeverity,
     validate_input,
@@ -60,6 +61,7 @@ from .rbac import (
 __all__ = [
     # Input Validation
     'ValidationSeverity',
+    'ValidationReport',
     'ValidationResult',
     'InputValidator',
     'GraphQLInputSanitizer',

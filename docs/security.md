@@ -40,21 +40,80 @@ are masked by default.
 
 ## Input validation
 
-`rail_django.security.input_validation` sanitizes string inputs and detects
-common XSS patterns. You can also wrap resolvers with `@validate_input`.
+`rail_django.security.input_validation` provides a unified validation pipeline
+that sanitizes strings, applies allowlisted HTML rules, and flags high-risk
+patterns. You can wrap resolvers with `@validate_input` or use
+`InputValidator.validate_payload` directly.
+
+Recommended configuration:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_input_validation": True,
+        "enable_sql_injection_protection": True,
+        "enable_xss_protection": True,
+        "input_allow_html": False,
+        "input_allowed_html_tags": ["p", "br", "strong", "em", "u", "ul", "li"],
+        "input_allowed_html_attributes": {"*": ["class"], "a": ["href", "title"]},
+        "input_max_string_length": 10000,
+        "input_truncate_long_strings": False,
+        "input_failure_severity": "high",
+        "input_pattern_scan_limit": 10000,
+    }
+}
+```
+
+`input_failure_severity` accepts `low`, `medium`, `high`, or `critical` to control
+which issues fail the request.
 
 ## Rate limiting
 
-There are two levels:
+Rate limiting is centralized in `rail_django.rate_limiting` and applied in:
 
-- Django middleware: `GraphQLRateLimitMiddleware` for IP-based limits
-- Graphene middleware: `GraphQLSecurityMiddleware` for per-field limits
+- Django middleware: `GraphQLRateLimitMiddleware` for GraphQL requests
+- Graphene middleware: root operation checks for GraphQL requests
+- Schema REST API endpoints
 
-Rate limiting should be backed by shared cache/Redis in production. In-memory
-limits only apply per process.
+Configure it with `RAIL_DJANGO_RATE_LIMITING`:
 
-The built-in rate limiters now use Django cache by default, so make sure
-`CACHES` is configured for a shared backend in production.
+```python
+RAIL_DJANGO_RATE_LIMITING = {
+    "enabled": True,
+    "contexts": {
+        "graphql": {
+            "enabled": True,
+            "rules": [
+                {"name": "user_minute", "scope": "user_or_ip", "limit": 600, "window_seconds": 60},
+                {"name": "user_hour", "scope": "user_or_ip", "limit": 36000, "window_seconds": 3600},
+                {"name": "ip_hour_backstop", "scope": "ip", "limit": 500000, "window_seconds": 3600},
+            ],
+        },
+        "graphql_login": {
+            "enabled": True,
+            "rules": [
+                {"name": "login_ip", "scope": "ip", "limit": 60, "window_seconds": 900},
+            ],
+        },
+        "schema_api": {
+            "enabled": True,
+            "rules": [
+                {"name": "schema_api_minute", "scope": "user_or_ip", "limit": 120, "window_seconds": 60},
+            ],
+        },
+    },
+}
+```
+
+Notes:
+
+- Scopes: `user`, `ip`, `user_or_ip`, `user_ip`, `global`.
+- GraphQL limits are enforced once per request (root field), not per field.
+- The limiter uses Django cache; configure a shared backend (Redis) in production.
+- Legacy settings are still supported when `RAIL_DJANGO_RATE_LIMITING` is unset
+  (`security_settings.enable_rate_limiting`, `rate_limit_requests_per_minute`,
+  `rate_limit_requests_per_hour`, `GRAPHQL_REQUESTS_LIMIT`,
+  `AUTH_LOGIN_ATTEMPTS_LIMIT`, and `GRAPHQL_SCHEMA_API_RATE_LIMIT`).
 
 ## Introspection and GraphiQL
 

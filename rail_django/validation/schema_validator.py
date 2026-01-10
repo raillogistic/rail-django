@@ -12,8 +12,9 @@ from typing import Any, Dict, List, Optional, Set
 
 from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
-from graphql import GraphQLSchema, build_ast_schema, validate
+from graphql import GraphQLSchema, validate_schema
 from graphql.error import GraphQLError
+from packaging.version import InvalidVersion, Version
 
 from .error_handlers import (
     InvalidSchemaConfigError,
@@ -24,6 +25,17 @@ from .error_handlers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SchemaInfo:
+    """Normalized schema metadata used during validation."""
+    name: str
+    schema: Optional[GraphQLSchema] = None
+    version: Optional[str] = None
+    description: Optional[str] = None
+    apps: Optional[List[str]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -82,12 +94,13 @@ class SchemaValidator:
         self.error_handler = ValidationErrorHandler()
 
     @handle_validation_exception
-    def validate_schema(self, schema_info) -> ValidationResult:
+    def validate_schema(self, schema_info: Optional[SchemaInfo] = None, **kwargs) -> ValidationResult:
         """
         Validate a complete schema configuration and GraphQL schema.
 
         Args:
             schema_info: Schema information object containing name, schema, etc.
+            **kwargs: Keyword arguments used to build SchemaInfo when schema_info is None.
 
         Returns:
             ValidationResult with validation details
@@ -96,6 +109,7 @@ class SchemaValidator:
             SchemaValidationError: If validation fails
         """
         self.error_handler.clear()
+        schema_info = self._normalize_schema_info(schema_info, **kwargs)
 
         # Validate schema configuration
         self._validate_schema_config(schema_info)
@@ -116,7 +130,7 @@ class SchemaValidator:
             is_valid=not self.error_handler.has_errors(),
             errors=[error.message for error in self.error_handler.errors],
             warnings=[warning.message for warning in self.error_handler.warnings],
-            info=[],
+            info=[info.message for info in self.error_handler.infos],
             schema_name=getattr(schema_info, 'name', 'unknown'),
             validation_details=self._get_validation_details(schema_info)
         )
@@ -176,8 +190,8 @@ class SchemaValidator:
     def _validate_graphql_schema(self, graphql_schema: GraphQLSchema, schema_name: str):
         """Validate GraphQL schema structure."""
         try:
-            # Validate schema using GraphQL's built-in validation
-            validation_errors = validate(graphql_schema, [])
+            # Validate schema using GraphQL's schema validation
+            validation_errors = validate_schema(graphql_schema)
 
             if validation_errors:
                 for error in validation_errors:
@@ -362,13 +376,25 @@ class SchemaValidator:
                     f"Schema version '{new_schema_info.version}' already exists",
                     'DUPLICATE_VERSION'
                 )
-            elif new_schema_info.version < existing_schema_info.version:
-                self.error_handler.add_warning(
-                    'version',
-                    f"New version '{new_schema_info.version}' is older than existing "
-                    f"version '{existing_schema_info.version}'",
-                    'OLDER_VERSION'
-                )
+            else:
+                try:
+                    new_version = Version(new_schema_info.version)
+                    existing_version = Version(existing_schema_info.version)
+                    if new_version < existing_version:
+                        self.error_handler.add_warning(
+                            'version',
+                            f"New version '{new_schema_info.version}' is older than existing "
+                            f"version '{existing_schema_info.version}'",
+                            'OLDER_VERSION'
+                        )
+                except InvalidVersion:
+                    if new_schema_info.version < existing_schema_info.version:
+                        self.error_handler.add_warning(
+                            'version',
+                            f"New version '{new_schema_info.version}' is older than existing "
+                            f"version '{existing_schema_info.version}'",
+                            'OLDER_VERSION'
+                        )
 
         # Check for breaking changes (simplified)
         if hasattr(new_schema_info, 'schema') and hasattr(existing_schema_info, 'schema'):
@@ -378,10 +404,40 @@ class SchemaValidator:
             is_valid=not self.error_handler.has_errors(),
             errors=[error.message for error in self.error_handler.errors],
             warnings=[warning.message for warning in self.error_handler.warnings],
-            info=[],
+            info=[info.message for info in self.error_handler.infos],
             schema_name=getattr(new_schema_info, 'name', 'unknown'),
             validation_details={'conflict_check': True}
         )
+
+    def _normalize_schema_info(self, schema_info: Optional[SchemaInfo], **kwargs) -> Any:
+        if schema_info is None:
+            return SchemaInfo(**kwargs)
+
+        if isinstance(schema_info, SchemaInfo):
+            if not kwargs:
+                return schema_info
+            data = {
+                'name': schema_info.name,
+                'schema': schema_info.schema,
+                'version': schema_info.version,
+                'description': schema_info.description,
+                'apps': schema_info.apps,
+                'metadata': schema_info.metadata,
+            }
+            data.update(kwargs)
+            return SchemaInfo(**data)
+
+        if isinstance(schema_info, dict):
+            data = dict(schema_info)
+            data.update(kwargs)
+            return SchemaInfo(**data)
+
+        if kwargs:
+            data = {key: getattr(schema_info, key, None) for key in SchemaInfo.__dataclass_fields__}
+            data.update(kwargs)
+            return SchemaInfo(**data)
+
+        return schema_info
 
     def _check_breaking_changes(self, new_schema: GraphQLSchema, existing_schema: GraphQLSchema):
         """Check for breaking changes between schema versions."""

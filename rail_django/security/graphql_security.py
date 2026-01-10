@@ -18,7 +18,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from graphql import (
     DocumentNode,
     FieldNode,
@@ -33,6 +32,8 @@ from graphql import (
 )
 from graphql.language.ast import Node
 from graphql.validation import ValidationContext
+
+from ..rate_limiting import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -483,23 +484,18 @@ def create_security_middleware(config: SecurityConfig = None):
         Returns:
             Résultat du middleware suivant
         """
-        # Rate limiting using Django cache for cross-process consistency
-        user = getattr(info.context, 'user', None)
-        if user and user.is_authenticated:
-            cache_key = f"rail:gql_security_rl:{user.id}"
-            count = cache.get(cache_key)
-            if count is None:
-                cache.add(cache_key, 1, timeout=60)
-            else:
-                if int(count) >= int(config.rate_limit_per_minute):
-                    raise GraphQLError("Limite de taux d??pass??e")
-                try:
-                    cache.incr(cache_key)
-                except ValueError:
-                    cache.set(cache_key, int(count) + 1, timeout=60)
+        is_root_field = info.path.key == info.operation.selection_set.selections[0].name.value
+        user = getattr(info.context, "user", None)
 
-        # Analyser la requête si c'est le champ racine
-        if info.path.key == info.operation.selection_set.selections[0].name.value:
+        if is_root_field:
+            schema_name = getattr(info.context, "schema_name", None)
+            limiter = get_rate_limiter(schema_name)
+            result = limiter.check("graphql", request=info.context)
+            if not result.allowed:
+                raise GraphQLError("Limite de taux depassee")
+
+        # Analyser la requete si c'est le champ racine
+        if is_root_field:
             try:
                 result = analyzer.analyze_query(
                     info.operation,

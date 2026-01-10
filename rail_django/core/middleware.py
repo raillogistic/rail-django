@@ -14,9 +14,10 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
-from ..config_proxy import get_setting
+from ..rate_limiting import get_rate_limiter
 from .performance import get_complexity_analyzer
-from .security import get_auth_manager, get_input_validator, get_rate_limiter
+from .exceptions import ValidationError as GraphQLValidationError
+from .security import get_auth_manager, get_input_validator
 
 logger = logging.getLogger(__name__)
 
@@ -309,16 +310,31 @@ class RateLimitingMiddleware(BaseMiddleware):
         if not self.settings.enable_rate_limiting_middleware:
             return next_resolver(root, info, **kwargs)
 
-        # Check rate limits
-        identifier = self.rate_limiter.get_client_identifier(info.context)
+        if not self._is_root_field(info):
+            return next_resolver(root, info, **kwargs)
 
-        if not self.rate_limiter.check_rate_limit(identifier, "minute"):
-            raise PermissionError("Rate limit exceeded (per minute)")
+        result = self.rate_limiter.check("graphql", request=info.context)
+        if not result.allowed:
+            raise PermissionError("Rate limit exceeded")
 
-        if not self.rate_limiter.check_rate_limit(identifier, "hour"):
-            raise PermissionError("Rate limit exceeded (per hour)")
+        if self._is_login_field(info):
+            login_result = self.rate_limiter.check("graphql_login", request=info.context)
+            if not login_result.allowed:
+                raise PermissionError("Rate limit exceeded (login)")
 
         return next_resolver(root, info, **kwargs)
+
+    @staticmethod
+    def _is_root_field(info: Any) -> bool:
+        path = getattr(info, "path", None)
+        if path is None:
+            return True
+        return getattr(path, "prev", None) is None
+
+    @staticmethod
+    def _is_login_field(info: Any) -> bool:
+        field_name = getattr(info, "field_name", "") or ""
+        return field_name.lower() == "login"
 
 
 ## CachingMiddleware removed: caching is not supported in this project.
@@ -338,9 +354,14 @@ class ValidationMiddleware(BaseMiddleware):
 
         # Validate input arguments
         if kwargs:
-            validation_errors = self.input_validator.validate_input(kwargs)
-            if validation_errors:
-                raise ValueError(f"Input validation failed: {'; '.join(validation_errors)}")
+            report = self.input_validator.validate_payload(kwargs)
+            if report.has_failures():
+                raise GraphQLValidationError(
+                    "Input validation failed",
+                    validation_errors=report.as_error_dict(),
+                )
+            if isinstance(report.sanitized_data, dict):
+                kwargs = report.sanitized_data
 
         return next_resolver(root, info, **kwargs)
 

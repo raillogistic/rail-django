@@ -22,8 +22,12 @@ This reference maps the main modules to their responsibilities.
 
 - `security/rbac.py`: role definitions and permission resolution
 - `security/graphql_security.py`: query depth and complexity analysis
-- `security/input_validation.py`: input sanitization and validation
+- `security/input_validation.py`: unified input validation and sanitization pipeline
 - `security/field_permissions.py`: field-level masking and visibility
+
+## rate_limiting
+
+- `rate_limiting.py`: centralized limiter shared across GraphQL, HTTP, and schema API
 
 ## views and URLs
 
@@ -37,13 +41,14 @@ This reference maps the main modules to their responsibilities.
 - `extensions/auth.py`: JWT login, refresh, user info
 - `extensions/audit.py`: audit logging
 - `extensions/exporting.py`: CSV/XLSX export endpoint
+- `extensions/validation.py`: validation query helpers and re-exports
 - `extensions/templating.py`: PDF endpoints via decorator
 - `extensions/health.py`: health checks
 - `extensions/optimization.py`: selection-set driven query optimization
-- `extensions/rate_limiting.py`: Graphene rate limiting middleware
+- `extensions/rate_limiting.py`: Graphene middleware backed by the shared limiter
 - `extensions/virus_scanner.py`: ClamAV integration
 
 ## middleware
 
-- `middleware/auth_middleware.py`: JWT auth and rate limiting
+- `middleware/auth_middleware.py`: JWT auth and shared rate limiting
 - `middleware/performance.py`: performance monitoring
