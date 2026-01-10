@@ -1,4 +1,3 @@
-
 from .base import *
 
 # Production settings
@@ -12,3 +11,192 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 # Database performance: Keep connections alive for 10 minutes
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)
 
+# =============================================================================
+# PARAMÈTRES DE SÉCURITÉ DJANGO
+# =============================================================================
+
+# Sécurité générale
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTPS (à activer en production)
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
+
+# Sessions
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 3600  # 1 heure
+
+# CSRF
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Strict'
+
+# =============================================================================
+# MIDDLEWARES DE SÉCURITÉ
+# =============================================================================
+
+# Ajouter ces middlewares à votre MIDDLEWARE existant
+SECURITY_MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'rail_django.middleware.GraphQLAuthenticationMiddleware',
+    'rail_django.middleware.GraphQLRateLimitMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+# Fusionner avec les middlewares existants s'ils ne sont pas déjà présents
+# Note: Ceci est une approximation, vous devrez peut-être ajuster l'ordre manuellement
+for mw in reversed(SECURITY_MIDDLEWARE):
+    if mw not in MIDDLEWARE:
+        MIDDLEWARE.insert(0, mw)
+
+# =============================================================================
+# CONFIGURATION GRAPHQL SÉCURISÉE
+# =============================================================================
+
+# Désactiver les mutations de sécurité en production
+disable_security_mutations = False
+
+# Endpoints GraphQL
+GRAPHQL_ENDPOINTS = ['/graphql/', '/graphql']
+
+# Configuration JWT
+JWT_AUTH_HEADER_PREFIX = 'Bearer'
+JWT_AUTH_HEADER_NAME = 'HTTP_AUTHORIZATION'
+JWT_USER_CACHE_TIMEOUT = 300  # 5 minutes
+
+# =============================================================================
+# AUDIT LOGGING
+# =============================================================================
+
+GRAPHQL_ENABLE_AUDIT_LOGGING = True
+AUDIT_STORE_IN_DATABASE = True
+AUDIT_STORE_IN_FILE = True
+AUDIT_RETENTION_DAYS = 90
+AUDIT_WEBHOOK_URL = env('AUDIT_WEBHOOK_URL', default=None)  # URL pour envoyer les événements d'audit
+
+# Seuils d'alerte pour l'audit
+AUDIT_ALERT_THRESHOLDS = {
+    'failed_logins_per_ip': 10,
+    'failed_logins_per_user': 5,
+    'suspicious_activity_window': 300,  # 5 minutes
+}
+
+# =============================================================================
+# LIMITATION DE DÉBIT
+# =============================================================================
+
+GRAPHQL_ENABLE_AUTH_RATE_LIMITING = True
+AUTH_LOGIN_ATTEMPTS_LIMIT = 5
+AUTH_LOGIN_ATTEMPTS_WINDOW = 900  # 15 minutes
+GRAPHQL_REQUESTS_LIMIT = 100
+GRAPHQL_REQUESTS_WINDOW = 3600  # 1 heure
+
+# =============================================================================
+# AUTHENTIFICATION MULTI-FACTEURS (MFA)
+# =============================================================================
+
+MFA_ENABLED = env.bool('MFA_ENABLED', default=False)
+MFA_ISSUER_NAME = 'Django GraphQL App'
+MFA_TOTP_VALIDITY_WINDOW = 1
+MFA_BACKUP_CODES_COUNT = 10
+MFA_TRUSTED_DEVICE_DURATION = 30  # jours
+MFA_SMS_TOKEN_LENGTH = 6
+MFA_SMS_TOKEN_VALIDITY = 300  # 5 minutes
+
+# Configuration SMS (Twilio)
+MFA_SMS_PROVIDER = 'twilio'
+TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = env('TWILIO_AUTH_TOKEN', default='')
+TWILIO_FROM_NUMBER = env('TWILIO_FROM_NUMBER', default='')
+
+# =============================================================================
+# CONFIGURATION DE CACHE
+# =============================================================================
+
+# Note: Les fonctionnalités GraphQL internes n'exigent pas de cache externe.
+# Utilisez LocMemCache pendant le développement/test si votre projet a besoin
+# d'un cache pour d'autres composants. Les vérifications de santé utilisent
+# des caches en mémoire par processus avec TTL.
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'KEY_PREFIX': 'graphql_security',
+        'TIMEOUT': 3600,
+    }
+}
+
+# =============================================================================
+# LOGGING SÉCURISÉ
+# =============================================================================
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} {name} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'audit': {
+            'format': '[AUDIT] {asctime} {message}',
+            'style': '{',
+        },
+        'security': {
+            'format': '[SECURITY] {asctime} {name} {levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'security_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'maxBytes': 1024*1024*10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'security',
+        },
+        'audit_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'audit.log',
+            'maxBytes': 1024*1024*10,  # 10MB
+            'backupCount': 10,
+            'formatter': 'audit',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'rail_django.middleware': {
+            'handlers': ['security_file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'audit': {
+            'handlers': ['audit_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['security_file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
