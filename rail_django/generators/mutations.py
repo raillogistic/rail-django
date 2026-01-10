@@ -16,6 +16,7 @@ from ..core.error_handling import get_error_handler
 from ..config_proxy import get_mutation_generator_settings
 import inspect
 import re
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Type, Union, get_origin
 
 import graphene
@@ -251,6 +252,100 @@ def build_integrity_errors(
 
     return [build_mutation_error("Database integrity error.", None)]
 
+
+@dataclass
+class NestedValidationLimits:
+    max_depth: Optional[int]
+    max_list_items: Optional[int]
+    max_total_nodes: Optional[int]
+    max_errors: int = 50
+
+
+def _get_nested_validation_limits(
+    info: graphene.ResolveInfo, handler: NestedOperationHandler
+) -> NestedValidationLimits:
+    settings = None
+    if hasattr(info.context, "mutation_generator"):
+        settings = info.context.mutation_generator.settings
+
+    max_depth = getattr(settings, "max_nested_depth", None) if settings else None
+    if max_depth is None:
+        max_depth = getattr(handler, "max_depth", 10)
+
+    max_list_items = getattr(settings, "max_nested_list_items", None) if settings else None
+    max_total_nodes = getattr(settings, "max_nested_nodes", None) if settings else None
+    max_errors = getattr(settings, "max_nested_errors", 50) if settings else 50
+
+    return NestedValidationLimits(
+        max_depth=max_depth,
+        max_list_items=max_list_items,
+        max_total_nodes=max_total_nodes,
+        max_errors=max_errors,
+    )
+
+
+def _join_nested_path(path: Optional[str], segment: str) -> str:
+    if segment.startswith("["):
+        return f"{path}{segment}" if path else segment
+    return f"{path}.{segment}" if path else segment
+
+
+def _validate_nested_limits(
+    input_data: Any, limits: NestedValidationLimits
+) -> List[MutationError]:
+    errors: List[MutationError] = []
+    stats = {"nodes": 0}
+
+    def add_error(message: str, path: Optional[str]):
+        errors.append(build_mutation_error(message=message, field=path))
+
+    def should_stop() -> bool:
+        return limits.max_errors is not None and len(errors) >= limits.max_errors
+
+    def check_total_nodes(path: Optional[str]) -> bool:
+        if limits.max_total_nodes is None:
+            return False
+        if stats["nodes"] > limits.max_total_nodes:
+            add_error(
+                f"Nested input exceeds maximum size of {limits.max_total_nodes} items.",
+                path,
+            )
+            return True
+        return False
+
+    def walk(value: Any, path: Optional[str], depth: int):
+        if should_stop():
+            return
+        if limits.max_depth is not None and depth > limits.max_depth:
+            add_error(
+                f"Nested input exceeds maximum depth of {limits.max_depth}.",
+                path,
+            )
+            return
+        if isinstance(value, dict):
+            stats["nodes"] += 1
+            if check_total_nodes(path):
+                return
+            for key, nested_value in value.items():
+                walk(nested_value, _join_nested_path(path, str(key)), depth + 1)
+            return
+        if isinstance(value, list):
+            if limits.max_list_items is not None and len(value) > limits.max_list_items:
+                add_error(
+                    f"List exceeds maximum length of {limits.max_list_items}.",
+                    path,
+                )
+                if should_stop():
+                    return
+            stats["nodes"] += len(value)
+            if check_total_nodes(path):
+                return
+            for index, item in enumerate(value):
+                walk(item, _join_nested_path(path, f"[{index}]"), depth + 1)
+
+    walk(input_data, None, 1)
+    return errors
+
 def _wrap_with_audit(
     model: Type[models.Model], operation: str, func: Callable
 ) -> Callable:
@@ -379,6 +474,12 @@ class MutationGenerator:
 
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
+
+                    limit_errors = _validate_nested_limits(
+                        input, _get_nested_validation_limits(info, nested_handler)
+                    )
+                    if limit_errors:
+                        return cls(ok=False, object=None, errors=limit_errors)
 
                     # Validate nested data before processing
                     validation_errors = nested_handler.validate_nested_data(
@@ -709,6 +810,12 @@ class MutationGenerator:
 
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
+
+                    limit_errors = _validate_nested_limits(
+                        update_data, _get_nested_validation_limits(info, nested_handler)
+                    )
+                    if limit_errors:
+                        return cls(ok=False, object=None, errors=limit_errors)
 
                     # Validate nested data before processing
                     validation_errors = nested_handler.validate_nested_data(
