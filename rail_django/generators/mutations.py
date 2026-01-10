@@ -116,6 +116,141 @@ def build_mutation_error(message: str, field: Optional[str] = None) -> MutationE
     return MutationError(field=_normalize_field_path(field), message=str(message))
 
 
+def _extract_field_from_message(message: str) -> Optional[str]:
+    match = re.search(r"Required field '([^']+)'", message)
+    if match:
+        return match.group(1)
+    match = re.search(r"Field '([^']+)'", message)
+    if match:
+        return match.group(1)
+    match = re.search(r"field '([^']+)'", message)
+    if match:
+        return match.group(1)
+    return None
+
+
+def build_error_list(messages: List[str]) -> List[MutationError]:
+    """Convert plain error messages into MutationError objects."""
+    errors: List[MutationError] = []
+    for message in messages:
+        field = _extract_field_from_message(str(message))
+        errors.append(build_mutation_error(message=str(message), field=field))
+    return errors
+
+
+def _map_column_to_field(model: Type[models.Model], column: str) -> Optional[str]:
+    for field in model._meta.get_fields():
+        if hasattr(field, "column") and field.column == column:
+            return field.name
+        if getattr(field, "attname", None) == column:
+            return field.name
+    return None
+
+
+def _get_field_label(model: Type[models.Model], field_name: str) -> str:
+    try:
+        field = model._meta.get_field(field_name)
+        label = getattr(field, "verbose_name", None)
+        if label:
+            return str(label)
+    except Exception:
+        pass
+    return field_name
+
+
+def _extract_unique_constraint_fields(
+    model: Type[models.Model], error_msg: str
+) -> List[str]:
+    fields: List[str] = []
+
+    match = re.search(r"UNIQUE constraint failed: ([\w\., ]+)", error_msg)
+    if match:
+        cols = [part.strip() for part in match.group(1).split(",")]
+        for col in cols:
+            col_name = col.split(".")[-1]
+            fields.append(_map_column_to_field(model, col_name) or col_name)
+
+    if not fields:
+        match = re.search(r"Key \(([^\)]+)\)=\([^\)]+\) already exists", error_msg)
+        if match:
+            cols = [c.strip() for c in match.group(1).split(",")]
+            for col_name in cols:
+                fields.append(_map_column_to_field(model, col_name) or col_name)
+
+    if not fields:
+        match = re.search(r"Duplicate entry .* for key '([^']+)'", error_msg)
+        if match:
+            fields.append(match.group(1))
+
+    return fields
+
+
+def _extract_not_null_field(error_msg: str) -> Optional[str]:
+    match = re.search(
+        r'null value in column "([^"]+)" violates not-null constraint', error_msg
+    )
+    if match:
+        return match.group(1)
+    match = re.search(r"NOT NULL constraint failed: ([\w\.]+)", error_msg)
+    if match:
+        return match.group(1).split(".")[-1]
+    match = re.search(r"Column '([^']+)' cannot be null", error_msg)
+    if match:
+        return match.group(1)
+    return None
+
+
+def build_integrity_errors(
+    model: Type[models.Model], exc: IntegrityError
+) -> List[MutationError]:
+    """Create friendly errors for database integrity failures."""
+    error_msg = str(exc)
+    field = _extract_not_null_field(error_msg)
+    if field:
+        field_name = _map_column_to_field(model, field) or field
+        label = _get_field_label(model, field_name)
+        return [build_mutation_error(f"{label} cannot be null.", field_name)]
+
+    unique_fields = _extract_unique_constraint_fields(model, error_msg)
+    if unique_fields:
+        errors: List[MutationError] = []
+        for field_name in unique_fields:
+            label = _get_field_label(model, field_name)
+            errors.append(
+                build_mutation_error(
+                    f"{label} must be unique.", field_name
+                )
+            )
+        return errors
+
+    lower_msg = error_msg.lower()
+    if "duplicate key value violates unique constraint" in lower_msg:
+        return [
+            build_mutation_error(
+                "Duplicate value violates unique constraint.", None
+            )
+        ]
+    if "unique constraint" in lower_msg or "duplicate entry" in lower_msg:
+        return [
+            build_mutation_error(
+                "Duplicate value violates unique constraint.", None
+            )
+        ]
+    if "foreign key constraint" in lower_msg:
+        return [
+            build_mutation_error(
+                "Invalid reference: related object does not exist.", None
+            )
+        ]
+    if "check constraint" in lower_msg:
+        return [
+            build_mutation_error(
+                "Value violates a database constraint.", None
+            )
+        ]
+
+    return [build_mutation_error("Database integrity error.", None)]
+
 def _wrap_with_audit(
     model: Type[models.Model], operation: str, func: Callable
 ) -> Callable:
@@ -250,7 +385,11 @@ class MutationGenerator:
                         model, input, "create"
                     )
                     if validation_errors:
-                        return cls(ok=False, object=None, errors=validation_errors)
+                        return cls(
+                            ok=False,
+                            object=None,
+                            errors=build_error_list(validation_errors),
+                        )
 
                     # Handle nested create with comprehensive validation and transaction management
                     def _perform_create(info, payload):
@@ -266,25 +405,11 @@ class MutationGenerator:
                     return cls(ok=False, object=None, errors=error_objects)
                 except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(exc)
-                    match = re.search(
-                        r'null value in column "(\w+)".*violates not-null constraint',
-                        error_msg,
+                    return cls(
+                        ok=False,
+                        object=None,
+                        errors=build_integrity_errors(model, exc),
                     )
-                    if match:
-                        field_name = match.group(1)
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"{field_name} cannot be null.", field=field_name
-                            )
-                        ]
-                    else:
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"Database integrity error: {error_msg}"
-                            )
-                        ]
-                    return cls(ok=False, object=None, errors=error_objects)
                 except Exception as exc:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -590,7 +715,11 @@ class MutationGenerator:
                         model, update_data, "update"
                     )
                     if validation_errors:
-                        return cls(ok=False, object=None, errors=validation_errors)
+                        return cls(
+                            ok=False,
+                            object=None,
+                            errors=build_error_list(validation_errors),
+                        )
 
                     # Handle nested update with comprehensive validation and transaction management
                     def _perform_update(info, target, payload):
@@ -613,25 +742,11 @@ class MutationGenerator:
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(exc)
-                    match = re.search(
-                        r'null value in column "(\w+)".*violates not-null constraint',
-                        error_msg,
+                    return UpdateMutation(
+                        ok=False,
+                        object=None,
+                        errors=build_integrity_errors(model, exc),
                     )
-                    if match:
-                        field_name = match.group(1)
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"{field_name} cannot be null.", field=field_name
-                            )
-                        ]
-                    else:
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"Database integrity error: {error_msg}"
-                            )
-                        ]
-                    return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except Exception as exc:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -949,43 +1064,18 @@ class MutationGenerator:
                     return cls(ok=True, objects=instances, errors=[])
 
                 except ValidationError as e:
-                    # Create structured error objects for validation errors
-                    error_objects = []
-                    if hasattr(e, "error_dict"):
-                        # Field-specific validation errors
-                        for field, errors in e.error_dict.items():
-                            for error in errors:
-                                error_objects.append(
-                                    MutationError(field=field, message=str(error))
-                                )
-                    else:
-                        # General validation error
-                        error_objects.append(MutationError(field=None, message=str(e)))
-                    return cls(ok=False, objects=[], errors=error_objects)
+                    return cls(
+                        ok=False,
+                        objects=[],
+                        errors=build_validation_errors(e),
+                    )
                 except IntegrityError as e:
                     transaction.set_rollback(True)
-                    error_msg = str(e)
-                    # Parse not-null constraint violation
-                    match = re.search(
-                        r'null value in column "(\w+)".*violates not-null constraint',
-                        error_msg,
+                    return cls(
+                        ok=False,
+                        objects=[],
+                        errors=build_integrity_errors(model, e),
                     )
-                    if match:
-                        field_name = match.group(1)
-                        error_objects = [
-                            MutationError(
-                                field=field_name,
-                                message=f"{field_name} cannot be null.",
-                            )
-                        ]
-                    else:
-                        error_objects = [
-                            MutationError(
-                                field=None,
-                                message=f"Database integrity error: {error_msg}",
-                            )
-                        ]
-                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -1117,25 +1207,11 @@ class MutationGenerator:
                     )
                 except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(exc)
-                    match = re.search(
-                        r'null value in column "(\w+)".*violates not-null constraint',
-                        error_msg,
+                    return cls(
+                        ok=False,
+                        objects=[],
+                        errors=build_integrity_errors(model, exc),
                     )
-                    if match:
-                        field_name = match.group(1)
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"{field_name} cannot be null.", field=field_name
-                            )
-                        ]
-                    else:
-                        error_objects = [
-                            build_mutation_error(
-                                message=f"Database integrity error: {error_msg}"
-                            )
-                        ]
-                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as exc:
                     transaction.set_rollback(True)
                     return cls(
@@ -1589,10 +1665,11 @@ class MutationGenerator:
                             ok=False,
                             result=None,
                             errors=[
-                                {
-                                    "field": None,
-                                    "message": f"Permission refusée ({', '.join(missing)})",
-                                }
+                                build_mutation_error(
+                                    message=(
+                                        f"Permission refusée ({', '.join(missing)})"
+                                    )
+                                )
                             ],
                         )
 
@@ -1639,10 +1716,10 @@ class MutationGenerator:
                         ok=False,
                         result=None,
                         errors=[
-                            {
-                                "field": "id",
-                                "message": f"{model.__name__} with id {id} does not exist",
-                            }
+                            build_mutation_error(
+                                message=f"{model.__name__} with id {id} does not exist",
+                                field="id",
+                            )
                         ],
                     )
                 except ValidationError as exc:
@@ -1653,6 +1730,14 @@ class MutationGenerator:
                         result=None,
                         errors=build_validation_errors(exc),
                     )
+                except IntegrityError as exc:
+                    if atomic:
+                        transaction.set_rollback(True)
+                    return cls(
+                        ok=False,
+                        result=None,
+                        errors=build_integrity_errors(model, exc),
+                    )
                 except Exception as e:
                     if atomic:
                         transaction.set_rollback(True)
@@ -1660,10 +1745,9 @@ class MutationGenerator:
                         ok=False,
                         result=None,
                         errors=[
-                            {
-                                "field": None,
-                                "message": f"Failed to execute {method_name}: {str(e)}",
-                            }
+                            build_mutation_error(
+                                message=f"Failed to execute {method_name}: {str(e)}"
+                            )
                         ],
                     )
 
