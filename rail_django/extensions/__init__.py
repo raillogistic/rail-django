@@ -39,7 +39,14 @@ from .auth import (  # ChangePasswordMutation,
 from .auth_decorators import get_user_from_jwt, jwt_optional, jwt_required, require_permissions
 
 # Model export functionality (JWT protected)
-from .exporting import ExportView, ModelExporter, export_model_to_csv, export_model_to_excel
+from .exporting import (
+    ExportJobDownloadView,
+    ExportJobStatusView,
+    ExportView,
+    ModelExporter,
+    export_model_to_csv,
+    export_model_to_excel,
+)
 
 # Model metadata schema for rich frontend interfaces
 from .metadata import (
@@ -90,6 +97,8 @@ __all__ = [
     # "get_audit_logger",
     # Model export (JWT protected)
     "ExportView",
+    "ExportJobStatusView",
+    "ExportJobDownloadView",
     "ModelExporter",
     "export_model_to_csv",
     "export_model_to_excel",

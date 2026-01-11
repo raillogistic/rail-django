@@ -13,18 +13,17 @@ Usage in your main urls.py:
         # ... other patterns
     ]
 
-This will make the export endpoint available at: /api/export/
+This will make the export endpoints available at: /api/export/
+
+Export endpoints require JWT auth; missing auth decorators will raise
+ImproperlyConfigured when importing export URLs.
 """
 
-from django.urls import path
-
-from .exporting import ExportView
+from .exporting import get_export_urls
 from .templating import template_urlpatterns
 
 app_name = "rail_django_extensions"
 
-urlpatterns = [
-    path("export/", ExportView.as_view(), name="model_export"),
-]
+urlpatterns = get_export_urls()
 
 urlpatterns += template_urlpatterns()

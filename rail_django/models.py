@@ -13,7 +13,6 @@ from typing import Any, Dict, List
 from django.core.exceptions import ValidationError
 from django.db import models as django_models
 
-from rail_django.core.schema_versioning import SchemaVersionModel
 from rail_django.defaults import LIBRARY_DEFAULTS
 from rail_django.extensions.audit import AuditEventModel
 from rail_django.extensions.reporting import (
@@ -212,5 +211,4 @@ __all__ = [
     "ReportingReportBlock",
     "ReportingExportJob",
     "SchemaRegistryModel",
-    "SchemaVersionModel",
 ]

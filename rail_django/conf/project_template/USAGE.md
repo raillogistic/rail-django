@@ -800,8 +800,9 @@ Don't write CSV writers manually. Use the export endpoint.
 ```
 This returns a binary stream of the generated Excel file.
 
-Guardrails (allowlists, row caps, rate limiting) are configured via
-`RAIL_DJANGO_EXPORT` in settings.
+Guardrails (default-deny allowlists, row caps, filter/order limits, rate limiting)
+are configured via `RAIL_DJANGO_EXPORT` in settings. Async jobs and export templates
+are also configured there. Use a shared cache (Redis) when async exports are enabled.
 
 ### Health Monitoring
 Expose a health check for Kubernetes or Load Balancers.
@@ -907,6 +908,7 @@ Ensure these are set in production (see `.env.example`):
 *   `DJANGO_DEBUG`: **Must** be `False`.
 *   `ALLOWED_HOSTS`: List of valid domains.
 *   `DATABASE_URL`: Connection string for PostgreSQL.
+*   `REDIS_URL`: Shared cache backend for async exports, rate limiting, and jobs.
 *   Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
 *   Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
 *   Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).

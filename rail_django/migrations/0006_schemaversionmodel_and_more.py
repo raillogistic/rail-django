@@ -11,33 +11,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name="SchemaVersionModel",
-            fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
-                ("version", models.CharField(max_length=50, unique=True)),
-                ("description", models.TextField(blank=True)),
-                ("schema_hash", models.CharField(max_length=64)),
-                ("created_at", models.DateTimeField(auto_now_add=True)),
-                ("created_by", models.CharField(max_length=100)),
-                ("migration_files", models.JSONField(default=list)),
-                ("rollback_instructions", models.TextField(blank=True, null=True)),
-                ("is_active", models.BooleanField(default=False)),
-                ("metadata", models.JSONField(default=dict)),
-            ],
-            options={
-                "db_table": "rail_django_schema_versions",
-                "ordering": ["-created_at"],
-            },
-        ),
         migrations.AlterField(
             model_name="schemaregistrymodel",
             name="custom_scalars",

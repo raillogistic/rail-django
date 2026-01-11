@@ -9,8 +9,4 @@ class Migration(migrations.Migration):
         ("rail_django", "0003_schema_versions"),
     ]
 
-    operations = [
-        migrations.DeleteModel(
-            name="SchemaVersionModel",
-        ),
-    ]
+    operations = []

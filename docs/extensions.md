@@ -16,7 +16,10 @@ importing them in your schema build or including their URLs.
 ## Exporting (`rail_django.extensions.exporting`)
 
 - `POST /api/v1/export/` exports CSV or XLSX.
-- Supports dot-notation field access and GraphQL filters.
+- Default-deny export schema with allowlisted accessors and filters.
+- Optional async export jobs with status/download URLs.
+- Supports export templates and field formatters.
+- Export URLs require JWT auth decorators to be installed.
 
 ## Templating / PDF (`rail_django.extensions.templating`)
 

@@ -1,0 +1,70 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script>
+    window.RailSchemaRegistryAdmin = {
+      uiDataUrl: "{% url 'admin:rail_django_schemaregistrymodel_ui_data' %}",
+    };
+  </script>
+{% endblock %}
+
+{% block field_sets %}
+  <div id="rail-schema-registry-editor" class="rail-schema-registry-editor" data-rail-editor>
+    <div class="rail-schema-registry-editor__header">
+      <h2>Schema Registry Builder</h2>
+      <p class="help">Interactive model scope and schema settings editor.</p>
+    </div>
+
+    <div class="rail-schema-registry-editor__status" data-rail-status>
+      Loading schema registry editor...
+    </div>
+
+    <div class="rail-schema-registry-editor__content" data-rail-content hidden>
+      <section class="rail-schema-registry-section">
+        <div class="rail-schema-registry-section__title">
+          <h3>Model Scope</h3>
+          <p class="help">Select apps, models, and exclusions with a click.</p>
+        </div>
+        <div class="rail-scope-grid">
+          <div class="rail-scope-panel" data-rail-panel="apps">
+            <div class="rail-scope-panel__header">
+              <h4>Apps</h4>
+              <input type="search" placeholder="Filter apps" data-rail-filter="apps" />
+            </div>
+            <div class="rail-scope-panel__list" data-rail-list="apps"></div>
+            <div class="rail-scope-panel__selection" data-rail-selected="apps"></div>
+          </div>
+          <div class="rail-scope-panel" data-rail-panel="models">
+            <div class="rail-scope-panel__header">
+              <h4>Models</h4>
+              <input type="search" placeholder="Filter models" data-rail-filter="models" />
+            </div>
+            <div class="rail-scope-panel__list" data-rail-list="models"></div>
+            <div class="rail-scope-panel__selection" data-rail-selected="models"></div>
+          </div>
+          <div class="rail-scope-panel" data-rail-panel="exclude_models">
+            <div class="rail-scope-panel__header">
+              <h4>Exclude Models</h4>
+              <input type="search" placeholder="Filter exclusions" data-rail-filter="exclude_models" />
+            </div>
+            <div class="rail-scope-panel__list" data-rail-list="exclude_models"></div>
+            <div class="rail-scope-panel__selection" data-rail-selected="exclude_models"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rail-schema-registry-section">
+        <div class="rail-schema-registry-section__title">
+          <h3>Settings</h3>
+          <p class="help">Review options across schema, query, mutation, and security sections.</p>
+        </div>
+        <div class="rail-settings-sections" data-rail-settings-sections></div>
+      </section>
+
+      <div class="rail-schema-registry-footer" data-rail-raw-toggle></div>
+    </div>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

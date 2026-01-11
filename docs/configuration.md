@@ -223,21 +223,78 @@ Export settings can be defined under `RAIL_DJANGO_EXPORT` (preferred) or
 RAIL_DJANGO_EXPORT = {
     "max_rows": 5000,
     "stream_csv": True,
+    "enforce_streaming_csv": True,
     "csv_chunk_size": 1000,
+    "excel_write_only": True,
+    "excel_auto_width": False,
     "rate_limit": {
         "enable": True,
         "window_seconds": 60,
         "max_requests": 30,
+        "trusted_proxies": ["10.0.0.1"],
     },
     "allowed_models": ["blog.Post", "auth.User"],
-    "allowed_fields": {
+    "export_fields": {
         "blog.Post": ["id", "title", "author.username", "created_at"],
     },
+    "export_exclude": {
+        "blog.Post": ["author.password"],
+    },
+    "sensitive_fields": ["password", "token"],
+    "require_export_fields": True,
     "require_model_permissions": True,
     "require_field_permissions": True,
     "required_permissions": ["blog.export_post"],
+    "filterable_fields": {
+        "blog.Post": ["status", "author.username", "created_at"],
+    },
+    "filterable_special_fields": ["quick"],
+    "orderable_fields": {
+        "blog.Post": ["created_at", "title"],
+    },
+    "max_filters": 50,
+    "max_or_depth": 3,
+    "max_prefetch_depth": 2,
+    "sanitize_formulas": True,
+    "formula_escape_strategy": "prefix",
+    "formula_escape_prefix": "'",
+    "field_formatters": {
+        "blog.Post": {
+            "author.email": {"type": "mask", "show_last": 4},
+            "created_at": {"type": "datetime", "format": "Y-m-d H:i"},
+        }
+    },
+    "export_templates": {
+        "recent_posts": {
+            "app_name": "blog",
+            "model_name": "Post",
+            "fields": ["id", "title", "created_at"],
+            "ordering": ["-created_at"],
+            "required_permissions": ["blog.export_post"],
+            "shared": True,
+        }
+    },
+    "async_jobs": {
+        "enable": True,
+        "backend": "thread",  # or "celery"/"rq"
+        "expires_seconds": 3600,
+    },
 }
 ```
+
+Notes:
+
+- Exports are default-deny when `require_export_fields` is `True`. Each model must
+  have an explicit `export_fields` entry to allow accessors.
+- Accessors must be full-path allowlisted (`author.username`), not base field names.
+- Filters and ordering are allowlisted via `filterable_fields` / `orderable_fields`.
+- Add GraphQL special filter keys (e.g., `quick`) to `filterable_special_fields`.
+- Async jobs require a shared cache between web and workers.
+- Callable accessors are disabled by default; enable `allow_callables` for explicit
+  allowlisted method access.
+- `allowed_fields` remains as a legacy alias for `export_fields`.
+- Async jobs are enabled by default with the `thread` backend; switch to `celery`
+  or `rq` for worker-based processing.
 
 ## SettingsProxy internals
 

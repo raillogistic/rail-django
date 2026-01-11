@@ -162,10 +162,13 @@ TWILIO_FROM_NUMBER = env('TWILIO_FROM_NUMBER', default='')
 # d'un cache pour d'autres composants. Les vérifications de santé utilisent
 # des caches en mémoire par processus avec TTL.
 
+# Use a shared cache backend in production so async exports and rate limiting
+# can coordinate across processes.
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'KEY_PREFIX': 'graphql_security',
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/1'),
+        'KEY_PREFIX': 'rail_django',
         'TIMEOUT': 3600,
     }
 }

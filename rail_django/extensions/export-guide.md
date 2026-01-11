@@ -6,13 +6,14 @@ This guide covers the enhanced Django model export functionality that allows you
 
 1. [Overview](#overview)
 2. [Field Format Options](#field-format-options)
-3. [GraphQL Filter Integration](#graphql-filter-integration)
-4. [HTTP API Usage](#http-api-usage)
-5. [Python API Usage](#python-api-usage)
-6. [Advanced Examples](#advanced-examples)
-7. [Integration Setup](#integration-setup)
-8. [Error Handling](#error-handling)
-9. [Performance Considerations](#performance-considerations)
+3. [Field Formatters and Masking](#field-formatters-and-masking)
+4. [GraphQL Filter Integration](#graphql-filter-integration)
+5. [HTTP API Usage](#http-api-usage)
+6. [Python API Usage](#python-api-usage)
+7. [Advanced Examples](#advanced-examples)
+8. [Integration Setup](#integration-setup)
+9. [Error Handling](#error-handling)
+10. [Performance Considerations](#performance-considerations)
 
 ## Overview
 
@@ -23,7 +24,7 @@ The Django model export functionality provides:
 - **Multiple Export Formats**: Excel (.xlsx) and CSV support
 - **HTTP API Endpoint**: RESTful API for generating exports
 - **Python API**: Direct programmatic access to export functionality
-- **Advanced Field Access**: Support for nested fields, methods, and properties
+- **Advanced Field Access**: Support for nested fields and allowlisted properties
 
 ## Field Format Options
 
@@ -49,9 +50,11 @@ fields = [
     {"accessor": "title", "title": "Post Title"},
     {"accessor": "author.username", "title": "Author Name"},
     {"accessor": "slug"},  # Uses verbose_name as title
-    {"accessor": "tags.count", "title": "Number of Tags"}
+    {"accessor": "tags", "title": "Tags"}
 ]
 ```
+
+Accessors must be explicitly allowlisted in `export_fields` and use dot notation.
 
 ### Mixed Format
 
@@ -66,9 +69,32 @@ fields = [
 ]
 ```
 
+Callable accessors (methods) are disabled by default. If you need method-based
+values, allowlist them explicitly and enable `allow_callables`.
+
+## Field Formatters and Masking
+
+Use `field_formatters` to apply PII masking or locale-aware formatting.
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "field_formatters": {
+        "blog.Post": {
+            "author.email": {"type": "mask", "show_last": 4},
+            "created_at": {"type": "datetime", "format": "Y-m-d H:i"},
+            "price": {"type": "number", "decimal_pos": 2},
+        }
+    }
+}
+```
+
 ## GraphQL Filter Integration
 
 The export functionality integrates with the same GraphQL filter classes used in queries, providing advanced filtering capabilities beyond basic Django ORM filters.
+
+Filters and ordering are allowlisted per model (`filterable_fields` / `orderable_fields`),
+and guardrails enforce max filter count and OR depth.
+Add special filter keys (like `quick`) to `filterable_special_fields` when needed.
 
 ### Basic Filters
 
@@ -118,7 +144,7 @@ filters = {
     "view_count__gte": 100,
     "tags__name__icontains": "python",
     "author__profile__verified": True,
-    "comments__count__range": [5, 50]
+    "comments__created_at__range": ["2024-01-01", "2024-12-31"]
 }
 ```
 
@@ -154,12 +180,26 @@ POST /api/export/
 }
 ```
 
+### Template + Async Example
+
+```json
+{
+    "template": "recent_posts",
+    "async": true,
+    "variables": {
+        "status": "published"
+    }
+}
+```
+
 ### Response
 
 The API returns the file as a downloadable attachment with appropriate headers:
 
 - **Content-Type**: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (Excel) or `text/csv` (CSV)
 - **Content-Disposition**: `attachment; filename="blog_posts_export.xlsx"`
+
+Async exports return a JSON payload with `job_id`, `status_url`, and `download_url`.
 
 ### Error Responses
 
@@ -257,11 +297,8 @@ fields = [
     {"accessor": "author.profile.full_name", "title": "Author Full Name"},
     {"accessor": "author.profile.bio", "title": "Author Bio"},
     {"accessor": "category.parent.name", "title": "Parent Category"},
-    {"accessor": "tags.count", "title": "Tag Count"},
-    {"accessor": "comments.filter(is_approved=True).count", "title": "Approved Comments"},
-    {"accessor": "get_absolute_url", "title": "URL"},
-    {"accessor": "word_count", "title": "Word Count"},  # Custom property
-    {"accessor": "reading_time", "title": "Reading Time"}  # Custom method
+    {"accessor": "tags", "title": "Tags"},
+    {"accessor": "word_count", "title": "Word Count"}  # Allowlisted property
 ]
 ```
 
@@ -309,9 +346,9 @@ fields = [
     {"accessor": "supplier.company_name", "title": "Supplier"},
     {"accessor": "supplier.contact_email", "title": "Supplier Email"},
     {"accessor": "stock_quantity", "title": "Stock"},
-    {"accessor": "variants.count", "title": "Variants"},
-    {"accessor": "reviews.count", "title": "Reviews"},
-    {"accessor": "average_rating", "title": "Rating"},
+    {"accessor": "variants", "title": "Variants"},
+    {"accessor": "reviews", "title": "Reviews"},
+    {"accessor": "average_rating", "title": "Rating"},  # Allowlisted property
     {"accessor": "is_active", "title": "Active"}
 ]
 
@@ -321,13 +358,11 @@ filters = {
     "price__range": [10, 1000],
     "category__is_featured": True,
     "supplier__is_verified": True,
-    "reviews__count__gte": 5,
-    "average_rating__gte": 4.0,
     "quick": "electronics smartphone",
     "created_date_last_month": True
 }
 
-ordering = ["category.name", "-average_rating", "-reviews__count"]
+ordering = ["category.name", "-created_at"]
 ```
 
 ## Integration Setup
@@ -343,6 +378,9 @@ urlpatterns = [
     path('api/', include('rail_django.extensions.urls')),
 ]
 ```
+
+The export URLs require JWT auth. If JWT decorators are unavailable,
+`get_export_urls()` raises `ImproperlyConfigured`.
 
 ### 2. Import in Your Code
 
@@ -445,7 +483,7 @@ fields = ["id", "title", "created_at"]  # Minimal field set
 ### Memory Usage
 
 - CSV exports are more memory-efficient than Excel
-- Excel exports load all data into memory for formatting
+- Excel exports use write-only mode by default to reduce memory
 - Consider CSV for very large datasets (>100k records)
 
 ## Security Considerations
@@ -453,7 +491,8 @@ fields = ["id", "title", "created_at"]  # Minimal field set
 1. **Authentication**: Implement proper authentication for the export endpoint
 2. **Authorization**: Ensure users can only export data they have permission to view
 3. **Rate Limiting**: Implement rate limiting to prevent abuse
-4. **Data Sanitization**: Be cautious with user-provided field accessors
+4. **Allowlists**: Use `export_fields`, `filterable_fields`, and `orderable_fields`
+5. **Formula Sanitization**: Enable CSV/Excel formula escaping for untrusted data
 
 ### Built-in Guardrails
 
@@ -465,18 +504,35 @@ RAIL_DJANGO_EXPORT = {
     "max_rows": 5000,
     "stream_csv": True,
     "csv_chunk_size": 1000,
+    "enforce_streaming_csv": True,
+    "excel_write_only": True,
     "rate_limit": {
         "enable": True,
         "window_seconds": 60,
         "max_requests": 30,
     },
     "allowed_models": ["blog.Post"],
-    "allowed_fields": {
+    "export_fields": {
         "blog.Post": ["id", "title", "author.username", "created_at"],
     },
+    "export_exclude": {
+        "blog.Post": ["author.password"],
+    },
+    "require_export_fields": True,
     "require_model_permissions": True,
     "require_field_permissions": True,
     "required_permissions": ["blog.export_post"],
+    "filterable_fields": {
+        "blog.Post": ["status", "author.username", "created_at"],
+    },
+    "filterable_special_fields": ["quick"],
+    "orderable_fields": {
+        "blog.Post": ["created_at", "title"],
+    },
+    "max_filters": 50,
+    "max_or_depth": 3,
+    "max_prefetch_depth": 2,
+    "sanitize_formulas": True,
 }
 ```
 
@@ -484,8 +540,19 @@ When enabled, the endpoint:
 
 - Caps rows (with optional request overrides via `max_rows`)
 - Blocks non-allowlisted models/fields
+- Enforces filter/order allowlists and query guardrails
 - Enforces model and field permissions
 - Applies cache-backed rate limits
+- Sanitizes CSV/Excel formulas
+
+### Async Jobs and Templates
+
+- `export_templates` define named field sets and default filters.
+- Templates can be gated via `required_permissions`, `allowed_groups`, or `allowed_users`.
+- Use `allow_overrides` to permit request overrides (e.g., `variables`, `filename`).
+- `async_jobs` enables job-based exports with status and download URLs.
+- Async workers require a shared cache backend.
+- Async exports default to the `thread` backend; use `celery` or `rq` for workers.
 
 ### Example Security Implementation
 

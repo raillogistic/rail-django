@@ -100,9 +100,28 @@ curl -s -X POST http://localhost:8000/api/v1/export/ \
 
 Notes:
 
-- Exports enforce `RAIL_DJANGO_EXPORT` settings for allowlists, row limits,
-  and rate limiting.
-- CSV responses may stream when `stream_csv` is enabled.
+- Exports enforce `RAIL_DJANGO_EXPORT` allowlists for fields, filters, and ordering.
+- Accessors must be full-path allowlisted (dot notation).
+- CSV responses stream by default when `enforce_streaming_csv` is enabled.
+- Export URLs require JWT auth; missing decorators will disable the endpoint.
+
+Async exports:
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/export/ \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "recent_posts",
+    "async": true,
+    "variables": {"status": "published"}
+  }'
+```
+
+Job endpoints:
+
+- `GET /api/v1/export/jobs/<job_id>/` returns status
+- `GET /api/v1/export/jobs/<job_id>/download/` downloads the file
 
 ## PDF templating endpoints
 
