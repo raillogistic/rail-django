@@ -36,6 +36,15 @@ INSTALLED_APPS = [
     "root",
 ]
 
+# App labels are used by the schema generator for include/exclude rules.
+INSTALLED_APP_LABELS = []
+for app_path in INSTALLED_APPS:
+    if not isinstance(app_path, str):
+        continue
+    app_label = app_path.rsplit(".", 1)[-1]
+    if app_label not in INSTALLED_APP_LABELS:
+        INSTALLED_APP_LABELS.append(app_label)
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -119,7 +128,6 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
 
 # GraphQL settings
 GRAPHENE = {
-    'SCHEMA': 'rail_django.schema.schema',
     'SCHEMA_OUTPUT': 'schema.graphql',
     'SCHEMA_INDENT': 2,
     'MIDDLEWARE': [
@@ -184,10 +192,7 @@ RAIL_DJANGO_GRAPHQL = {
         "excluded_apps": [],
         # Specific models to exclude from schema (e.g. ['auth.Permission'])
         "excluded_models": [],
-        # Enable GraphQL introspection (recommended False in production)
-        "enable_introspection": True,
-        # Enable GraphiQL interactive interface (recommended False in production)
-        "enable_graphiql": True,
+        # Introspection/GraphiQL defaults are handled by environment settings.
         # Auto-refresh schema when models change (Development only)
         "auto_refresh_on_model_change": False,
         # Auto-refresh schema after migrations are applied
@@ -412,7 +417,7 @@ RAIL_DJANGO_GRAPHQL = {
     },
     "schema_registry": {
         # Enable schema registry for distributed schemas
-        "enable_registry": False,
+        "enable_registry": True,
         # Packages to auto-discover schemas from
         "auto_discover_packages": [],
     },
@@ -427,17 +432,22 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
         "schema_settings": {
             "authentication_required": False,
             "enable_graphiql": False, # No UI needed for auth endpoint
+            # Hide all model queries for the auth-only endpoint.
+            "excluded_apps": INSTALLED_APP_LABELS,
+            # Keep only security mutations (login/register/etc).
+            "enable_extension_mutations": False,
         },
         "mutation_settings": {
             # Disable generic CRUD mutations to keep this endpoint focused on Auth
             "generate_create": False,
             "generate_update": False,
             "generate_delete": False,
+            "enable_method_mutations": False,
         }
     },
     
     # 2. Default API Schema ("gql"): Secure, requires token
-    "default": {
+    "gql": {
         "schema_settings": {
             "authentication_required": True,
             "enable_graphiql": False, # Disable UI for the API endpoint
@@ -447,11 +457,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
     # 3. GraphiQL Schema: For exploration, closed in production
     "graphiql": {
         "schema_settings": {
-            "authentication_required": True, # Still require auth to explore
-            "enable_graphiql": True,
-            # In production, this entire schema could be disabled or restricted at the view level
-            # by setting 'enable_introspection': False via env var if desired.
-            "enable_introspection": True,
+            # Debug-gated defaults are applied by the schema registry.
         },
     },
 }

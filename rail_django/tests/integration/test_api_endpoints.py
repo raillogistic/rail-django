@@ -48,14 +48,32 @@ TEST_GRAPHQL_SETTINGS = {
             "verbose_logging": False,
         },
     },
+    "RAIL_DJANGO_GRAPHQL_SCHEMAS": {
+        "gql": {
+            "schema_settings": {
+                "authentication_required": False,
+                "enable_graphiql": False,
+            },
+        },
+        "secure": {
+            "schema_settings": {
+                "authentication_required": True,
+                "enable_graphiql": False,
+            },
+        },
+    },
 }
 
 
+@override_settings(**TEST_GRAPHQL_SETTINGS)
 class TestAPIEndpointsIntegration(TestCase):
     """Tests d'intégration pour les endpoints API GraphQL."""
 
     def setUp(self):
         """Configuration des tests d'endpoints API."""
+        from rail_django.core.registry import schema_registry
+
+        schema_registry.clear()
         # Client Django pour les tests HTTP
         self.django_client = DjangoClient()
 
@@ -96,7 +114,8 @@ class TestAPIEndpointsIntegration(TestCase):
         self.graphql_client = Client(self.schema)
 
         # URL de l'endpoint GraphQL
-        self.graphql_url = "/graphql/"
+        self.graphql_url = "/graphql/gql/"
+        self.secure_graphql_url = "/graphql/secure/"
 
     def test_graphql_endpoint_availability(self):
         """Test la disponibilité de l'endpoint GraphQL."""
@@ -120,7 +139,9 @@ class TestAPIEndpointsIntegration(TestCase):
         }
 
         response = self.django_client.post(
-            self.graphql_url, data=json.dumps(query), content_type="application/json"
+            self.secure_graphql_url,
+            data=json.dumps(query),
+            content_type="application/json",
         )
 
         # La requête doit fonctionner

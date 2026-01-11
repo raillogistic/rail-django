@@ -5,13 +5,10 @@ example queries and mutations.
 
 ## Endpoints
 
-- `POST /graphql/` (default schema)
 - `POST /graphql/<schema_name>/` (multi-schema)
 - `GET /schemas/` (JSON list of registered schemas)
-- `GET /playground/<schema_name>/` (GraphQL Playground if enabled)
 
-Note: `/graphql/` is wired with `graphiql=True` in `rail_django.urls`. For
-multi-schema endpoints, GraphiQL is controlled by `schema_settings.enable_graphiql`.
+Note: GraphiQL is controlled by `schema_settings.enable_graphiql`.
 
 ## Field naming
 

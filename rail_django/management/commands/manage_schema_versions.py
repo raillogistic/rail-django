@@ -7,7 +7,7 @@ import json
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from rail_django.core.schema_builder import SchemaBuilder
+from rail_django.core.schema import get_schema_builder
 from rail_django.core.schema_versioning import schema_version_manager
 
 
@@ -159,8 +159,9 @@ class Command(BaseCommand):
 
         # Construire le schéma actuel
         try:
-            schema_builder = SchemaBuilder()
-            schema = schema_builder.build_schema()
+            schema_builder = get_schema_builder("default")
+            schema_builder.rebuild_schema()
+            schema = schema_builder.get_schema()
         except Exception as e:
             raise CommandError(f"Erreur lors de la construction du schéma: {e}")
 

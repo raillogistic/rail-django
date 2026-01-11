@@ -749,23 +749,24 @@ class SchemaBuilder:
 
                 # Add health/maintenance mutations
                 extension_mutations: Dict[str, Any] = {}
-                try:
-                    from ..extensions.health import RefreshSchemaMutation
-                    from ..extensions.audit import LogFrontendAuditMutation
+                if self._get_schema_setting("enable_extension_mutations", True):
+                    try:
+                        from ..extensions.health import RefreshSchemaMutation
+                        from ..extensions.audit import LogFrontendAuditMutation
 
-                    extension_mutations.update(
-                        {
-                            "refresh_schema": RefreshSchemaMutation.Field(),
-                            "log_frontend_audit": LogFrontendAuditMutation.Field(),
-                        }
-                    )
-                    logger.info(
-                        f"Health extension mutations integrated into schema '{self.schema_name}'"
-                    )
-                except ImportError as e:
-                    logger.warning(
-                        f"Could not import health extension mutations for schema '{self.schema_name}': {e}"
-                    )
+                        extension_mutations.update(
+                            {
+                                "refresh_schema": RefreshSchemaMutation.Field(),
+                                "log_frontend_audit": LogFrontendAuditMutation.Field(),
+                            }
+                        )
+                        logger.info(
+                            f"Health extension mutations integrated into schema '{self.schema_name}'"
+                        )
+                    except ImportError as e:
+                        logger.warning(
+                            f"Could not import health extension mutations for schema '{self.schema_name}': {e}"
+                        )
 
                 # Load custom mutation extensions from settings
                 mutation_extensions_path = self._get_schema_setting(
@@ -1086,6 +1087,7 @@ def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
     """
     from .registry import schema_registry
 
+    schema_registry.discover_schemas()
     return SchemaBuilder(schema_name=schema_name, registry=schema_registry)
 
 

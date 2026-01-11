@@ -1,0 +1,7 @@
+"""
+Compatibility shim for older discovery patterns.
+
+The canonical schema registrations now live in schemas.py.
+"""
+
+from .schemas import register_schema

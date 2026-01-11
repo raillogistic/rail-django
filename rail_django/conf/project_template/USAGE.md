@@ -104,7 +104,7 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     ```bash
     python manage.py runserver
     ```
-    Access the GraphiQL playground at: `http://localhost:8000/graphql`
+    Access the GraphiQL playground at: `http://localhost:8000/graphql/graphiql/`
 
 ### Project Structure
 Rail Django enforces a clean architecture to keep your codebase scalable.
@@ -235,9 +235,9 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 ```
 
 This creates distinct endpoints (configured in `urls.py` automatically):
-*   `/api/auth/`
-*   `/api/default/` (or `/api/graphql/`)
-*   `/api/admin/`
+*   `/graphql/auth/`
+*   `/graphql/gql/`
+*   `/graphql/admin/`
 
 ---
 

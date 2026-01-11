@@ -58,18 +58,17 @@ RAIL_DJANGO_GRAPHQL = {
 
 ```python
 RAIL_DJANGO_GRAPHQL_SCHEMAS = {
-    "default": {
+    "gql": {
         "schema_settings": {
-            "enable_graphiql": True,
-            "enable_introspection": True,
+            "authentication_required": True,
         },
         "performance_settings": {
             "max_query_depth": 8,
         },
     },
-    "admin": {
+    "auth": {
         "schema_settings": {
-            "authentication_required": True,
+            "authentication_required": False,
             "enable_graphiql": False,
         },
     },
@@ -82,7 +81,6 @@ Rail Django uses Graphene-Django. You can keep standard `GRAPHENE` settings:
 
 ```python
 GRAPHENE = {
-    "SCHEMA": "rail_django.schema.schema",
     "CAMELCASE_ERRORS": False,
     "ATOMIC_MUTATIONS": True,
 }

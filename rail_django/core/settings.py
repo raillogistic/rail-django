@@ -400,6 +400,9 @@ class SchemaSettings:
     # Disable security mutations (e.g., login, logout)
     disable_security_mutations: bool = False
 
+    # Enable built-in extension mutations (health/audit)
+    enable_extension_mutations: bool = True
+
     # Enable model metadata exposure for frontend rich tables and forms
     show_metadata: bool = False
 

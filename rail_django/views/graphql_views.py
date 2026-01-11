@@ -7,15 +7,15 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.conf import settings
-from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.utils import timezone as django_timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 
 try:
+    import graphene
     from graphene_django.views import GraphQLView
-    from graphql import GraphQLError
 except ImportError:
     raise ImportError(
         "graphene-django is required for GraphQL views. "
@@ -37,9 +37,20 @@ class MultiSchemaGraphQLView(GraphQLView):
     - Custom error handling per schema
     """
 
+    _placeholder_schema = None
+
     def __init__(self, **kwargs):
         """Initialize the multi-schema view."""
-        super().__init__(**kwargs)
+        if self._placeholder_schema is None:
+            class _PlaceholderQuery(graphene.ObjectType):
+                placeholder = graphene.String(description="Placeholder field")
+
+            self.__class__._placeholder_schema = graphene.Schema(
+                query=_PlaceholderQuery
+            )
+
+        schema = kwargs.pop("schema", None) or self._placeholder_schema
+        super().__init__(schema=schema, **kwargs)
         self._schema_cache = {}
 
     def dispatch(self, request: HttpRequest, *args, **kwargs):
@@ -50,7 +61,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             request: HTTP request object
             schema_name: Name of the schema to use (from URL)
         """
-        schema_name = kwargs.get("schema_name", "default")
+        schema_name = kwargs.get("schema_name", "gql")
 
         try:
             # Get schema configuration
@@ -111,7 +122,7 @@ class MultiSchemaGraphQLView(GraphQLView):
 
         # Add schema name to context for metadata hierarchy
         schema_match = getattr(request, "resolver_match", None)
-        schema_name = getattr(schema_match, "kwargs", {}).get("schema_name", "default")
+        schema_name = getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
         context.schema_name = schema_name
 
         return context
@@ -129,6 +140,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         try:
             from ..core.registry import schema_registry
 
+            schema_registry.discover_schemas()
             return schema_registry.get_schema(schema_name)
         except ImportError:
             logger.warning("Schema registry not available")
@@ -465,18 +477,26 @@ class SchemaListView(View):
         try:
             from ..core.registry import schema_registry
 
+            schema_registry.discover_schemas()
             schemas = []
             for schema_info in schema_registry.list_schemas():
                 if schema_info:
                     settings_dict = getattr(schema_info, "settings", {}) or {}
+                    schema_settings = settings_dict.get("schema_settings", {})
+                    if not isinstance(schema_settings, dict):
+                        schema_settings = {}
                     public_info = {
                         "name": getattr(schema_info, "name", ""),
                         "description": getattr(schema_info, "description", ""),
                         "version": getattr(schema_info, "version", "1.0.0"),
                         "enabled": getattr(schema_info, "enabled", True),
-                        "graphiql_enabled": settings_dict.get("enable_graphiql", True),
-                        "authentication_required": settings_dict.get(
-                            "authentication_required", False
+                        "graphiql_enabled": schema_settings.get(
+                            "enable_graphiql",
+                            settings_dict.get("enable_graphiql", True),
+                        ),
+                        "authentication_required": schema_settings.get(
+                            "authentication_required",
+                            settings_dict.get("authentication_required", False),
                         ),
                     }
                     schemas.append(public_info)
@@ -488,132 +508,3 @@ class SchemaListView(View):
         except Exception as e:
             logger.error(f"Error listing schemas: {e}")
             return JsonResponse({"error": "Failed to list schemas"}, status=500)
-
-
-class GraphQLPlaygroundView(View):
-    """
-    Custom GraphQL Playground view with schema-specific configuration.
-    """
-
-    def get(self, request: HttpRequest, schema_name: str = "default") -> HttpResponse:
-        """
-        Render GraphQL Playground for the specified schema.
-
-        Args:
-            request: HTTP request object
-            schema_name: Name of the schema
-
-        Returns:
-            HTML response with GraphQL Playground
-        """
-        try:
-            from ..core.registry import schema_registry
-
-            # Get schema info
-            schema_info = schema_registry.get_schema(schema_name)
-            if not schema_info:
-                raise Http404(f"Schema '{schema_name}' not found")
-
-            # Check if GraphiQL is enabled for this schema
-            schema_settings = getattr(schema_info, "settings", {}) or {}
-            try:
-                from dataclasses import asdict
-                from ..core.settings import SchemaSettings
-
-                resolved_settings = asdict(SchemaSettings.from_schema(schema_name))
-                schema_settings = {**resolved_settings, **schema_settings}
-            except Exception:
-                pass
-            if not schema_settings.get("enable_graphiql", True):
-                return HttpResponse(
-                    f"GraphQL Playground is disabled for schema '{schema_name}'",
-                    status=403,
-                )
-
-            # Generate playground HTML
-            playground_html = self._generate_playground_html(schema_name, schema_info)
-            return HttpResponse(playground_html, content_type="text/html")
-
-        except ImportError:
-            return HttpResponse("Schema registry not available", status=503)
-        except Exception as e:
-            logger.error(f"Error rendering playground for schema '{schema_name}': {e}")
-            return HttpResponse("Failed to load GraphQL Playground", status=500)
-
-    def _generate_playground_html(
-        self, schema_name: str, schema_info: Dict[str, Any]
-    ) -> str:
-        """
-        Generate HTML for GraphQL Playground.
-
-        Args:
-            schema_name: Name of the schema
-            schema_info: Schema information dictionary
-
-        Returns:
-            HTML string for the playground
-        """
-        endpoint_url = f"/graphql/{schema_name}/"
-        schema_description = getattr(
-            schema_info, "description", f"GraphQL Playground for {schema_name}"
-        )
-
-        playground_version = "1.7.28"
-        playground_base = (
-            f"https://cdn.jsdelivr.net/npm/graphql-playground-react@{playground_version}/build"
-        )
-        css_sri = (
-            "sha384-xb+UHILNN4fV3NgQMTjXk0x9A80U0hmkraTFvucUYTILJymGT8E1Aq2278NSi5+3"
-        )
-        js_sri = (
-            "sha384-ardaO17esJ2ZxvY24V1OE6X4j+Z3WKgGMptrlDLmD+2w/JC3nbQ5ZfKGY2zfOPEE"
-        )
-
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>{schema_description}</title>
-            <link rel="stylesheet" href="{playground_base}/static/css/index.css" integrity="{css_sri}" crossorigin="anonymous" />
-            <link rel="shortcut icon" href="{playground_base}/favicon.png" />
-            <script src="{playground_base}/static/js/middleware.js" integrity="{js_sri}" crossorigin="anonymous"></script>
-        </head>
-        <body>
-            <div id="root">
-                <style>
-                    body {{ background: rgb(23, 42, 58); font-family: Open Sans, sans-serif; height: 90vh; }}
-                    #root {{ height: 100%; width: 100%; display: flex; align-items: center; justify-content: center; }}
-                    .loading {{ font-size: 32px; font-weight: 200; color: rgba(255, 255, 255, .6); margin-left: 20px; }}
-                    img {{ width: 78px; height: 78px; }}
-                    .title {{ font-weight: 400; }}
-                </style>
-                <img src="{playground_base}/logo.png" alt="" />
-                <div class="loading"> Loading
-                    <span class="title">GraphQL Playground</span>
-                </div>
-            </div>
-            <script>
-                window.addEventListener('load', function (event) {{
-                    GraphQLPlayground.init(document.getElementById('root'), {{
-                        endpoint: '{endpoint_url}',
-                        settings: {{
-                            'general.betaUpdates': false,
-                            'editor.theme': 'dark',
-                            'editor.reuseHeaders': true,
-                            'tracing.hideTracingResponse': true,
-                            'editor.fontSize': 14,
-                            'editor.fontFamily': '"Source Code Pro", "Consolas", "Inconsolata", "Droid Sans Mono", "Monaco", monospace',
-                            'request.credentials': 'omit',
-                        }},
-                        tabs: [{{
-                            endpoint: '{endpoint_url}',
-                            query: '# Welcome to GraphQL Playground for {schema_name}\\n# {schema_description}\\n\\n{{\\n  __schema {{\\n    types {{\\n      name\\n    }}\\n  }}\\n}}',
-                        }}],
-                    }})
-                }})
-            </script>
-        </body>
-        </html>
-        """

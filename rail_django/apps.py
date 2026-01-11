@@ -124,13 +124,19 @@ class AppConfig(BaseAppConfig):
         try:
             from .core.schema import get_schema_builder
             from .core.settings import SchemaSettings
+            from .core.registry import schema_registry
 
-            schema_settings = SchemaSettings.from_schema("default")
-            if schema_settings.prebuild_on_startup:
-                builder = get_schema_builder("default")
-                # Build the schema once at startup
-                builder.get_schema()
-                logger.info("Prebuilt GraphQL schema 'default' on startup")
+            schema_registry.discover_schemas()
+            schema_names = schema_registry.get_schema_names(enabled_only=True) or ["gql"]
+            for schema_name in schema_names:
+                schema_settings = SchemaSettings.from_schema(schema_name)
+                if schema_settings.prebuild_on_startup:
+                    builder = get_schema_builder(schema_name)
+                    # Build the schema once at startup
+                    builder.get_schema()
+                    logger.info(
+                        "Prebuilt GraphQL schema '%s' on startup", schema_name
+                    )
         except ImportError as e:
             logger.debug(f"Could not prebuild schema on startup: {e}")
         except Exception as e:

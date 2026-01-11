@@ -5,8 +5,8 @@ This document describes how Rail Django builds and serves GraphQL schemas.
 ## Core flow
 
 1. **Schema discovery**
-   - `SchemaRegistry` scans installed apps for `graphql_schema.py`, `schema.py`,
-     or `graphql/schema.py` and registers schemas.
+   - `SchemaRegistry` scans installed apps for `schemas.py`, `graphql_schema.py`,
+     `schema.py`, or `graphql/schema.py` and registers schemas.
    - Apps may also call `register_schema(registry)` directly.
 
 2. **Schema build**

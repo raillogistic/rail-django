@@ -1,0 +1,42 @@
+"""
+Default schema registrations for a Rail Django project.
+
+Edit this file to add/remove schemas or override per-schema settings. The
+baseline settings come from RAIL_DJANGO_GRAPHQL_SCHEMAS in settings.
+"""
+
+from django.conf import settings
+
+
+def _get_schema_config(schema_name):
+    schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {}) or {}
+    if not isinstance(schema_settings, dict):
+        return {}
+    config = schema_settings.get(schema_name, {})
+    return config if isinstance(config, dict) else {}
+
+
+def _normalize_list(value):
+    return value if isinstance(value, list) else None
+
+
+def _register_schema(registry, schema_name, description):
+    config = _get_schema_config(schema_name)
+    registry.register_schema(
+        name=schema_name,
+        description=description,
+        version=config.get("version", "1.0.0"),
+        apps=_normalize_list(config.get("apps")),
+        models=_normalize_list(config.get("models")),
+        exclude_models=_normalize_list(config.get("exclude_models")),
+        settings=config,
+        schema_class=config.get("schema_class"),
+        auto_discover=config.get("auto_discover", True),
+        enabled=config.get("enabled", True),
+    )
+
+
+def register_schema(registry):
+    _register_schema(registry, "auth", "Authentication-only schema")
+    _register_schema(registry, "gql", "Primary GraphQL API schema")
+    _register_schema(registry, "graphiql", "GraphiQL schema")

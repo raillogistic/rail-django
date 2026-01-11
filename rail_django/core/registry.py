@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 from django.apps import apps
+from django.conf import settings as django_settings
 from django.db import models
 from django.utils.module_loading import import_string
 
@@ -55,6 +56,34 @@ class SchemaRegistry:
         self._discovery_hooks: List[Callable] = []
         self._lock = threading.Lock()
         self._initialized = False
+
+    def _apply_graphiql_defaults(
+        self, schema_name: str, settings_payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Apply debug-gated defaults for the graphiql schema if not explicitly set."""
+        if schema_name != "graphiql":
+            return settings_payload
+
+        debug_enabled = getattr(django_settings, "DEBUG", False)
+        schema_settings = settings_payload.get("schema_settings")
+        if isinstance(schema_settings, dict):
+            schema_settings = dict(schema_settings)
+        else:
+            schema_settings = {}
+
+        if "enable_graphiql" not in schema_settings and "enable_graphiql" not in settings_payload:
+            schema_settings["enable_graphiql"] = debug_enabled
+        if "enable_introspection" not in schema_settings and "enable_introspection" not in settings_payload:
+            schema_settings["enable_introspection"] = debug_enabled
+        if (
+            "authentication_required" not in schema_settings
+            and "authentication_required" not in settings_payload
+        ):
+            schema_settings["authentication_required"] = not debug_enabled
+
+        settings_payload = dict(settings_payload)
+        settings_payload["schema_settings"] = schema_settings
+        return settings_payload
 
     def register_schema(
         self,
@@ -100,6 +129,11 @@ class SchemaRegistry:
             "enabled": enabled,
         }
         modified_kwargs = self._run_pre_registration_hooks(name, **kwargs)
+        settings_payload = modified_kwargs.get("settings", settings) or {}
+        if not isinstance(settings_payload, dict):
+            settings_payload = {}
+        settings_payload = self._apply_graphiql_defaults(name, settings_payload)
+        modified_kwargs["settings"] = settings_payload
 
         with self._lock:
             if name in self._schemas:
@@ -370,6 +404,8 @@ class SchemaRegistry:
             except Exception as e:
                 logger.error(f"Error running discovery hook: {e}")
 
+        self._register_schemas_from_settings()
+
         self._initialized = True
         logger.info(f"Schema discovery completed. Found {len(self._schemas)} schemas.")
 
@@ -388,12 +424,61 @@ class SchemaRegistry:
         for app_config in apps.get_app_configs():
             self._discover_app_schemas(app_config)
 
+        self._register_schemas_from_settings()
+
         discovered_count = len(self._schemas) - initial_count
         logger.info(
             f"Auto-discovery completed. Discovered {discovered_count} new schemas."
         )
 
         return discovered_count
+
+    def _register_schemas_from_settings(self) -> int:
+        """
+        Register schemas defined in RAIL_DJANGO_GRAPHQL_SCHEMAS if missing.
+        """
+        schema_configs = getattr(django_settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", None)
+        if not isinstance(schema_configs, dict):
+            return 0
+
+        registered = 0
+        for schema_name, config in schema_configs.items():
+            if not isinstance(schema_name, str) or not schema_name:
+                continue
+            if self.schema_exists(schema_name):
+                continue
+
+            config_dict = config if isinstance(config, dict) else {}
+            apps_list = config_dict.get("apps")
+            models_list = config_dict.get("models")
+            exclude_models_list = config_dict.get("exclude_models")
+
+            try:
+                self.register_schema(
+                    name=schema_name,
+                    description=config_dict.get(
+                        "description", f"{schema_name} schema"
+                    ),
+                    version=config_dict.get("version", "1.0.0"),
+                    apps=apps_list if isinstance(apps_list, list) else None,
+                    models=models_list if isinstance(models_list, list) else None,
+                    exclude_models=(
+                        exclude_models_list
+                        if isinstance(exclude_models_list, list)
+                        else None
+                    ),
+                    settings=config_dict,
+                    schema_class=config_dict.get("schema_class"),
+                    auto_discover=config_dict.get("auto_discover", True),
+                    enabled=config_dict.get("enabled", True),
+                )
+                registered += 1
+            except Exception as e:
+                logger.warning(
+                    f"Failed to register schema '{schema_name}' from settings: {e}"
+                )
+
+        return registered
 
     def _discover_app_schemas(self, app_config) -> None:
         """
@@ -404,8 +489,9 @@ class SchemaRegistry:
         """
         app_name = app_config.name
 
-        # Look for graphql_schema.py or schema.py in the app
+        # Look for schemas.py, graphql_schema.py, or schema.py in the app
         schema_modules = [
+            f"{app_name}.schemas",
             f"{app_name}.graphql_schema",
             f"{app_name}.schema",
             f"{app_name}.graphql.schema",
@@ -567,6 +653,7 @@ class SchemaRegistry:
             self._schemas.clear()
             self._schema_builders.clear()
             self._schema_instance_cache.clear()
+            self._initialized = False
             logger.info("Cleared all schemas")
 
     def get_models_for_schema(self, name: str) -> List[Type[models.Model]]:
@@ -688,6 +775,7 @@ class SchemaRegistry:
             self._schemas.clear()
             self._schema_builders.clear()
             self._schema_instance_cache.clear()
+            self._initialized = False
             logger.info("Cleared all schemas from registry")
 
 

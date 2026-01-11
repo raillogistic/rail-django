@@ -45,8 +45,8 @@ urlpatterns = [
 4. Configure `RAIL_DJANGO_GRAPHQL` (see `configuration.md`)
 
 5. Run the server and open:
-- `http://localhost:8000/graphql/` (default schema)
-- `http://localhost:8000/playground/default/` (if enabled)
+- `http://localhost:8000/graphql/gql/` (primary API)
+- `http://localhost:8000/graphql/graphiql/` (if enabled)
 
 ## Documentation map
 

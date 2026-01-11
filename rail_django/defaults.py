@@ -32,6 +32,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_pagination": True,
         "auto_camelcase": False,
         "disable_security_mutations": False,
+        "enable_extension_mutations": True,
         "show_metadata": False,
         "query_extensions": [],
     },

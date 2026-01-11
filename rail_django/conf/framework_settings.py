@@ -109,7 +109,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # GraphQL settings
 GRAPHENE = {
-    "SCHEMA": "rail_django.schema.schema",
     "MIDDLEWARE": [
         "graphene_django.debug.DjangoDebugMiddleware",
     ],

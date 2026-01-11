@@ -1078,7 +1078,12 @@ class TypeGenerator:
         # Add reverse relationship fields with dual field generation for nested operations (e.g., comments for Post)
         if include_reverse_relations:
             reverse_relations = self._get_reverse_relations(model)
-            for field_name, related_model in reverse_relations.items():
+            for field_name, rel_info in reverse_relations.items():
+                related_model = (
+                    rel_info.get("model") if isinstance(rel_info, dict) else rel_info
+                )
+                if related_model is None:
+                    continue
                 if not self._should_include_field(model, field_name, for_input=True):
                     continue
 

@@ -8,6 +8,16 @@ DEBUG = False
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
+# Lock down the GraphiQL schema in production.
+if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
+    RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault("schema_settings", {})
+    RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
+        {
+            "enable_graphiql": False,
+            "enable_introspection": False,
+        }
+    )
+
 # Database performance: Keep connections alive for 10 minutes
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)
 
