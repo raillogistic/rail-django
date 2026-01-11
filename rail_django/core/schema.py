@@ -495,6 +495,31 @@ class SchemaBuilder:
             else:
                 query_attrs[field_name] = field
 
+    def _apply_field_allowlist(
+        self, fields: Dict[str, Any], allowlist: Optional[List[str]]
+    ) -> Dict[str, Any]:
+        """Filter root fields using an allowlist when configured."""
+        if allowlist is None:
+            return fields
+
+        if isinstance(allowlist, (list, tuple, set)):
+            allowed = {str(name).strip() for name in allowlist if str(name).strip()}
+        else:
+            allowed = {str(allowlist).strip()} if allowlist else set()
+
+        if not allowed:
+            return {}
+
+        filtered = {}
+        for key, field in fields.items():
+            field_names = {key}
+            alias = getattr(field, "name", None)
+            if alias:
+                field_names.add(alias)
+            if field_names & allowed:
+                filtered[key] = field
+        return filtered
+
     def rebuild_schema(self) -> None:
         """
         Rebuilds the entire GraphQL schema.
@@ -703,6 +728,20 @@ class SchemaBuilder:
                             f"Could not import metadata queries for schema '{self.schema_name}': {e}"
                         )
 
+                query_allowlist = self._get_schema_setting(
+                    "query_field_allowlist", None
+                )
+                if query_allowlist is not None:
+                    query_attrs = self._apply_field_allowlist(
+                        query_attrs, query_allowlist
+                    )
+                    if not query_attrs:
+                        query_attrs = {
+                            "dummy": graphene.String(
+                                description="Dummy query field to ensure schema validity"
+                            )
+                        }
+
                 query_type = type("Query", (graphene.ObjectType,), query_attrs)
 
                 # Create Mutation type if there are mutations
@@ -797,6 +836,14 @@ class SchemaBuilder:
                     **extension_mutations,
                 }
 
+                mutation_allowlist = self._get_schema_setting(
+                    "mutation_field_allowlist", None
+                )
+                if mutation_allowlist is not None:
+                    all_mutations = self._apply_field_allowlist(
+                        all_mutations, mutation_allowlist
+                    )
+
                 if all_mutations:
                     # logger.info(
                     #     f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"
@@ -805,28 +852,34 @@ class SchemaBuilder:
                         "Mutation", (graphene.ObjectType,), all_mutations
                     )
                 else:
-                    logger.info(
-                        f"No mutations found for schema '{self.schema_name}', creating dummy mutation"
-                    )
-
-                    # Create dummy mutation to avoid GraphQL error
-                    class DummyMutation(graphene.Mutation):
-                        class Arguments:
-                            pass
-
-                        success = graphene.Boolean()
-
-                        def mutate(self, info):
-                            return DummyMutation(success=True)
-
-                    mutation_attrs = {
-                        "dummy": DummyMutation.Field(
-                            description="Placeholder mutation field"
+                    if mutation_allowlist is not None:
+                        logger.info(
+                            f"No allowed mutations for schema '{self.schema_name}', skipping mutation type"
                         )
-                    }
-                    mutation_type = type(
-                        "Mutation", (graphene.ObjectType,), mutation_attrs
-                    )
+                        mutation_type = None
+                    else:
+                        logger.info(
+                            f"No mutations found for schema '{self.schema_name}', creating dummy mutation"
+                        )
+
+                        # Create dummy mutation to avoid GraphQL error
+                        class DummyMutation(graphene.Mutation):
+                            class Arguments:
+                                pass
+
+                            success = graphene.Boolean()
+
+                            def mutate(self, info):
+                                return DummyMutation(success=True)
+
+                        mutation_attrs = {
+                            "dummy": DummyMutation.Field(
+                                description="Placeholder mutation field"
+                            )
+                        }
+                        mutation_type = type(
+                            "Mutation", (graphene.ObjectType,), mutation_attrs
+                        )
 
                 # Create Schema with security middleware
                 middleware = []

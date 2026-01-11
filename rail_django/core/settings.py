@@ -412,6 +412,12 @@ class SchemaSettings:
     # Custom GraphQL mutation extensions loaded by path
     mutation_extensions: List[str] = field(default_factory=list)
 
+    # Allowlist root query fields (None = no filtering)
+    query_field_allowlist: Optional[List[str]] = None
+
+    # Allowlist root mutation fields (None = no filtering)
+    mutation_field_allowlist: Optional[List[str]] = None
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
         """

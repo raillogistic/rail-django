@@ -212,6 +212,10 @@ RAIL_DJANGO_GRAPHQL = {
         # List of custom query extension classes to add
         "query_extensions": [],
         "mutation_extensions": [],
+        # Allowlist root query fields (None = no filtering)
+        "query_field_allowlist": None,
+        # Allowlist root mutation fields (None = no filtering)
+        "mutation_field_allowlist": None,
     },
     "type_generation_settings": {
         # Fields to exclude globally by name from all types
@@ -436,6 +440,10 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
             "excluded_apps": INSTALLED_APP_LABELS,
             # Keep only security mutations (login/register/etc).
             "enable_extension_mutations": False,
+            # Only expose the current-user query.
+            "query_field_allowlist": ["me"],
+            # Only expose login + register mutations.
+            "mutation_field_allowlist": ["login", "register"],
         },
         "mutation_settings": {
             # Disable generic CRUD mutations to keep this endpoint focused on Auth

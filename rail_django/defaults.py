@@ -35,6 +35,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_extension_mutations": True,
         "show_metadata": False,
         "query_extensions": [],
+        "mutation_extensions": [],
+        "query_field_allowlist": None,
+        "mutation_field_allowlist": None,
     },
     "type_generation_settings": {
         "exclude_fields": {},

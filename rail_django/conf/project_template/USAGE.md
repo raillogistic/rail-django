@@ -184,6 +184,10 @@ RAIL_DJANGO_GRAPHQL = {
         "query_extensions": [],
         # Dotted paths to extra Mutation classes
         "mutation_extensions": [],
+        # Allowlist root query fields (None = no filtering)
+        "query_field_allowlist": None,
+        # Allowlist root mutation fields (None = no filtering)
+        "mutation_field_allowlist": None,
     },
     "type_generation_settings": {
         # {"app.Model": ["field_a", "field_b"]}
@@ -452,6 +456,8 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
         "schema_settings": {
             "authentication_required": False,
             "enable_graphiql": False, 
+            "query_field_allowlist": ["me"],
+            "mutation_field_allowlist": ["login", "register"],
         },
         # Disable unrelated mutations
         "mutation_settings": {
