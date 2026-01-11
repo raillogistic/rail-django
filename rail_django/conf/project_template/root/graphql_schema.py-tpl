@@ -1,7 +1,6 @@
 """
 Compatibility shim for older discovery patterns.
 
-The canonical schema registrations now live in schemas.py.
+Schemas are registered from RAIL_DJANGO_GRAPHQL_SCHEMAS in settings by default.
+Add register_schema(registry) here only if you want code-driven registration.
 """
-
-from .schemas import register_schema

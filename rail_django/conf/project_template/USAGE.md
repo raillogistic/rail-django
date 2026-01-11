@@ -239,6 +239,28 @@ This creates distinct endpoints (configured in `urls.py` automatically):
 *   `/graphql/gql/`
 *   `/graphql/admin/`
 
+#### How schemas are registered
+Rail Django registers schemas from two sources, in this order:
+1.  App discovery: each installed app is scanned for `schemas.py`,
+    `graphql_schema.py`, `schema.py`, or `graphql/schema.py`. If a module exposes
+    `register_schema(registry)`, it is called.
+2.  Settings fallback: any entries in `RAIL_DJANGO_GRAPHQL_SCHEMAS` that are not
+    already registered are added automatically.
+
+By default, the starter template registers schemas only from
+`RAIL_DJANGO_GRAPHQL_SCHEMAS`. The `schemas.py` and `graphql_schema.py` files
+ship as no-op stubs unless you add `register_schema(...)` yourself. Schemas can
+still appear even if `register_schema(...)` is empty, as long as they exist in
+`RAIL_DJANGO_GRAPHQL_SCHEMAS`.
+
+To disable a schema:
+*   Remove the schema key from `RAIL_DJANGO_GRAPHQL_SCHEMAS`, or set
+    `"enabled": False`.
+*   If you also register it in `schemas.py`, remove it there too.
+
+The registry is cached once per process. Restart the server (or call
+`schema_registry.clear()` in a Django shell) to pick up changes.
+
 ---
 
 ## 5. Data Modeling & API Design
