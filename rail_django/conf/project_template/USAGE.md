@@ -148,38 +148,282 @@ Your project is configured via `root/settings/base.py`. The primary configuratio
 
 ### Global Settings (`RAIL_DJANGO_GRAPHQL`)
 
+RAIL_DJANGO_GRAPHQL is the global default configuration for all schemas. The
+list below shows every supported key with defaults and short clarifications.
+
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
-        # Security: Disable introspection in production to hide schema details
-        "enable_introspection": env.bool("DJANGO_DEBUG", default=False),
-        
-        # UI: Enable the GraphiQL playground only in dev
-        "enable_graphiql": env.bool("DJANGO_DEBUG", default=False),
-        
-        # Access: Require JWT token for ALL queries by default
+        # App labels to skip (e.g. ["admin"])
+        "excluded_apps": [],
+        # Model names or "app.Model" labels to skip
+        "excluded_models": [],
+        # Disable in production to hide schema details
+        "enable_introspection": True,
+        # Disable in production to remove the UI
+        "enable_graphiql": True,
+        # Auto-rebuild on model saves/deletes (dev only)
+        "auto_refresh_on_model_change": False,
+        # Rebuild schema after migrations
+        "auto_refresh_on_migration": True,
+        # Build schema at startup
+        "prebuild_on_startup": False,
+        # Require JWT by default
         "authentication_required": True,
-        
-        # Exclusions: Hide specific internal models
-        "excluded_apps": ["admin", "contenttypes"],
+        # Master toggle for pagination fields
+        "enable_pagination": True,
+        # Keep snake_case names when False
+        "auto_camelcase": False,
+        # Disable login/register/etc mutations
+        "disable_security_mutations": False,
+        # Enable built-in health/audit mutations
+        "enable_extension_mutations": True,
+        # Expose model metadata queries for UI builders
+        "show_metadata": False,
+        # Dotted paths to extra Query classes
+        "query_extensions": [],
+        # Dotted paths to extra Mutation classes
+        "mutation_extensions": [],
+    },
+    "type_generation_settings": {
+        # {"app.Model": ["field_a", "field_b"]}
+        "exclude_fields": {},
+        # Legacy alias for exclude_fields
+        "excluded_fields": {},
+        # {"app.Model": ["field_a"]} or None for all
+        "include_fields": None,
+        # {DjangoFieldClass: GrapheneScalar}
+        "custom_field_mappings": {},
+        # Build filter inputs for types
+        "generate_filters": True,
+        # Alias for generate_filters
+        "enable_filtering": True,
+        # CamelCase type field names
+        "auto_camelcase": False,
+        # Use model help_text as descriptions
+        "generate_descriptions": True,
+    },
+    "query_settings": {
+        # Add filter args to list queries
+        "generate_filters": True,
+        # Add ordering args to list queries
+        "generate_ordering": True,
+        # Add pagination args to list queries
+        "generate_pagination": True,
+        # Enable pagination resolver logic
+        "enable_pagination": True,
+        # Enable ordering resolver logic
+        "enable_ordering": True,
+        # Use Relay connections instead of lists
+        "use_relay": False,
+        # Default page size for paginated queries
+        "default_page_size": 20,
+        # Maximum page size allowed
+        "max_page_size": 100,
+        # Max buckets for grouping queries
+        "max_grouping_buckets": 200,
+        # Cap for ordering on Python properties
+        "max_property_ordering_results": 2000,
+        # {"app.Model": ["slug", "uuid"]}
+        "additional_lookup_fields": {},
     },
     "mutation_settings": {
-        # CRUD: Globally enable/disable auto-generation
+        # Auto-generate create mutations
         "generate_create": True,
+        # Auto-generate update mutations
         "generate_update": True,
+        # Auto-generate delete mutations
         "generate_delete": True,
-        
-        # Bulk: Enable bulk operations (e.g. delete 50 items)
-        "enable_bulk_operations": False, 
+        # Auto-generate bulk mutations
+        "generate_bulk": False,
+        # Enable create execution
+        "enable_create": True,
+        # Enable update execution
+        "enable_update": True,
+        # Enable delete execution
+        "enable_delete": True,
+        # Enable bulk execution
+        "enable_bulk_operations": False,
+        # Expose custom model method mutations
+        "enable_method_mutations": True,
+        # Items per bulk operation
+        "bulk_batch_size": 100,
+        # {"app.Model": ["field_a"]}
+        "required_update_fields": {},
+        # Allow nested relation writes
+        "enable_nested_relations": True,
+        # Per-model nested relation config
+        "nested_relations_config": {},
+        # Per-field nested relation config
+        "nested_field_config": {},
+    },
+    "performance_settings": {
+        # Apply select_related/prefetch_related
+        "enable_query_optimization": True,
+        # Use select_related when possible
+        "enable_select_related": True,
+        # Use prefetch_related when possible
+        "enable_prefetch_related": True,
+        # Use .only() to trim columns
+        "enable_only_fields": True,
+        # Use .defer() for large fields
+        "enable_defer_fields": False,
+        # Enable DataLoader batching
+        "enable_dataloader": True,
+        # Batch size for DataLoader
+        "dataloader_batch_size": 100,
+        # Max allowed query depth
+        "max_query_depth": 10,
+        # Max allowed query complexity
+        "max_query_complexity": 1000,
+        # Pre-calc query cost
+        "enable_query_cost_analysis": False,
+        # Timeout in seconds
+        "query_timeout": 30,
     },
     "security_settings": {
-        # Limits: Protect against DoS
-        "max_query_depth": 10,
-        "max_query_complexity": 2000,
-        
-        # Uploads: File limits
-        "max_file_upload_size": 10 * 1024 * 1024, # 10MB
-    }
+        # Enforce auth checks
+        "enable_authentication": True,
+        # Enforce permission checks
+        "enable_authorization": True,
+        # Enable rate limiter
+        "enable_rate_limiting": False,
+        # Per-minute limit
+        "rate_limit_requests_per_minute": 60,
+        # Per-hour limit
+        "rate_limit_requests_per_hour": 1000,
+        # Enforce depth limiting
+        "enable_query_depth_limiting": True,
+        # Allowlist for security middleware/CORS
+        "allowed_origins": ["*"],
+        # Enforce CSRF for cookie auth
+        "enable_csrf_protection": True,
+        # Emit CORS headers
+        "enable_cors": True,
+        # Enforce field-level permissions
+        "enable_field_permissions": True,
+        # Enforce object-level permissions
+        "enable_object_permissions": True,
+        # Enable input sanitizer
+        "enable_input_validation": True,
+        # Enable SQLi detection
+        "enable_sql_injection_protection": True,
+        # Enable XSS detection
+        "enable_xss_protection": True,
+        # Allow HTML in inputs
+        "input_allow_html": False,
+        "input_allowed_html_tags": [
+            "p",
+            "br",
+            "strong",
+            "em",
+            "u",
+            "ol",
+            "ul",
+            "li",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "blockquote",
+        ],
+        "input_allowed_html_attributes": {
+            "*": ["class"],
+            "a": ["href", "title"],
+            "img": ["src", "alt", "width", "height"],
+        },
+        # None disables length cap
+        "input_max_string_length": None,
+        # Trim oversized strings instead of erroring
+        "input_truncate_long_strings": False,
+        # Severity for validation errors
+        "input_failure_severity": "high",
+        # Max chars to scan
+        "input_pattern_scan_limit": 10000,
+        # Session timeout in minutes
+        "session_timeout_minutes": 30,
+        # 10MB
+        "max_file_upload_size": 10 * 1024 * 1024,
+        "allowed_file_types": [".jpg", ".jpeg", ".png", ".pdf", ".txt"],
+    },
+    "middleware_settings": {
+        # Auth middleware on/off
+        "enable_authentication_middleware": True,
+        # Log requests
+        "enable_logging_middleware": True,
+        # Track performance
+        "enable_performance_middleware": True,
+        # Error handler middleware
+        "enable_error_handling_middleware": True,
+        # Rate limiter middleware
+        "enable_rate_limiting_middleware": True,
+        # Input validation middleware
+        "enable_validation_middleware": True,
+        # CORS middleware
+        "enable_cors_middleware": True,
+        # Log GraphQL queries
+        "log_queries": True,
+        # Log GraphQL mutations
+        "log_mutations": True,
+        # Log GraphQL errors
+        "log_errors": True,
+        # Log performance data
+        "log_performance": True,
+        # Slow query threshold
+        "performance_threshold_ms": 1000,
+        # Enforce complexity
+        "enable_query_complexity_middleware": True,
+    },
+    "error_handling": {
+        # Include detailed errors
+        "enable_detailed_errors": False,
+        # Log errors
+        "enable_error_logging": True,
+        # Report errors to external services
+        "enable_error_reporting": True,
+        # Sentry integration toggle
+        "enable_sentry_integration": False,
+        # Hide internal details from clients
+        "mask_internal_errors": True,
+        # Include stack traces
+        "include_stack_trace": False,
+        # Prefix for error codes
+        "error_code_prefix": "RAIL_GQL",
+        # Max error message length
+        "max_error_message_length": 500,
+        # Categorize errors
+        "enable_error_categorization": True,
+        # Track error metrics
+        "enable_error_metrics": True,
+        # Log level for error events
+        "log_level": "ERROR",
+    },
+    "custom_scalars": {
+        "DateTime": {"enabled": True},
+        "Date": {"enabled": True},
+        "Time": {"enabled": True},
+        "JSON": {"enabled": True},
+        "UUID": {"enabled": True},
+        "Email": {"enabled": True},
+        "URL": {"enabled": True},
+        "Phone": {"enabled": True},
+        "Decimal": {"enabled": True},
+        "Binary": {"enabled": True},
+    },
+    "monitoring_settings": {
+        # Toggle metrics collection
+        "enable_metrics": False,
+        # Metrics backend name
+        "metrics_backend": "prometheus",
+    },
+    "schema_registry": {
+        # Enable schema registry discovery
+        "enable_registry": False,
+        # Python packages to scan for schemas
+        "auto_discover_packages": [],
+    },
 }
 ```
 

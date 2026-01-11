@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type
 from django.apps import apps
 from django.conf import settings as django_settings
 from django.db import models
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils.module_loading import import_string
 
 logger = logging.getLogger(__name__)
@@ -159,16 +160,7 @@ class SchemaRegistry:
             if schema_settings:
                 from ..config_proxy import configure_schema_settings
 
-                # Flatten nested settings structure for configure_schema_settings
-                flattened_settings = {}
-                for key, value in schema_settings.items():
-                    if isinstance(value, dict):
-                        # If value is a dict, add its contents directly to flattened_settings
-                        flattened_settings.update(value)
-                    else:
-                        # If value is not a dict, add it as-is
-                        flattened_settings[key] = value
-                configure_schema_settings(name, **flattened_settings)
+                configure_schema_settings(name, **schema_settings)
 
             logger.info(f"Registered schema: {name}")
 
@@ -405,6 +397,7 @@ class SchemaRegistry:
                 logger.error(f"Error running discovery hook: {e}")
 
         self._register_schemas_from_settings()
+        self._register_schemas_from_database()
 
         self._initialized = True
         logger.info(f"Schema discovery completed. Found {len(self._schemas)} schemas.")
@@ -425,6 +418,7 @@ class SchemaRegistry:
             self._discover_app_schemas(app_config)
 
         self._register_schemas_from_settings()
+        self._register_schemas_from_database()
 
         discovered_count = len(self._schemas) - initial_count
         logger.info(
@@ -432,6 +426,45 @@ class SchemaRegistry:
         )
 
         return discovered_count
+
+    def _register_schemas_from_database(self) -> int:
+        """
+        Register schemas stored in the database (SchemaRegistryModel).
+        """
+        try:
+            schema_model = apps.get_model("rail_django", "SchemaRegistryModel")
+        except LookupError:
+            return 0
+
+        try:
+            entries = schema_model.objects.all()
+        except (OperationalError, ProgrammingError) as exc:
+            logger.debug("Skipping database schema registry: %s", exc)
+            return 0
+
+        registered = 0
+        for entry in entries:
+            try:
+                config = entry.to_registry_kwargs()
+                if not config.get("name"):
+                    continue
+                schema_info = self.register_schema(**config)
+                if schema_info:
+                    schema_info.created_at = (
+                        entry.created_at.isoformat() if entry.created_at else None
+                    )
+                    schema_info.updated_at = (
+                        entry.updated_at.isoformat() if entry.updated_at else None
+                    )
+                registered += 1
+            except Exception as exc:
+                logger.warning(
+                    "Failed to register schema '%s' from database: %s",
+                    getattr(entry, "name", "<unknown>"),
+                    exc,
+                )
+
+        return registered
 
     def _register_schemas_from_settings(self) -> int:
         """

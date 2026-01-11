@@ -32,6 +32,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {key: _json_safe(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def _resolve_request(context: Any) -> Optional[Any]:
     if context is None:
         return None
@@ -247,7 +257,7 @@ class AuditLogger:
         sanitized_event = self._sanitize_event(event)
 
         # Enregistrer dans les logs
-        log_data = asdict(sanitized_event)
+        log_data = _json_safe(asdict(sanitized_event))
         log_data["timestamp"] = sanitized_event.timestamp.isoformat()
 
         # Choisir le niveau de log appropriÃƒÂ©

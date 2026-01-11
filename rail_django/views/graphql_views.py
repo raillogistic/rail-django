@@ -4,10 +4,11 @@ Multi-schema GraphQL views for handling multiple GraphQL schemas with different 
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 from django.http import HttpRequest, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone as django_timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -467,44 +468,100 @@ class SchemaListView(View):
     View for listing available GraphQL schemas and their metadata.
     """
 
-    def get(self, request: HttpRequest) -> JsonResponse:
-        """
-        Return a list of available schemas with their metadata.
+    template_name = "schema_registry.html"
 
-        Returns:
-            JSON response with schema list
-        """
+    def get(self, request: HttpRequest) -> JsonResponse:
+        """Return available schemas as JSON or a rendered HTML page."""
+        wants_html = self._wants_html(request)
         try:
             from ..core.registry import schema_registry
 
             schema_registry.discover_schemas()
-            schemas = []
-            for schema_info in schema_registry.list_schemas():
-                if schema_info:
-                    settings_dict = getattr(schema_info, "settings", {}) or {}
-                    schema_settings = settings_dict.get("schema_settings", {})
-                    if not isinstance(schema_settings, dict):
-                        schema_settings = {}
-                    public_info = {
-                        "name": getattr(schema_info, "name", ""),
-                        "description": getattr(schema_info, "description", ""),
-                        "version": getattr(schema_info, "version", "1.0.0"),
-                        "enabled": getattr(schema_info, "enabled", True),
-                        "graphiql_enabled": schema_settings.get(
-                            "enable_graphiql",
-                            settings_dict.get("enable_graphiql", True),
-                        ),
-                        "authentication_required": schema_settings.get(
-                            "authentication_required",
-                            settings_dict.get("authentication_required", False),
-                        ),
-                    }
-                    schemas.append(public_info)
+            schemas = self._serialize_schemas(schema_registry.list_schemas())
+
+            if wants_html:
+                return render(
+                    request,
+                    self.template_name,
+                    self._build_context(schemas),
+                )
 
             return JsonResponse({"schemas": schemas, "count": len(schemas)})
 
         except ImportError:
+            if wants_html:
+                context = self._build_context([])
+                context["error"] = "Schema registry not available"
+                return render(request, self.template_name, context, status=503)
+
             return JsonResponse({"error": "Schema registry not available"}, status=503)
         except Exception as e:
             logger.error(f"Error listing schemas: {e}")
+            if wants_html:
+                context = self._build_context([])
+                context["error"] = "Failed to list schemas"
+                return render(request, self.template_name, context, status=500)
+
             return JsonResponse({"error": "Failed to list schemas"}, status=500)
+
+    def _serialize_schemas(self, schema_list) -> List[Dict[str, Any]]:
+        schemas = []
+        for schema_info in schema_list:
+            if not schema_info:
+                continue
+            settings_dict = getattr(schema_info, "settings", {}) or {}
+            schema_settings = settings_dict.get("schema_settings", {})
+            if not isinstance(schema_settings, dict):
+                schema_settings = {}
+            raw_models = getattr(schema_info, "models", []) or []
+            if isinstance(raw_models, (list, tuple, set)):
+                models = list(raw_models)
+            else:
+                models = []
+            public_info = {
+                "name": getattr(schema_info, "name", ""),
+                "description": getattr(schema_info, "description", ""),
+                "version": getattr(schema_info, "version", "1.0.0"),
+                "enabled": getattr(schema_info, "enabled", True),
+                "graphiql_enabled": schema_settings.get(
+                    "enable_graphiql",
+                    settings_dict.get("enable_graphiql", True),
+                ),
+                "authentication_required": schema_settings.get(
+                    "authentication_required",
+                    settings_dict.get("authentication_required", False),
+                ),
+                "models": models,
+            }
+            schemas.append(public_info)
+        return schemas
+
+    def _build_context(self, schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total = len(schemas)
+        enabled = sum(1 for schema in schemas if schema.get("enabled"))
+        graphiql_enabled = sum(
+            1 for schema in schemas if schema.get("graphiql_enabled")
+        )
+        auth_required = sum(
+            1 for schema in schemas if schema.get("authentication_required")
+        )
+        return {
+            "schemas": schemas,
+            "counts": {
+                "total": total,
+                "enabled": enabled,
+                "disabled": total - enabled,
+                "graphiql_enabled": graphiql_enabled,
+                "auth_required": auth_required,
+            },
+        }
+
+    def _wants_html(self, request: HttpRequest) -> bool:
+        format_param = request.GET.get("format", "").lower()
+        if format_param == "json":
+            return False
+        if format_param == "html":
+            return True
+
+        accept = request.META.get("HTTP_ACCEPT", "")
+        return "text/html" in accept.lower()
