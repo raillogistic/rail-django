@@ -184,11 +184,11 @@ POST /api/export/
 
 ```json
 {
-    "template": "recent_posts",
-    "async": true,
-    "variables": {
-        "status": "published"
-    }
+  "template": "recent_posts",
+  "async": true,
+  "variables": {
+    "status": "published"
+  }
 }
 ```
 

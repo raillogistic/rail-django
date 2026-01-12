@@ -1,3 +1,12 @@
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "rail_django.conf.test_settings"
+django_find_project = false
+pythonpath = ["."]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+]

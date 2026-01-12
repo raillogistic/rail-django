@@ -923,6 +923,10 @@ class TypeGenerator:
         """
 
         # Check if we already have this input type to prevent infinite recursion
+        if isinstance(partial, str):
+            mutation_type = partial
+            partial = False
+
         cache_key = (model, partial, mutation_type, include_reverse_relations)
         if cache_key in self._input_type_registry:
             return self._input_type_registry[cache_key]

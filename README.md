@@ -41,6 +41,15 @@ Accédez à l'interface GraphiQL sur `http://localhost:8000/graphql`.
 
 ---
 
+## Supported Versions
+
+- Python 3.8+
+- Django 4.2+
+- Graphene 3.3+
+- graphene-django 3.1.5+
+
+---
+
 ## 🏗️ Architecture du Code (Structure interne)
 
 Le framework est structuré en modules découplés pour assurer une maintenance aisée :

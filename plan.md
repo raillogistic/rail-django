@@ -39,6 +39,11 @@ Goals: stabilize behavior and enable safe refactors.
 Acceptance criteria:
 - Core security and error handling flows covered by tests.
 - CI or local test command documented and green.
+Phase 0 progress:
+- Added regression coverage in `rail_django/tests/unit/test_phase0_regressions.py` using `rail_django.testing` helpers; expected failures track known issues (error mapping, security middleware complexity, anonymous masking, auth_required override, optimize_query complexity).
+- Documented supported Python/Django/Graphene versions in `README.md` and `docs/README.md`.
+- Documented CI test/lint commands in `docs/testing.md`.
+- Added a GitHub Actions CI workflow for lint (black check) and unit tests (Django test runner).
 
 ## Phase 1: Correctness and Security Fixes
 Goals: fix correctness/security regressions before structural changes.

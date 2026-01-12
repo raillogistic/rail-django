@@ -148,7 +148,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
 
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Exécuter une requête pour récupérer les entreprises
@@ -181,7 +181,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_mutation_execution_with_data(self):
         """Test l'exécution de mutations avec des données réelles."""
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Exécuter une mutation pour créer une entreprise
@@ -255,7 +255,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
 
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Exécuter une requête avec relations
@@ -305,7 +305,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
 
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Exécuter une mutation de méthode métier
@@ -353,28 +353,19 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 )
 
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Exécuter une requête avec filtres
         query = """
         query {
             allCompanies(
-                secteurActivite: "Technology"
-                estActive: true
-                first: 3
+                filters: { secteurActivite: "Technology", estActive: true }
+                limit: 3
             ) {
-                edges {
-                    node {
-                        nomEntreprise
-                        secteurActivite
-                        nombreEmployes
-                    }
-                }
-                pageInfo {
-                    hasNextPage
-                    hasPreviousPage
-                }
+                nomEntreprise
+                secteurActivite
+                nombreEmployes
             }
         }
         """
@@ -392,7 +383,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_schema_validation(self):
         """Test la validation du schéma généré."""
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
 
         # Vérifier que le schéma est valide
         self.assertIsNotNone(schema)
@@ -446,13 +437,9 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         query = """
         query {
-            allCompanies(first: 10) {
-                edges {
-                    node {
-                        nomEntreprise
-                        secteurActivite
-                    }
-                }
+            allCompanies(limit: 10) {
+                nomEntreprise
+                secteurActivite
             }
         }
         """
@@ -471,7 +458,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_error_handling_integration(self):
         """Test la gestion d'erreurs dans l'intégration complète."""
         # Générer le schéma
-        schema = self.schema_generator.get_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         client = Client(schema)
 
         # Tester une mutation avec des données invalides

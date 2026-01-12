@@ -62,6 +62,17 @@ pytest -m integration
 pytest -m "not integration"
 ```
 
+For the Django test runner (used in CI):
+```bash
+DJANGO_SETTINGS_MODULE=rail_django.conf.framework_settings \
+python -m django test rail_django.tests.unit
+```
+
+Lint check used in CI:
+```bash
+python -m black --check rail_django/testing rail_django/tests/unit/test_phase0_regressions.py
+```
+
 ## Regression Checklist (before release)
 - Run unit + integration tests.
 - Validate schema build in production settings (no debug fields).

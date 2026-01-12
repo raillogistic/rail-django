@@ -48,6 +48,13 @@ urlpatterns = [
 - `http://localhost:8000/graphql/gql/` (primary API)
 - `http://localhost:8000/graphql/graphiql/` (if enabled)
 
+## Supported Versions
+
+- Python 3.8+
+- Django 4.2+
+- Graphene 3.3+
+- graphene-django 3.1.5+
+
 ## Documentation map
 
 - `graphql.md`: GraphQL API usage and examples

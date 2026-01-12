@@ -21,7 +21,9 @@ from django.test.utils import override_settings
 from graphene import Schema
 from graphene.test import Client
 from test_app.models import Category, Post, Tag
+from tests.models import TestAccount, TestCustomer
 
+from rail_django.core.schema import SchemaBuilder
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationGenerator
 from rail_django.generators.queries import QueryGenerator
@@ -487,15 +489,11 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         start_time = time.time()
         query = """
         query {
-            allCustomers(first: 50) {
-                edges {
-                    node {
-                        id
-                        nomClient
-                        prenomClient
-                        villeClient
-                    }
-                }
+            allCustomers(limit: 50) {
+                id
+                nomClient
+                prenomClient
+                villeClient
             }
         }
         """
@@ -537,7 +535,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Tester via GraphQL avec filtrage
         query = """
         query {
-            allCustomers(emailClient: "indextest0@example.com") {
+            allCustomers(filters: { emailClient: "indextest0@example.com" }) {
                 id
                 nomClient
                 emailClient

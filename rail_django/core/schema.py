@@ -175,6 +175,16 @@ class SchemaBuilder:
         # Fallback to raw settings for backward compatibility
         return self._raw_settings.get(key, default)
 
+    def _get_list_alias(self, model: Type[models.Model]) -> Optional[str]:
+        plural = getattr(model._meta, "verbose_name_plural", None)
+        if not plural:
+            return None
+        alias = str(plural).strip()
+        if not alias:
+            return None
+        alias = alias.replace(" ", "_").replace("-", "_").lower()
+        return f"all_{alias}"
+
     def _connect_signals(self) -> None:
         """
         Connects Django signals for automatic schema rebuilding.
@@ -364,6 +374,9 @@ class SchemaBuilder:
                             model, manager_name
                         )
                         self._query_fields[f"{model_name}s"] = list_query
+                        alias_name = self._get_list_alias(model)
+                        if alias_name and alias_name not in self._query_fields:
+                            self._query_fields[alias_name] = list_query
 
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name

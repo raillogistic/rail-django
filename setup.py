@@ -1,15 +1,20 @@
 import os
 from setuptools import setup, find_packages
 
+long_description = ""
+if os.path.exists("README.md"):
+    with open("README.md", "r", encoding="utf-8") as readme:
+        long_description = readme.read()
+
 setup(
     name="rail-django",
     version="0.1.0",
     description="A Django wrapper framework with pre-configured settings and tools.",
-    long_description=open("README.md").read() if os.path.exists("README.md") else "",
+    long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Your Name",
-    author_email="your.email@example.com",
-    url="https://github.com/yourusername/rail-django",
+    author="Milia Khaled",
+    author_email="miliakhaled@gmail.com",
+    url="https://github.com/raillogistic/rail-django",
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
