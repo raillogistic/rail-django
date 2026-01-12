@@ -127,8 +127,9 @@ Job endpoints:
 
 Path: `/api/templates/<template_path>/<pk>/`
 
-Templates are registered with `@model_pdf_template`. The endpoint returns a
-PDF file (content-type `application/pdf`). Use JWT auth if enabled.
+Templates are registered with `@model_pdf_template` (models) or `@pdf_template`
+(standalone functions). The endpoint returns a PDF file (content-type
+`application/pdf`). Use JWT auth if enabled.
 
 Example:
 
@@ -136,3 +137,15 @@ Example:
 curl -s -H "Authorization: Bearer <jwt>" \
   http://localhost:8000/api/templates/orders/printable/detail/123/
 ```
+
+Async rendering:
+
+- `GET /api/templates/<template_path>/<pk>/?async=true` returns `job_id`,
+  `status_url`, and `download_url`.
+- `GET /api/templates/jobs/<job_id>/` returns job status
+- `GET /api/templates/jobs/<job_id>/download/` downloads the PDF
+
+Catalog + preview:
+
+- `GET /api/templates/catalog/` returns template metadata
+- `GET /api/templates/preview/<template_path>/<pk>/` returns HTML (dev-only)

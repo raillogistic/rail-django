@@ -57,6 +57,7 @@ urlpatterns = [
 - `extensions.md`: Built-in extensions (health, export, templating, MFA)
 - `architecture.md`: Internal architecture and request lifecycle
 - `modules.md`: Codebase map for contributors
+- `testing.md`: Testing strategy and test utilities
 - `cli.md`: CLI and management commands
 
 ## Conventions

@@ -23,8 +23,12 @@ importing them in your schema build or including their URLs.
 
 ## Templating / PDF (`rail_django.extensions.templating`)
 
-- Decorator `@model_pdf_template` registers a PDF endpoint.
-- Endpoint: `/api/templates/<template_path>/<pk>/`.
+- Decorators `@model_pdf_template` and `@pdf_template` register PDF endpoints.
+- Low-level helpers: `render_pdf(...)`, `PdfBuilder()`, and pluggable renderers.
+- Endpoints: `/api/templates/<template_path>/<pk>/`, `/api/templates/catalog/`, `/api/templates/preview/...`,
+  plus async job status/download endpoints under `/api/templates/jobs/...`.
+- Optional post-processing for watermarks, page stamps, encryption, and signatures.
+- Optional deps: `pypdf` (encryption/overlays), `pyhanko` (signatures), `wkhtmltopdf` binary.
 
 ## Optimization (`rail_django.extensions.optimization`)
 

@@ -18,6 +18,13 @@
 - Some modules trigger Django app access at import time (can raise AppRegistryNotReady).
 - Several modules show duplication and drift (security settings, performance, rate limiting).
 
+## Testing Strategy
+- Use a pyramid: unit (fast, no DB), integration (Django + DB), contract/regression (schema snapshots, security limits).
+- Mark tests with pytest markers (`unit`, `integration`) and keep CI defaults on unit tests.
+- Add schema snapshot tests for public APIs to detect accidental breaking changes.
+- Maintain a security regression suite (depth, complexity, introspection, input validation).
+- Provide reusable test helpers in `rail_django.testing` (schema builder, context/request, test client).
+
 ## Phase 0: Baseline, Safety, and Tests
 Goals: stabilize behavior and enable safe refactors.
 - Add minimal regression tests for:
@@ -26,6 +33,7 @@ Goals: stabilize behavior and enable safe refactors.
   - Field masking behavior for anonymous vs authenticated users.
   - Schema builder settings overrides (authentication_required).
   - optimize_query with complexity_limit.
+- Adopt `rail_django.testing` helpers in new tests to keep setup consistent.
 - Document current supported Django/Graphene versions in README and docs.
 - Set up CI profile (lint + tests) if not already present.
 Acceptance criteria:

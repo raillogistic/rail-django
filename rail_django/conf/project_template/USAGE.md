@@ -851,6 +851,28 @@ Turn Django models into PDFs using HTML/CSS templates.
             return {"items": self.items.all()}
     ```
 3.  **Download:** `GET /api/templates/store/order/download_invoice/<pk>/`
+4.  **Function-based Template (optional):**
+    ```python
+    from rail_django.extensions.templating import pdf_template
+
+    @pdf_template(content="pdf/invoice.html", url="invoices/print")
+    def invoice_pdf(request, order_id):
+        return {"order_id": order_id}
+    ```
+    Ensure the module is imported at startup (e.g., in `apps.py` ready) so the
+    decorator runs and registers the template.
+5.  **Async Jobs (optional):**
+    `GET /api/templates/.../<pk>/?async=true` returns `job_id`, `status_url`, `download_url`.
+    Enable via `RAIL_DJANGO_GRAPHQL_TEMPLATING["async_jobs"]["enable"] = True`.
+6.  **Catalog Endpoint:**
+    `GET /api/templates/catalog/` lists available templates + metadata.
+7.  **Preview Endpoint (dev):**
+    `GET /api/templates/preview/<template_path>/<pk>/` returns HTML.
+    Enable via `RAIL_DJANGO_GRAPHQL_TEMPLATING["enable_preview"] = True`.
+8.  **Management Command:**
+    `python manage.py render_pdf <template_path> --pk <pk> --output out.pdf`
+9.  **Low-level Helpers:**
+    `render_pdf(...)` or `PdfBuilder()` for programmatic rendering.
 
 **Configuration (`RAIL_DJANGO_GRAPHQL_TEMPLATING`):**
 Use CSS to style your PDFs (page size, margins).
@@ -861,6 +883,15 @@ Use CSS to style your PDFs (page size, margins).
     "font_family": "Helvetica"
 }
 ```
+
+Additional controls include renderer selection, URL fetcher allowlists, rate limiting,
+async job storage, post-processing (watermarks, page stamps, encryption, signatures),
+and catalog/preview toggles.
+
+Optional dependencies:
+- `pypdf` for watermark overlays and encryption.
+- `pyhanko` for digital signatures.
+- `wkhtmltopdf` binary for the wkhtml renderer.
 
 ---
 

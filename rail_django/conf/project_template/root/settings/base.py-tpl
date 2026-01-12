@@ -490,6 +490,22 @@ RAIL_DJANGO_GRAPHQL_TEMPLATING = {
 
     
 
+    # PDF renderer: "weasyprint" (default) or "wkhtmltopdf"
+
+    "renderer": "weasyprint",
+
+    # Base URL for resolving assets. Use "request" to resolve against request base URL.
+
+    "base_url": None,
+
+    # Expose detailed errors in responses (recommended False in production).
+
+    "expose_errors": False,
+
+    # Enable HTML preview endpoint for templates (recommended only in development).
+
+    "enable_preview": False,
+
     # Default styling configuration for all generated PDFs
 
     "default_template_config": {
@@ -518,6 +534,70 @@ RAIL_DJANGO_GRAPHQL_TEMPLATING = {
 
         "extra_css": "",
 
+    },
+
+    # Restrictive allowlist for WeasyPrint URL fetching (file/http/data)
+
+    "url_fetcher_allowlist": {
+        "schemes": ["file", "data", "http", "https"],
+        "hosts": [],
+        "allow_remote": False,
+        "file_roots": [],
+    },
+
+    # Basic rate limiting to prevent PDF rendering abuse
+
+    "rate_limit": {
+        "enable": True,
+        "window_seconds": 60,
+        "max_requests": 30,
+        "trusted_proxies": [],
+    },
+
+    # Optional caching for rendered PDFs
+
+    "cache": {
+        "enable": False,
+        "timeout_seconds": 300,
+        "vary_on_user": True,
+        "vary_on_client_data": True,
+        "vary_on_template_config": True,
+        "key_prefix": "rail:pdf_cache",
+    },
+
+    # Async PDF jobs (thread, celery, rq)
+
+    "async_jobs": {
+        "enable": False,
+        "backend": "thread",
+        "expires_seconds": 3600,
+        "storage_dir": MEDIA_ROOT / "rail_pdfs",
+        "queue": "default",
+        "track_progress": False,
+        "webhook_url": None,
+        "webhook_headers": {},
+        "webhook_timeout_seconds": 10,
+    },
+
+    # Catalog endpoint config for UI-driven print workflows
+
+    "catalog": {
+        "enable": True,
+        "require_authentication": True,
+        "filter_by_access": True,
+        "include_config": False,
+        "include_permissions": True,
+    },
+
+    # Post-processing pipeline defaults (watermark, encryption, signatures)
+
+    "postprocess": {
+        "enable": False,
+        "strict": True,
+        "watermark": {},
+        "page_stamps": {},
+        "encryption": {},
+        "signature": {},
     },
 
 }
