@@ -128,6 +128,8 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+The `DjangoDebug` field is only exposed when `DEBUG=True`.
+
 ## CORS and CSRF
 
 The library uses `django-cors-headers` when configured. Do not leave

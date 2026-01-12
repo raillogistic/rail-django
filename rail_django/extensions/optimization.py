@@ -26,7 +26,7 @@ from django.db.models.fields.reverse_related import (
     ManyToOneRel,
     OneToOneRel,
 )
-from graphql import GraphQLResolveInfo
+from graphql import DocumentNode, GraphQLResolveInfo
 from graphql.execution.collect_fields import collect_fields
 
 # Caching removed from project: no cache imports
@@ -570,10 +570,28 @@ def optimize_query(
             try:
                 # Analyser la complexité si une limite est définie
                 if complexity_limit:
-                    analysis = optimizer.query_analyzer.analyze_query_complexity(info)
-                    if analysis.complexity_score > complexity_limit:
+                    from ..security.graphql_security import (
+                        GraphQLSecurityAnalyzer,
+                        SecurityConfig,
+                    )
+
+                    fragments = list(getattr(info, "fragments", {}).values())
+                    document = DocumentNode(definitions=[info.operation] + fragments)
+                    analyzer = GraphQLSecurityAnalyzer(
+                        SecurityConfig(
+                            max_query_complexity=int(complexity_limit),
+                            enable_query_cost_analysis=True,
+                        )
+                    )
+                    analysis = analyzer.analyze_query(
+                        document,
+                        info.schema,
+                        getattr(info.context, "user", None),
+                        info.variable_values,
+                    )
+                    if analysis.complexity > complexity_limit:
                         raise Exception(
-                            f"Query complexity {analysis.complexity_score} exceeds limit {complexity_limit}"
+                            f"Query complexity {analysis.complexity} exceeds limit {complexity_limit}"
                         )
 
                 # Exécuter la requête

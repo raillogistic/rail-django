@@ -21,7 +21,6 @@ from ..config_proxy import get_setting
 from ..security.input_validation import InputValidator as UnifiedInputValidator
 
 logger = logging.getLogger(__name__)
-User = get_user_model()
 
 
 @dataclass
@@ -109,7 +108,7 @@ class AuthenticationManager:
         self.schema_name = schema_name
         self.settings = SecuritySettings.from_schema(schema_name)
 
-    def authenticate_user(self, request: Any) -> Union[User, AnonymousUser]:
+    def authenticate_user(self, request: Any) -> Union[Any, AnonymousUser]:
         """
         Authenticate user from request.
 
@@ -136,7 +135,7 @@ class AuthenticationManager:
 
         return AnonymousUser()
 
-    def _authenticate_token(self, token: str) -> Optional[User]:
+    def _authenticate_token(self, token: str) -> Optional[Any]:
         """Authenticate user by token."""
         try:
             # This would integrate with your token authentication system
@@ -168,7 +167,9 @@ class AuthorizationManager:
         self.schema_name = schema_name
         self.settings = SecuritySettings.from_schema(schema_name)
 
-    def check_field_permission(self, user: User, model_name: str, field_name: str, action: str = "read") -> bool:
+    def check_field_permission(
+        self, user: Any, model_name: str, field_name: str, action: str = "read"
+    ) -> bool:
         """
         Check if user has permission to access a specific field.
 
@@ -191,7 +192,9 @@ class AuthorizationManager:
         permission_name = f"{model_name.lower()}.{action}_{field_name}"
         return user.has_perm(permission_name)
 
-    def check_object_permission(self, user: User, obj: Any, action: str = "read") -> bool:
+    def check_object_permission(
+        self, user: Any, obj: Any, action: str = "read"
+    ) -> bool:
         """
         Check if user has permission to access a specific object.
 

@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from django.conf import settings as django_settings
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from graphql.error import GraphQLError
 from graphql.execution import ExecutionResult
@@ -218,7 +218,7 @@ class ErrorHandler:
             return error
 
         # Django validation errors
-        if isinstance(error, ValidationError):
+        if isinstance(error, DjangoValidationError):
             return ValidationError(str(error))
 
         # Django permission errors

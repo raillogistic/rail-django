@@ -497,11 +497,13 @@ def create_security_middleware(config: SecurityConfig = None):
         # Analyser la requete si c'est le champ racine
         if is_root_field:
             try:
+                fragments = list(getattr(info, "fragments", {}).values())
+                document = DocumentNode(definitions=[info.operation] + fragments)
                 result = analyzer.analyze_query(
-                    info.operation,
+                    document,
                     info.schema,
                     user,
-                    info.variable_values
+                    info.variable_values,
                 )
 
                 if result.blocked_reasons:

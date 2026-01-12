@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import graphene
 from django.apps import apps
+from django.conf import settings as django_settings
 from django.db import models
 from django.db.models.signals import post_delete, post_migrate, post_save
 from django.dispatch import receiver
@@ -596,7 +597,11 @@ class SchemaBuilder:
                 )
 
                 # Create Query type with security extensions
-                query_attrs = {"debug": graphene.Field(DjangoDebug, name="_debug")}
+                query_attrs: Dict[str, Any] = {}
+                if getattr(django_settings, "DEBUG", False):
+                    query_attrs["debug"] = graphene.Field(
+                        DjangoDebug, name="_debug"
+                    )
                 query_attrs.update(self._query_fields)
 
                 custom_query_classes = self._load_query_extensions()

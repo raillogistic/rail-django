@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Type, Union
 import graphene
 from django.apps import apps
 from django.db import models
+from django.contrib.auth.models import AnonymousUser
 from django.db.models import Count, ForeignKey, ManyToManyField, OneToOneField, Q
 from graphene_django import DjangoObjectType
 
@@ -213,11 +214,9 @@ class QueryGenerator:
     ):
         """Hide or mask fields based on field-level permissions."""
         context_user = getattr(getattr(info, "context", None), "user", None)
-        if (
-            not context_user
-            or not getattr(context_user, "is_authenticated", False)
-            or context_user.is_superuser
-        ):
+        if context_user is None:
+            context_user = AnonymousUser()
+        if getattr(context_user, "is_superuser", False):
             return data
 
         def mask_instance(instance: models.Model):

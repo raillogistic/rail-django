@@ -150,3 +150,13 @@ Acceptance criteria:
 2. Phase 2 and Phase 3 together for refactor and cleanup.
 3. Phase 4 and Phase 5 for performance and security.
 4. Phase 6 and Phase 7 for enhancements and documentation.
+
+## Resume (Phase 1 progress)
+- Fixed Django ValidationError mapping by avoiding name shadowing.
+- Security middleware now analyzes a proper DocumentNode (operation + fragments).
+- DjangoDebug field gated behind DEBUG.
+- Field masking now applies to anonymous users (superusers bypass).
+- Schema registry now respects `authentication_required` overrides.
+- `optimize_query` complexity limit uses GraphQL security analyzer.
+- Removed import-time user model resolution in core security module.
+- Docs updated to note debug field exposure behavior.

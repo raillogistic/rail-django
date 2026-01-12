@@ -306,7 +306,7 @@ class SchemaRegistry:
                     for key, value in schema_info.settings.items():
                         # Normalize key casing for proxy-level settings
                         upper_key = key.upper()
-                        if upper_key in {"ENABLE_GRAPHIQL", "authentication_required"}:
+                        if upper_key in {"ENABLE_GRAPHIQL", "AUTHENTICATION_REQUIRED"}:
                             overrides[upper_key] = value
                         # Collect all valid SchemaSettings fields
                         elif key in valid_schema_fields:
