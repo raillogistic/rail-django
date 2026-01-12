@@ -10,3 +10,13 @@ markers = [
     "unit: unit tests",
     "integration: integration tests",
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+select = ["F"]
+ignore = ["F401"]

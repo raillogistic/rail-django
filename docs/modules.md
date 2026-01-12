@@ -9,12 +9,27 @@ This reference maps the main modules to their responsibilities.
 - `core/settings.py`: dataclass-based settings models
 - `core/middleware.py`: Graphene middleware stack definitions
 - `core/performance.py`: lightweight query optimization helpers
+- `core/runtime_settings.py`: merged security + performance runtime settings
+- `core/services.py`: service hooks for rate limiting, optimizers, and audit logging
 
 ## generators
 
-- `generators/types.py`: Django field to GraphQL type mapping
-- `generators/queries.py`: list, paginated, grouping queries
-- `generators/mutations.py`: CRUD and bulk mutations
+- `generators/types.py`: type generator entrypoint and shared helpers
+- `generators/types_objects.py`: object type construction and relationship fields
+- `generators/types_inputs.py`: input types for create/update mutations
+- `generators/types_enums.py`: enum helpers for choice fields
+- `generators/types_dataloaders.py`: DataLoader helpers for reverse relations
+- `generators/queries.py`: query generator entrypoint and shared helpers
+- `generators/queries_list.py`: single and list query builders
+- `generators/queries_pagination.py`: paginated query builders
+- `generators/queries_grouping.py`: grouping query builders
+- `generators/queries_ordering.py`: ordering helpers for list and paginated queries
+- `generators/mutations.py`: mutation generator entrypoint and shared helpers
+- `generators/mutations_crud.py`: create/update/delete mutation builders
+- `generators/mutations_bulk.py`: bulk mutation builders
+- `generators/mutations_methods.py`: method mutation builders and audit helpers
+- `generators/mutations_errors.py`: mutation error helpers
+- `generators/mutations_limits.py`: nested input validation limits
 - `generators/filters.py`: advanced filter input generation
 - `generators/introspector.py`: model metadata inspection
 

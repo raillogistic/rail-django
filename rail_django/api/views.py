@@ -14,7 +14,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from ..rate_limiting import get_rate_limiter
+from ..core.services import get_rate_limiter
 
 from ..core.registry import schema_registry
 from ..plugins.base import plugin_manager

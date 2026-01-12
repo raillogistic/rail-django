@@ -6,99 +6,19 @@ including authentication, authorization, rate limiting, and input validation.
 """
 
 import logging
-import time
-from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Union
 
-from django.conf import settings as django_settings
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
-from django.utils import timezone
 
-from ..config_proxy import get_setting
+from .services import get_rate_limiter as get_unified_rate_limiter
 from ..security.input_validation import InputValidator as UnifiedInputValidator
+from .runtime_settings import RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SecuritySettings:
-    """Settings for security configuration."""
-
-    enable_authentication: bool = True
-    enable_authorization: bool = True
-    enable_rate_limiting: bool = False
-    rate_limit_requests_per_minute: int = 60
-    rate_limit_requests_per_hour: int = 1000
-    enable_query_depth_limiting: bool = True
-    max_query_depth: int = 10
-    enable_introspection: bool = True
-    enable_graphiql: bool = True
-    allowed_origins: List[str] = field(default_factory=lambda: ["*"])
-    enable_csrf_protection: bool = True
-    enable_cors: bool = True
-    enable_field_permissions: bool = True
-    enable_object_permissions: bool = True
-    enable_input_validation: bool = True
-    enable_sql_injection_protection: bool = True
-    enable_xss_protection: bool = True
-    input_allow_html: bool = False
-    input_allowed_html_tags: List[str] = field(
-        default_factory=lambda: [
-            "p",
-            "br",
-            "strong",
-            "em",
-            "u",
-            "ol",
-            "ul",
-            "li",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-            "blockquote",
-        ]
-    )
-    input_allowed_html_attributes: Dict[str, List[str]] = field(
-        default_factory=lambda: {
-            "*": ["class"],
-            "a": ["href", "title"],
-            "img": ["src", "alt", "width", "height"],
-        }
-    )
-    input_max_string_length: Optional[int] = None
-    input_truncate_long_strings: bool = False
-    input_failure_severity: str = "high"
-    input_pattern_scan_limit: int = 10000
-    session_timeout_minutes: int = 30
-    max_file_upload_size: int = 10485760  # 10MB
-    allowed_file_types: List[str] = field(
-        default_factory=lambda: [".jpg", ".jpeg", ".png", ".pdf", ".txt"])
-
-    @classmethod
-    def from_schema(cls, schema_name: Optional[str] = None) -> "SecuritySettings":
-        """Create SecuritySettings from schema configuration."""
-        from ..defaults import LIBRARY_DEFAULTS
-
-        defaults = LIBRARY_DEFAULTS.get("security_settings", {})
-
-        # Override with Django settings if available
-        django_security_settings = getattr(
-            django_settings, 'RAIL_DJANGO_GRAPHQL', {}).get('security_settings', {})
-
-        # Merge settings
-        merged_settings = {**defaults, **django_security_settings}
-
-        # Filter to only include valid fields
-        valid_fields = set(cls.__dataclass_fields__.keys())
-        filtered_settings = {k: v for k, v in merged_settings.items() if k in valid_fields}
-
-        return cls(**filtered_settings)
+SecuritySettings = RuntimeSettings
 
 
 class AuthenticationManager:
@@ -106,7 +26,7 @@ class AuthenticationManager:
 
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
-        self.settings = SecuritySettings.from_schema(schema_name)
+        self.settings = RuntimeSettings.from_schema(schema_name)
 
     def authenticate_user(self, request: Any) -> Union[Any, AnonymousUser]:
         """
@@ -165,7 +85,7 @@ class AuthorizationManager:
 
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
-        self.settings = SecuritySettings.from_schema(schema_name)
+        self.settings = RuntimeSettings.from_schema(schema_name)
 
     def check_field_permission(
         self, user: Any, model_name: str, field_name: str, action: str = "read"
@@ -242,79 +162,47 @@ class AuthorizationManager:
 
 
 class RateLimiter:
-    """Handle rate limiting for GraphQL requests."""
+    """Compatibility wrapper around the unified rate limiting engine."""
 
     def __init__(self, schema_name: Optional[str] = None):
         self.schema_name = schema_name
-        self.settings = SecuritySettings.from_schema(schema_name)
+        self._limiter = get_unified_rate_limiter(schema_name)
 
     def check_rate_limit(self, identifier: str, window: str = "minute") -> bool:
         """
-        Check if request is within rate limits.
-
-        Args:
-            identifier: Unique identifier (IP, user ID, etc.)
-            window: Time window (minute, hour)
-
-        Returns:
-            True if within limits, False if rate limited
+        Legacy compatibility: identifier can be user or ip. Window is ignored and
+        delegated to the unified configuration (multiple rules can apply).
         """
-        if not self.settings.enable_rate_limiting:
-            return True
-
-        if window == "minute":
-            limit = int(self.settings.rate_limit_requests_per_minute)
-            window_seconds = 60
-        elif window == "hour":
-            limit = int(self.settings.rate_limit_requests_per_hour)
-            window_seconds = 3600
+        user = None
+        ip = None
+        if identifier.startswith("user:"):
+            user_id = identifier.split(":", 1)[1]
+            user = type("_UserStub", (), {"id": user_id, "is_authenticated": True})()
+        elif identifier.startswith("ip:"):
+            ip = identifier.split(":", 1)[1]
         else:
-            limit = int(self.settings.rate_limit_requests_per_minute)
-            window_seconds = 60
+            ip = identifier
 
-        cache_key = f"rail:rate:{window}:{identifier}"
-        count = cache.get(cache_key)
-        if count is None:
-            cache.add(cache_key, 1, timeout=window_seconds)
-            return True
-
-        if int(count) >= limit:
-            return False
-
-        try:
-            cache.incr(cache_key)
-        except ValueError:
-            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
-        return True
+        result = self._limiter.check("graphql", user=user, ip=ip)
+        return result.allowed
 
     def get_client_identifier(self, request: Any) -> str:
-        """Get unique identifier for rate limiting."""
-        # Try to get user ID first
-        if hasattr(request, 'user') and request.user.is_authenticated:
+        if hasattr(request, "user") and request.user.is_authenticated:
             return f"user:{request.user.id}"
-
-        # Fall back to IP address
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+        if forwarded:
+            ip = forwarded.split(",")[0].strip()
         else:
-            ip = request.META.get('REMOTE_ADDR', 'unknown')
-
+            ip = request.META.get("REMOTE_ADDR", "unknown")
         return f"ip:{ip}"
 
     def rate_limit(self, func):
-        """Decorator to apply rate limiting to GraphQL resolvers."""
+        """Decorator to apply unified rate limiting to GraphQL resolvers."""
         @wraps(func)
         def wrapper(root, info, **kwargs):
-            identifier = self.get_client_identifier(info.context)
-
-            # Check both minute and hour limits
-            if not self.check_rate_limit(identifier, "minute"):
-                raise PermissionError("Rate limit exceeded (per minute)")
-
-            if not self.check_rate_limit(identifier, "hour"):
-                raise PermissionError("Rate limit exceeded (per hour)")
-
+            result = self._limiter.check("graphql", request=info.context)
+            if not result.allowed:
+                raise PermissionError("Rate limit exceeded")
             return func(root, info, **kwargs)
 
         return wrapper

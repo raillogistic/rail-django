@@ -7,17 +7,17 @@ including authentication, logging, performance monitoring, and error handling.
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.utils import timezone
+from graphql import DocumentNode
 
-from ..rate_limiting import get_rate_limiter
 from .performance import get_complexity_analyzer
 from .exceptions import ValidationError as GraphQLValidationError
 from .security import get_auth_manager, get_input_validator
+from .services import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -432,7 +432,17 @@ class QueryComplexityMiddleware(BaseMiddleware):
 
         # Analyze query complexity
         query_string = str(info.operation)
-        validation_errors = self.complexity_analyzer.validate_query_limits(query_string)
+        fragments = list(getattr(info, "fragments", {}).values())
+        document = (
+            DocumentNode(definitions=[info.operation] + fragments)
+            if info.operation is not None
+            else None
+        )
+        validation_errors = self.complexity_analyzer.validate_query_limits(
+            query_string,
+            schema=getattr(info, "schema", None),
+            document=document,
+        )
 
         if validation_errors:
             raise ValueError(f"Query complexity validation failed: {'; '.join(validation_errors)}")

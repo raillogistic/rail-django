@@ -16,7 +16,7 @@ from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 
 from ..core.error_handling import get_error_handler
-from ..core.performance import get_query_optimizer
+from ..core.services import get_query_optimizer
 from ..core.security import get_authz_manager, get_input_validator
 from ..core.settings import MutationGeneratorSettings
 

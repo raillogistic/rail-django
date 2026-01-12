@@ -16,7 +16,7 @@ from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
-from ..rate_limiting import get_rate_limiter
+from ..core.services import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 

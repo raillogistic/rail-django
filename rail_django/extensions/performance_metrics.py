@@ -13,17 +13,19 @@ import hashlib
 import logging
 import statistics
 import time
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from graphene import Boolean, Field, Float, Int
 from graphene import List as GrapheneList
 from graphene import ObjectType, String
-from graphql import Visitor, parse, validate, visit
-from graphql.language.ast import FieldNode, FragmentDefinitionNode, OperationDefinitionNode
+from graphql import parse
+from graphql.language.ast import FieldNode, OperationDefinitionNode
+
+from ..core.performance import QueryComplexityAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -89,86 +91,6 @@ class SlowQueryAlert:
     user_id: Optional[str] = None
     query_complexity: int = 0
     database_queries: int = 0
-
-
-class QueryComplexityAnalyzer:
-    """Analyseur de complexité des requêtes GraphQL."""
-
-    def __init__(self, max_depth: int = 10, complexity_weights: Dict[str, int] = None):
-        self.max_depth = max_depth
-        self.complexity_weights = complexity_weights or {
-            'field': 1,
-            'list_field': 2,
-            'connection': 3,
-            'nested_object': 2,
-            'fragment': 1
-        }
-
-    def analyze_query(self, query_text: str) -> Tuple[int, int]:
-        """
-        Analyse la profondeur et la complexité d'une requête.
-
-        Returns:
-            Tuple[int, int]: (depth, complexity)
-        """
-        try:
-            document = parse(query_text)
-            analyzer = ComplexityVisitor(self.complexity_weights)
-            visit(document, analyzer)
-
-            return analyzer.max_depth, analyzer.total_complexity
-
-        except Exception as e:
-            logger.warning(f"Failed to analyze query complexity: {e}")
-            return 0, 0
-
-
-class ComplexityVisitor(Visitor):
-    """Visiteur pour calculer la complexité des requêtes GraphQL."""
-
-    def __init__(self, complexity_weights: Dict[str, int]):
-        # Initialize parent Visitor class to set up enter_leave_map
-        super().__init__()
-
-        self.complexity_weights = complexity_weights
-        self.current_depth = 0
-        self.max_depth = 0
-        self.total_complexity = 0
-        self.field_stack = []
-
-    def enter_field(self, node: FieldNode, *_):
-        """Entrée dans un champ."""
-        self.current_depth += 1
-        self.max_depth = max(self.max_depth, self.current_depth)
-        self.field_stack.append(node.name.value)
-
-        # Calculer la complexité du champ
-        field_complexity = self.complexity_weights.get('field', 1)
-
-        # Augmenter la complexité pour les listes et connexions
-        if self._is_list_field(node):
-            field_complexity = self.complexity_weights.get('list_field', 2)
-        elif self._is_connection_field(node):
-            field_complexity = self.complexity_weights.get('connection', 3)
-
-        # Multiplier par la profondeur pour pénaliser les requêtes profondes
-        self.total_complexity += field_complexity * self.current_depth
-
-    def leave_field(self, node: FieldNode, *_):
-        """Sortie d'un champ."""
-        self.current_depth -= 1
-        if self.field_stack:
-            self.field_stack.pop()
-
-    def _is_list_field(self, node: FieldNode) -> bool:
-        """Vérifie si le champ est une liste."""
-        field_name = node.name.value
-        return field_name.startswith('all') or field_name.endswith('s')
-
-    def _is_connection_field(self, node: FieldNode) -> bool:
-        """Vérifie si le champ est une connexion Relay."""
-        return any(arg.name.value in ['first', 'last', 'after', 'before']
-                   for arg in (node.arguments or []))
 
 
 class PerformanceMetricsCollector:

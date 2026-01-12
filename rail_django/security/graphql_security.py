@@ -17,7 +17,6 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from graphql import (
     DocumentNode,
     FieldNode,
@@ -33,7 +32,7 @@ from graphql import (
 from graphql.language.ast import Node
 from graphql.validation import ValidationContext
 
-from ..rate_limiting import get_rate_limiter
+from ..core.services import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -368,25 +367,27 @@ class GraphQLSecurityAnalyzer:
             user: Utilisateur effectuant la requête
         """
         # Vérifier la complexité
-        if result.complexity > self.config.max_query_complexity:
-            result.blocked_reasons.append(
-                f"Complexité de requête trop élevée: {result.complexity} > {self.config.max_query_complexity}"
-            )
-        elif result.complexity > self.config.max_query_complexity * 0.8:
-            result.warnings.append(
-                f"Complexité de requête élevée: {result.complexity}"
-            )
-
+        if self.config.enable_query_cost_analysis:
+            if result.complexity > self.config.max_query_complexity:
+                result.blocked_reasons.append(
+                    f"Complexité de requête trop élevée: {result.complexity} > {self.config.max_query_complexity}"
+                )
+            elif result.complexity > self.config.max_query_complexity * 0.8:
+                result.warnings.append(
+                    f"Complexité de requête élevée: {result.complexity}"
+                )
+    
         # Vérifier la profondeur
-        if result.depth > self.config.max_query_depth:
-            result.blocked_reasons.append(
-                f"Profondeur de requête trop élevée: {result.depth} > {self.config.max_query_depth}"
-            )
-        elif result.depth > self.config.max_query_depth * 0.8:
-            result.warnings.append(
-                f"Profondeur de requête élevée: {result.depth}"
-            )
-
+        if self.config.enable_depth_limiting:
+            if result.depth > self.config.max_query_depth:
+                result.blocked_reasons.append(
+                    f"Profondeur de requête trop élevée: {result.depth} > {self.config.max_query_depth}"
+                )
+            elif result.depth > self.config.max_query_depth * 0.8:
+                result.warnings.append(
+                    f"Profondeur de requête élevée: {result.depth}"
+                )
+    
         # Vérifier le nombre de champs
         if result.field_count > self.config.max_field_count:
             result.blocked_reasons.append(

@@ -160,3 +160,13 @@ Acceptance criteria:
 - `optimize_query` complexity limit uses GraphQL security analyzer.
 - Removed import-time user model resolution in core security module.
 - Docs updated to note debug field exposure behavior.
+
+## Resume (Phase 2/3 progress)
+- Added `core/services.py` service hooks and switched rate limiter usage to the shared service entrypoint.
+- Unified complexity analysis: core/performance now supports AST parsing with GraphQLSecurityAnalyzer and extensions/performance_metrics delegates to it; depth/complexity checks respect config flags.
+- Query complexity middleware now passes schema + DocumentNode (including fragments) to the analyzer.
+- Split generators into helper modules: mutations (crud/bulk/methods/errors/limits), queries (list/pagination/grouping/ordering), and types (objects/inputs/enums/dataloaders).
+- Fixed ordering count annotation for `__count` and removed duplicate `graphql_meta` assignments; added missing bulk mutation GraphQLMeta initialization.
+- Added Black/Ruff configuration to `pyproject.toml`.
+- Updated `docs/modules.md` with new module map.
+- Tests: `pytest -m unit`, `pytest -m integration` (warnings: PytestCollectionWarning for model fixtures and cryptography deprecation).

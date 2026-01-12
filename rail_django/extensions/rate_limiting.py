@@ -18,7 +18,7 @@ from graphql import GraphQLError
 import graphene
 
 from rail_django.config_proxy import get_settings_proxy
-from rail_django.rate_limiting import get_rate_limiter
+from rail_django.core.services import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
