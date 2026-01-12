@@ -37,9 +37,6 @@ INSTALLED_APPS = [
     "corsheaders",
     # Framework apps
     "rail_django",
-    "rail_django.core",
-    "rail_django.generators",
-    "rail_django.extensions",
 ]
 
 MIDDLEWARE = [
