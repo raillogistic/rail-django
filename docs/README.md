@@ -66,6 +66,7 @@ urlpatterns = [
 - `modules.md`: Codebase map for contributors
 - `testing.md`: Testing strategy and test utilities
 - `cli.md`: CLI and management commands
+- `migration.md`: Migration notes and new settings
 
 ## Conventions
 

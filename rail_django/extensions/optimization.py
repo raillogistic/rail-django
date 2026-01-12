@@ -3,11 +3,12 @@ Performance Optimization System for Django GraphQL Auto-Generation
 
 This module provides comprehensive performance optimization features including:
 - N+1 Query Prevention with automatic select_related and prefetch_related
-- Caching hooks retained for compatibility (caching is disabled in this project)
+- Optional caching hooks (disabled unless a backend is registered)
 - Query complexity analysis and optimization
 - Resource usage monitoring and timeout handling
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -28,6 +29,7 @@ from django.db.models.fields.reverse_related import (
 )
 from graphql import DocumentNode, GraphQLResolveInfo
 from graphql.execution.collect_fields import collect_fields
+from graphql.language.ast import FieldNode, FragmentSpreadNode, InlineFragmentNode
 
 # Caching removed from project: no cache imports
 
@@ -49,6 +51,8 @@ class QueryOptimizationConfig:
     enable_query_caching: bool = False
     enable_field_caching: bool = False
     cache_timeout: int = 300  # 5 minutes
+    query_cache_user_specific: bool = False
+    query_cache_scope: str = "schema"
 
     # Query Optimization
     enable_complexity_analysis: bool = True
@@ -131,35 +135,65 @@ class QueryAnalyzer:
 
     def _extract_requested_fields(self, info: GraphQLResolveInfo) -> Set[str]:
         """Extract requested fields from GraphQL query including nested fields."""
-        requested_fields = set()
+        requested_fields: Set[str] = set()
+        fragments = getattr(info, "fragments", {}) or {}
 
-        def extract_fields(selection_set, parent_path=""):
-            if not selection_set:
+        def collect(selection_set, parent_path=""):
+            if not selection_set or not getattr(selection_set, "selections", None):
                 return
 
             for selection in selection_set.selections:
-                # Handle field selections
-                if hasattr(selection, "name") and hasattr(selection.name, "value"):
+                if isinstance(selection, FieldNode):
                     field_name = selection.name.value
-                    current_path = f"{parent_path}__{field_name}" if parent_path else field_name
+                    if field_name.startswith("__"):
+                        continue
+                    current_path = (
+                        f"{parent_path}__{field_name}" if parent_path else field_name
+                    )
                     requested_fields.add(current_path)
-                    
-                    # Recurse if there are sub-selections
-                    if hasattr(selection, "selection_set") and selection.selection_set:
-                        extract_fields(selection.selection_set, current_path)
-                        
-                # Handle inline fragments and fragment spreads
-                elif hasattr(selection, "selection_set") and selection.selection_set:
-                    # For fragments, we continue with the same parent path
-                    extract_fields(selection.selection_set, parent_path)
+                    if selection.selection_set:
+                        collect(selection.selection_set, current_path)
+                elif isinstance(selection, InlineFragmentNode):
+                    collect(selection.selection_set, parent_path)
+                elif isinstance(selection, FragmentSpreadNode):
+                    fragment = fragments.get(selection.name.value)
+                    if fragment:
+                        collect(fragment.selection_set, parent_path)
 
         try:
-            if info.field_nodes and info.field_nodes[0].selection_set:
-                extract_fields(info.field_nodes[0].selection_set)
+            for node in info.field_nodes or []:
+                if node.selection_set:
+                    collect(node.selection_set)
             return requested_fields
         except Exception as e:
             logger.warning(f"Failed to extract requested fields: {e}")
             return set()
+
+    def _walk_selection_set(
+        self,
+        selection_set,
+        fragments: Dict[str, Any],
+        depth: int,
+        on_field: Callable[[FieldNode, int], None],
+    ) -> None:
+        if not selection_set or not getattr(selection_set, "selections", None):
+            return
+
+        for selection in selection_set.selections:
+            if isinstance(selection, FieldNode):
+                on_field(selection, depth)
+                if selection.selection_set:
+                    self._walk_selection_set(
+                        selection.selection_set, fragments, depth + 1, on_field
+                    )
+            elif isinstance(selection, InlineFragmentNode):
+                self._walk_selection_set(
+                    selection.selection_set, fragments, depth, on_field
+                )
+            elif isinstance(selection, FragmentSpreadNode):
+                fragment = fragments.get(selection.name.value)
+                if fragment:
+                    self._walk_selection_set(fragment.selection_set, fragments, depth, on_field)
 
     def _get_select_related_fields(
         self, model: Type[models.Model], requested_fields: Set[str]
@@ -257,18 +291,17 @@ class QueryAnalyzer:
         # Simple complexity calculation based on field count and nesting
         complexity = 0
 
-        def count_fields(selection_set, depth=0):
+        def count_field(field: FieldNode, depth: int) -> None:
             nonlocal complexity
-            if not selection_set or depth > self.config.max_query_depth:
+            if depth > self.config.max_query_depth:
                 return
-
-            for field in selection_set.selections:
-                complexity += 1 + depth  # Base cost + depth penalty
-                if hasattr(field, "selection_set") and field.selection_set:
-                    count_fields(field.selection_set, depth + 1)
+            complexity += 1 + depth
 
         try:
-            count_fields(info.field_nodes[0].selection_set)
+            fragments = getattr(info, "fragments", {}) or {}
+            for node in info.field_nodes or []:
+                if node.selection_set:
+                    self._walk_selection_set(node.selection_set, fragments, 1, count_field)
         except Exception as e:
             logger.warning(f"Failed to calculate query complexity: {e}")
             complexity = 1
@@ -277,21 +310,18 @@ class QueryAnalyzer:
 
     def _calculate_depth(self, info: GraphQLResolveInfo) -> int:
         """Calculate maximum query depth."""
+        max_depth = 0
 
-        def get_depth(selection_set, current_depth=0):
-            if not selection_set:
-                return current_depth
-
-            max_depth = current_depth
-            for field in selection_set.selections:
-                if hasattr(field, "selection_set") and field.selection_set:
-                    depth = get_depth(field.selection_set, current_depth + 1)
-                    max_depth = max(max_depth, depth)
-
-            return max_depth
+        def update_depth(field: FieldNode, depth: int) -> None:
+            nonlocal max_depth
+            max_depth = max(max_depth, depth)
 
         try:
-            return get_depth(info.field_nodes[0].selection_set)
+            fragments = getattr(info, "fragments", {}) or {}
+            for node in info.field_nodes or []:
+                if node.selection_set:
+                    self._walk_selection_set(node.selection_set, fragments, 1, update_depth)
+            return max_depth or 1
         except Exception as e:
             logger.warning(f"Failed to calculate query depth: {e}")
             return 1
@@ -303,8 +333,9 @@ class QueryAnalyzer:
         query_count = 1  # Base query
 
         for field_name in requested_fields:
+            root_field = field_name.split("__", 1)[0]
             try:
-                field = model._meta.get_field(field_name)
+                field = model._meta.get_field(root_field)
                 if isinstance(field, (ForeignKey, OneToOneField, ManyToManyField)):
                     query_count += 1  # Additional query per relationship
             except FieldDoesNotExist:
@@ -408,7 +439,7 @@ class QueryOptimizer:
         return prefetch_objects
 
 
-## CacheManager removed: caching functionality is not supported in this project.
+## CacheManager removed: caching backends are intentionally external.
 
 
 class PerformanceMonitor:
@@ -541,20 +572,83 @@ class PerformanceMonitor:
 # Decorators for performance optimization
 
 
+def _resolve_cache_scopes(
+    scope_setting: Any,
+    schema_name: Optional[str],
+    extra_scopes: Optional[List[str]] = None,
+) -> List[str]:
+    scopes: List[str] = []
+    raw_scopes: List[str] = []
+    if isinstance(scope_setting, (list, tuple, set)):
+        raw_scopes = [str(scope) for scope in scope_setting if scope]
+    elif scope_setting:
+        raw_scopes = [str(scope_setting)]
+
+    for scope in raw_scopes:
+        if scope == "schema" and schema_name:
+            scopes.append(f"schema:{schema_name}")
+        elif scope == "global":
+            scopes.append("global")
+        else:
+            scopes.append(scope)
+
+    for scope in extra_scopes or []:
+        if scope:
+            scopes.append(str(scope))
+
+    if not scopes:
+        scopes.append("global")
+    return scopes
+
+
+def _build_query_cache_key(
+    info: GraphQLResolveInfo,
+    *,
+    schema_name: Optional[str],
+    versions: List[str],
+    user_id: Optional[str],
+    cache_buster: Optional[str],
+) -> str:
+    operation = info.operation
+    operation_name = None
+    if operation and operation.name and operation.name.value:
+        operation_name = operation.name.value
+
+    variables = info.variable_values or {}
+    query_text = str(operation) if operation is not None else ""
+    query_hash = hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+
+    payload = {
+        "schema": schema_name or "default",
+        "field": info.field_name,
+        "operation": operation_name,
+        "query_hash": query_hash,
+        "variables": variables,
+        "user_id": user_id,
+        "versions": versions,
+        "cache_buster": cache_buster,
+    }
+    raw = json.dumps(payload, sort_keys=True, default=str)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return f"gqlcache:{digest}"
+
+
 def optimize_query(
     enable_caching: bool = False,
     cache_timeout: Optional[int] = None,
     user_specific_cache: bool = False,
     complexity_limit: Optional[int] = None,
+    cache_scopes: Optional[List[str]] = None,
 ):
     """
     Decorator for optimizing GraphQL queries.
 
     Args:
-        enable_caching: Ignored (caching disabled in this project)
-        cache_timeout: Ignored (caching disabled in this project)
-        user_specific_cache: Ignored (caching disabled in this project)
+        enable_caching: Enable query caching when a backend is registered
+        cache_timeout: Optional cache TTL override (seconds)
+        user_specific_cache: Cache results per authenticated user when True
         complexity_limit: Optional complexity limit for the query
+        cache_scopes: Optional cache scopes to include in the cache key
     """
 
     def decorator(resolver_func: Callable) -> Callable:
@@ -563,6 +657,15 @@ def optimize_query(
             schema_name = getattr(info.context, "schema_name", None)
             optimizer = get_optimizer(schema_name)
             performance_monitor = get_performance_monitor(schema_name)
+            cache_backend = None
+            cache_config = getattr(optimizer, "config", None)
+            cache_enabled = bool(
+                enable_caching or getattr(cache_config, "enable_query_caching", False)
+            )
+            if cache_enabled:
+                from ..core.services import get_query_cache_backend
+
+                cache_backend = get_query_cache_backend(schema_name)
 
             # Démarrer le monitoring
             start_time = time.time()
@@ -595,11 +698,81 @@ def optimize_query(
                         )
 
                 # Exécuter la requête
+                if (
+                    cache_enabled
+                    and cache_backend is not None
+                    and info.operation
+                    and info.operation.operation.value == "query"
+                ):
+                    cache_timeout_value = cache_timeout
+                    if cache_timeout_value is None and cache_config is not None:
+                        cache_timeout_value = getattr(cache_config, "cache_timeout", None)
+
+                    cache_user_specific = bool(
+                        user_specific_cache
+                        or getattr(cache_config, "query_cache_user_specific", False)
+                    )
+                    user = getattr(info.context, "user", None)
+                    user_id = None
+                    if cache_user_specific and user and getattr(user, "is_authenticated", False):
+                        user_id = str(getattr(user, "id", None) or getattr(user, "pk", None))
+
+                    scope_setting = getattr(cache_config, "query_cache_scope", "schema")
+                    scopes = _resolve_cache_scopes(scope_setting, schema_name, cache_scopes)
+                    versions = [cache_backend.get_version(scope) for scope in scopes]
+                    cache_buster = getattr(info.context, "cache_buster", None) or getattr(
+                        info.context, "cache_version", None
+                    )
+
+                    cache_key = _build_query_cache_key(
+                        info,
+                        schema_name=schema_name,
+                        versions=versions,
+                        user_id=user_id,
+                        cache_buster=cache_buster,
+                    )
+                    cached = cache_backend.get(cache_key)
+                    if cached is not None:
+                        return cached
+
                 result = resolver_func(root, info, **kwargs)
 
                 # Optimize queryset if it's a QuerySet
                 if isinstance(result, QuerySet) and hasattr(result, "model"):
                     result = optimizer.optimize_queryset(result, info, result.model)
+                if (
+                    cache_enabled
+                    and cache_backend is not None
+                    and info.operation
+                    and info.operation.operation.value == "query"
+                    and result is not None
+                    and not isinstance(result, QuerySet)
+                ):
+                    cache_timeout_value = cache_timeout
+                    if cache_timeout_value is None and cache_config is not None:
+                        cache_timeout_value = getattr(cache_config, "cache_timeout", None)
+                    cache_user_specific = bool(
+                        user_specific_cache
+                        or getattr(cache_config, "query_cache_user_specific", False)
+                    )
+                    user = getattr(info.context, "user", None)
+                    user_id = None
+                    if cache_user_specific and user and getattr(user, "is_authenticated", False):
+                        user_id = str(getattr(user, "id", None) or getattr(user, "pk", None))
+                    scope_setting = getattr(cache_config, "query_cache_scope", "schema")
+                    scopes = _resolve_cache_scopes(scope_setting, schema_name, cache_scopes)
+                    versions = [cache_backend.get_version(scope) for scope in scopes]
+                    cache_buster = getattr(info.context, "cache_buster", None) or getattr(
+                        info.context, "cache_version", None
+                    )
+                    cache_key = _build_query_cache_key(
+                        info,
+                        schema_name=schema_name,
+                        versions=versions,
+                        user_id=user_id,
+                        cache_buster=cache_buster,
+                    )
+                    cache_backend.set(cache_key, result, timeout=cache_timeout_value)
 
                 # Enregistrer les métriques de performance
                 execution_time = time.time() - start_time
@@ -627,7 +800,24 @@ def optimize_query(
     return decorator
 
 
-## cache_result decorator removed: no caching in project
+def invalidate_query_cache(
+    schema_name: Optional[str] = None, scopes: Optional[Union[str, List[str]]] = None
+) -> List[str]:
+    """Bump cache versions for the provided scopes to invalidate cached entries."""
+    from ..core.services import get_query_cache_backend
+
+    backend = get_query_cache_backend(schema_name)
+    if backend is None:
+        return []
+
+    scope_setting: Any = scopes
+    if scope_setting is None:
+        scope_setting = "schema" if schema_name else "global"
+    resolved_scopes = _resolve_cache_scopes(scope_setting, schema_name)
+    return [backend.bump_version(scope) for scope in resolved_scopes]
+
+
+## cache_result decorator removed: use optimize_query with a cache backend instead
 
 
 # Global optimization manager instance
@@ -648,12 +838,20 @@ def _build_optimizer_config(schema_name: Optional[str]) -> QueryOptimizationConf
     return QueryOptimizationConfig(
         enable_select_related=perf_settings.get("enable_select_related", True),
         enable_prefetch_related=perf_settings.get("enable_prefetch_related", True),
-        max_prefetch_depth=perf_settings.get("max_query_depth", 3),
+        max_prefetch_depth=perf_settings.get(
+            "max_prefetch_depth", perf_settings.get("max_query_depth", 3)
+        ),
         auto_optimize_queries=perf_settings.get("enable_query_optimization", True),
         enable_schema_caching=False,
-        enable_query_caching=False,
+        enable_query_caching=bool(perf_settings.get("enable_query_caching", False)),
         enable_field_caching=False,
-        cache_timeout=perf_settings.get("cache_timeout", 300),
+        cache_timeout=perf_settings.get(
+            "query_cache_timeout", perf_settings.get("cache_timeout", 300)
+        ),
+        query_cache_user_specific=bool(
+            perf_settings.get("query_cache_user_specific", False)
+        ),
+        query_cache_scope=perf_settings.get("query_cache_scope", "schema"),
         enable_complexity_analysis=perf_settings.get("enable_query_cost_analysis", False),
         max_query_complexity=perf_settings.get("max_query_complexity", 1000),
         max_query_depth=perf_settings.get("max_query_depth", 10),

@@ -578,6 +578,22 @@ class SchemaBuilder:
                 self._schema = None
                 self._query_fields = {}
                 self._mutation_fields = {}
+                build_context = {
+                    "schema_name": self.schema_name,
+                    "builder": self,
+                }
+                try:
+                    from ..plugins.base import plugin_manager
+                    from ..plugins.hooks import hook_registry
+
+                    build_context = plugin_manager.run_pre_schema_build(
+                        self.schema_name, self, build_context
+                    )
+                    build_context = hook_registry.execute_hooks_with_modification(
+                        "schema_pre_build", build_context, self
+                    )
+                except Exception:
+                    pass
 
                 # Discover models
                 models = self._discover_models()
@@ -954,6 +970,31 @@ class SchemaBuilder:
 
                 # Increment schema version
                 self._schema_version += 1
+
+                try:
+                    from .schema_snapshots import record_schema_snapshot
+
+                    record_schema_snapshot(
+                        self.schema_name,
+                        self._schema,
+                        version=str(self._schema_version),
+                        description=f"Schema snapshot for {self.schema_name}",
+                    )
+                except Exception:
+                    pass
+
+                try:
+                    from ..plugins.base import plugin_manager
+                    from ..plugins.hooks import hook_registry
+
+                    plugin_manager.run_post_schema_build(
+                        self.schema_name, self, self._schema, build_context
+                    )
+                    hook_registry.execute_hooks(
+                        "schema_post_build", build_context, self, self._schema
+                    )
+                except Exception:
+                    pass
 
                 # Register schema in the registry
                 try:

@@ -11,6 +11,7 @@ This reference maps the main modules to their responsibilities.
 - `core/performance.py`: lightweight query optimization helpers
 - `core/runtime_settings.py`: merged security + performance runtime settings
 - `core/services.py`: service hooks for rate limiting, optimizers, and audit logging
+- `core/schema_snapshots.py`: schema snapshots for diff/export endpoints
 
 ## generators
 
@@ -62,6 +63,14 @@ This reference maps the main modules to their responsibilities.
 - `extensions/optimization.py`: selection-set driven query optimization
 - `extensions/rate_limiting.py`: Graphene middleware backed by the shared limiter
 - `extensions/virus_scanner.py`: ClamAV integration
+- `extensions/persisted_queries.py`: APQ-style persisted query support
+- `extensions/observability.py`: Sentry/OpenTelemetry plugin hooks
+- `extensions/subscriptions.py`: Channels subscription helper
+
+## plugins
+
+- `plugins/base.py`: plugin interface and manager
+- `plugins/hooks.py`: hook registry
 
 ## middleware
 

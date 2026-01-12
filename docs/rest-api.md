@@ -12,6 +12,9 @@ Base path: `/api/v1/`
 - `GET /api/v1/schemas/<schema_name>/` schema details
 - `PUT /api/v1/schemas/<schema_name>/` update schema
 - `DELETE /api/v1/schemas/<schema_name>/` remove schema
+- `GET /api/v1/schemas/<schema_name>/export/` export schema (json/sdl/markdown)
+- `GET /api/v1/schemas/<schema_name>/history/` list schema snapshots
+- `GET /api/v1/schemas/<schema_name>/diff/` diff latest snapshots or requested versions
 - `GET /api/v1/discovery/` discovery status
 - `POST /api/v1/discovery/` run auto-discovery
 - `GET /api/v1/health/` registry health summary
@@ -49,6 +52,12 @@ Note: list/detail endpoints require a JWT access token; create/update/delete,
 discovery, and metrics endpoints require admin permissions. Health remains
 public. Configure required permissions with
 `GRAPHQL_SCHEMA_API_REQUIRED_PERMISSIONS`.
+
+Schema export supports formats via `?format=`:
+
+- `json` (default) returns introspection JSON
+- `sdl` returns GraphQL SDL
+- `markdown` returns Markdown docs
 
 Rate limiting for these endpoints is controlled by
 `RAIL_DJANGO_RATE_LIMITING["contexts"]["schema_api"]` (legacy

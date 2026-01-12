@@ -134,6 +134,7 @@ class RailGraphQLTestClient:
         user: Any = None,
         headers: Optional[Mapping[str, str]] = None,
         operation_name: Optional[str] = None,
+        middleware: Optional[Iterable[Any]] = None,
     ):
         merged_headers = dict(self.headers)
         if headers:
@@ -145,12 +146,14 @@ class RailGraphQLTestClient:
             headers=merged_headers,
             data={"query": query, "variables": variables or {}},
         )
-        return self._client.execute(
-            query,
-            variable_values=variables,
-            context_value=request,
-            operation_name=operation_name,
-        )
+        execute_kwargs = {
+            "variable_values": variables,
+            "context_value": request,
+            "operation_name": operation_name,
+        }
+        if middleware is not None:
+            execute_kwargs["middleware"] = middleware
+        return self._client.execute(query, **execute_kwargs)
 
 
 @contextmanager

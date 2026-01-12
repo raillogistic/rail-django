@@ -18,6 +18,8 @@ from .performance import get_complexity_analyzer
 from .exceptions import ValidationError as GraphQLValidationError
 from .security import get_auth_manager, get_input_validator
 from .services import get_rate_limiter
+from ..config_proxy import get_setting
+from ..plugins.base import plugin_manager
 
 logger = logging.getLogger(__name__)
 
@@ -349,6 +351,47 @@ class RateLimitingMiddleware(BaseMiddleware):
         return field_name.lower() == "login"
 
 
+class AccessGuardMiddleware(BaseMiddleware):
+    """Middleware for schema-level authentication and introspection guards."""
+
+    def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
+        if not self._is_root_field(info):
+            return next_resolver(root, info, **kwargs)
+
+        from .settings import SchemaSettings
+        from .security import is_introspection_allowed
+
+        schema_name = getattr(info.context, "schema_name", None)
+        schema_settings = SchemaSettings.from_schema(schema_name)
+        user = getattr(info.context, "user", None)
+
+        if schema_settings.authentication_required:
+            if not user or not getattr(user, "is_authenticated", False):
+                raise PermissionError("Authentication required")
+
+        if self._is_restricted_introspection_field(info):
+            if not is_introspection_allowed(
+                user,
+                schema_name,
+                enable_introspection=schema_settings.enable_introspection,
+            ):
+                raise PermissionError("Introspection not permitted")
+
+        return next_resolver(root, info, **kwargs)
+
+    @staticmethod
+    def _is_root_field(info: Any) -> bool:
+        path = getattr(info, "path", None)
+        if path is None:
+            return True
+        return getattr(path, "prev", None) is None
+
+    @staticmethod
+    def _is_restricted_introspection_field(info: Any) -> bool:
+        field_name = getattr(info, "field_name", "") or ""
+        return field_name in {"__schema", "__type"}
+
+
 ## CachingMiddleware removed: caching is not supported in this project.
 
 
@@ -438,6 +481,14 @@ class QueryComplexityMiddleware(BaseMiddleware):
             if info.operation is not None
             else None
         )
+        try:
+            depth, complexity = self.complexity_analyzer.analyze_query(query_string)
+            metrics = getattr(info.context, "_graphql_metrics", None)
+            if metrics is not None:
+                metrics.query_depth = depth
+                metrics.query_complexity = complexity
+        except Exception:
+            pass
         validation_errors = self.complexity_analyzer.validate_query_limits(
             query_string,
             schema=getattr(info, "schema", None),
@@ -448,6 +499,89 @@ class QueryComplexityMiddleware(BaseMiddleware):
             raise ValueError(f"Query complexity validation failed: {'; '.join(validation_errors)}")
 
         return next_resolver(root, info, **kwargs)
+
+
+class PluginMiddleware(BaseMiddleware):
+    """Middleware for plugin execution hooks."""
+
+    def __init__(self, schema_name: Optional[str] = None):
+        super().__init__(schema_name)
+        self.enabled = bool(
+            get_setting("plugin_settings.enable_execution_hooks", True, schema_name)
+        )
+
+    def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
+        if not self.enabled:
+            return next_resolver(root, info, **kwargs)
+
+        schema_name = getattr(info.context, "schema_name", None) or self.schema_name
+        operation_type = info.operation.operation.value if info.operation else "unknown"
+        operation_name = self._get_operation_name(info)
+        context = self._get_plugin_context(info)
+        is_root = self._is_root_field(info)
+
+        if is_root:
+            decision = plugin_manager.run_before_operation(
+                schema_name, operation_type, operation_name, info, context
+            )
+            if decision and decision.handled:
+                return decision.result
+
+        decision = plugin_manager.run_before_resolve(
+            schema_name, info, root, kwargs, context
+        )
+        if decision and decision.handled:
+            return decision.result
+
+        try:
+            result = next_resolver(root, info, **kwargs)
+        except Exception as exc:
+            plugin_manager.run_after_resolve(
+                schema_name, info, root, kwargs, None, exc, context
+            )
+            if is_root:
+                plugin_manager.run_after_operation(
+                    schema_name, operation_type, operation_name, info, None, exc, context
+                )
+            raise
+
+        after_resolve = plugin_manager.run_after_resolve(
+            schema_name, info, root, kwargs, result, None, context
+        )
+        if after_resolve and after_resolve.handled:
+            result = after_resolve.result
+
+        if is_root:
+            after_operation = plugin_manager.run_after_operation(
+                schema_name, operation_type, operation_name, info, result, None, context
+            )
+            if after_operation and after_operation.handled:
+                result = after_operation.result
+
+        return result
+
+    @staticmethod
+    def _get_plugin_context(info: Any) -> Dict[str, Any]:
+        context = getattr(info.context, "_rail_plugin_context", None)
+        if context is None:
+            context = {}
+            setattr(info.context, "_rail_plugin_context", context)
+        return context
+
+    @staticmethod
+    def _is_root_field(info: Any) -> bool:
+        path = getattr(info, "path", None)
+        if path is None:
+            return True
+        return getattr(path, "prev", None) is None
+
+    @staticmethod
+    def _get_operation_name(info: Any) -> Optional[str]:
+        operation = getattr(info, "operation", None)
+        name_node = getattr(operation, "name", None)
+        if name_node and getattr(name_node, "value", None):
+            return name_node.value
+        return None
 
 
 class CORSMiddleware(BaseMiddleware):
@@ -469,8 +603,10 @@ DEFAULT_MIDDLEWARE = [
     AuthenticationMiddleware,
     GraphQLAuditMiddleware,
     RateLimitingMiddleware,
+    AccessGuardMiddleware,
     ValidationMiddleware,
     QueryComplexityMiddleware,
+    PluginMiddleware,
     PerformanceMiddleware,
     LoggingMiddleware,
     ErrorHandlingMiddleware,

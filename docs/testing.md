@@ -47,6 +47,9 @@ result = client.execute(
 assert "errors" not in result
 ```
 
+`RailGraphQLTestClient.execute(...)` accepts an optional `middleware` list so
+you can exercise GraphQL middleware in unit tests.
+
 Tip: use `override_rail_settings(...)` around schema creation if you want to
 avoid persistent changes to `RAIL_DJANGO_GRAPHQL_SCHEMAS` during tests.
 

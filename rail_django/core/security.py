@@ -13,12 +13,16 @@ from django.contrib.auth.models import AnonymousUser
 
 from .services import get_rate_limiter as get_unified_rate_limiter
 from ..security.input_validation import InputValidator as UnifiedInputValidator
+from ..config_proxy import get_setting
+from ..security.rbac import role_manager
 from .runtime_settings import RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
 
 SecuritySettings = RuntimeSettings
+
+DEFAULT_INTROSPECTION_ROLES = ["admin", "developer"]
 
 
 class AuthenticationManager:
@@ -224,6 +228,34 @@ class InputValidator:
 
     def validate_and_sanitize(self, model_name: Optional[str], input_data: Dict[str, Any]) -> Dict[str, Any]:
         return self._validator.validate_input(model_name, input_data)
+
+
+def get_introspection_roles(schema_name: Optional[str] = None) -> List[str]:
+    roles = get_setting("security_settings.introspection_roles", None, schema_name)
+    if isinstance(roles, str):
+        roles = [r.strip() for r in roles.split(",") if r.strip()]
+    if isinstance(roles, (list, tuple, set)):
+        return [str(role) for role in roles if role]
+    return list(DEFAULT_INTROSPECTION_ROLES)
+
+
+def is_introspection_allowed(
+    user: Any,
+    schema_name: Optional[str],
+    *,
+    enable_introspection: bool,
+) -> bool:
+    if enable_introspection:
+        return True
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    allowed_roles = set(get_introspection_roles(schema_name))
+    if not allowed_roles:
+        return False
+    user_roles = set(role_manager.get_user_roles(user))
+    return bool(user_roles.intersection(allowed_roles))
 
 
 # Global instances

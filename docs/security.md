@@ -22,6 +22,17 @@ CSRF_COOKIE_NAME = "csrftoken"
 
 Auth mutations (if enabled): `login`, `refresh_token`, `logout`, `register`.
 
+Refresh tokens can be rotated and protected against reuse:
+
+```python
+JWT_ROTATE_REFRESH_TOKENS = True
+JWT_REFRESH_REUSE_DETECTION = True
+JWT_REFRESH_TOKEN_CACHE = "default"
+```
+
+Cookie policies can be set globally (`JWT_COOKIE_*`) or per cookie
+(`JWT_AUTH_COOKIE_*`, `JWT_REFRESH_COOKIE_*`).
+
 ## Authorization
 
 Authorization uses a hybrid RBAC system:
@@ -66,6 +77,23 @@ RAIL_DJANGO_GRAPHQL = {
 
 `input_failure_severity` accepts `low`, `medium`, `high`, or `critical` to control
 which issues fail the request.
+
+## Persisted queries
+
+Persisted queries can be enforced with an allowlist to reduce the attack
+surface for arbitrary query text:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "persisted_query_settings": {
+        "enabled": True,
+        "enforce_allowlist": True,
+        "allowlist": {
+            "<sha256>": "query { me { id } }",
+        },
+    }
+}
+```
 
 ## Rate limiting
 
@@ -130,6 +158,10 @@ RAIL_DJANGO_GRAPHQL = {
 
 The `DjangoDebug` field is only exposed when `DEBUG=True`.
 
+When introspection is disabled, `security_settings.introspection_roles`
+allows specific roles (or superusers) to access it. Authentication is enforced
+at the middleware layer when `schema_settings.authentication_required = True`.
+
 ## CORS and CSRF
 
 The library uses `django-cors-headers` when configured. Do not leave
@@ -146,6 +178,12 @@ GRAPHQL_ENABLE_AUDIT_LOGGING = True
 AUDIT_STORE_IN_DATABASE = True
 AUDIT_STORE_IN_FILE = True
 AUDIT_WEBHOOK_URL = None
+AUDIT_REDACTION_FIELDS = ["password", "token", "secret"]
+AUDIT_REDACTION_MASK = "***REDACTED***"
+AUDIT_REDACT_ERROR_MESSAGES = True
+AUDIT_RETENTION_DAYS = 90
+AUDIT_RETENTION_RUN_INTERVAL = 3600
+AUDIT_RETENTION_HOOK = None  # Optional dotted path or callable
 ```
 
 ## Recommended Django security settings

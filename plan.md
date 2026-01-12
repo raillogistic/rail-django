@@ -170,3 +170,19 @@ Acceptance criteria:
 - Added Black/Ruff configuration to `pyproject.toml`.
 - Updated `docs/modules.md` with new module map.
 - Tests: `pytest -m unit`, `pytest -m integration` (warnings: PytestCollectionWarning for model fixtures and cryptography deprecation).
+
+## Resume (Phase 4 progress)
+- Added query cache hook interfaces in `core/services.py` and an in-memory backend in `extensions/query_cache.py` plus `invalidate_query_cache`.
+- Extended `optimize_query` with cache scopes, user-specific keys, and cache TTL wiring; query analyzer now handles fragments and depth consistently.
+- Added query metrics and N+1 detection in `GraphQLPerformanceMiddleware`, plus performance headers for DB metrics.
+- Added property-ordering cap warnings and `property_ordering_warn_on_cap` setting.
+- Tests: unit coverage for query caching (hit/invalidation, user-specific) and N+1 detection.
+- Docs: expanded configuration/testing/extensions guidance for query metrics and caching.
+
+## Resume (Phase 5 progress)
+- Added `AccessGuardMiddleware` with schema auth requirements and role-based introspection allowlist.
+- Hardened JWT refresh flows with rotation/reuse detection and configurable cookie policies.
+- Input validation now respects per-schema severity thresholds; query limits respect introspection roles.
+- Audit logging supports redaction fields/masks plus retention policy hooks.
+- Tests: unit coverage for access guards, input validation severity, audit redaction, cookie policy; integration coverage for JWT refresh rotation/reuse and audit retention.
+- Docs: updated security/configuration guidance for introspection roles, JWT hardening, and audit retention/redaction.

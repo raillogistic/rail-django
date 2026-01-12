@@ -309,6 +309,26 @@ RAIL_DJANGO_GRAPHQL = {
         # Timeout for query execution in seconds
         "query_timeout": 30,
     },
+    "persisted_query_settings": {
+        # Enable persisted queries (APQ)
+        "enabled": False,
+        # Cache alias for persisted queries
+        "cache_alias": "default",
+        # TTL for persisted query entries (seconds)
+        "ttl": 86400,
+        # Allow storing new queries on first request
+        "allow_unregistered": True,
+        # Enforce allowlist only when True
+        "enforce_allowlist": False,
+        # Hash -> query mapping (or list of hashes)
+        "allowlist": {},
+        # JSON file path containing allowlist
+        "allowlist_path": None,
+        # Hash algorithm (sha256 only)
+        "hash_algorithm": "sha256",
+        # Max query length (0 = unlimited)
+        "max_query_length": 0,
+    },
     "security_settings": {
         # Enable authentication checks
         "enable_authentication": True,
@@ -378,6 +398,12 @@ RAIL_DJANGO_GRAPHQL = {
         # Enable query complexity analysis middleware
         "enable_query_complexity_middleware": True,
     },
+    "plugin_settings": {
+        # Enable schema build hooks from plugins
+        "enable_schema_hooks": True,
+        # Enable execution hooks from plugins
+        "enable_execution_hooks": True,
+    },
     "error_handling": {
         # Return detailed error messages (False for production)
         "enable_detailed_errors": False,
@@ -426,6 +452,14 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_registry": True,
         # Packages to auto-discover schemas from
         "auto_discover_packages": [],
+        # Enable schema snapshots for diff/export endpoints
+        "enable_schema_snapshots": False,
+        # Max snapshot entries to retain per schema
+        "snapshot_max_entries": 50,
+        # Enable schema export endpoint
+        "enable_schema_export": True,
+        # Enable schema diff endpoint
+        "enable_schema_diff": True,
     },
 }
 

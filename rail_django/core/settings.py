@@ -95,6 +95,7 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
         "schema_settings",
         "query_settings",
         "mutation_settings",
+        "persisted_query_settings",
         "TYPE_SETTINGS",
         "FILTERING",
         "PAGINATION",
@@ -108,6 +109,7 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
         "RELATIONSHIP_HANDLING",
         "DEVELOPMENT",
         "I18N",
+        "plugin_settings",
     }
     if any(k in rail_settings for k in known_section_keys):
         return rail_settings
@@ -239,6 +241,7 @@ class QueryGeneratorSettings:
 
     # Maximum number of rows to load when ordering by Python properties
     max_property_ordering_results: int = 2000
+    property_ordering_warn_on_cap: bool = True
 
     # Additional fields to use for lookups (e.g., slug, uuid)
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)

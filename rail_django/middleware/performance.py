@@ -9,6 +9,7 @@ Ce module fournit un middleware complet pour surveiller:
 - Les rapports détaillés
 """
 
+import json
 import logging
 import threading
 import time
@@ -19,6 +20,7 @@ from typing import Any, Callable, Deque, Dict, List, Optional
 
 import graphene
 from django.conf import settings
+from django.db import connection
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.views import View
@@ -43,6 +45,8 @@ class RequestMetrics:
     database_time: float = 0.0
     cache_hits: int = 0
     cache_misses: int = 0
+    n_plus_one_queries: List[Dict[str, Any]] = field(default_factory=list)
+    n_plus_one_count: int = 0
 
     # Métriques de ressources
     memory_usage: float = 0.0
@@ -68,6 +72,49 @@ class RequestMetrics:
         """Détermine si la requête est considérée comme complexe."""
         complexity_threshold = getattr(settings, "GRAPHQL_COMPLEXITY_THRESHOLD", 100)
         return self.query_complexity and self.query_complexity > complexity_threshold
+
+
+class QueryMetricsCollector:
+    """Collect query count/time and spot repeated query patterns."""
+
+    def __init__(self, n_plus_one_threshold: int = 5, max_sql_length: int = 200):
+        self.query_count = 0
+        self.total_time = 0.0
+        self.n_plus_one_threshold = n_plus_one_threshold
+        self.max_sql_length = max_sql_length
+        self._fingerprints: Dict[str, Dict[str, Any]] = {}
+
+    def execute_wrapper(self, execute, sql, params, many, context):
+        start = time.perf_counter()
+        try:
+            return execute(sql, params, many, context)
+        finally:
+            duration = time.perf_counter() - start
+            self.query_count += 1
+            self.total_time += duration
+            fingerprint = self._normalize_sql(sql)
+            data = self._fingerprints.setdefault(
+                fingerprint, {"count": 0, "total_time": 0.0}
+            )
+            data["count"] += 1
+            data["total_time"] += duration
+
+    def get_n_plus_one_candidates(self, limit: int = 5) -> List[Dict[str, Any]]:
+        candidates = [
+            {"sql": self._truncate_sql(sql), "count": data["count"]}
+            for sql, data in self._fingerprints.items()
+            if data["count"] >= self.n_plus_one_threshold
+        ]
+        candidates.sort(key=lambda item: item["count"], reverse=True)
+        return candidates[:limit]
+
+    def _normalize_sql(self, sql: Any) -> str:
+        return " ".join(str(sql or "").split())
+
+    def _truncate_sql(self, sql: str) -> str:
+        if len(sql) <= self.max_sql_length:
+            return sql
+        return f"{sql[: self.max_sql_length]}..."
 
 
 @dataclass
@@ -140,6 +187,25 @@ class PerformanceAggregator:
                     p95_execution_time
                 ) = 0
 
+            db_queries = [
+                m.database_queries for m in self.metrics_history if m.database_queries
+            ]
+            avg_db_queries = (
+                sum(db_queries) / len(db_queries) if db_queries else 0
+            )
+            db_time = [
+                m.database_time for m in self.metrics_history if m.database_time
+            ]
+            avg_db_time = sum(db_time) / len(db_time) if db_time else 0
+            n_plus_one_requests = sum(
+                1 for m in self.metrics_history if m.n_plus_one_count
+            )
+            n_plus_one_rate = (
+                (n_plus_one_requests / total_requests * 100)
+                if total_requests > 0
+                else 0
+            )
+
             # Statistiques de cache
             total_cache_hits = sum(m.cache_hits for m in self.metrics_history)
             total_cache_misses = sum(m.cache_misses for m in self.metrics_history)
@@ -175,6 +241,9 @@ class PerformanceAggregator:
                 if total_requests > 0
                 else 0,
                 "avg_execution_time": avg_execution_time,
+                "avg_database_queries": avg_db_queries,
+                "avg_database_time": avg_db_time,
+                "n_plus_one_rate": n_plus_one_rate,
                 "max_execution_time": max_execution_time,
                 "min_execution_time": min_execution_time,
                 "p95_execution_time": p95_execution_time,
@@ -293,6 +362,14 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         self.enabled = getattr(settings, "GRAPHQL_PERFORMANCE_ENABLED", settings.DEBUG)
         self.aggregator = get_performance_aggregator() if self.enabled else None
         self.performance_monitor = get_performance_monitor() if self.enabled else None
+        perf_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {}).get(
+            "performance_settings", {}
+        )
+        self.enable_query_metrics = bool(perf_settings.get("enable_query_metrics", False))
+        self.enable_n_plus_one_detection = bool(
+            perf_settings.get("enable_n_plus_one_detection", True)
+        )
+        self.n_plus_one_threshold = int(perf_settings.get("n_plus_one_threshold", 5))
 
     def process_request(self, request):
         """Handle the start of a request."""
@@ -301,13 +378,23 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
 
         request._graphql_request_id = f"req_{int(time.time() * 1000)}_{id(request)}"
         request._graphql_start_time = time.time()
+        query_name = self._resolve_query_name(request)
+        request._graphql_query_text = self._extract_query_text(request)
 
         request._graphql_metrics = RequestMetrics(
             request_id=request._graphql_request_id,
-            query_name="unknown",
+            query_name=query_name,
             start_time=request._graphql_start_time,
             user_id=getattr(request.user, "id", None) if hasattr(request, "user") else None,
         )
+        if self.enable_query_metrics and hasattr(connection, "execute_wrapper"):
+            collector = QueryMetricsCollector(
+                n_plus_one_threshold=self.n_plus_one_threshold
+            )
+            wrapper = connection.execute_wrapper(collector.execute_wrapper)
+            wrapper.__enter__()
+            request._graphql_query_metrics = collector
+            request._graphql_query_wrapper = wrapper
 
         return None
 
@@ -320,6 +407,7 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         metrics = request._graphql_metrics
         metrics.end_time = end_time
         metrics.execution_time = end_time - metrics.start_time
+        self._finalize_query_metrics(request, metrics)
 
         metrics.cache_hits = 0
         metrics.cache_misses = 0
@@ -331,6 +419,12 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
             response["X-GraphQL-Execution-Time"] = f"{metrics.execution_time:.3f}"
             if metrics.query_complexity:
                 response["X-GraphQL-Query-Complexity"] = str(metrics.query_complexity)
+            if metrics.database_queries:
+                response["X-GraphQL-DB-Queries"] = str(metrics.database_queries)
+            if metrics.database_time:
+                response["X-GraphQL-DB-Time"] = f"{metrics.database_time:.3f}"
+            if metrics.n_plus_one_count:
+                response["X-GraphQL-N-Plus-One"] = str(metrics.n_plus_one_count)
 
         return response
 
@@ -345,11 +439,77 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         end_time = time.time()
         metrics.end_time = end_time
         metrics.execution_time = end_time - metrics.start_time
+        self._finalize_query_metrics(request, metrics)
 
         if self.aggregator:
             self.aggregator.add_metrics(metrics)
 
         return None
+
+    def _finalize_query_metrics(self, request, metrics: RequestMetrics) -> None:
+        wrapper = getattr(request, "_graphql_query_wrapper", None)
+        if wrapper is not None:
+            try:
+                wrapper.__exit__(None, None, None)
+            except Exception:
+                logger.debug("Failed to close query metrics wrapper", exc_info=True)
+            request._graphql_query_wrapper = None
+        collector = getattr(request, "_graphql_query_metrics", None)
+        if collector is None:
+            return
+
+        metrics.database_queries = collector.query_count
+        metrics.database_time = collector.total_time
+        if self.enable_n_plus_one_detection:
+            candidates = collector.get_n_plus_one_candidates()
+            metrics.n_plus_one_queries = candidates
+            metrics.n_plus_one_count = len(candidates)
+            if candidates:
+                metrics.warnings.append("Potential N+1 query pattern detected")
+
+    def _resolve_query_name(self, request) -> str:
+        query_text = self._extract_query_text(request)
+        if not query_text:
+            return "unknown"
+        if request.method == "POST" and request.body:
+            try:
+                payload = json.loads(request.body.decode("utf-8"))
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                op_name = payload.get("operationName") or payload.get("operation_name")
+                if op_name:
+                    return str(op_name)
+        first_field = self._extract_first_field_name(query_text)
+        return first_field or "anonymous"
+
+    def _extract_first_field_name(self, query_text: str) -> Optional[str]:
+        tokens = query_text.replace("{", " ").replace("}", " ").split()
+        for token in tokens:
+            lowered = token.lower()
+            if lowered in {"query", "mutation", "subscription"}:
+                continue
+            if lowered.startswith("fragment"):
+                continue
+            if token.startswith("$") or token.startswith("..."):
+                continue
+            return token
+        return None
+
+    def _extract_query_text(self, request) -> str:
+        if request.method == "GET":
+            query = request.GET.get("query", "")
+            return str(query) if query is not None else ""
+        if not request.body:
+            return ""
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return ""
+        if isinstance(payload, dict):
+            query = payload.get("query", "")
+            return str(query) if query is not None else ""
+        return ""
 
     def _is_graphql_request(self, request) -> bool:
         """Return True when the request targets GraphQL."""
@@ -423,6 +583,8 @@ class GraphQLPerformanceView(View):
                 "user_id": m.user_id,
                 "query_complexity": m.query_complexity,
                 "database_queries": m.database_queries,
+                "database_time": m.database_time,
+                "n_plus_one_count": m.n_plus_one_count,
                 "cache_hits": m.cache_hits,
                 "cache_misses": m.cache_misses,
             }

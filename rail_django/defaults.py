@@ -59,6 +59,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "default_page_size": 20,
         "max_page_size": 100,
         "max_property_ordering_results": 2000,
+        "property_ordering_warn_on_cap": True,
         "additional_lookup_fields": {},
     },
     "mutation_settings": {
@@ -85,10 +86,29 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_defer_fields": False,
         "enable_dataloader": True,
         "dataloader_batch_size": 100,
+        "max_prefetch_depth": 3,
         "max_query_depth": 10,
         "max_query_complexity": 1000,
         "enable_query_cost_analysis": False,
         "query_timeout": 30,
+        "enable_query_metrics": True,
+        "enable_n_plus_one_detection": True,
+        "n_plus_one_threshold": 5,
+        "enable_query_caching": False,
+        "query_cache_timeout": 300,
+        "query_cache_user_specific": False,
+        "query_cache_scope": "schema",
+    },
+    "persisted_query_settings": {
+        "enabled": False,
+        "cache_alias": "default",
+        "ttl": 86400,
+        "allow_unregistered": True,
+        "enforce_allowlist": False,
+        "allowlist": {},
+        "allowlist_path": None,
+        "hash_algorithm": "sha256",
+        "max_query_length": 0,
     },
     "security_settings": {
         "enable_authentication": True,
@@ -97,6 +117,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "rate_limit_requests_per_minute": 60,
         "rate_limit_requests_per_hour": 1000,
         "enable_query_depth_limiting": True,
+        "introspection_roles": ["admin", "developer"],
         # "max_query_depth": 10,  # Unused: This is controlled by performance_settings.max_query_depth
         # "enable_introspection": True,  # Unused: Controlled by schema_settings.enable_introspection
         # "enable_graphiql": True,  # Unused: Controlled by schema_settings.enable_graphiql
@@ -155,6 +176,10 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "performance_threshold_ms": 1000,
         "enable_query_complexity_middleware": True,
     },
+    "plugin_settings": {
+        "enable_schema_hooks": True,
+        "enable_execution_hooks": True,
+    },
     "error_handling": {
         "enable_detailed_errors": False,
         "enable_error_logging": True,
@@ -187,6 +212,10 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "schema_registry": {
         "enable_registry": False,
         "auto_discover_packages": [],
+        "enable_schema_snapshots": False,
+        "snapshot_max_entries": 50,
+        "enable_schema_export": True,
+        "enable_schema_diff": True,
     },
 }
 

@@ -19,6 +19,8 @@ RAIL_DJANGO_GRAPHQL = {
     "query_settings": {
         "default_page_size": 20,
         "max_page_size": 100,
+        "max_property_ordering_results": 2000,
+        "property_ordering_warn_on_cap": True,
         "additional_lookup_fields": {},
     },
     "mutation_settings": {
@@ -37,8 +39,27 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_query_optimization": True,
         "enable_select_related": True,
         "enable_prefetch_related": True,
+        "max_prefetch_depth": 3,
         "max_query_depth": 10,
         "max_query_complexity": 1000,
+        "enable_query_metrics": True,
+        "enable_n_plus_one_detection": True,
+        "n_plus_one_threshold": 5,
+        "enable_query_caching": False,
+        "query_cache_timeout": 300,
+        "query_cache_user_specific": False,
+        "query_cache_scope": "schema",
+    },
+    "persisted_query_settings": {
+        "enabled": False,
+        "cache_alias": "default",
+        "ttl": 86400,
+        "allow_unregistered": True,
+        "enforce_allowlist": False,
+        "allowlist": {},
+        "allowlist_path": None,
+        "hash_algorithm": "sha256",
+        "max_query_length": 0,
     },
     "security_settings": {
         "enable_authentication": True,
@@ -46,10 +67,15 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_input_validation": True,
         "input_allow_html": False,
         "input_failure_severity": "high",
+        "introspection_roles": ["admin", "developer"],
     },
     "middleware_settings": {
         "enable_query_complexity_middleware": True,
         "performance_threshold_ms": 1000,
+    },
+    "plugin_settings": {
+        "enable_schema_hooks": True,
+        "enable_execution_hooks": True,
     },
 }
 ```
@@ -96,6 +122,17 @@ JWT_ACCESS_TOKEN_LIFETIME = 3600
 JWT_REFRESH_TOKEN_LIFETIME = 86400
 JWT_AUTH_COOKIE = "jwt"
 JWT_REFRESH_COOKIE = "refresh_token"
+JWT_ROTATE_REFRESH_TOKENS = True
+JWT_REFRESH_REUSE_DETECTION = True
+JWT_REFRESH_TOKEN_CACHE = "default"
+JWT_COOKIE_SECURE = True
+JWT_COOKIE_SAMESITE = "Lax"
+JWT_COOKIE_DOMAIN = None
+JWT_COOKIE_PATH = "/"
+JWT_AUTH_COOKIE_SECURE = True
+JWT_AUTH_COOKIE_SAMESITE = "Lax"
+JWT_REFRESH_COOKIE_SECURE = True
+JWT_REFRESH_COOKIE_SAMESITE = "Lax"
 JWT_ALLOW_COOKIE_AUTH = True
 JWT_ENFORCE_CSRF = True  # Require CSRF token for cookie-based auth on unsafe methods
 CSRF_COOKIE_NAME = "csrftoken"
@@ -131,6 +168,104 @@ GRAPHQL_SLOW_QUERY_THRESHOLD = 1.0
 GRAPHQL_COMPLEXITY_THRESHOLD = 100
 GRAPHQL_MEMORY_THRESHOLD = 100.0
 GRAPHQL_PERFORMANCE_HEADERS = False
+```
+
+Enable query metrics and N+1 detection through `performance_settings`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "performance_settings": {
+        "enable_query_metrics": True,
+        "enable_n_plus_one_detection": True,
+        "n_plus_one_threshold": 5,
+    }
+}
+```
+
+## Query caching hooks
+
+Query caching is opt-in and requires a cache backend registered via
+`set_query_cache_factory`. You can use the in-memory backend for tests or wire
+in your own cache adapter.
+
+```python
+from rail_django.core.services import set_query_cache_factory
+from rail_django.extensions.query_cache import InMemoryQueryCacheBackend
+
+backend = InMemoryQueryCacheBackend(default_timeout=300)
+set_query_cache_factory(lambda schema_name=None: backend)
+
+RAIL_DJANGO_GRAPHQL = {
+    "performance_settings": {
+        "enable_query_caching": True,
+        "query_cache_timeout": 300,
+        "query_cache_user_specific": False,
+        "query_cache_scope": "schema",
+    }
+}
+```
+
+Use `invalidate_query_cache(schema_name="...")` when writes should invalidate
+cached query results.
+
+## Persisted queries (APQ)
+
+Persisted queries are opt-in and can be backed by cache or an allowlist.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "persisted_query_settings": {
+        "enabled": True,
+        "cache_alias": "default",
+        "ttl": 86400,
+        "allow_unregistered": True,
+        "enforce_allowlist": False,
+        "allowlist": {},
+        "allowlist_path": None,
+        "hash_algorithm": "sha256",
+        "max_query_length": 0,
+    }
+}
+```
+
+If you want a strict allowlist, set `enforce_allowlist = True` and provide a
+hash->query mapping (or a list of hashes) in `allowlist` or `allowlist_path`.
+
+## Plugin settings
+
+Plugin execution hooks are controlled via `plugin_settings`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "plugin_settings": {
+        "enable_schema_hooks": True,
+        "enable_execution_hooks": True,
+    }
+}
+```
+
+Enable plugins via `GRAPHQL_SCHEMA_PLUGINS`:
+
+```python
+GRAPHQL_SCHEMA_PLUGINS = {
+    "rail_django.extensions.observability.SentryIntegrationPlugin": {"enabled": True},
+    "rail_django.extensions.observability.OpenTelemetryIntegrationPlugin": {"enabled": False},
+}
+```
+
+## Schema registry snapshots
+
+Enable snapshots to power the schema export, history, and diff endpoints.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "schema_registry": {
+        "enable_schema_snapshots": True,
+        "snapshot_max_entries": 50,
+        "enable_schema_export": True,
+        "enable_schema_diff": True,
+    }
+}
 ```
 
 ## CORS and CSRF

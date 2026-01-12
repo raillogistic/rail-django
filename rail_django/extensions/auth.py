@@ -6,6 +6,9 @@ for login, register, token refresh, and user management.
 """
 
 import logging
+import threading
+import time
+import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
@@ -16,6 +19,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.cache import caches
 from django.utils import timezone
 from graphene_django import DjangoObjectType
 
@@ -32,6 +36,77 @@ from ..extensions.permissions import (
 logger = logging.getLogger(__name__)
 
 # User model will be retrieved dynamically when needed
+
+
+class RefreshTokenStore:
+    """Cache-backed store for refresh token rotation and reuse detection."""
+
+    def __init__(self):
+        self.enable_rotation = bool(
+            getattr(settings, "JWT_ROTATE_REFRESH_TOKENS", True)
+        )
+        self.enable_reuse_detection = bool(
+            getattr(settings, "JWT_REFRESH_REUSE_DETECTION", True)
+        )
+        self.cache_alias = getattr(settings, "JWT_REFRESH_TOKEN_CACHE", "default")
+        self._cache = self._resolve_cache()
+        self._fallback_store: Dict[str, Dict[str, Any]] = {}
+        self._fallback_lock = threading.RLock()
+
+    def _resolve_cache(self):
+        try:
+            return caches[self.cache_alias]
+        except Exception:
+            return None
+
+    def _cache_get(self, key: str) -> Any:
+        if self._cache is not None:
+            return self._cache.get(key)
+        with self._fallback_lock:
+            entry = self._fallback_store.get(key)
+            if not entry:
+                return None
+            expires_at = entry.get("expires_at")
+            if expires_at is not None and expires_at <= time.time():
+                self._fallback_store.pop(key, None)
+                return None
+            return entry.get("value")
+
+    def _cache_set(self, key: str, value: Any, ttl: Optional[int]) -> None:
+        if self._cache is not None:
+            self._cache.set(key, value, timeout=ttl)
+            return
+        expires_at = None
+        if ttl and ttl > 0:
+            expires_at = time.time() + ttl
+        with self._fallback_lock:
+            self._fallback_store[key] = {"value": value, "expires_at": expires_at}
+
+    def _family_key(self, family_id: str) -> str:
+        return f"jwt:refresh:family:{family_id}"
+
+    def _revoked_key(self, family_id: str) -> str:
+        return f"jwt:refresh:revoked:{family_id}"
+
+    def is_family_revoked(self, family_id: str) -> bool:
+        return bool(self._cache_get(self._revoked_key(family_id)))
+
+    def revoke_family(self, family_id: str, ttl: Optional[int]) -> None:
+        self._cache_set(self._revoked_key(family_id), True, ttl)
+
+    def ensure_active(self, family_id: str, token_id: str, ttl: Optional[int]) -> bool:
+        current = self._cache_get(self._family_key(family_id))
+        if current is None:
+            self._cache_set(self._family_key(family_id), token_id, ttl)
+            return True
+        return current == token_id
+
+    def rotate(self, family_id: str, token_id: str, ttl: Optional[int]) -> None:
+        self._cache_set(self._family_key(family_id), token_id, ttl)
+
+
+def get_refresh_token_store() -> RefreshTokenStore:
+    return RefreshTokenStore()
 
 
 def _get_effective_permissions(user: "AbstractUser") -> List[str]:
@@ -325,12 +400,20 @@ class JWTManager:
         return lifetime_seconds
 
     @classmethod
-    def generate_token(cls, user: "AbstractUser") -> Dict[str, Any]:
+    def generate_token(
+        cls,
+        user: "AbstractUser",
+        *,
+        refresh_family: Optional[str] = None,
+        include_refresh: bool = True,
+    ) -> Dict[str, Any]:
         """
-        Génère un token JWT pour l'utilisateur.
+        GÇ¸nÇ¹re un token JWT pour l'utilisateur.
 
         Args:
             user: Instance de l'utilisateur Django
+            refresh_family: Optional refresh token family identifier
+            include_refresh: When False, return access token only
 
         Returns:
             Dict contenant le token, refresh_token et expires_at
@@ -342,7 +425,9 @@ class JWTManager:
         expiration = (
             None if access_lifetime <= 0 else now + timedelta(seconds=access_lifetime)
         )
-        refresh_expiration = now + timedelta(seconds=refresh_lifetime)
+        refresh_expiration = (
+            now + timedelta(seconds=refresh_lifetime) if include_refresh else None
+        )
         permission_snapshot = _get_effective_permissions(user)
 
         payload = {
@@ -356,17 +441,26 @@ class JWTManager:
         if expiration is not None:
             payload["exp"] = expiration
 
-        refresh_payload = {
-            "user_id": user.id,
-            "exp": refresh_expiration,
-            "iat": now,
-            "type": "refresh",
-        }
-
         token = jwt.encode(payload, cls.get_jwt_secret(), algorithm="HS256")
-        refresh_token = jwt.encode(
-            refresh_payload, cls.get_jwt_secret(), algorithm="HS256"
-        )
+
+        refresh_token = None
+        if include_refresh:
+            refresh_family_id = refresh_family or uuid.uuid4().hex
+            refresh_token_id = uuid.uuid4().hex
+            refresh_payload = {
+                "user_id": user.id,
+                "exp": refresh_expiration,
+                "iat": now,
+                "type": "refresh",
+                "family": refresh_family_id,
+                "jti": refresh_token_id,
+            }
+            refresh_token = jwt.encode(
+                refresh_payload, cls.get_jwt_secret(), algorithm="HS256"
+            )
+            store = get_refresh_token_store()
+            if store.enable_rotation or store.enable_reuse_detection:
+                store.rotate(refresh_family_id, refresh_token_id, refresh_lifetime)
 
         return {
             "token": token,
@@ -408,22 +502,48 @@ class JWTManager:
     @classmethod
     def refresh_token(cls, refresh_token: str) -> Optional[Dict[str, Any]]:
         """
-        Rafraîchit un token d'accès à partir d'un refresh token.
+        Refresh an access token from a refresh token.
 
         Args:
-            refresh_token: Token de rafraîchissement
+            refresh_token: Refresh token string
 
         Returns:
-            Nouveau token d'accès ou None si le refresh token est invalide
+            Access token payload or None if invalid
         """
+
         payload = cls.verify_token(refresh_token, expected_type="refresh")
         if not payload or payload.get("type") != "refresh":
             return None
 
+        store = get_refresh_token_store()
+        rotation_enabled = bool(store.enable_rotation)
+        reuse_detection = bool(store.enable_reuse_detection and store.enable_rotation)
+        family_id = payload.get("family")
+        token_id = payload.get("jti")
+        refresh_ttl = cls.get_refresh_expiration()
+
+        if reuse_detection:
+            if not family_id or not token_id:
+                logger.warning("Refresh token missing family/jti")
+                return None
+            if store.is_family_revoked(family_id):
+                logger.warning("Refresh token family revoked")
+                return None
+            if not store.ensure_active(family_id, token_id, refresh_ttl):
+                store.revoke_family(family_id, refresh_ttl)
+                logger.warning("Refresh token reuse detected")
+                return None
+
         try:
             User = get_user_model()
             user = User.objects.get(id=payload["user_id"])
-            return cls.generate_token(user)
+            if rotation_enabled:
+                token_data = cls.generate_token(user, refresh_family=family_id)
+                return token_data
+
+            token_data = cls.generate_token(user, include_refresh=False)
+            token_data["refresh_token"] = refresh_token
+            return token_data
         except User.DoesNotExist:
             logger.warning(
                 f"Utilisateur introuvable pour le refresh token: {payload.get('user_id')}"
@@ -431,18 +551,46 @@ class JWTManager:
             return None
 
 
+def _resolve_cookie_policy(kind: str) -> Dict[str, Any]:
+    kind_upper = kind.upper()
+    secure = getattr(settings, f"JWT_{kind_upper}_COOKIE_SECURE", None)
+    if secure is None:
+        secure = getattr(settings, "JWT_COOKIE_SECURE", None)
+    if secure is None:
+        secure = not getattr(settings, "DEBUG", False)
+    if getattr(settings, "DEBUG", False):
+        secure = False
+
+    samesite = getattr(
+        settings,
+        f"JWT_{kind_upper}_COOKIE_SAMESITE",
+        getattr(settings, "JWT_COOKIE_SAMESITE", "Lax"),
+    )
+    domain = getattr(
+        settings,
+        f"JWT_{kind_upper}_COOKIE_DOMAIN",
+        getattr(settings, "JWT_COOKIE_DOMAIN", None),
+    )
+    path = getattr(
+        settings,
+        f"JWT_{kind_upper}_COOKIE_PATH",
+        "/",
+    )
+    return {
+        "secure": secure,
+        "samesite": samesite,
+        "domain": domain,
+        "path": path,
+    }
+
+
 def set_auth_cookies(request, access_token=None, refresh_token=None):
     """Sets secure HttpOnly cookies for authentication tokens."""
     if not hasattr(request, "_set_auth_cookies"):
         request._set_auth_cookies = []
 
-    # Force secure=False in DEBUG mode to allow cookies on localhost HTTP
-    # Default to True in production (DEBUG=False) unless explicitly disabled
-    secure = getattr(settings, "JWT_COOKIE_SECURE", not getattr(settings, "DEBUG", False))
-    if getattr(settings, "DEBUG", False):
-        secure = False
-
-    samesite = "Lax"
+    auth_policy = _resolve_cookie_policy("auth")
+    refresh_policy = _resolve_cookie_policy("refresh")
 
     if access_token:
         request._set_auth_cookies.append(
@@ -450,8 +598,10 @@ def set_auth_cookies(request, access_token=None, refresh_token=None):
                 "key": getattr(settings, "JWT_AUTH_COOKIE", "jwt"),
                 "value": access_token,
                 "httponly": True,
-                "secure": secure,
-                "samesite": samesite,
+                "secure": auth_policy["secure"],
+                "samesite": auth_policy["samesite"],
+                "domain": auth_policy["domain"],
+                "path": auth_policy["path"],
                 "max_age": getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", 3600),
             }
         )
@@ -462,10 +612,11 @@ def set_auth_cookies(request, access_token=None, refresh_token=None):
                 "key": getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"),
                 "value": refresh_token,
                 "httponly": True,
-                "secure": secure,
-                "samesite": samesite,
+                "secure": refresh_policy["secure"],
+                "samesite": refresh_policy["samesite"],
+                "domain": refresh_policy["domain"],
+                "path": refresh_policy["path"],
                 "max_age": getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400 * 7),
-                "path": "/",
             }
         )
 

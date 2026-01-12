@@ -9,6 +9,9 @@ from ..extensions.templating import template_urlpatterns
 from .views import (
     SchemaDetailAPIView,
     SchemaDiscoveryAPIView,
+    SchemaDiffAPIView,
+    SchemaExportAPIView,
+    SchemaHistoryAPIView,
     SchemaHealthAPIView,
     SchemaListAPIView,
     SchemaManagementAPIView,
@@ -28,6 +31,21 @@ urlpatterns = [
         "schemas/<str:schema_name>/",
         SchemaDetailAPIView.as_view(),
         name="schema-detail",
+    ),
+    path(
+        "schemas/<str:schema_name>/export/",
+        SchemaExportAPIView.as_view(),
+        name="schema-export",
+    ),
+    path(
+        "schemas/<str:schema_name>/history/",
+        SchemaHistoryAPIView.as_view(),
+        name="schema-history",
+    ),
+    path(
+        "schemas/<str:schema_name>/diff/",
+        SchemaDiffAPIView.as_view(),
+        name="schema-diff",
     ),
     # Schema management operations
     path("management/", SchemaManagementAPIView.as_view(), name="schema-management"),

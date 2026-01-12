@@ -95,6 +95,11 @@ class MultiSchemaGraphQLView(GraphQLView):
                             {"errors": [{"message": "Invalid JSON in request body"}]},
                             status=400,
                         )
+                    persisted_response = self._apply_persisted_query(
+                        request, schema_name
+                    )
+                    if persisted_response is not None:
+                        return persisted_response
 
             # Get schema configuration
             schema_info = self._get_schema_info(schema_name)
@@ -111,13 +116,13 @@ class MultiSchemaGraphQLView(GraphQLView):
             # Apply GraphQL middleware for this schema
             self._configure_middleware(schema_name)
 
-            # Check authentication requirements
-            if not self._check_authentication(request, schema_info):
+            if (
+                request.method == "GET"
+                and self.graphiql
+                and not request.GET.get("query")
+                and not self._check_authentication(request, schema_info)
+            ):
                 return self._authentication_required_response()
-
-            # Enforce introspection settings
-            if not self._allow_introspection(request, schema_info):
-                return self._introspection_disabled_response()
 
             # Set the schema for this request
             self.schema = self._get_schema_instance(schema_name, schema_info)
@@ -302,10 +307,6 @@ class MultiSchemaGraphQLView(GraphQLView):
         if hasattr(request, "user") and request.user.is_authenticated:
             return True
 
-        query_text = self._extract_query_text(request)
-        if "__schema" in query_text or "__type" in query_text:
-            return True
-
         # Check for API key or token authentication
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
@@ -331,6 +332,49 @@ class MultiSchemaGraphQLView(GraphQLView):
             query = body.get("query", "")
             return str(query) if query is not None else ""
         return ""
+
+    def _apply_persisted_query(
+        self, request: HttpRequest, schema_name: str
+    ) -> Optional[JsonResponse]:
+        if request.method != "POST" or not request.body:
+            return None
+
+        content_type = request.META.get("CONTENT_TYPE", "").lower()
+        if content_type and not content_type.startswith("application/json"):
+            return None
+
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        try:
+            from ..extensions.persisted_queries import resolve_persisted_query
+        except Exception:
+            return None
+
+        resolution = resolve_persisted_query(payload, schema_name=schema_name)
+        if resolution.has_error():
+            return JsonResponse(
+                {
+                    "errors": [
+                        {
+                            "message": resolution.error_message,
+                            "extensions": {"code": resolution.error_code},
+                        }
+                    ]
+                },
+                status=200,
+            )
+
+        if resolution.query and payload.get("query") != resolution.query:
+            payload["query"] = resolution.query
+            request._body = json.dumps(payload).encode("utf-8")
+
+        return None
 
     def _validate_token(
         self,
@@ -405,8 +449,20 @@ class MultiSchemaGraphQLView(GraphQLView):
     ) -> bool:
         """Return False when introspection is disabled and query uses it."""
         schema_settings = self._get_effective_schema_settings(schema_info)
-        if schema_settings.get("enable_introspection", True):
-            return True
+        enable_introspection = schema_settings.get("enable_introspection", True)
+        user = getattr(request, "user", None)
+        try:
+            from ..core.security import is_introspection_allowed
+
+            if is_introspection_allowed(
+                user,
+                getattr(schema_info, "name", None),
+                enable_introspection=bool(enable_introspection),
+            ):
+                return True
+        except Exception:
+            if enable_introspection:
+                return True
 
         query_text = self._extract_query_text(request)
 

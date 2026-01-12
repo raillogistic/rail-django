@@ -35,6 +35,23 @@ importing them in your schema build or including their URLs.
 - Query analyzer for selection sets
 - Automatic `select_related` and `prefetch_related`
 - Performance monitor helpers
+- Optional query cache hooks when a backend is registered via
+  `rail_django.core.services.set_query_cache_factory`
+
+## Persisted queries (`rail_django.extensions.persisted_queries`)
+
+- APQ-style persisted query resolution with allowlists.
+- Cache-backed storage for query hashes (opt-in).
+
+## Observability (`rail_django.extensions.observability`)
+
+- Optional plugin hooks for Sentry and OpenTelemetry.
+- Activate via `GRAPHQL_SCHEMA_PLUGINS`.
+
+## Subscriptions (`rail_django.extensions.subscriptions`)
+
+- Lightweight helper to build a Channels consumer.
+- Requires `channels-graphql-ws` (optional dependency).
 
 ## Rate limiting (`rail_django.extensions.rate_limiting`)
 

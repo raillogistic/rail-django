@@ -4,6 +4,7 @@ Base plugin architecture for GraphQL schema registry.
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
 from django.conf import settings
@@ -91,6 +92,68 @@ class BasePlugin(ABC):
         """
         return []
 
+    def pre_schema_build(self, schema_name: str, builder: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Hook called before schema build."""
+        return {}
+
+    def post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: Dict[str, Any]) -> None:
+        """Hook called after schema build."""
+        return None
+
+    def before_operation(
+        self,
+        schema_name: str,
+        operation_type: str,
+        operation_name: Optional[str],
+        info: Any,
+        context: Dict[str, Any],
+    ) -> "ExecutionHookResult":
+        """Hook called before a root operation."""
+        return ExecutionHookResult()
+
+    def after_operation(
+        self,
+        schema_name: str,
+        operation_type: str,
+        operation_name: Optional[str],
+        info: Any,
+        result: Any,
+        error: Optional[BaseException],
+        context: Dict[str, Any],
+    ) -> "ExecutionHookResult":
+        """Hook called after a root operation."""
+        return ExecutionHookResult()
+
+    def before_resolve(
+        self,
+        schema_name: str,
+        info: Any,
+        root: Any,
+        kwargs: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> "ExecutionHookResult":
+        """Hook called before a resolver executes."""
+        return ExecutionHookResult()
+
+    def after_resolve(
+        self,
+        schema_name: str,
+        info: Any,
+        root: Any,
+        kwargs: Dict[str, Any],
+        result: Any,
+        error: Optional[BaseException],
+        context: Dict[str, Any],
+    ) -> "ExecutionHookResult":
+        """Hook called after a resolver executes."""
+        return ExecutionHookResult()
+
+
+@dataclass
+class ExecutionHookResult:
+    handled: bool = False
+    result: Any = None
+
 
 class PluginManager:
     """
@@ -160,6 +223,10 @@ class PluginManager:
     def get_plugins(self) -> List[BasePlugin]:
         """Get all loaded plugins."""
         return list(self._plugins.values())
+
+    def get_loaded_plugins(self) -> List[BasePlugin]:
+        """Alias for get_plugins (backward compatibility)."""
+        return self.get_plugins()
 
     def get_enabled_plugins(self) -> List[BasePlugin]:
         """Get all enabled plugins."""
@@ -266,6 +333,122 @@ class PluginManager:
                 errors.append(f"{plugin.get_name()}: Validation error - {e}")
 
         return errors
+
+    def run_pre_schema_build(self, schema_name: str, builder: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+        self.load_plugins()
+        updated = context.copy()
+        for plugin in self.get_enabled_plugins():
+            try:
+                result = plugin.pre_schema_build(schema_name, builder, updated)
+                if isinstance(result, dict):
+                    updated.update(result)
+            except Exception as exc:
+                logger.error("Error in pre_schema_build for %s: %s", plugin.get_name(), exc)
+        return updated
+
+    def run_post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: Dict[str, Any]) -> None:
+        self.load_plugins()
+        for plugin in self.get_enabled_plugins():
+            try:
+                plugin.post_schema_build(schema_name, builder, schema, context)
+            except Exception as exc:
+                logger.error("Error in post_schema_build for %s: %s", plugin.get_name(), exc)
+
+    def run_before_operation(
+        self,
+        schema_name: str,
+        operation_type: str,
+        operation_name: Optional[str],
+        info: Any,
+        context: Dict[str, Any],
+    ) -> Optional[ExecutionHookResult]:
+        self.load_plugins()
+        for plugin in self.get_enabled_plugins():
+            try:
+                result = self._coerce_execution_result(
+                    plugin.before_operation(schema_name, operation_type, operation_name, info, context)
+                )
+                if result.handled:
+                    return result
+            except Exception as exc:
+                logger.error("Error in before_operation for %s: %s", plugin.get_name(), exc)
+        return None
+
+    def run_after_operation(
+        self,
+        schema_name: str,
+        operation_type: str,
+        operation_name: Optional[str],
+        info: Any,
+        result: Any,
+        error: Optional[BaseException],
+        context: Dict[str, Any],
+    ) -> Optional[ExecutionHookResult]:
+        self.load_plugins()
+        handled_result: Optional[ExecutionHookResult] = None
+        for plugin in self.get_enabled_plugins():
+            try:
+                outcome = self._coerce_execution_result(
+                    plugin.after_operation(schema_name, operation_type, operation_name, info, result, error, context)
+                )
+                if outcome.handled:
+                    handled_result = outcome
+                    result = outcome.result
+            except Exception as exc:
+                logger.error("Error in after_operation for %s: %s", plugin.get_name(), exc)
+        return handled_result
+
+    def run_before_resolve(
+        self,
+        schema_name: str,
+        info: Any,
+        root: Any,
+        kwargs: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Optional[ExecutionHookResult]:
+        self.load_plugins()
+        for plugin in self.get_enabled_plugins():
+            try:
+                result = self._coerce_execution_result(
+                    plugin.before_resolve(schema_name, info, root, kwargs, context)
+                )
+                if result.handled:
+                    return result
+            except Exception as exc:
+                logger.error("Error in before_resolve for %s: %s", plugin.get_name(), exc)
+        return None
+
+    def run_after_resolve(
+        self,
+        schema_name: str,
+        info: Any,
+        root: Any,
+        kwargs: Dict[str, Any],
+        result: Any,
+        error: Optional[BaseException],
+        context: Dict[str, Any],
+    ) -> Optional[ExecutionHookResult]:
+        self.load_plugins()
+        handled_result: Optional[ExecutionHookResult] = None
+        for plugin in self.get_enabled_plugins():
+            try:
+                outcome = self._coerce_execution_result(
+                    plugin.after_resolve(schema_name, info, root, kwargs, result, error, context)
+                )
+                if outcome.handled:
+                    handled_result = outcome
+                    result = outcome.result
+            except Exception as exc:
+                logger.error("Error in after_resolve for %s: %s", plugin.get_name(), exc)
+        return handled_result
+
+    @staticmethod
+    def _coerce_execution_result(value: Any) -> ExecutionHookResult:
+        if isinstance(value, ExecutionHookResult):
+            return value
+        if value is None:
+            return ExecutionHookResult()
+        return ExecutionHookResult(handled=True, result=value)
 
 
 # Global plugin manager instance

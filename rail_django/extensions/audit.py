@@ -11,7 +11,7 @@ Ce module fournit un système complet d'audit pour :
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from doctest import debug
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -25,6 +25,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.http import HttpRequest
 from django.utils import timezone as django_timezone
+from django.utils.module_loading import import_string
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,18 @@ class AuditLogger:
         self.store_in_file = getattr(settings, "AUDIT_STORE_IN_FILE", True)
         self.webhook_url = getattr(settings, "AUDIT_WEBHOOK_URL", None)
         self.retention_days = getattr(settings, "AUDIT_RETENTION_DAYS", 90)
+        self.retention_interval_seconds = int(
+            getattr(settings, "AUDIT_RETENTION_RUN_INTERVAL", 3600)
+        )
+        self._last_retention_run = 0.0
+        self.redaction_mask = getattr(
+            settings, "AUDIT_REDACTION_MASK", "***REDACTED***"
+        )
+        self.redact_error_messages = bool(
+            getattr(settings, "AUDIT_REDACT_ERROR_MESSAGES", True)
+        )
+        self.redaction_fields = self._load_redaction_fields()
+        self._retention_hook = self._resolve_retention_hook()
 
         # Mode debug - si None, utilise la configuration Django DEBUG
         if debug is None:
@@ -176,6 +189,39 @@ class AuditLogger:
         self._failed_login_ip_state: Dict[str, List[float]] = {}
         self._failed_login_user_state: Dict[str, List[float]] = {}
 
+    def _load_redaction_fields(self) -> List[str]:
+        default_fields = [
+            "password",
+            "token",
+            "secret",
+            "key",
+            "credential",
+            "authorization",
+            "email",
+            "phone",
+            "ssn",
+        ]
+        fields = getattr(settings, "AUDIT_REDACTION_FIELDS", None)
+        if isinstance(fields, str):
+            fields = [f.strip() for f in fields.split(",") if f.strip()]
+        if isinstance(fields, (list, tuple, set)):
+            return [str(f).lower() for f in fields if f]
+        return default_fields
+
+    def _resolve_retention_hook(self):
+        hook = getattr(settings, "AUDIT_RETENTION_HOOK", None)
+        if not hook:
+            return None
+        if callable(hook):
+            return hook
+        if isinstance(hook, str):
+            try:
+                return import_string(hook)
+            except Exception as exc:
+                logger.warning("Failed to import audit retention hook: %s", exc)
+                return None
+        return None
+
     def log_event(self, event: AuditEvent) -> None:
         """
         Enregistre un événement d'audit.
@@ -187,6 +233,7 @@ class AuditLogger:
             return
 
         try:
+            event = self._redact_event(event)
             # Enregistrer dans les logs
             if self.store_in_file:
                 self._log_to_file(event)
@@ -202,8 +249,53 @@ class AuditLogger:
             # Vérifier les seuils d'alerte
             self._check_alert_thresholds(event)
 
+            self._apply_retention_policy()
         except Exception as e:
             logger.error(f"Erreur lors de l'enregistrement de l'événement d'audit: {e}")
+
+    def _redact_event(self, event: AuditEvent) -> AuditEvent:
+        if event.additional_data:
+            event.additional_data = self._redact_payload(event.additional_data)
+        if event.error_message and self.redact_error_messages:
+            if self._contains_sensitive_terms(event.error_message):
+                event.error_message = self.redaction_mask
+        return event
+
+    def _contains_sensitive_terms(self, value: str) -> bool:
+        lowered = value.lower()
+        return any(term in lowered for term in self.redaction_fields)
+
+    def _redact_payload(self, payload: Any) -> Any:
+        if isinstance(payload, dict):
+            redacted: Dict[str, Any] = {}
+            for key, value in payload.items():
+                if str(key).lower() in self.redaction_fields:
+                    redacted[key] = self.redaction_mask
+                else:
+                    redacted[key] = self._redact_payload(value)
+            return redacted
+        if isinstance(payload, list):
+            return [self._redact_payload(item) for item in payload]
+        return payload
+
+    def _apply_retention_policy(self) -> None:
+        if not self.store_in_db or not self.retention_days:
+            return
+        now = time.time()
+        if self.retention_interval_seconds:
+            if now - self._last_retention_run < self.retention_interval_seconds:
+                return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=self.retention_days)
+        try:
+            get_audit_event_model().objects.filter(timestamp__lt=cutoff).delete()
+        except Exception as exc:
+            logger.warning("Failed to apply audit retention: %s", exc)
+        if self._retention_hook:
+            try:
+                self._retention_hook(cutoff=cutoff, logger=self)
+            except Exception as exc:
+                logger.warning("Retention hook failed: %s", exc)
+        self._last_retention_run = now
 
     def log_login_attempt(
         self,

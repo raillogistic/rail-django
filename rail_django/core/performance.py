@@ -42,7 +42,7 @@ class QueryOptimizer:
         config = QueryOptimizationConfig(
             enable_select_related=self.settings.enable_select_related,
             enable_prefetch_related=self.settings.enable_prefetch_related,
-            max_prefetch_depth=self.settings.max_query_depth,
+            max_prefetch_depth=self.settings.max_prefetch_depth,
             auto_optimize_queries=self.settings.enable_query_optimization,
             enable_schema_caching=False,
             enable_query_caching=False,
@@ -195,15 +195,19 @@ class QueryComplexityAnalyzer:
                 GraphQLSecurityAnalyzer,
                 SecurityConfig,
             )
+            from .settings import SchemaSettings
+            from .security import get_introspection_roles
 
             doc = document or parse(query)
+            schema_settings = SchemaSettings.from_schema(self.schema_name or "default")
             analyzer = GraphQLSecurityAnalyzer(
                 SecurityConfig(
                     max_query_complexity=self.settings.max_query_complexity,
                     max_query_depth=self.settings.max_query_depth,
                     max_field_count=1000000,
                     max_operation_count=1000000,
-                    enable_introspection=True,
+                    enable_introspection=schema_settings.enable_introspection,
+                    introspection_roles=get_introspection_roles(self.schema_name),
                     enable_query_cost_analysis=enable_complexity,
                     enable_depth_limiting=enable_depth,
                 )

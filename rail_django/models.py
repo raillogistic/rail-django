@@ -49,8 +49,16 @@ def _default_performance_settings() -> Dict[str, Any]:
     return _default_section("performance_settings")
 
 
+def _default_persisted_query_settings() -> Dict[str, Any]:
+    return _default_section("persisted_query_settings")
+
+
 def _default_security_settings() -> Dict[str, Any]:
     return _default_section("security_settings")
+
+
+def _default_plugin_settings() -> Dict[str, Any]:
+    return _default_section("plugin_settings")
 
 
 def _default_middleware_settings() -> Dict[str, Any]:
@@ -104,7 +112,11 @@ class SchemaRegistryModel(django_models.Model):
     query_settings = django_models.JSONField(default=_default_query_settings)
     mutation_settings = django_models.JSONField(default=_default_mutation_settings)
     performance_settings = django_models.JSONField(default=_default_performance_settings)
+    persisted_query_settings = django_models.JSONField(
+        default=_default_persisted_query_settings
+    )
     security_settings = django_models.JSONField(default=_default_security_settings)
+    plugin_settings = django_models.JSONField(default=_default_plugin_settings)
     middleware_settings = django_models.JSONField(default=_default_middleware_settings)
     error_handling = django_models.JSONField(default=_default_error_handling)
     custom_scalars = django_models.JSONField(default=_default_custom_scalars)
@@ -168,8 +180,14 @@ class SchemaRegistryModel(django_models.Model):
             "performance_settings": _ensure_dict(
                 self.performance_settings, _default_performance_settings()
             ),
+            "persisted_query_settings": _ensure_dict(
+                self.persisted_query_settings, _default_persisted_query_settings()
+            ),
             "security_settings": _ensure_dict(
                 self.security_settings, _default_security_settings()
+            ),
+            "plugin_settings": _ensure_dict(
+                self.plugin_settings, _default_plugin_settings()
             ),
             "middleware_settings": _ensure_dict(
                 self.middleware_settings, _default_middleware_settings()
@@ -203,6 +221,25 @@ class SchemaRegistryModel(django_models.Model):
         }
 
 
+class SchemaSnapshotModel(django_models.Model):
+    """Stored snapshot of a schema for diff/export history."""
+
+    schema_name = django_models.SlugField(max_length=50, db_index=True)
+    version = django_models.CharField(max_length=50)
+    schema_hash = django_models.CharField(max_length=64, db_index=True)
+    schema_sdl = django_models.TextField(blank=True)
+    schema_json = django_models.JSONField(default=dict)
+    created_at = django_models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "rail_django_schema_snapshot"
+        ordering = ["-created_at"]
+        unique_together = ("schema_name", "version")
+
+    def __str__(self) -> str:
+        return f"{self.schema_name} ({self.version})"
+
+
 __all__ = [
     "AuditEventModel",
     "ReportingDataset",
@@ -211,4 +248,5 @@ __all__ = [
     "ReportingReportBlock",
     "ReportingExportJob",
     "SchemaRegistryModel",
+    "SchemaSnapshotModel",
 ]

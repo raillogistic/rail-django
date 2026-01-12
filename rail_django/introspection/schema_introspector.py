@@ -137,6 +137,80 @@ class SchemaIntrospection:
             'tags': self.tags
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SchemaIntrospection":
+        """Rehydrate a SchemaIntrospection from a dictionary."""
+        if not isinstance(data, dict):
+            raise ValueError("SchemaIntrospection.from_dict expects a dict")
+
+        complexity_data = data.get("complexity", {}) or {}
+        complexity = SchemaComplexity(
+            total_types=complexity_data.get("total_types", 0),
+            object_types=complexity_data.get("object_types", 0),
+            interface_types=complexity_data.get("interface_types", 0),
+            union_types=complexity_data.get("union_types", 0),
+            enum_types=complexity_data.get("enum_types", 0),
+            scalar_types=complexity_data.get("scalar_types", 0),
+            input_types=complexity_data.get("input_types", 0),
+            total_fields=complexity_data.get("total_fields", 0),
+            total_arguments=complexity_data.get("total_arguments", 0),
+            max_depth=complexity_data.get("max_depth", 0),
+            circular_references=complexity_data.get("circular_references", []) or [],
+            deprecated_fields=complexity_data.get("deprecated_fields", 0),
+        )
+
+        introspection = cls(
+            schema_name=data.get("schema_name", ""),
+            version=data.get("version"),
+            description=data.get("description"),
+        )
+        timestamp = data.get("introspection_date")
+        if isinstance(timestamp, str):
+            try:
+                introspection.introspection_date = datetime.fromisoformat(timestamp)
+            except ValueError:
+                pass
+        introspection.complexity = complexity
+
+        types_data = data.get("types", {}) or {}
+        for type_name, type_dict in types_data.items():
+            introspection.types[type_name] = TypeInfo(
+                name=type_dict.get("name", type_name),
+                kind=type_dict.get("kind", ""),
+                description=type_dict.get("description"),
+                fields=type_dict.get("fields", []) or [],
+                interfaces=type_dict.get("interfaces", []) or [],
+                possible_types=type_dict.get("possible_types", []) or [],
+                enum_values=type_dict.get("enum_values", []) or [],
+                input_fields=type_dict.get("input_fields", []) or [],
+                is_deprecated=bool(type_dict.get("is_deprecated", False)),
+                deprecation_reason=type_dict.get("deprecation_reason"),
+            )
+
+        introspection.queries = [
+            FieldInfo(**field) for field in (data.get("queries", []) or [])
+        ]
+        introspection.mutations = [
+            FieldInfo(**field) for field in (data.get("mutations", []) or [])
+        ]
+        introspection.subscriptions = [
+            FieldInfo(**field) for field in (data.get("subscriptions", []) or [])
+        ]
+
+        directives_data = data.get("directives", {}) or {}
+        for name, directive in directives_data.items():
+            introspection.directives[name] = DirectiveInfo(
+                name=directive.get("name", name),
+                description=directive.get("description"),
+                locations=directive.get("locations", []) or [],
+                args=directive.get("args", []) or [],
+                is_repeatable=bool(directive.get("is_repeatable", False)),
+            )
+
+        introspection.dependencies = data.get("dependencies", []) or []
+        introspection.tags = data.get("tags", []) or []
+        return introspection
+
     def _type_info_to_dict(self, type_info: TypeInfo) -> Dict[str, Any]:
         """Convert TypeInfo to dictionary."""
         return {

@@ -71,6 +71,7 @@ class RuntimeSettings:
     enable_query_optimization: bool = True
     enable_select_related: bool = True
     enable_prefetch_related: bool = True
+    max_prefetch_depth: int = 3
     enable_only_fields: bool = True
     enable_defer_fields: bool = False
     enable_dataloader: bool = True

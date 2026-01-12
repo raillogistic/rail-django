@@ -36,10 +36,26 @@ class AuditLoggerProtocol(Protocol):
 RateLimiterFactory = Callable[[Optional[str]], RateLimiterProtocol]
 QueryOptimizerFactory = Callable[[Optional[str]], QueryOptimizerProtocol]
 AuditLoggerFactory = Callable[[], AuditLoggerProtocol]
+class QueryCacheBackendProtocol(Protocol):
+    def get(self, key: str) -> Any:
+        ...
+
+    def set(self, key: str, value: Any, timeout: Optional[int] = None) -> None:
+        ...
+
+    def get_version(self, namespace: str) -> str:
+        ...
+
+    def bump_version(self, namespace: str) -> str:
+        ...
+
+
+QueryCacheFactory = Callable[[Optional[str]], QueryCacheBackendProtocol]
 
 _rate_limiter_factory: Optional[RateLimiterFactory] = None
 _query_optimizer_factory: Optional[QueryOptimizerFactory] = None
 _audit_logger_factory: Optional[AuditLoggerFactory] = None
+_query_cache_factory: Optional[QueryCacheFactory] = None
 
 
 def set_rate_limiter_factory(factory: Optional[RateLimiterFactory]) -> None:
@@ -55,6 +71,11 @@ def set_query_optimizer_factory(factory: Optional[QueryOptimizerFactory]) -> Non
 def set_audit_logger_factory(factory: Optional[AuditLoggerFactory]) -> None:
     global _audit_logger_factory
     _audit_logger_factory = factory
+
+
+def set_query_cache_factory(factory: Optional[QueryCacheFactory]) -> None:
+    global _query_cache_factory
+    _query_cache_factory = factory
 
 
 def get_rate_limiter(schema_name: Optional[str] = None) -> RateLimiterProtocol:
@@ -82,3 +103,9 @@ def get_audit_logger() -> AuditLoggerProtocol:
         from ..extensions.audit import audit_logger
 
     return audit_logger
+
+
+def get_query_cache_backend(schema_name: Optional[str] = None) -> Optional[QueryCacheBackendProtocol]:
+    if _query_cache_factory is not None:
+        return _query_cache_factory(schema_name)
+    return None

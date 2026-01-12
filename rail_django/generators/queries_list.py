@@ -2,6 +2,8 @@
 Single and list query builders.
 """
 
+import logging
+
 from typing import Any, List, Optional, Type, Union
 
 import graphene
@@ -16,6 +18,7 @@ from ..core.meta import get_model_graphql_meta
 from ..extensions.optimization import optimize_query
 from .queries_ordering import get_default_ordering
 
+logger = logging.getLogger(__name__)
 
 def generate_single_query(
     self, model: Type[models.Model], manager_name: str = "objects"
@@ -124,10 +127,23 @@ def generate_list_query(
                 prop_limit = getattr(
                     self.settings, "max_property_ordering_results", None
                 )
+                warn_on_cap = bool(
+                    getattr(self.settings, "property_ordering_warn_on_cap", True)
+                )
                 if prop_limit:
-                    max_items = min(
-                        prop_limit, (kwargs.get("limit") or prop_limit)
-                    )
+                    requested_limit = kwargs.get("limit")
+                    max_items = min(prop_limit, (requested_limit or prop_limit))
+                    if (
+                        warn_on_cap
+                        and requested_limit
+                        and requested_limit > prop_limit
+                    ):
+                        logger.warning(
+                            "Property ordering on %s capped at %s results (requested %s).",
+                            model.__name__,
+                            max_items,
+                            requested_limit,
+                        )
                     queryset = queryset[:max_items]
                 items = list(queryset)
                 items = self._apply_property_ordering(items, prop_specs)
