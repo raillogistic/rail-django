@@ -742,6 +742,7 @@ class MutationGenerator:
 
         class UpdateMutation(graphene.Mutation):
             class Arguments:
+                id = graphene.ID(required=True)
                 input = input_type(required=True)
 
             # Standardized return type
@@ -755,11 +756,12 @@ class MutationGenerator:
                 cls,
                 root: Any,
                 info: graphene.ResolveInfo,
+                id: str,
                 input: Dict[str, Any],
             ) -> "UpdateMutation":
                 try:
                     input = cls._sanitize_input_data(input)
-                    record_id = input.get("id")
+                    record_id = id or input.get("id")
                     if not record_id:
                         return cls(
                             ok=False,

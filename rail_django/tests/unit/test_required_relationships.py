@@ -65,7 +65,7 @@ class TestRequiredRelationships(TestCase):
         """Test that ForeignKey fields with blank=True are optional."""
 
         # Create a test model with blank=True ForeignKey
-        class TestModel(models.Model):
+        class RequiredRelationshipTestModel(models.Model):
             name = models.CharField(max_length=100)
             optional_category = models.ForeignKey(
                 Category, on_delete=models.CASCADE, blank=True, null=True
@@ -75,7 +75,9 @@ class TestRequiredRelationships(TestCase):
                 app_label = "test_app"
 
         # Generate create input type for the test model
-        create_input = self.type_generator.generate_input_type(TestModel, "create")
+        create_input = self.type_generator.generate_input_type(
+            RequiredRelationshipTestModel, "create"
+        )
 
         # Get the fields from the input type
         fields = create_input._meta.fields

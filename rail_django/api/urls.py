@@ -30,7 +30,7 @@ urlpatterns = [
         name="schema-detail",
     ),
     # Schema management operations
-    # path("management/", SchemaManagementAPIView.as_view(), name="schema-management"),
+    path("management/", SchemaManagementAPIView.as_view(), name="schema-management"),
     # Discovery operations
     path("discovery/", SchemaDiscoveryAPIView.as_view(), name="schema-discovery"),
     # Health and monitoring

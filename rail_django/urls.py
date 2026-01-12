@@ -12,6 +12,7 @@ Supports multi-schema functionality.
 """
 
 from django.urls import include, path
+from .health_urls import health_urlpatterns
 from .views.graphql_views import MultiSchemaGraphQLView, SchemaListView
 
 urlpatterns = [
@@ -27,3 +28,4 @@ urlpatterns = [
     # REST API for schema management
     path("api/v1/", include("rail_django.api.urls", namespace="schema_api")),
 ]
+urlpatterns += health_urlpatterns

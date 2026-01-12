@@ -774,8 +774,7 @@ class RelationshipMetadata:
 
     name: str
     relationship_type: str
-    # Embed full related model metadata (single-level depth by default)
-    related_model: "ModelMetadata"
+    related_model: str
     related_app: str
     to_field: Optional[str]
     from_field: str
@@ -1181,10 +1180,9 @@ class RelationshipMetadataType(graphene.ObjectType):
     relationship_type = graphene.String(
         required=True, description="Type of relationship"
     )
-    related_model = graphene.Field(
-        lambda: ModelMetadataType,
+    related_model = graphene.String(
         required=True,
-        description="Related model metadata",
+        description="Related model name",
     )
     related_app = graphene.String(required=True, description="Related model app")
     to_field = graphene.String(description="Target field name")
@@ -1745,30 +1743,16 @@ class ModelMetadataExtractor:
         # Simplified permission flag; adjust with actual checks if needed
         has_permission = True
 
-        # Build embedded related model metadata (guard depth to avoid recursion)
         if related_model is None or not hasattr(related_model, "_meta"):
             return None
 
         related_app_label = getattr(related_model._meta, "app_label", "")
         related_model_class_name = related_model.__name__
 
-        # Include nested relationships only if within max depth
-        include_nested = current_depth < self.max_depth
-        embedded_related = self.extract_model_metadata(
-            app_name=related_app_label,
-            model_name=related_model_class_name,
-            user=user,
-            nested_fields=include_nested,
-            permissions_included=True,
-            current_depth=current_depth + 1,
-        )
-        if embedded_related is None:
-            return None
-
         return RelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
-            related_model=embedded_related,
+            related_model=related_model_class_name,
             is_required=not field.blank,
             related_app=related_app_label,
             to_field=field.remote_field.name
@@ -1855,25 +1839,14 @@ class ModelMetadataExtractor:
         if nested_fields:
             reverse_relations = introspector.get_reverse_relations()
             for rel_name, related_model in reverse_relations.items():
-                # Build embedded metadata for reverse-related model with depth guard
-                include_nested = current_depth < self.max_depth
-                embedded_related = self.extract_model_metadata(
-                    app_name=related_model._meta.app_label,
-                    model_name=related_model.__name__,
-                    user=user,
-                    nested_fields=include_nested,
-                    permissions_included=True,
-                    current_depth=current_depth + 1,
-                )
-                if embedded_related is None:
-                    continue
+                related_app_label = getattr(related_model._meta, "app_label", "")
                 relationships.append(
                     RelationshipMetadata(
                         name=rel_name,
                         verbose_name=related_model._meta.verbose_name,
                         relationship_type="ReverseRelation",
-                        related_model=embedded_related,
-                        related_app=related_model._meta.app_label,
+                        related_model=related_model.__name__,
+                        related_app=related_app_label,
                         to_field=None,
                         is_required=False,
                         from_field=rel_name,
@@ -1900,8 +1873,11 @@ class ModelMetadataExtractor:
                 # Check standard Django permissions
                 for action in ["add", "change", "delete", "view"]:
                     perm_code = f"{app_label}.{action}_{model_name_code}"
-                    if user.has_perm(perm_code):
-                        permissions.append(perm_code)
+                    try:
+                        if user.has_perm(perm_code):
+                            permissions.append(perm_code)
+                    except Exception:
+                        continue
 
         # Get ordering
         ordering = list(model._meta.ordering) if model._meta.ordering else []
@@ -1974,7 +1950,10 @@ class ModelMetadataExtractor:
         model_name = model._meta.model_name
         view_permission = f"{app_label}.view_{model_name}"
 
-        return user.has_perm(view_permission)
+        try:
+            return user.has_perm(view_permission)
+        except Exception:
+            return False
 
     @cache_metadata(
         timeout=1800, user_specific=False
@@ -4045,7 +4024,10 @@ class ModelFormMetadataExtractor:
         model_name = model._meta.model_name
         view_permission = f"{app_label}.view_{model_name}"
 
-        return user.has_perm(view_permission)
+        try:
+            return user.has_perm(view_permission)
+        except Exception:
+            return False
 
 
 class ModelTableExtractor:
@@ -5323,11 +5305,22 @@ class ModelMetadataQuery(graphene.ObjectType):
         Returns:
             ModelMetadataType or None if not accessible
         """
-        # Check core schema settings gating
+        schema_settings = get_core_schema_settings(
+            getattr(info.context, "schema_name", None)
+        )
+        if not schema_settings:
+            return None
+
+        show_metadata = getattr(schema_settings, "show_metadata", None)
+        if show_metadata is None and isinstance(schema_settings, dict):
+            show_metadata = schema_settings.get("show_metadata")
+        if not show_metadata:
+            return None
+
         # Get user from context and require authentication
         user = getattr(info.context, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
-            permissions_included = False
+            return None
 
         # Extract metadata via extractor which handles model lookup
         extractor = ModelMetadataExtractor(max_depth=max_depth)

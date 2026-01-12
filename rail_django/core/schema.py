@@ -7,10 +7,13 @@ the unified GraphQL schema from all registered Django apps and models.
 
 import importlib
 import inspect
+import itertools
 import logging
+import re
 import threading
+import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import graphene
 from django.apps import apps
@@ -20,6 +23,8 @@ from django.dispatch import receiver
 from graphene_django.debug import DjangoDebug
 
 logger = logging.getLogger(__name__)
+
+_GRAPHQL_NAME_INVALID_RE = re.compile(r"[^_0-9A-Za-z]")
 
 
 class SchemaBuilder:
@@ -78,6 +83,7 @@ class SchemaBuilder:
         self._raw_settings = raw_settings or {}
 
         # Load settings using the new configuration system
+        self._settings_locked = settings is not None
         if settings is None:
             try:
                 from ..config_proxy import get_core_schema_settings
@@ -120,6 +126,22 @@ class SchemaBuilder:
 
         self._initialized = True
         self._connect_signals()
+
+    def _refresh_settings_if_needed(self) -> None:
+        if self._settings_locked:
+            return
+        try:
+            from ..config_proxy import get_core_schema_settings
+            from .settings import SchemaSettings
+
+            settings_dict = get_core_schema_settings(self.schema_name) or {}
+        except ImportError:
+            return
+
+        if settings_dict != (self._raw_settings or {}):
+            self.settings = SchemaSettings(**settings_dict) if settings_dict else SchemaSettings()
+            self._raw_settings = settings_dict or {}
+            self._schema = None
 
     @property
     def type_generator(self):
@@ -182,7 +204,12 @@ class SchemaBuilder:
         alias = str(plural).strip()
         if not alias:
             return None
-        alias = alias.replace(" ", "_").replace("-", "_").lower()
+        alias = unicodedata.normalize("NFKD", alias)
+        alias = alias.encode("ascii", "ignore").decode("ascii")
+        alias = alias.replace(" ", "_").replace("-", "_")
+        alias = _GRAPHQL_NAME_INVALID_RE.sub("", alias).strip("_").lower()
+        if not alias:
+            return None
         return f"all_{alias}"
 
     def _connect_signals(self) -> None:
@@ -955,13 +982,28 @@ class SchemaBuilder:
                 )
                 raise
 
-    def get_schema(self) -> graphene.Schema:
+    def get_schema(
+        self, model_list: Optional[List[Type[models.Model]]] = None
+    ) -> graphene.Schema:
         """
         Returns the current GraphQL schema, rebuilding if necessary.
 
         Returns:
             graphene.Schema: The current GraphQL schema
         """
+        self._refresh_settings_if_needed()
+        if model_list is not None:
+            valid_models = [
+                model for model in model_list if self._is_valid_model(model)
+            ]
+            original_discover = self._discover_models
+            self._discover_models = lambda: valid_models
+            try:
+                self.rebuild_schema()
+            finally:
+                self._discover_models = original_discover
+            return self._schema
+
         if self._schema is None:
             self.rebuild_schema()
         return self._schema
@@ -1138,6 +1180,116 @@ class SchemaBuilder:
             Any: Schema settings instance
         """
         return self.settings
+
+
+class AutoSchemaGenerator:
+    """Builds schemas from explicit model lists with basic caching."""
+
+    _counter = itertools.count()
+
+    def __init__(
+        self,
+        settings: Optional[Any] = None,
+        schema_name: Optional[str] = None,
+        registry=None,
+    ) -> None:
+        if schema_name is None:
+            schema_name = f"auto_{next(self._counter)}"
+        self._base_schema_name = schema_name
+        self._settings = settings
+        self._registry = registry
+        self._registered_models: Set[Type[models.Model]] = set()
+        self._query_extensions: List[Type[graphene.ObjectType]] = []
+        self._schema_cache: Dict[Tuple[str, ...], graphene.Schema] = {}
+        self._builders: Dict[Tuple[str, ...], SchemaBuilder] = {}
+        self._lock = threading.Lock()
+
+    def register_model(self, model: Type[models.Model]) -> None:
+        self._registered_models.add(model)
+        self._invalidate_cache()
+
+    def register_models(self, models_list: List[Type[models.Model]]) -> None:
+        for model in models_list:
+            self._registered_models.add(model)
+        self._invalidate_cache()
+
+    def add_query_extension(self, extension: Type[graphene.ObjectType]) -> None:
+        if extension not in self._query_extensions:
+            self._query_extensions.append(extension)
+            self._invalidate_cache()
+
+    def _invalidate_cache(self) -> None:
+        self._schema_cache.clear()
+        for builder in self._builders.values():
+            builder.clear_schema()
+
+    def _cache_key(
+        self, models_list: Optional[List[Type[models.Model]]]
+    ) -> Tuple[str, ...]:
+        if models_list is None:
+            return ("__all__",)
+        if not models_list:
+            return ("__none__",)
+        return tuple(sorted({model._meta.label_lower for model in models_list}))
+
+    def _get_builder(self, cache_key: Tuple[str, ...]) -> SchemaBuilder:
+        builder = self._builders.get(cache_key)
+        if builder is None:
+            schema_name = f"{self._base_schema_name}_{len(self._builders)}"
+            builder = SchemaBuilder(
+                settings=self._settings,
+                schema_name=schema_name,
+                registry=self._registry,
+            )
+            self._builders[cache_key] = builder
+        return builder
+
+    def get_schema(
+        self, model_list: Optional[List[Type[models.Model]]] = None
+    ) -> graphene.Schema:
+        if model_list is None and self._registered_models:
+            models_list = list(self._registered_models)
+        else:
+            models_list = list(model_list) if model_list is not None else None
+
+        cache_key = self._cache_key(models_list)
+        with self._lock:
+            cached = self._schema_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+            builder = self._get_builder(cache_key)
+
+            if models_list is not None:
+                valid_models = [
+                    model for model in models_list if builder._is_valid_model(model)
+                ]
+
+                def _discover_models_override() -> List[Type[models.Model]]:
+                    return valid_models
+
+                builder._discover_models = _discover_models_override
+
+            if self._query_extensions:
+                original_load = getattr(
+                    builder, "_auto_schema_original_load_query_extensions", None
+                )
+                if original_load is None:
+                    original_load = builder._load_query_extensions
+                    builder._auto_schema_original_load_query_extensions = original_load
+
+                def _load_query_extensions_override() -> List[Type[graphene.ObjectType]]:
+                    loaded = list(original_load())
+                    for extension in self._query_extensions:
+                        if extension not in loaded:
+                            loaded.append(extension)
+                    return loaded
+
+                builder._load_query_extensions = _load_query_extensions_override
+
+            schema = builder.get_schema()
+            self._schema_cache[cache_key] = schema
+            return schema
 
 
 # Global schema management functions

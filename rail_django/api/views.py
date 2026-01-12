@@ -40,7 +40,10 @@ class BaseAPIView(View):
 
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         """Handle CORS and common headers."""
-        if self.auth_required:
+        auth_required = self.auth_required and getattr(
+            settings, "GRAPHQL_SCHEMA_API_AUTH_REQUIRED", True
+        )
+        if auth_required:
             auth_response = self._authenticate_request(request)
             if auth_response is not None:
                 self._audit_request(
@@ -82,6 +85,8 @@ class BaseAPIView(View):
             elif origin and origin in allowed_origins:
                 response["Access-Control-Allow-Origin"] = origin
                 response["Vary"] = "Origin"
+            elif not allowed_origins:
+                response["Access-Control-Allow-Origin"] = "*"
 
             response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -262,6 +267,8 @@ class BaseAPIView(View):
 
     def _require_admin(self, request: HttpRequest) -> Optional[JsonResponse]:
         """Ensure the request is authenticated and authorized for management actions."""
+        if not getattr(settings, "GRAPHQL_SCHEMA_API_AUTH_REQUIRED", True):
+            return None
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
             return self.error_response("Authentication required", status=401)

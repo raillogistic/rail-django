@@ -264,7 +264,6 @@ class TestMultiSchemaAuthentication(TestCase):
         request = Mock()
         request.method = "GET"
         request.user = self.user
-        request.user.is_authenticated = True
 
         # Le test devrait passer sans erreur d'authentification
         with patch.object(view, "check_schema_permissions") as mock_check:

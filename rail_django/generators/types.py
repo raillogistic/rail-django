@@ -716,6 +716,8 @@ class TypeGenerator:
                 continue
             if not self._should_include_field(model, accessor_name):
                 continue
+            query_optimizer = self.query_optimizer
+            get_relation_dataloader = self._get_relation_dataloader
 
             # Use proper lazy type resolution to avoid recursion
             # Create a closure that captures the related_model
@@ -758,7 +760,14 @@ class TypeGenerator:
                 )
 
             # Add resolver that handles different relationship types with filtering
-            def make_resolver(accessor_name, is_one_to_one, related_model, relation):
+            def make_resolver(
+                accessor_name,
+                is_one_to_one,
+                related_model,
+                relation,
+                query_optimizer,
+                get_relation_dataloader,
+            ):
                 def resolver(self, info, filters=None):
                     # Optimization: Use prefetch cache if available and no filters (for lists)
                     if not is_one_to_one and not filters and hasattr(self, "_prefetched_objects_cache") and accessor_name in self._prefetched_objects_cache:
@@ -778,9 +787,9 @@ class TypeGenerator:
 
                         if (
                             relation is not None
-                            and self.query_optimizer.settings.enable_dataloader
+                            and query_optimizer.settings.enable_dataloader
                         ):
-                            loader = self._get_relation_dataloader(
+                            loader = get_relation_dataloader(
                                 info.context,
                                 related_model,
                                 relation,
@@ -822,7 +831,12 @@ class TypeGenerator:
                 return count_resolver
 
             type_attrs[f"resolve_{accessor_name}"] = make_resolver(
-                accessor_name, is_one_to_one_reverse, related_model, relation
+                accessor_name,
+                is_one_to_one_reverse,
+                related_model,
+                relation,
+                query_optimizer,
+                get_relation_dataloader,
             )
 
             # Add count resolver only for non-OneToOne relationships
@@ -907,8 +921,8 @@ class TypeGenerator:
     def generate_input_type(
         self,
         model: Type[models.Model],
-        partial: bool = False,
         mutation_type: str = "create",
+        partial: bool = False,
         include_reverse_relations: bool = True,
     ) -> Type[graphene.InputObjectType]:
         """
@@ -922,7 +936,12 @@ class TypeGenerator:
             include_reverse_relations: Whether to include reverse relationship fields for nested creation
         """
 
-        # Check if we already have this input type to prevent infinite recursion
+        # Backward-compatible argument handling
+        if isinstance(mutation_type, bool) and isinstance(partial, str):
+            mutation_type, partial = partial, mutation_type
+        elif isinstance(mutation_type, bool) and isinstance(partial, bool):
+            partial = mutation_type
+            mutation_type = "create"
         if isinstance(partial, str):
             mutation_type = partial
             partial = False
@@ -1015,12 +1034,7 @@ class TypeGenerator:
             # Apply field requirement logic to relationship fields
             # For ManyToMany fields, use blank attribute instead of null
             if rel_info.relationship_type == "ManyToManyField":
-                if mutation_type == "create":
-                    is_required = not django_field.blank and not partial
-                else:  # update
-                    is_required = (
-                        False  # All relationship fields are optional for updates
-                    )
+                is_required = False
             else:
                 if mutation_type == "create":
                     is_required = (
@@ -1064,11 +1078,7 @@ class TypeGenerator:
 
             elif rel_info.relationship_type == "ManyToManyField":
                 # 1. Add direct ID list field: <field_name>
-                list_type = graphene.List(graphene.ID)
-                if is_required:
-                    input_fields[field_name] = graphene.NonNull(list_type)
-                else:
-                    input_fields[field_name] = list_type
+                input_fields[field_name] = graphene.JSONString()
 
                 # 2. Add nested field: nested_<field_name>
                 nested_field_name = f"nested_{field_name}"

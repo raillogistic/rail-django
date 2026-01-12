@@ -231,8 +231,13 @@ class RoleManager:
         Returns:
             Liste des noms de rôles
         """
+        if not user or not getattr(user, "is_authenticated", False):
+            return []
+        if getattr(user, "pk", None) is None:
+            return []
+
         # Retrieve roles directly from Django groups
-        roles = list(user.groups.values_list('name', flat=True))
+        roles = list(user.groups.values_list("name", flat=True))
 
         # Add system roles if applicable
         if user.is_superuser:
@@ -254,6 +259,11 @@ class RoleManager:
         Returns:
             Ensemble des permissions effectives
         """
+        if not user or not getattr(user, "is_authenticated", False):
+            return set()
+        if getattr(user, "pk", None) is None:
+            return set()
+
         permissions = set()
         user_roles = self.get_user_roles(user)
 

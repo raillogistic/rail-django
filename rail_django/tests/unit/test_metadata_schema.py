@@ -78,7 +78,7 @@ class TestModelMetadataExtractor(TestCase):
         """Test field metadata extraction with specific permissions."""
         # Create permission for viewing name field
         content_type = ContentType.objects.get_for_model(TestModel)
-        permission = Permission.objects.create(
+        permission, _ = Permission.objects.get_or_create(
             codename="view_testmodel_name",
             name="Can view test model name",
             content_type=content_type,
@@ -354,7 +354,7 @@ class TestPermissionFiltering(TestCase):
         """Test field-level permission checking."""
         # Create specific field permission
         content_type = ContentType.objects.get_for_model(TestModel)
-        permission = Permission.objects.create(
+        permission, _ = Permission.objects.get_or_create(
             codename="view_testmodel_name",
             name="Can view test model name",
             content_type=content_type,

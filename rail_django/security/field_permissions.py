@@ -106,6 +106,16 @@ class FieldPermissionManager:
         # Règles par défaut pour les champs sensibles
         self._setup_default_rules()
 
+    def _safe_has_perm(self, user, perm_name: str) -> bool:
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if getattr(user, "pk", None) is None:
+            return False
+        try:
+            return user.has_perm(perm_name)
+        except Exception:
+            return False
+
     def _setup_default_rules(self):
         """Configure les règles par défaut pour les champs sensibles."""
         # Champs de mot de passe - toujours masqués
@@ -311,11 +321,11 @@ class FieldPermissionManager:
 
             if context.operation_type in ["create", "update", "delete"]:
                 perm_name = f"{app_label}.change_{model_name_lower}"
-                if context.user.has_perm(perm_name):
+                if self._safe_has_perm(context.user, perm_name):
                     return FieldAccessLevel.WRITE
 
             perm_name = f"{app_label}.view_{model_name_lower}"
-            if context.user.has_perm(perm_name):
+            if self._safe_has_perm(context.user, perm_name):
                 return FieldAccessLevel.READ
 
         # Fallback: permettre la lecture si aucune règle spécifique n'existe
@@ -404,7 +414,10 @@ class FieldPermissionManager:
 
         # Vérifier les permissions
         if rule.permissions:
-            if not any(context.user.has_perm(perm) for perm in rule.permissions):
+            if not any(
+                self._safe_has_perm(context.user, perm)
+                for perm in rule.permissions
+            ):
                 return False
 
         # Vérifier la condition personnalisée

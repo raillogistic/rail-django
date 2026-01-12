@@ -29,7 +29,7 @@ from tests.models import (
     TestSkillCategory,
 )
 
-from rail_django.core.schema import SchemaBuilder
+from rail_django.core.schema import AutoSchemaGenerator, SchemaBuilder
 from rail_django.decorators import business_logic
 from rail_django.generators.filters import AdvancedFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector

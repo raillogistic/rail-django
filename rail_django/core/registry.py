@@ -33,6 +33,7 @@ class SchemaInfo:
     exclude_models: List[str] = field(default_factory=list)
     settings: Dict[str, Any] = field(default_factory=dict)
     schema_class: Optional[Type] = None
+    builder: Optional[Any] = None
     auto_discover: bool = True
     enabled: bool = True
     created_at: Optional[str] = None
@@ -340,6 +341,7 @@ class SchemaRegistry:
                     registry=self,
                 )
                 self._schema_builders[name] = builder
+                schema_info.builder = builder
 
             except ImportError as e:
                 logger.error(f"Could not import SchemaBuilder: {e}")
@@ -416,9 +418,6 @@ class SchemaRegistry:
         # Look for schema configurations in Django apps
         for app_config in apps.get_app_configs():
             self._discover_app_schemas(app_config)
-
-        self._register_schemas_from_settings()
-        self._register_schemas_from_database()
 
         discovered_count = len(self._schemas) - initial_count
         logger.info(

@@ -580,6 +580,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
 
 @pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
 class TestDatabaseOperationsAdvanced:
     """Tests d'intégration avancés pour les opérations de base de données."""
 

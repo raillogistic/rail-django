@@ -180,8 +180,8 @@ class SchemaSerializer:
             'apps_count': len(schema_info.apps),
             'models_count': len(schema_info.models),
             'exclude_models_count': len(schema_info.exclude_models),
-            'created_at': schema_info.created_at.isoformat() if hasattr(schema_info, 'created_at') else None,
-            'updated_at': schema_info.updated_at.isoformat() if hasattr(schema_info, 'updated_at') else None
+            'created_at': schema_info.created_at.isoformat() if getattr(schema_info, 'created_at', None) else None,
+            'updated_at': schema_info.updated_at.isoformat() if getattr(schema_info, 'updated_at', None) else None
         }
 
     @staticmethod
@@ -205,9 +205,9 @@ class SchemaSerializer:
             'models': schema_info.models,
             'exclude_models': schema_info.exclude_models,
             'settings': schema_info.settings,
-            'builder': str(schema_info.builder) if schema_info.builder else None,
-            'created_at': schema_info.created_at.isoformat() if hasattr(schema_info, 'created_at') else None,
-            'updated_at': schema_info.updated_at.isoformat() if hasattr(schema_info, 'updated_at') else None
+            'builder': str(getattr(schema_info, 'builder', None)) if getattr(schema_info, 'builder', None) else None,
+            'created_at': schema_info.created_at.isoformat() if getattr(schema_info, 'created_at', None) else None,
+            'updated_at': schema_info.updated_at.isoformat() if getattr(schema_info, 'updated_at', None) else None
         }
 
 
@@ -238,8 +238,7 @@ class ManagementActionSerializer:
 
         action = str(data['action']).strip().lower()
         if action not in ManagementActionSerializer.VALID_ACTIONS:
-            raise ValueError(
-                f"Invalid action. Must be one of: {', '.join(ManagementActionSerializer.VALID_ACTIONS)}")
+            raise ValueError(f"Unknown action: {action}")
 
         validated_data = {'action': action}
 

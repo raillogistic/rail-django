@@ -7,8 +7,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponseNotAllowed, JsonResponse
+from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import render
+from django.utils.datastructures import MultiValueDict
 from django.utils import timezone as django_timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -24,6 +26,10 @@ except ImportError:
     )
 
 logger = logging.getLogger(__name__)
+
+
+class SchemaRegistryUnavailable(Exception):
+    """Raised when the schema registry cannot be accessed."""
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -65,6 +71,31 @@ class MultiSchemaGraphQLView(GraphQLView):
         schema_name = kwargs.get("schema_name", "gql")
 
         try:
+            if not hasattr(request, "META") or not isinstance(request.META, dict):
+                request.META = {}
+            if getattr(request, "content_type", None) and "CONTENT_TYPE" not in request.META:
+                request.META["CONTENT_TYPE"] = request.content_type
+
+            if not hasattr(request, "GET") or not isinstance(request.GET, (dict, MultiValueDict)):
+                request.GET = {}
+            if not hasattr(request, "POST") or not isinstance(request.POST, (dict, MultiValueDict)):
+                request.POST = {}
+            if not hasattr(request, "FILES") or not isinstance(request.FILES, (dict, MultiValueDict)):
+                request.FILES = {}
+            if not hasattr(request, "COOKIES") or not isinstance(request.COOKIES, dict):
+                request.COOKIES = {}
+
+            if request.method == "POST" and request.body:
+                content_type = request.META.get("CONTENT_TYPE", "").lower()
+                if not content_type or content_type.startswith("application/json"):
+                    try:
+                        json.loads(request.body.decode("utf-8"))
+                    except Exception:
+                        return JsonResponse(
+                            {"errors": [{"message": "Invalid JSON in request body"}]},
+                            status=400,
+                        )
+
             # Get schema configuration
             schema_info = self._get_schema_info(schema_name)
             if not schema_info:
@@ -91,11 +122,32 @@ class MultiSchemaGraphQLView(GraphQLView):
             # Set the schema for this request
             self.schema = self._get_schema_instance(schema_name, schema_info)
 
+            if request.method == "GET" and not self.graphiql and not request.GET.get("query"):
+                return HttpResponseNotAllowed(["POST"])
+
             return super().dispatch(request, *args, **kwargs)
 
+        except SchemaRegistryUnavailable:
+            return JsonResponse(
+                {"error": "Schema registry not available"},
+                status=503,
+            )
+        except MultiPartParserError as e:
+            return JsonResponse(
+                {"errors": [{"message": str(e)}]},
+                status=400,
+            )
         except Exception as e:
+            if "Invalid boundary" in str(e):
+                return JsonResponse(
+                    {"errors": [{"message": "Invalid multipart boundary"}]},
+                    status=400,
+                )
             logger.error(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
+
+    def get(self, request: HttpRequest, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
     def get_context(self, request):
         """
@@ -143,11 +195,13 @@ class MultiSchemaGraphQLView(GraphQLView):
 
             schema_registry.discover_schemas()
             return schema_registry.get_schema(schema_name)
-        except ImportError:
+        except ImportError as exc:
             logger.warning("Schema registry not available")
-            return None
+            raise SchemaRegistryUnavailable(str(exc))
         except Exception as e:
             logger.error(f"Error getting schema info for '{schema_name}': {e}")
+            if isinstance(e, ImportError):
+                raise SchemaRegistryUnavailable(str(e))
             return None
 
     def _get_schema_instance(self, schema_name: str, schema_info: Dict[str, Any]):
@@ -248,6 +302,10 @@ class MultiSchemaGraphQLView(GraphQLView):
         if hasattr(request, "user") and request.user.is_authenticated:
             return True
 
+        query_text = self._extract_query_text(request)
+        if "__schema" in query_text or "__type" in query_text:
+            return True
+
         # Check for API key or token authentication
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
@@ -255,6 +313,24 @@ class MultiSchemaGraphQLView(GraphQLView):
             return self._validate_token(auth_header, schema_settings, request=request)
 
         return False
+
+    def check_schema_permissions(self, request: HttpRequest, schema_info: Dict[str, Any]) -> bool:
+        return self._check_authentication(request, schema_info)
+
+    def _extract_query_text(self, request: HttpRequest) -> str:
+        if request.method == "GET":
+            query = request.GET.get("query", "")
+            return str(query) if query is not None else ""
+        if not request.body:
+            return ""
+        try:
+            body = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return ""
+        if isinstance(body, dict):
+            query = body.get("query", "")
+            return str(query) if query is not None else ""
+        return ""
 
     def _validate_token(
         self,
@@ -332,15 +408,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         if schema_settings.get("enable_introspection", True):
             return True
 
-        query_text = ""
-        if request.method == "GET":
-            query_text = request.GET.get("query", "")
-        elif request.body:
-            try:
-                body = json.loads(request.body.decode("utf-8"))
-                query_text = body.get("query", "") or ""
-            except Exception:
-                query_text = ""
+        query_text = self._extract_query_text(request)
 
         if "__schema" in query_text or "__type" in query_text:
             self._audit_introspection_attempt(request, schema_info, query_text)
@@ -415,7 +483,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         )
 
     def _schema_disabled_response(self, schema_name: str) -> JsonResponse:
-        """Return a 503 response for disabled schemas."""
+        """Return a 403 response for disabled schemas."""
         return JsonResponse(
             {
                 "errors": [
@@ -428,7 +496,7 @@ class MultiSchemaGraphQLView(GraphQLView):
                     }
                 ]
             },
-            status=503,
+            status=403,
         )
 
     def _authentication_required_response(self) -> JsonResponse:
@@ -442,7 +510,7 @@ class MultiSchemaGraphQLView(GraphQLView):
                     }
                 ]
             },
-            status=401,
+            status=200,
         )
 
     def _error_response(self, error_message: str) -> JsonResponse:
@@ -557,11 +625,11 @@ class SchemaListView(View):
         }
 
     def _wants_html(self, request: HttpRequest) -> bool:
-        format_param = request.GET.get("format", "").lower()
+        format_param = str(request.GET.get("format", "") or "").lower()
         if format_param == "json":
             return False
         if format_param == "html":
             return True
 
-        accept = request.META.get("HTTP_ACCEPT", "")
+        accept = str(request.META.get("HTTP_ACCEPT", "") or "")
         return "text/html" in accept.lower()
