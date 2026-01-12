@@ -18,7 +18,7 @@ from django.db import models, transaction
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import override_settings
 from graphene import ObjectType, Schema
-from graphene.test import Client
+from rail_django.testing import RailGraphQLTestClient
 from graphene_django import DjangoObjectType
 from tests.models import (
     TestCompany,
@@ -94,7 +94,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         schema = self.schema_generator.get_schema()
 
         # Créer un client de test
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une requête d'introspection
         introspection_query = """
@@ -149,7 +149,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une requête pour récupérer les entreprises
         query = """
@@ -182,7 +182,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         """Test l'exécution de mutations avec des données réelles."""
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une mutation pour créer une entreprise
         mutation = """
@@ -256,7 +256,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une requête avec relations
         query = """
@@ -306,7 +306,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une mutation de méthode métier
         mutation = (
@@ -354,7 +354,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Exécuter une requête avec filtres
         query = """
@@ -389,7 +389,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         self.assertIsNotNone(schema)
 
         # Tester la validation avec une requête invalide
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         invalid_query = """
         query {
@@ -433,7 +433,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         self.assertLess(generation_time, 2.0)
 
         # Tester l'exécution de requêtes
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         query = """
         query {
@@ -459,7 +459,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         """Test la gestion d'erreurs dans l'intégration complète."""
         # Générer le schéma
         schema = self.schema_generator.get_schema()
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="default")
 
         # Tester une mutation avec des données invalides
         mutation = """
@@ -513,7 +513,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         def execute_query():
             """Exécute une requête dans un thread séparé."""
             try:
-                client = Client(schema)
+                client = RailGraphQLTestClient(schema, schema_name="default")
                 query = """
                 query {
                     allCompanies {

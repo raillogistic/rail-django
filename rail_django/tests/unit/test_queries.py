@@ -20,7 +20,6 @@ from django.test import TestCase
 from graphene import Boolean, DateTime, Field, Int
 from graphene import List as GrapheneList
 from graphene import ObjectType, String
-from graphene.test import Client
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 

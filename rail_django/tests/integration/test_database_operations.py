@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, models, transaction
 from django.test import TestCase, TransactionTestCase
 from django.test.utils import override_settings
 from graphene import Schema
-from graphene.test import Client
+from rail_django.testing import RailGraphQLTestClient
 from test_app.models import Category, Post, Tag
 from tests.models import TestAccount, TestCustomer
 
@@ -51,7 +51,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Générer le schéma
         self.schema = self.schema_generator.get_schema()
-        self.client = Client(self.schema)
+        self.client = RailGraphQLTestClient(self.schema, schema_name="default")
 
     def test_create_operations(self):
         """Test les opérations de création en base de données."""

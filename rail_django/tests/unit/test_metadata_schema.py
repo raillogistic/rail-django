@@ -13,7 +13,7 @@ from django.contrib.auth.models import Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.test import TestCase
-from graphene.test import Client
+from rail_django.testing import RailGraphQLTestClient
 
 from rail_django.core.settings import SchemaSettings
 from rail_django.extensions.metadata import (
@@ -296,7 +296,7 @@ class TestGraphQLIntegration(TestCase):
             pass
 
         schema = graphene.Schema(query=Query)
-        client = Client(schema)
+        client = RailGraphQLTestClient(schema, schema_name="test", user=self.user)
 
         # Execute GraphQL query
         query = """
@@ -323,11 +323,7 @@ class TestGraphQLIntegration(TestCase):
         }
         """
 
-        # Mock context with user
-        context = Mock()
-        context.user = self.user
-
-        result = client.execute(query, context=context)
+        result = client.execute(query)
 
         # Verify no errors in execution
         self.assertIsNone(result.get("errors"))

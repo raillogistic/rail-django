@@ -23,7 +23,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from graphene import Schema
-from graphene.test import Client
+from rail_django.testing import RailGraphQLTestClient
 from graphene_django.views import GraphQLView
 from rail_django.core.schema import SchemaBuilder
 from rail_django.middleware import GraphQLPerformanceMiddleware
@@ -111,7 +111,9 @@ class TestAPIEndpointsIntegration(TestCase):
         self.schema = self.schema_generator.get_schema()
 
         # Client GraphQL
-        self.graphql_client = Client(self.schema)
+        self.graphql_client = RailGraphQLTestClient(
+            self.schema, schema_name="default"
+        )
 
         # URL de l'endpoint GraphQL
         self.graphql_url = "/graphql/gql/"

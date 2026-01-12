@@ -19,7 +19,6 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.test import TestCase
 from graphene import Boolean, DateTime, Field, Int, Mutation, ObjectType, String
-from graphene.test import Client
 from graphene_django import DjangoObjectType
 from test_app.models import Category, Client, Comment
 from test_app.models import Post
