@@ -149,6 +149,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_cors_middleware": True,
         "log_queries": True,
         "log_mutations": True,
+        "log_introspection": False,
         "log_errors": True,
         "log_performance": True,
         "performance_threshold_ms": 1000,

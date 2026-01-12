@@ -371,6 +371,8 @@ RAIL_DJANGO_GRAPHQL = {
         "log_queries": True,
         # Log GraphQL mutations
         "log_mutations": True,
+        # Log introspection fields (__schema, __type, __typename)
+        "log_introspection": False,
         # Log GraphQL errors
         "log_errors": True,
         # Log performance data

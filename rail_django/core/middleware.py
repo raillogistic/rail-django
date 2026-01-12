@@ -35,6 +35,7 @@ class MiddlewareSettings:
     enable_cors_middleware: bool = True
     log_queries: bool = True
     log_mutations: bool = True
+    log_introspection: bool = False
     log_errors: bool = True
     log_performance: bool = True
     performance_threshold_ms: int = 1000
@@ -123,6 +124,8 @@ class LoggingMiddleware(BaseMiddleware):
             (operation_type == "query" and self.settings.log_queries) or
             (operation_type == "mutation" and self.settings.log_mutations)
         )
+        if should_log and not self.settings.log_introspection and self._is_introspection_field(info):
+            should_log = False
 
         if should_log:
             user = getattr(info.context, 'user', AnonymousUser())
@@ -158,6 +161,15 @@ class LoggingMiddleware(BaseMiddleware):
                 )
 
             raise
+
+    @staticmethod
+    def _is_introspection_field(info: Any) -> bool:
+        field_name = getattr(info, "field_name", "") or ""
+        if field_name.startswith("__"):
+            return True
+        parent_type = getattr(info, "parent_type", None)
+        parent_name = getattr(parent_type, "name", "") or ""
+        return parent_name.startswith("__")
 
 
 class GraphQLAuditMiddleware(BaseMiddleware):
