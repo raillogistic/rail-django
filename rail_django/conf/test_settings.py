@@ -31,9 +31,20 @@ def _sqlite_json_valid(value):
         return 0
 
 
+def _sqlite_json(value):
+    if value is None:
+        return None
+    try:
+        json.loads(value)
+        return value
+    except (TypeError, ValueError):
+        return None
+
+
 def _register_sqlite_functions(sender, connection, **kwargs):
     if connection.vendor != "sqlite":
         return
+    connection.connection.create_function("JSON", 1, _sqlite_json)
     connection.connection.create_function("JSON_VALID", 1, _sqlite_json_valid)
 
 

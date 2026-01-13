@@ -15,8 +15,10 @@ Note: GraphiQL is controlled by `schema_settings.enable_graphiql`.
 Rail Django supports APQ-style persisted queries when enabled via
 `persisted_query_settings`. Clients send a `sha256Hash` inside
 `extensions.persistedQuery` and can omit the query body after the hash is
-registered. If `require_allowlist` is enabled, unknown hashes are rejected.
-See `extensions.md` and `configuration.md` for setup details.
+registered. If `enforce_allowlist` is enabled, unknown hashes are rejected.
+When `enforce_allowlist` is false, unknown hashes return `PERSISTED_QUERY_NOT_FOUND`
+so clients can register them when `allow_unregistered` is enabled. See
+`extensions.md` and `configuration.md` for setup details.
 
 ## Field naming
 

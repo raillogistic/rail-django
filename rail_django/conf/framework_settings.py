@@ -3,8 +3,12 @@ Base settings for projects using rail-django framework.
 Users import * from this file in their project's settings.py.
 """
 
+import json
 import os
 from pathlib import Path
+
+from django.db.backends.signals import connection_created
+
 from rail_django.defaults import LIBRARY_DEFAULTS
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -75,6 +79,36 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+
+def _sqlite_json_valid(value):
+    if value is None:
+        return 0
+    try:
+        json.loads(value)
+        return 1
+    except (TypeError, ValueError):
+        return 0
+
+
+def _sqlite_json(value):
+    if value is None:
+        return None
+    try:
+        json.loads(value)
+        return value
+    except (TypeError, ValueError):
+        return None
+
+
+def _register_sqlite_functions(sender, connection, **kwargs):
+    if connection.vendor != "sqlite":
+        return
+    connection.connection.create_function("JSON", 1, _sqlite_json)
+    connection.connection.create_function("JSON_VALID", 1, _sqlite_json_valid)
+
+
+connection_created.connect(_register_sqlite_functions)
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

@@ -672,7 +672,7 @@ def optimize_query(
 
             try:
                 # Analyser la complexité si une limite est définie
-                if complexity_limit:
+                if complexity_limit is not None:
                     from ..security.graphql_security import (
                         GraphQLSecurityAnalyzer,
                         SecurityConfig,

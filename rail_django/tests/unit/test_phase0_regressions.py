@@ -3,7 +3,6 @@ Targeted regression tests for Phase 0 stabilization.
 """
 
 from types import SimpleNamespace
-import unittest
 
 import graphene
 from django.contrib.auth.models import AnonymousUser, User
@@ -35,7 +34,6 @@ class TestPhase0Regressions(TestCase):
         context = build_context(user=user, schema_name="phase0")
         return SimpleNamespace(context=context)
 
-    @unittest.expectedFailure
     def test_error_handler_maps_django_validation_error(self):
         handler = ErrorHandler()
         error = handler.handle_error(DjangoValidationError("invalid"))
@@ -51,7 +49,6 @@ class TestPhase0Regressions(TestCase):
         self.assertNotEqual(masked.password, "secret")
         self.assertEqual(masked.email, "user@example.com")
 
-    @unittest.expectedFailure
     def test_field_masking_anonymous_user_masks_sensitive_fields(self):
         generator = QueryGenerator(TypeGenerator())
         instance = Phase0MaskingModel(password="secret", email="user@example.com")
@@ -61,7 +58,6 @@ class TestPhase0Regressions(TestCase):
 
         self.assertNotEqual(masked.password, "secret")
 
-    @unittest.expectedFailure
     def test_graphql_security_middleware_enforces_complexity_limits(self):
         class Query(graphene.ObjectType):
             first = graphene.String()
@@ -81,8 +77,18 @@ class TestPhase0Regressions(TestCase):
         ]
         context = build_context(schema_name="security")
 
+        query = """
+        query Test {
+          ...Fields
+        }
+        fragment Fields on Query {
+          first
+          second
+        }
+        """
+
         result = schema.execute(
-            "{ first second }",
+            query,
             context_value=context,
             middleware=middleware,
         )
@@ -90,7 +96,6 @@ class TestPhase0Regressions(TestCase):
         self.assertTrue(result.errors)
         self.assertIn("complex", result.errors[0].message.lower())
 
-    @unittest.expectedFailure
     def test_schema_builder_respects_authentication_required_override(self):
         harness = build_schema(
             schema_name="phase0_auth",
@@ -99,7 +104,6 @@ class TestPhase0Regressions(TestCase):
 
         self.assertFalse(harness.builder.settings.authentication_required)
 
-    @unittest.expectedFailure
     def test_optimize_query_enforces_complexity_limit(self):
         class Query(graphene.ObjectType):
             echo = graphene.String()

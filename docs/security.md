@@ -95,6 +95,10 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+When `enforce_allowlist` is false, allowlist entries are treated as pre-registered
+queries and unknown hashes return `PERSISTED_QUERY_NOT_FOUND` so clients can
+register them when `allow_unregistered` is enabled.
+
 ## Rate limiting
 
 Rate limiting is centralized in `rail_django.rate_limiting` and applied in:

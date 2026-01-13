@@ -21,6 +21,7 @@ from graphql import (
     DocumentNode,
     FieldNode,
     FragmentDefinitionNode,
+    FragmentSpreadNode,
     GraphQLError,
     GraphQLResolveInfo,
     GraphQLSchema,
@@ -150,6 +151,12 @@ class GraphQLSecurityAnalyzer:
         )
 
         # Analyser chaque opération
+        fragments = {
+            definition.name.value: definition
+            for definition in document.definitions
+            if isinstance(definition, FragmentDefinitionNode)
+        }
+
         for definition in document.definitions:
             if isinstance(definition, OperationDefinitionNode):
                 result.operation_count += 1
@@ -164,7 +171,8 @@ class GraphQLSecurityAnalyzer:
                     schema,
                     result,
                     depth=1,
-                    parent_type=schema.query_type if definition.operation.value == 'query' else schema.mutation_type
+                    parent_type=schema.query_type if definition.operation.value == 'query' else schema.mutation_type,
+                    fragments=fragments,
                 )
 
         # Calculer le temps d'exécution estimé
@@ -180,7 +188,7 @@ class GraphQLSecurityAnalyzer:
 
     def _analyze_selection_set(self, selection_set, schema: GraphQLSchema,
                                result: QueryAnalysisResult, depth: int,
-                               parent_type=None):
+                               parent_type=None, fragments: Optional[Dict[str, Any]] = None):
         """
         Analyse un ensemble de sélections GraphQL.
 
@@ -219,7 +227,8 @@ class GraphQLSecurityAnalyzer:
                         schema,
                         result,
                         depth + 1,
-                        field_type
+                        field_type,
+                        fragments,
                     )
 
             elif isinstance(selection, InlineFragmentNode):
@@ -228,17 +237,22 @@ class GraphQLSecurityAnalyzer:
                     schema,
                     result,
                     depth,
-                    parent_type
+                    parent_type,
+                    fragments,
                 )
 
-            elif isinstance(selection, FragmentDefinitionNode):
-                self._analyze_selection_set(
-                    selection.selection_set,
-                    schema,
-                    result,
-                    depth,
-                    parent_type
-                )
+            elif isinstance(selection, FragmentSpreadNode):
+                if fragments:
+                    fragment = fragments.get(selection.name.value)
+                    if fragment:
+                        self._analyze_selection_set(
+                            fragment.selection_set,
+                            schema,
+                            result,
+                            depth,
+                            parent_type,
+                            fragments,
+                        )
 
     def _calculate_field_complexity(self, field: FieldNode, parent_type, depth: int) -> int:
         """
@@ -485,7 +499,8 @@ def create_security_middleware(config: SecurityConfig = None):
         Returns:
             Résultat du middleware suivant
         """
-        is_root_field = info.path.key == info.operation.selection_set.selections[0].name.value
+        path = getattr(info, "path", None)
+        is_root_field = path is None or getattr(path, "prev", None) is None
         user = getattr(info.context, "user", None)
 
         if is_root_field:
@@ -513,6 +528,8 @@ def create_security_middleware(config: SecurityConfig = None):
                 # Ajouter les métriques au contexte
                 info.context.security_analysis = result
 
+            except GraphQLError:
+                raise
             except Exception as e:
                 logger.error(f"Erreur d'analyse de sécurité: {e}")
 

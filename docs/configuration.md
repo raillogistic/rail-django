@@ -230,6 +230,9 @@ RAIL_DJANGO_GRAPHQL = {
 
 If you want a strict allowlist, set `enforce_allowlist = True` and provide a
 hash->query mapping (or a list of hashes) in `allowlist` or `allowlist_path`.
+When `enforce_allowlist` is false, allowlist entries are treated as
+pre-registered queries and unknown hashes return `PERSISTED_QUERY_NOT_FOUND`
+so clients can register them when `allow_unregistered` is enabled.
 
 ## Plugin settings
 

@@ -73,13 +73,24 @@ class SchemaRegistry:
         else:
             schema_settings = {}
 
-        if "enable_graphiql" not in schema_settings and "enable_graphiql" not in settings_payload:
+        payload_keys = {str(key).upper() for key in settings_payload}
+
+        if (
+            "enable_graphiql" not in schema_settings
+            and "enable_graphiql" not in settings_payload
+            and "ENABLE_GRAPHIQL" not in payload_keys
+        ):
             schema_settings["enable_graphiql"] = debug_enabled
-        if "enable_introspection" not in schema_settings and "enable_introspection" not in settings_payload:
+        if (
+            "enable_introspection" not in schema_settings
+            and "enable_introspection" not in settings_payload
+            and "ENABLE_INTROSPECTION" not in payload_keys
+        ):
             schema_settings["enable_introspection"] = debug_enabled
         if (
             "authentication_required" not in schema_settings
             and "authentication_required" not in settings_payload
+            and "AUTHENTICATION_REQUIRED" not in payload_keys
         ):
             schema_settings["authentication_required"] = not debug_enabled
 
@@ -293,6 +304,7 @@ class SchemaRegistry:
                 if schema_info.settings:
                     overrides = {}
                     schema_settings_overrides = {}
+                    direct_schema_overrides = {}
 
                     # Get all valid SchemaSettings fields
                     from .settings import SchemaSettings
@@ -302,18 +314,28 @@ class SchemaRegistry:
                         for field in SchemaSettings.__dataclass_fields__.values()
                     }
 
-                    # Promote top-level library flags to uppercase for SettingsProxy
+                    # Normalize top-level schema settings so overrides win over defaults.
                     for key, value in schema_info.settings.items():
-                        # Normalize key casing for proxy-level settings
-                        upper_key = key.upper()
-                        if upper_key in {"ENABLE_GRAPHIQL", "AUTHENTICATION_REQUIRED"}:
-                            overrides[upper_key] = value
-                        # Collect all valid SchemaSettings fields
-                        elif key in valid_schema_fields:
-                            schema_settings_overrides[key] = value
-                        # Handle nested schema_settings (legacy support)
-                        elif key == "schema_settings" and isinstance(value, dict):
+                        if key == "schema_settings" and isinstance(value, dict):
                             schema_settings_overrides.update(value)
+                            continue
+
+                        key_name = str(key)
+                        upper_key = key_name.upper()
+                        if upper_key == "ENABLE_GRAPHIQL":
+                            direct_schema_overrides["enable_graphiql"] = value
+                            continue
+                        if upper_key == "ENABLE_INTROSPECTION":
+                            direct_schema_overrides["enable_introspection"] = value
+                            continue
+                        if upper_key == "AUTHENTICATION_REQUIRED":
+                            direct_schema_overrides["authentication_required"] = value
+                            continue
+                        if key_name in valid_schema_fields:
+                            direct_schema_overrides[key_name] = value
+
+                    if direct_schema_overrides:
+                        schema_settings_overrides.update(direct_schema_overrides)
 
                     # Attach schema-level overrides if any
                     if schema_settings_overrides:

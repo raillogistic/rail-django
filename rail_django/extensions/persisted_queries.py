@@ -132,22 +132,20 @@ def resolve_persisted_query(
                 error_message="Persisted query hash mismatch",
             )
 
-        if settings.enforce_allowlist and sha not in settings.allowlist_hashes:
+        if (
+            settings.enforce_allowlist
+            and settings.allowlist_hashes
+            and sha not in settings.allowlist_hashes
+        ):
             return PersistedQueryResolution(
                 query=None,
                 error_code=PERSISTED_QUERY_NOT_ALLOWED,
                 error_message="Persisted query not allowlisted",
             )
 
-        if settings.allowlist and sha not in settings.allowlist_hashes:
-            return PersistedQueryResolution(
-                query=None,
-                error_code=PERSISTED_QUERY_NOT_ALLOWED,
-                error_message="Persisted query not allowlisted",
-            )
-
-        if settings.allowlist.get(sha):
-            return PersistedQueryResolution(query=settings.allowlist.get(sha))
+        allowlisted_query = settings.allowlist.get(sha)
+        if allowlisted_query:
+            return PersistedQueryResolution(query=allowlisted_query)
 
         if settings.allow_unregistered or not settings.allowlist_hashes:
             _get_store(settings).set(sha, query)
@@ -157,16 +155,20 @@ def resolve_persisted_query(
     if allowlisted_query:
         return PersistedQueryResolution(query=allowlisted_query)
 
-    stored_query = _get_store(settings).get(sha)
-    if stored_query:
-        return PersistedQueryResolution(query=stored_query)
-
-    if settings.allowlist_hashes and sha not in settings.allowlist_hashes:
+    if (
+        settings.enforce_allowlist
+        and settings.allowlist_hashes
+        and sha not in settings.allowlist_hashes
+    ):
         return PersistedQueryResolution(
             query=None,
             error_code=PERSISTED_QUERY_NOT_ALLOWED,
             error_message="Persisted query not allowlisted",
         )
+
+    stored_query = _get_store(settings).get(sha)
+    if stored_query:
+        return PersistedQueryResolution(query=stored_query)
 
     return PersistedQueryResolution(
         query=None,

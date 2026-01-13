@@ -61,6 +61,43 @@ apps.
 - `rail_django/tests/integration`: DB and schema execution tests.
 - Use pytest markers: `@pytest.mark.unit`, `@pytest.mark.integration`.
 
+## Test coverage map
+This is a quick reference for what each test module is responsible for.
+
+### Unit tests (1)
+- `rail_django/tests/unit/test_decorators.py`: schema registration decorators, mutation/business decorators, logging.
+- `rail_django/tests/unit/test_generators.py`: type generation mapping, relationships, caching, meta handling, invalid model errors.
+- `rail_django/tests/unit/test_introspector.py`: model field/relationship introspection, validation, choices, dataclasses, multi-model workflow.
+- `rail_django/tests/unit/test_metadata_schema.py`: metadata extraction, permissions, GraphQL query integration, edge cases.
+- `rail_django/tests/unit/test_mutations.py`: mutation generation, input types, relationship handling, validation/error paths, performance.
+
+### Unit tests (2)
+- `rail_django/tests/unit/test_phase0_regressions.py`: error handling mapping, field masking, complexity enforcement, schema override handling.
+- `rail_django/tests/unit/test_phase4_performance.py`: query cache hit/invalidation, user-specific cache, metrics collector.
+- `rail_django/tests/unit/test_phase5_security.py`: access guard auth/introspection, input validation severity, audit redaction, auth cookies.
+- `rail_django/tests/unit/test_phase6_persisted_queries.py`: APQ allowlist enforcement, allow_unregistered registration, hash mismatch/not found flows.
+- `rail_django/tests/unit/test_phase6_plugins.py`: plugin execution hook interception.
+
+### Unit tests (3)
+- `rail_django/tests/unit/test_queries.py`: query generation for single/list/nested cases and invalid model handling.
+- `rail_django/tests/unit/test_registry.py`: schema registry lifecycle (register/enable/list/clear/discover) and global helpers.
+- `rail_django/tests/unit/test_required_relationships.py`: required relationship fields in inputs across fk/o2o/m2m.
+- `rail_django/tests/unit/test_templating.py`: pdf template registry inheritance and permission gating.
+
+### Integration tests (1)
+- `rail_django/tests/integration/test_api_endpoints.py`: endpoint availability, auth/permissions, validation, rate limiting, cors, batching, perf, headers.
+- `rail_django/tests/integration/test_database_operations.py`: CRUD, relationships, business methods, transactions, constraints, concurrency, perf, migrations.
+- `rail_django/tests/integration/test_multi_schema.py`: multi-schema routing, schema list urls, auth gating, error handling.
+- `rail_django/tests/integration/test_phase5_security.py`: jwt refresh reuse detection, audit retention cleanup.
+- `rail_django/tests/integration/test_phase6_schema_registry.py`: schema snapshot export, history, diff endpoints.
+
+### Integration tests (2)
+- `rail_django/tests/integration/test_rest_api.py`: schema management REST API list/detail/create/update/delete, discovery, health/metrics, cors, errors.
+- `rail_django/tests/integration/test_schema_generation.py`: full schema build, introspection, query/mutation execution, filters/pagination, errors, concurrency, caching, extensions.
+
+### Health system tests
+- `rail_django/tests/test_health_system.py`: health checker, metrics, reporting, dashboard/api endpoints, integration load/perf/caching.
+
 ## Running Tests
 ```bash
 pytest -m unit
