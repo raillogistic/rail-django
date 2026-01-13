@@ -538,6 +538,7 @@ class ConfigLoader:
             "CORE_schema_settings",
             "query_settings",
             "mutation_settings",
+            "subscription_settings",
             "type_generation_settings",
             "performance_settings",
             "security_settings",
@@ -660,7 +661,12 @@ def debug_configuration_legacy() -> None:
     print(f"Full legacy config: {config}")
 
     # Debug legacy sections
-    legacy_sections = ["mutation_settings", "TYPE_SETTINGS", "schema_settings"]
+    legacy_sections = [
+        "mutation_settings",
+        "subscription_settings",
+        "TYPE_SETTINGS",
+        "schema_settings",
+    ]
     for section in legacy_sections:
         if section in config:
             print(f"{section} found: {config[section]}")

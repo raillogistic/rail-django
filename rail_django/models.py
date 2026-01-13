@@ -45,6 +45,10 @@ def _default_mutation_settings() -> Dict[str, Any]:
     return _default_section("mutation_settings")
 
 
+def _default_subscription_settings() -> Dict[str, Any]:
+    return _default_section("subscription_settings")
+
+
 def _default_performance_settings() -> Dict[str, Any]:
     return _default_section("performance_settings")
 
@@ -111,6 +115,7 @@ class SchemaRegistryModel(django_models.Model):
     type_generation_settings = django_models.JSONField(default=_default_type_generation_settings)
     query_settings = django_models.JSONField(default=_default_query_settings)
     mutation_settings = django_models.JSONField(default=_default_mutation_settings)
+    subscription_settings = django_models.JSONField(default=_default_subscription_settings)
     performance_settings = django_models.JSONField(default=_default_performance_settings)
     persisted_query_settings = django_models.JSONField(
         default=_default_persisted_query_settings
@@ -176,6 +181,9 @@ class SchemaRegistryModel(django_models.Model):
             ),
             "mutation_settings": _ensure_dict(
                 self.mutation_settings, _default_mutation_settings()
+            ),
+            "subscription_settings": _ensure_dict(
+                self.subscription_settings, _default_subscription_settings()
             ),
             "performance_settings": _ensure_dict(
                 self.performance_settings, _default_performance_settings()

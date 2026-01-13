@@ -188,6 +188,8 @@ RAIL_DJANGO_GRAPHQL = {
         "query_field_allowlist": None,
         # Allowlist root mutation fields (None = no filtering)
         "mutation_field_allowlist": None,
+        # Allowlist root subscription fields (None = no filtering)
+        "subscription_field_allowlist": None,
     },
     "type_generation_settings": {
         # {"app.Model": ["field_a", "field_b"]}
@@ -260,6 +262,16 @@ RAIL_DJANGO_GRAPHQL = {
         "nested_relations_config": {},
         # Per-field nested relation config
         "nested_field_config": {},
+    },
+    "subscription_settings": {
+        # Enable auto-generated subscriptions
+        "enable_subscriptions": False,
+        # Toggle model create/update/delete events
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        # Enable filters argument on subscription fields
+        "enable_filters": True,
     },
     "performance_settings": {
         # Apply select_related/prefetch_related

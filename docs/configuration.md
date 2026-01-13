@@ -30,6 +30,13 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_bulk_operations": False,
         "enable_nested_relations": True,
     },
+    "subscription_settings": {
+        "enable_subscriptions": False,
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        "enable_filters": True,
+    },
     "type_generation_settings": {
         "exclude_fields": {},
         "include_fields": None,
@@ -105,6 +112,26 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
             "authentication_required": False,
             "enable_graphiql": False,
         },
+    },
+}
+```
+
+## Subscription settings
+
+Auto-generated subscriptions are disabled by default and require
+`channels-graphql-ws` for WebSocket support.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "subscription_settings": {
+        "enable_subscriptions": True,
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        "enable_filters": True,
+    },
+    "schema_settings": {
+        "subscription_field_allowlist": ["order_created", "order_updated"],
     },
 }
 ```

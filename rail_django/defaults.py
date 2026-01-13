@@ -38,6 +38,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "mutation_extensions": [],
         "query_field_allowlist": None,
         "mutation_field_allowlist": None,
+        "subscription_field_allowlist": None,
     },
     "type_generation_settings": {
         "exclude_fields": {},
@@ -77,6 +78,13 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_nested_relations": True,
         "nested_relations_config": {},
         "nested_field_config": {},
+    },
+    "subscription_settings": {
+        "enable_subscriptions": False,
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        "enable_filters": True,
     },
     "performance_settings": {
         "enable_query_optimization": True,

@@ -376,6 +376,24 @@ def get_query_generator_settings(schema_name: Optional[str] = None):
     return QueryGeneratorSettings.from_schema(schema_name)
 
 
+def get_subscription_generator_settings(schema_name: Optional[str] = None):
+    """
+    Get subscription generator settings for the specified schema using hierarchical loading.
+
+    Args:
+        schema_name: Name of the schema for schema-specific settings
+
+    Returns:
+        SubscriptionGeneratorSettings instance
+    """
+    from .core.settings import SubscriptionGeneratorSettings
+
+    if schema_name is None:
+        schema_name = "default"
+
+    return SubscriptionGeneratorSettings.from_schema(schema_name)
+
+
 def get_core_schema_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get core schema settings for the specified schema using hierarchical loading.

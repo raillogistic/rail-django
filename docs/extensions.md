@@ -59,6 +59,8 @@ importing them in your schema build or including their URLs.
 ## Subscriptions (`rail_django.extensions.subscriptions`)
 
 - Lightweight helper to build a Channels consumer.
+- Auto-generated subscriptions are enabled via `subscription_settings.enable_subscriptions`.
+- Supports per-model created/updated/deleted events with filter args.
 - Requires `channels-graphql-ws` (optional dependency).
 
 ## Rate limiting (`rail_django.extensions.rate_limiting`)

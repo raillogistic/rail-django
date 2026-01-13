@@ -117,11 +117,13 @@ class SchemaBuilder:
         self._type_generator = None
         self._query_generator = None
         self._mutation_generator = None
+        self._subscription_generator = None
 
         # Schema state
         self._schema = None
         self._query_fields: Dict[str, Union[graphene.Field, graphene.List]] = {}
         self._mutation_fields: Dict[str, Type[graphene.Mutation]] = {}
+        self._subscription_fields: Dict[str, graphene.Field] = {}
         self._registered_models: Set[Type[models.Model]] = set()
         self._schema_version = 0
 
@@ -179,6 +181,21 @@ class SchemaBuilder:
                 schema_name=self.schema_name,
             )
         return self._mutation_generator
+
+    @property
+    def subscription_generator(self):
+        """Lazy-loaded subscription generator."""
+        if self._subscription_generator is None:
+            from ..config_proxy import get_subscription_generator_settings
+            from ..generators.subscriptions import SubscriptionGenerator
+
+            subscription_settings = get_subscription_generator_settings(self.schema_name)
+            self._subscription_generator = SubscriptionGenerator(
+                self.type_generator,
+                settings=subscription_settings,
+                schema_name=self.schema_name,
+            )
+        return self._subscription_generator
 
     def _get_schema_setting(self, key: str, default: Any = None) -> Any:
         """
@@ -490,6 +507,37 @@ class SchemaBuilder:
         )
         logger.debug(f"Mutation fields: {list(self._mutation_fields.keys())}")
 
+    def _generate_subscription_fields(self, models: List[Type[models.Model]]) -> None:
+        """
+        Generates subscription fields for all discovered models.
+
+        Args:
+            models: List of Django models to generate subscriptions for
+        """
+        self._subscription_fields = {}
+        try:
+            subscriptions = self.subscription_generator.generate_all_subscriptions(
+                models
+            )
+        except ImportError as exc:
+            logger.warning(
+                "Subscriptions disabled for schema '%s': %s",
+                self.schema_name,
+                exc,
+            )
+            return
+
+        if subscriptions:
+            self._subscription_fields.update(subscriptions)
+            logger.info(
+                "Total subscriptions generated for schema '%s': %s",
+                self.schema_name,
+                len(self._subscription_fields),
+            )
+            logger.debug(
+                "Subscription fields: %s", list(self._subscription_fields.keys())
+            )
+
     def _load_query_extensions(self) -> List[Type[graphene.ObjectType]]:
         """
         Load custom query extensions defined in schema settings.
@@ -586,6 +634,7 @@ class SchemaBuilder:
                 self._schema = None
                 self._query_fields = {}
                 self._mutation_fields = {}
+                self._subscription_fields = {}
                 build_context = {
                     "schema_name": self.schema_name,
                     "builder": self,
@@ -616,8 +665,11 @@ class SchemaBuilder:
                 # Generate mutations
                 self._generate_mutation_fields(models)
 
+                # Generate subscriptions
+                self._generate_subscription_fields(models)
+
                 logger.info(
-                    f"Schema '{self.schema_name}' generation - Query fields: {len(self._query_fields)}, Mutation fields: {len(self._mutation_fields)}"
+                    f"Schema '{self.schema_name}' generation - Query fields: {len(self._query_fields)}, Mutation fields: {len(self._mutation_fields)}, Subscription fields: {len(self._subscription_fields)}"
                 )
 
                 # Create Query type with security extensions
@@ -815,6 +867,7 @@ class SchemaBuilder:
 
                 # Create Mutation type if there are mutations
                 mutation_type = None
+                subscription_type = None
                 logger.info(
                     f"Checking mutation fields for schema '{self.schema_name}': {len(self._mutation_fields)} mutations found"
                 )
@@ -950,6 +1003,20 @@ class SchemaBuilder:
                             "Mutation", (graphene.ObjectType,), mutation_attrs
                         )
 
+                subscription_fields = dict(self._subscription_fields)
+                subscription_allowlist = self._get_schema_setting(
+                    "subscription_field_allowlist", None
+                )
+                if subscription_allowlist is not None:
+                    subscription_fields = self._apply_field_allowlist(
+                        subscription_fields, subscription_allowlist
+                    )
+
+                if subscription_fields:
+                    subscription_type = type(
+                        "Subscription", (graphene.ObjectType,), subscription_fields
+                    )
+
                 # Create Schema with security middleware
                 middleware = []
                 try:
@@ -970,6 +1037,7 @@ class SchemaBuilder:
                 self._schema = graphene.Schema(
                     query=query_type,
                     mutation=mutation_type,
+                    subscription=subscription_type,
                     auto_camelcase=self.settings.auto_camelcase,
                 )
 
@@ -1118,6 +1186,7 @@ class SchemaBuilder:
             self._schema = None
             self._query_fields.clear()
             self._mutation_fields.clear()
+            self._subscription_fields.clear()
             self._registered_models.clear()
             logger.info(f"Schema '{self.schema_name}' cleared")
 

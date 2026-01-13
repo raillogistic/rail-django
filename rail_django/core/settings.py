@@ -95,6 +95,7 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
         "schema_settings",
         "query_settings",
         "mutation_settings",
+        "subscription_settings",
         "persisted_query_settings",
         "TYPE_SETTINGS",
         "FILTERING",
@@ -367,6 +368,50 @@ class MutationGeneratorSettings:
 
 
 @dataclass
+class SubscriptionGeneratorSettings:
+    """Settings for controlling GraphQL subscription generation."""
+
+    enable_subscriptions: bool = False
+    enable_create: bool = True
+    enable_update: bool = True
+    enable_delete: bool = True
+    enable_filters: bool = True
+
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "SubscriptionGeneratorSettings":
+        """
+        Create SubscriptionGeneratorSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            SubscriptionGeneratorSettings: Configured settings instance
+        """
+        defaults = _get_library_defaults().get("subscription_settings", {})
+        global_settings = _get_global_settings(schema_name).get(
+            "subscription_settings", {}
+        )
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "subscription_settings", {}
+        )
+
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings
+        )
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+        return cls(**filtered_settings)
+
+
+@dataclass
 class SchemaSettings:
     """Settings for controlling overall schema behavior."""
 
@@ -420,6 +465,9 @@ class SchemaSettings:
 
     # Allowlist root mutation fields (None = no filtering)
     mutation_field_allowlist: Optional[List[str]] = None
+
+    # Allowlist root subscription fields (None = no filtering)
+    subscription_field_allowlist: Optional[List[str]] = None
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":

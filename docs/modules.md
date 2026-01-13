@@ -33,6 +33,7 @@ This reference maps the main modules to their responsibilities.
 - `generators/mutations_limits.py`: nested input validation limits
 - `generators/filters.py`: advanced filter input generation
 - `generators/introspector.py`: model metadata inspection
+- `generators/subscriptions.py`: auto-generated subscription fields
 
 ## security
 
@@ -69,6 +70,11 @@ This reference maps the main modules to their responsibilities.
 - `extensions/persisted_queries.py`: APQ-style persisted query support
 - `extensions/observability.py`: Sentry/OpenTelemetry plugin hooks
 - `extensions/subscriptions.py`: Channels subscription helper
+
+## subscriptions
+
+- `subscriptions/registry.py`: subscription class registry for broadcasters
+- `subscriptions/broadcaster.py`: signal-driven event broadcasting
 
 ## plugins
 
