@@ -40,6 +40,8 @@ def generate_create_mutation(
     )
 
     class CreateMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             input = input_type(required=True)
 
@@ -340,6 +342,8 @@ def generate_update_mutation(
     )
 
     class UpdateMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             id = graphene.ID(required=True)
             input = input_type(required=True)
@@ -681,6 +685,8 @@ def generate_delete_mutation(
     graphql_meta = get_model_graphql_meta(model)
 
     class DeleteMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             id = graphene.ID(required=True)
 

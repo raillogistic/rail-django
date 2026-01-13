@@ -64,6 +64,13 @@ RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
         "enable_authentication": True,
         "enable_authorization": True,
+        "enable_policy_engine": True,
+        "enable_permission_cache": True,
+        "permission_cache_ttl_seconds": 300,
+        "enable_permission_audit": False,
+        "permission_audit_log_all": False,
+        "permission_audit_log_denies": True,
+        "field_permission_input_mode": "reject",
         "enable_input_validation": True,
         "input_allow_html": False,
         "input_failure_severity": "high",
@@ -71,6 +78,7 @@ RAIL_DJANGO_GRAPHQL = {
     },
     "middleware_settings": {
         "enable_query_complexity_middleware": True,
+        "enable_field_permission_middleware": True,
         "performance_threshold_ms": 1000,
     },
     "plugin_settings": {
@@ -157,6 +165,28 @@ RAIL_DJANGO_GRAPHQL = {
         "input_failure_severity": "high",
         "input_pattern_scan_limit": 10000,
     }
+}
+```
+
+## Permission policy settings
+
+The policy engine adds explicit allow/deny rules with precedence and can be
+audited. Field permission input handling is configured here as well:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_policy_engine": True,
+        "enable_permission_cache": True,
+        "permission_cache_ttl_seconds": 300,
+        "enable_permission_audit": False,
+        "permission_audit_log_all": False,
+        "permission_audit_log_denies": True,
+        "field_permission_input_mode": "reject",  # or "strip"
+    },
+    "middleware_settings": {
+        "enable_field_permission_middleware": True,
+    },
 }
 ```
 

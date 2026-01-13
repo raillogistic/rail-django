@@ -9,13 +9,19 @@ Ce module fournit :
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
+from django.core.cache import cache
 from django.db import models
 from graphql import GraphQLError
+
+from rail_django.config_proxy import get_setting
+
+from .policies import PolicyContext as AccessPolicyContext
+from .policies import PolicyEffect, policy_manager
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser, Group
@@ -65,10 +71,33 @@ class PermissionContext:
     object_id: Optional[str] = None
     object_instance: Optional[models.Model] = None
     model_class: Optional[Type[models.Model]] = None
+    operation: Optional[str] = None
     organization_id: Optional[str] = None
     department_id: Optional[str] = None
     project_id: Optional[str] = None
     additional_context: Dict[str, Any] = None
+
+
+@dataclass
+class PolicyDecisionDetail:
+    name: str
+    effect: str
+    priority: int
+    reason: Optional[str] = None
+
+
+@dataclass
+class PermissionExplanation:
+    permission: str
+    allowed: bool
+    reason: Optional[str] = None
+    policy_decision: Optional[PolicyDecisionDetail] = None
+    policy_matches: List[PolicyDecisionDetail] = field(default_factory=list)
+    user_roles: List[str] = field(default_factory=list)
+    effective_permissions: Set[str] = field(default_factory=set)
+    context_required: bool = False
+    context_allowed: Optional[bool] = None
+    context_reason: Optional[str] = None
 
 
 class RoleManager:
@@ -82,6 +111,29 @@ class RoleManager:
         self._permissions_cache = {}
         self._role_hierarchy = {}
         self._model_roles_registry: Set[str] = set()
+        self._owner_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
+        self._assignment_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
+
+        self._permission_cache_enabled = bool(
+            get_setting("security_settings.enable_permission_cache", True)
+        )
+        self._permission_cache_ttl = int(
+            get_setting("security_settings.permission_cache_ttl_seconds", 300)
+        )
+        self._permission_cache_prefix = "rail:rbac:perm"
+        self._permission_cache_version_prefix = "rail:rbac:ver"
+        self._policy_engine_enabled = bool(
+            get_setting("security_settings.enable_policy_engine", True)
+        )
+        self._permission_audit_enabled = bool(
+            get_setting("security_settings.enable_permission_audit", False)
+        )
+        self._permission_audit_log_all = bool(
+            get_setting("security_settings.permission_audit_log_all", False)
+        )
+        self._permission_audit_log_denies = bool(
+            get_setting("security_settings.permission_audit_log_denies", True)
+        )
 
         # Rôles système prédéfinis
         self.system_roles = {
@@ -207,6 +259,62 @@ class RoleManager:
 
         self._model_roles_registry.add(model_label)
 
+    def register_owner_resolver(
+        self,
+        model_class: Union[Type[models.Model], str],
+        resolver: Callable[[PermissionContext], bool],
+    ) -> None:
+        key = self._normalize_model_key(model_class)
+        if not key:
+            return
+        self._owner_resolvers[key] = resolver
+
+    def register_assignment_resolver(
+        self,
+        model_class: Union[Type[models.Model], str],
+        resolver: Callable[[PermissionContext], bool],
+    ) -> None:
+        key = self._normalize_model_key(model_class)
+        if not key:
+            return
+        self._assignment_resolvers[key] = resolver
+
+    def _normalize_model_key(self, model_class: Union[Type[models.Model], str, None]) -> str:
+        if model_class is None:
+            return ""
+        if isinstance(model_class, str):
+            return model_class.lower()
+        return model_class._meta.label_lower
+
+    def _get_model_key_from_context(self, context: PermissionContext) -> str:
+        if context.model_class is not None:
+            return self._normalize_model_key(context.model_class)
+        if context.object_instance is not None:
+            return self._normalize_model_key(context.object_instance.__class__)
+        return ""
+
+    def _apply_context_resolver(
+        self,
+        resolver: Optional[Callable[[PermissionContext], bool]],
+        context: PermissionContext,
+        obj: Optional[models.Model],
+    ) -> Optional[bool]:
+        if resolver is None:
+            return None
+        try:
+            return bool(resolver(context))
+        except TypeError:
+            try:
+                return bool(resolver(context.user))
+            except TypeError:
+                try:
+                    return bool(resolver(context.user, obj))
+                except TypeError:
+                    return bool(resolver(context.user, obj, context))
+        except Exception as exc:
+            logger.warning("Resolver error for context %s: %s", context, exc)
+            return False
+
     def get_role_definition(self, role_name: str) -> Optional[RoleDefinition]:
         """
         Récupère la définition d'un rôle.
@@ -328,48 +436,342 @@ class RoleManager:
                     return True
         return False
 
-    def has_permission(self, user: "AbstractUser", permission: str,
-                       context: PermissionContext = None) -> bool:
-        """
-        Vérifie si un utilisateur a une permission spécifique.
+    def _get_cache_version(self, user_id: Optional[int]) -> int:
+        if not user_id:
+            return 0
+        cache_key = f"{self._permission_cache_version_prefix}:{user_id}"
+        version = cache.get(cache_key)
+        if version is None:
+            cache.set(cache_key, 1)
+            return 1
+        try:
+            return int(version)
+        except (TypeError, ValueError):
+            return 1
 
-        Args:
-            user: Utilisateur
-            permission: Permission à vérifier
-            context: Contexte de la permission
+    def bump_user_cache_version(self, user_id: Optional[int]) -> None:
+        if not user_id:
+            return
+        cache_key = f"{self._permission_cache_version_prefix}:{user_id}"
+        try:
+            cache.incr(cache_key)
+        except Exception:
+            current = cache.get(cache_key) or 0
+            cache.set(cache_key, int(current) + 1)
 
-        Returns:
-            True si l'utilisateur a la permission
-        """
-        if not user or not user.is_authenticated:
-            return False
+    def invalidate_user_cache(self, user: "AbstractUser") -> None:
+        user_id = getattr(user, "id", None)
+        self.bump_user_cache_version(user_id)
 
-        # Super utilisateur a toutes les permissions
+    def _build_permission_cache_key(
+        self,
+        user_id: Optional[int],
+        permission: str,
+        context: Optional[PermissionContext],
+    ) -> Optional[str]:
+        if not self._permission_cache_enabled or not user_id:
+            return None
+        version = self._get_cache_version(user_id)
+        policy_version = policy_manager.get_version()
+        model_label = ""
+        object_id = ""
+        operation = ""
+        if context is not None:
+            model_class = context.model_class
+            if model_class is None and context.object_instance is not None:
+                model_class = context.object_instance.__class__
+            if model_class is not None:
+                model_label = model_class._meta.label_lower
+            object_id = str(
+                context.object_id
+                or getattr(context.object_instance, "pk", "")
+                or ""
+            )
+            operation = str(context.operation or "")
+        return (
+            f"{self._permission_cache_prefix}:{user_id}:{version}:{policy_version}:"
+            f"{permission}:{model_label}:{object_id}:{operation}"
+        )
+
+    def _get_cached_permission(self, cache_key: Optional[str]) -> Optional[bool]:
+        if not cache_key:
+            return None
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and "allowed" in cached:
+            return bool(cached["allowed"])
+        return None
+
+    def _set_cached_permission(self, cache_key: Optional[str], allowed: bool) -> None:
+        if not cache_key or not self._permission_cache_ttl:
+            return
+        cache.set(cache_key, {"allowed": bool(allowed)}, timeout=self._permission_cache_ttl)
+
+    def _build_policy_context(
+        self,
+        user: "AbstractUser",
+        permission: str,
+        context: Optional[PermissionContext],
+    ) -> AccessPolicyContext:
+        model_class = None
+        object_instance = None
+        object_id = None
+        operation = None
+        additional_context = None
+        request = None
+        if context is not None:
+            model_class = context.model_class
+            object_instance = context.object_instance
+            object_id = context.object_id
+            operation = context.operation
+            additional_context = context.additional_context
+            if isinstance(additional_context, dict):
+                request = additional_context.get("request") or additional_context.get(
+                    "context"
+                )
+        return AccessPolicyContext(
+            user=user,
+            permission=permission,
+            model_class=model_class,
+            object_instance=object_instance,
+            object_id=object_id,
+            operation=operation,
+            additional_context=additional_context,
+            request=request,
+        )
+
+    def _describe_policy(self, policy: Any) -> PolicyDecisionDetail:
+        return PolicyDecisionDetail(
+            name=str(getattr(policy, "name", "")),
+            effect=str(getattr(getattr(policy, "effect", None), "value", None) or getattr(policy, "effect", "")),
+            priority=int(getattr(policy, "priority", 0) or 0),
+            reason=getattr(policy, "reason", None),
+        )
+
+    def has_permission(
+        self,
+        user: "AbstractUser",
+        permission: str,
+        context: PermissionContext = None,
+    ) -> bool:
+        audit_enabled = (
+            self._permission_audit_enabled
+            and (self._permission_audit_log_all or self._permission_audit_log_denies)
+        )
+        cache_key = self._build_permission_cache_key(
+            getattr(user, "id", None), permission, context
+        )
+        if cache_key and not audit_enabled:
+            cached = self._get_cached_permission(cache_key)
+            if cached is not None:
+                return cached
+
+        allowed, explanation = self._evaluate_permission(
+            user, permission, context, include_explanation=audit_enabled
+        )
+
+        if cache_key:
+            self._set_cached_permission(cache_key, allowed)
+
+        if audit_enabled and (
+            self._permission_audit_log_all
+            or (self._permission_audit_log_denies and not allowed)
+        ):
+            self._audit_permission_decision(
+                user, permission, context, explanation
+            )
+
+        return allowed
+
+    def _check_contextual_permission_with_reason(
+        self, permission: str, context: PermissionContext
+    ) -> Tuple[bool, Optional[str]]:
+        if permission.endswith("_own"):
+            allowed = self._is_object_owner(context)
+            return allowed, None if allowed else "not_owner"
+        if permission.endswith("_assigned"):
+            allowed = self._is_object_assigned(context)
+            return allowed, None if allowed else "not_assigned"
+        return False, "context_not_applicable"
+
+    def _evaluate_permission(
+        self,
+        user: "AbstractUser",
+        permission: str,
+        context: Optional[PermissionContext],
+        *,
+        include_explanation: bool = False,
+    ) -> Tuple[bool, Optional[PermissionExplanation]]:
+        explanation = None
+        if include_explanation:
+            explanation = PermissionExplanation(
+                permission=permission, allowed=False
+            )
+
+        if not user or not getattr(user, "is_authenticated", False):
+            if explanation:
+                explanation.reason = "authentication_required"
+            return False, explanation
+
+        if self._policy_engine_enabled:
+            policy_context = self._build_policy_context(user, permission, context)
+            if include_explanation:
+                policy_explanation = policy_manager.explain(policy_context)
+                if policy_explanation and policy_explanation.decision:
+                    decision = policy_explanation.decision
+                    if explanation:
+                        explanation.policy_decision = self._describe_policy(
+                            decision.policy
+                        )
+                        explanation.policy_matches = [
+                            self._describe_policy(match)
+                            for match in policy_explanation.matches
+                        ]
+                        explanation.allowed = decision.allowed
+                        explanation.reason = (
+                            decision.reason
+                            or (
+                                "policy_allow"
+                                if decision.effect == PolicyEffect.ALLOW
+                                else "policy_deny"
+                            )
+                        )
+                    return decision.allowed, explanation
+            else:
+                decision = policy_manager.evaluate(policy_context)
+                if decision is not None:
+                    return decision.allowed, None
+
         if user.is_superuser:
-            return True
+            if explanation:
+                explanation.allowed = True
+                explanation.reason = "superuser"
+            return True, explanation
 
         effective_permissions = self.get_effective_permissions(user, context)
+        user_roles = self.get_user_roles(user)
 
-        is_contextual = permission.endswith('_own') or permission.endswith('_assigned')
+        if explanation:
+            explanation.user_roles = list(user_roles)
+            explanation.effective_permissions = set(effective_permissions)
+
+        is_contextual = permission.endswith("_own") or permission.endswith("_assigned")
         if is_contextual:
+            if explanation:
+                explanation.context_required = True
             if not context:
-                return False
+                if explanation:
+                    explanation.reason = "context_required"
+                return False, explanation
             if not self._permission_in_effective_permissions(
                 permission, effective_permissions
             ):
-                return False
-            return self._check_contextual_permission(user, permission, context)
+                if explanation:
+                    explanation.reason = "permission_missing"
+                return False, explanation
+            allowed, reason = self._check_contextual_permission_with_reason(
+                permission, context
+            )
+            if explanation:
+                explanation.allowed = allowed
+                explanation.context_allowed = allowed
+                explanation.context_reason = reason
+                explanation.reason = reason or "context_allowed"
+            return allowed, explanation
 
         if self._permission_in_effective_permissions(
             permission, effective_permissions
         ):
-            return True
+            if explanation:
+                explanation.allowed = True
+                explanation.reason = "permission_granted"
+            return True, explanation
 
-        # Vérifier les permissions contextuelles
         if context:
-            return self._check_contextual_permission(user, permission, context)
+            allowed, reason = self._check_contextual_permission_with_reason(
+                permission, context
+            )
+            if explanation:
+                explanation.allowed = allowed
+                explanation.context_allowed = allowed
+                explanation.context_reason = reason
+                explanation.reason = reason or "context_allowed"
+            return allowed, explanation
 
-        return False
+        if explanation:
+            explanation.reason = "permission_missing"
+        return False, explanation
+
+    def _audit_permission_decision(
+        self,
+        user: "AbstractUser",
+        permission: str,
+        context: Optional[PermissionContext],
+        explanation: Optional[PermissionExplanation],
+    ) -> None:
+        if explanation is None:
+            return
+        try:
+            from ..extensions.audit import AuditEventType, log_audit_event
+        except Exception:
+            return
+
+        request = None
+        if context and isinstance(context.additional_context, dict):
+            request = context.additional_context.get("request") or context.additional_context.get("context")
+
+        model_label = ""
+        object_id = ""
+        operation = None
+        if context:
+            model_class = context.model_class
+            if model_class is None and context.object_instance is not None:
+                model_class = context.object_instance.__class__
+            if model_class is not None:
+                model_label = model_class._meta.label_lower
+            object_id = str(
+                context.object_id
+                or getattr(context.object_instance, "pk", "")
+                or ""
+            )
+            operation = context.operation
+
+        additional_data = {
+            "permission": permission,
+            "allowed": explanation.allowed,
+            "reason": explanation.reason,
+            "model": model_label,
+            "object_id": object_id,
+            "operation": operation,
+            "roles": explanation.user_roles,
+        }
+
+        if explanation.policy_decision:
+            additional_data["policy"] = {
+                "name": explanation.policy_decision.name,
+                "effect": explanation.policy_decision.effect,
+                "priority": explanation.policy_decision.priority,
+                "reason": explanation.policy_decision.reason,
+            }
+
+        log_audit_event(
+            request,
+            AuditEventType.DATA_ACCESS,
+            user=user,
+            success=bool(explanation.allowed),
+            additional_data=additional_data,
+        )
+
+    def explain_permission(
+        self, user: "AbstractUser", permission: str, context: PermissionContext = None
+    ) -> PermissionExplanation:
+        allowed, explanation = self._evaluate_permission(
+            user, permission, context, include_explanation=True
+        )
+        if explanation is None:
+            explanation = PermissionExplanation(
+                permission=permission, allowed=allowed
+            )
+        return explanation
 
     def _check_contextual_permission(self, user: "AbstractUser",
                                      permission: str, context: PermissionContext) -> bool:
@@ -384,15 +786,10 @@ class RoleManager:
         Returns:
             True si l'utilisateur a la permission dans ce contexte
         """
-        # Permissions sur ses propres objets
-        if permission.endswith('_own'):
-            return self._is_object_owner(context)
-
-        # Permissions sur les objets assignés
-        if permission.endswith('_assigned'):
-            return self._is_object_assigned(context)
-
-        return False
+        allowed, _ = self._check_contextual_permission_with_reason(
+            permission, context
+        )
+        return allowed
 
     def _get_context_instance(self, context: PermissionContext) -> Optional[models.Model]:
         if context.object_instance is not None:
@@ -421,6 +818,21 @@ class RoleManager:
         if obj is None:
             return False
 
+        model_key = self._get_model_key_from_context(context)
+        resolver = self._owner_resolvers.get(model_key) if model_key else None
+
+        if resolver is None:
+            for attr in ("is_owner", "is_owned_by", "owned_by"):
+                candidate = getattr(obj, attr, None)
+                if callable(candidate):
+                    resolver = candidate
+                    break
+
+        if resolver is not None:
+            resolved = self._apply_context_resolver(resolver, context, obj)
+            if resolved is not None:
+                return bool(resolved)
+
         user = context.user
         for attr in ("owner", "created_by", "user"):
             if hasattr(obj, attr):
@@ -445,6 +857,21 @@ class RoleManager:
         obj = self._get_context_instance(context)
         if obj is None:
             return False
+
+        model_key = self._get_model_key_from_context(context)
+        resolver = self._assignment_resolvers.get(model_key) if model_key else None
+
+        if resolver is None:
+            for attr in ("is_assigned", "is_assigned_to"):
+                candidate = getattr(obj, attr, None)
+                if callable(candidate):
+                    resolver = candidate
+                    break
+
+        if resolver is not None:
+            resolved = self._apply_context_resolver(resolver, context, obj)
+            if resolved is not None:
+                return bool(resolved)
 
         user = context.user
         if hasattr(obj, 'assigned_to'):
@@ -483,8 +910,7 @@ class RoleManager:
                 raise ValueError(f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'")
 
         user.groups.add(group)
-
-        # Cache removed: no invalidation needed
+        self.invalidate_user_cache(user)
 
         logger.info(f"Rôle '{role_name}' assigné à l'utilisateur {user.username}")
 
@@ -501,8 +927,7 @@ class RoleManager:
         try:
             group = group_model.objects.get(name=role_name)
             user.groups.remove(group)
-
-            # Cache removed: no invalidation needed
+            self.invalidate_user_cache(user)
 
             logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user.username}")
         except group_model.DoesNotExist:
@@ -595,9 +1020,14 @@ def require_permission(permission: str, context_func: callable = None):
 
     def _infer_model_class(info):
         graphql_type = getattr(info, "return_type", None)
+        while hasattr(graphql_type, "of_type"):
+            graphql_type = graphql_type.of_type
         graphene_type = getattr(graphql_type, "graphene_type", None)
         meta = getattr(graphene_type, "_meta", None)
-        return getattr(meta, "model", None)
+        model = getattr(meta, "model", None)
+        if model is not None:
+            return model
+        return getattr(graphene_type, "model_class", None)
 
     def _normalize_permission_context(context, user, info, args, kwargs):
         if context is None:
@@ -612,6 +1042,7 @@ def require_permission(permission: str, context_func: callable = None):
                 "id",
                 "pk",
                 "model_class",
+                "operation",
                 "organization_id",
                 "department_id",
                 "project_id",
@@ -632,6 +1063,7 @@ def require_permission(permission: str, context_func: callable = None):
                     or context.get("pk")
                 ),
                 model_class=context.get("model_class"),
+                operation=context.get("operation"),
                 organization_id=context.get("organization_id"),
                 department_id=context.get("department_id"),
                 project_id=context.get("project_id"),
@@ -644,6 +1076,22 @@ def require_permission(permission: str, context_func: callable = None):
 
         if context.user is None:
             context.user = user
+        if context.additional_context is None:
+            context.additional_context = {}
+        if info is not None and isinstance(context.additional_context, dict):
+            context.additional_context.setdefault("request", getattr(info, "context", None))
+        if context.operation is None and info is not None:
+            try:
+                op_value = info.operation.operation.value if info.operation else None
+            except Exception:
+                op_value = None
+            if op_value:
+                if op_value == "query":
+                    context.operation = "read"
+                elif op_value == "mutation":
+                    context.operation = "write"
+                else:
+                    context.operation = op_value
 
         if context.object_instance is None:
             context.object_instance = _extract_object_instance(args, kwargs)

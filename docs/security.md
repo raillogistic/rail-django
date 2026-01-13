@@ -43,11 +43,137 @@ Authorization uses a hybrid RBAC system:
 
 Use GraphQLMeta to guard operations per model and to hide fields.
 
+## Policy engine
+
+The access policy engine adds explicit allow/deny rules with precedence. Policies
+are evaluated by priority (higher wins); ties resolve to deny. When a policy
+matches, it overrides RBAC and field rules.
+
+Example policy:
+
+```python
+from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
+
+policy_manager.register_policy(
+    AccessPolicy(
+        name="deny_tokens_for_contractors",
+        effect=PolicyEffect.DENY,
+        priority=50,
+        roles=["contractor"],
+        fields=["*token*"],
+        operations=["read"],
+        reason="Token values are not exposed to contractors.",
+    )
+)
+```
+
+## Permission caching
+
+RBAC permission checks are cached per user/context. Invalidation happens on
+group/role membership changes. Tune behavior with:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_permission_cache": True,
+        "permission_cache_ttl_seconds": 300,
+    }
+}
+```
+
 ## Field permissions
 
 `rail_django.security.field_permissions` can hide or mask sensitive fields based
-on roles, permissions, and ownership. Sensitive names like `password` or `token`
-are masked by default.
+on roles, permissions, ownership, and policy overrides. Sensitive names like
+`password` or `token` are masked by default.
+
+Enable the GraphQL middleware that enforces field visibility and input writes:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "middleware_settings": {
+        "enable_field_permission_middleware": True,
+    },
+    "security_settings": {
+        "field_permission_input_mode": "reject",  # or "strip"
+    },
+}
+```
+
+### Classification tags
+
+You can tag fields or models with classifications (e.g., `pii`, `financial`) and
+apply policies once per tag:
+
+```python
+from rail_django.core.meta import GraphQLMeta
+
+class Customer(models.Model):
+    email = models.EmailField()
+    salary = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class GraphQLMeta(GraphQLMeta):
+        classifications = GraphQLMeta.Classification(
+            model=["pii"],
+            fields={"salary": ["financial"]},
+        )
+```
+
+Register policies per classification:
+
+```python
+from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
+
+policy_manager.register_classification_bundle(
+    "pii",
+    [
+        AccessPolicy(
+            name="mask_pii_for_non_admins",
+            effect=PolicyEffect.ALLOW,
+            priority=20,
+            roles=["admin", "superadmin"],
+            visibility="visible",
+        ),
+        AccessPolicy(
+            name="mask_pii_default",
+            effect=PolicyEffect.ALLOW,
+            priority=10,
+            visibility="masked",
+            mask_value="***REDACTED***",
+        ),
+    ],
+)
+```
+
+## Explain API and auditing
+
+Use the permission explain query to debug decisions:
+
+```graphql
+query {
+  explainPermission(permission: "project.update_own", modelName: "test_app.Project", objectId: "123") {
+    allowed
+    reason
+    policyDecision { name effect priority reason }
+    policyMatches { name effect }
+  }
+}
+```
+
+When permission audit logging is enabled, decisions are emitted via
+`rail_django.extensions.audit` with context and policy metadata.
+
+Enable permission auditing with:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_permission_audit": True,
+        "permission_audit_log_all": False,
+        "permission_audit_log_denies": True,
+    }
+}
+```
 
 ## Input validation
 

@@ -7,7 +7,7 @@ This reference maps the main modules to their responsibilities.
 - `core/registry.py`: schema registry, discovery, and schema builders
 - `core/schema.py`: schema build pipeline
 - `core/settings.py`: dataclass-based settings models
-- `core/middleware.py`: Graphene middleware stack definitions
+- `core/middleware.py`: Graphene middleware stack definitions, including field permission enforcement
 - `core/performance.py`: lightweight query optimization helpers
 - `core/runtime_settings.py`: merged security + performance runtime settings
 - `core/services.py`: service hooks for rate limiting, optimizers, and audit logging
@@ -36,10 +36,12 @@ This reference maps the main modules to their responsibilities.
 
 ## security
 
+- `security/policies.py`: explicit allow/deny policy engine and classification bundles
 - `security/rbac.py`: role definitions and permission resolution
 - `security/graphql_security.py`: query depth and complexity analysis
 - `security/input_validation.py`: unified input validation and sanitization pipeline
 - `security/field_permissions.py`: field-level masking and visibility
+- `security/signals.py`: permission cache invalidation hooks
 
 ## rate_limiting
 
@@ -57,6 +59,7 @@ This reference maps the main modules to their responsibilities.
 - `extensions/auth.py`: JWT login, refresh, user info
 - `extensions/audit.py`: audit logging
 - `extensions/exporting.py`: CSV/XLSX export endpoint
+- `extensions/permissions.py`: permission helpers and explain API
 - `extensions/validation.py`: validation query helpers and re-exports
 - `extensions/templating.py`: PDF endpoints via decorator
 - `extensions/health.py`: health checks

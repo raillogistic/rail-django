@@ -113,6 +113,12 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "security_settings": {
         "enable_authentication": True,
         "enable_authorization": True,
+        "enable_policy_engine": True,
+        "enable_permission_cache": True,
+        "permission_cache_ttl_seconds": 300,
+        "enable_permission_audit": False,
+        "permission_audit_log_all": False,
+        "permission_audit_log_denies": True,
         "enable_rate_limiting": False,
         "rate_limit_requests_per_minute": 60,
         "rate_limit_requests_per_hour": 1000,
@@ -129,6 +135,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_input_validation": True,
         "enable_sql_injection_protection": True,
         "enable_xss_protection": True,
+        "field_permission_input_mode": "reject",
         "input_allow_html": False,
         "input_allowed_html_tags": [
             "p",
@@ -167,6 +174,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_error_handling_middleware": True,
         "enable_rate_limiting_middleware": True,
         "enable_validation_middleware": True,
+        "enable_field_permission_middleware": True,
         "enable_cors_middleware": True,
         "log_queries": True,
         "log_mutations": True,

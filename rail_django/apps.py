@@ -84,6 +84,10 @@ class AppConfig(BaseAppConfig):
                 from . import signals  # This will be created later
 
                 logger.debug("Django signals setup completed")
+            if settings.get("security_settings.enable_permission_cache", True):
+                from .security.signals import connect_permission_cache_signals
+
+                connect_permission_cache_signals()
         except ImportError as e:
             logger.debug(f"Signals module not found, skipping: {e}")
         except Exception as e:

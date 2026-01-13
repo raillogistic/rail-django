@@ -290,6 +290,18 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_authentication": True,
         # Enforce permission checks
         "enable_authorization": True,
+        # Enable allow/deny policy engine
+        "enable_policy_engine": True,
+        # Cache permission checks per user/context
+        "enable_permission_cache": True,
+        # Permission cache TTL in seconds
+        "permission_cache_ttl_seconds": 300,
+        # Emit audit events for permission checks
+        "enable_permission_audit": False,
+        # Log all permission checks
+        "permission_audit_log_all": False,
+        # Log deny decisions when audit is enabled
+        "permission_audit_log_denies": True,
         # Enable rate limiter
         "enable_rate_limiting": False,
         # Per-minute limit
@@ -306,6 +318,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_cors": True,
         # Enforce field-level permissions
         "enable_field_permissions": True,
+        # Reject or strip input fields when write access is missing
+        "field_permission_input_mode": "reject",
         # Enforce object-level permissions
         "enable_object_permissions": True,
         # Enable input sanitizer
@@ -365,6 +379,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_rate_limiting_middleware": True,
         # Input validation middleware
         "enable_validation_middleware": True,
+        # Field permission middleware
+        "enable_field_permission_middleware": True,
         # CORS middleware
         "enable_cors_middleware": True,
         # Log GraphQL queries
@@ -569,6 +585,21 @@ class Product(models.Model):
     )
 ```
 
+You can also tag data classifications and reuse policy bundles:
+
+```python
+class Customer(models.Model):
+    email = models.EmailField()
+    salary = models.DecimalField(max_digits=10, decimal_places=2)
+
+    graphql_meta = GraphQLMeta(
+        classifications=GraphQLMeta.Classification(
+            model=["pii"],
+            fields={"salary": ["financial"]},
+        )
+    )
+```
+
 ---
 
 ## 6. Querying & Filtering
@@ -742,6 +773,15 @@ def resolve_financial_report(root, info):
     return generate_report()
 ```
 
+For contextual permissions (`*_own`, `*_assigned`), ensure the check has object context:
+
+```python
+from rail_django.security import PermissionContext, role_manager
+
+context = PermissionContext(user=request.user, object_instance=project)
+role_manager.has_permission(request.user, "project.update_own", context)
+```
+
 ### Field-Level Security
 You can hide fields dynamically based on who is asking.
 
@@ -757,6 +797,49 @@ field_permissions={
 }
 ```
 A generic user will see `null` or receive a permission error. A support user sees the masked value. An admin sees the full value.
+
+Field permission enforcement runs in Graphene middleware. Enable it and decide how to handle disallowed inputs:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "middleware_settings": {
+        "enable_field_permission_middleware": True,
+    },
+    "security_settings": {
+        "field_permission_input_mode": "reject",  # or "strip"
+    },
+}
+```
+
+### Policy Engine and Explain API
+The policy engine lets you define explicit allow/deny rules with precedence. Deny wins when priorities tie.
+
+```python
+from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
+
+policy_manager.register_policy(
+    AccessPolicy(
+        name="deny_tokens_for_contractors",
+        effect=PolicyEffect.DENY,
+        priority=50,
+        roles=["contractor"],
+        fields=["*token*"],
+        operations=["read"],
+    )
+)
+```
+
+Use the explain query to debug decisions (and wire audit logging if needed):
+
+```graphql
+query {
+  explainPermission(permission: "project.update_own", modelName: "store.Product", objectId: "123") {
+    allowed
+    reason
+    policyDecision { name effect priority reason }
+  }
+}
+```
 
 ### Input Sanitization
 The library automatically sanitizes inputs to prevent XSS. It strips dangerous tags (`<script>`, `<iframe>`) from string inputs before they reach your resolvers.

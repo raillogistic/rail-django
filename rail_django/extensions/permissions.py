@@ -366,15 +366,55 @@ def require_permission(
         def wrapper(self, info, *args, **kwargs):
             user = getattr(info.context, "user", None)
 
-            # Récupération de l'objet si disponible
-            obj = None
-            if "id" in kwargs:
-                model_class = getattr(self, "model_class", None)
-                if model_class:
+            def _extract_object_instance(args, kwargs):
+                for key in ("instance", "obj", "object"):
+                    if key in kwargs and kwargs[key] is not None:
+                        return kwargs[key]
+
+                for arg in args:
+                    if isinstance(arg, models.Model):
+                        return arg
+
+                return None
+
+            def _extract_object_id(kwargs):
+                for key in ("object_id", "id", "pk"):
+                    if key in kwargs and kwargs[key] is not None:
+                        return kwargs[key]
+
+                input_value = kwargs.get("input") or kwargs.get("data")
+                if isinstance(input_value, dict):
+                    for key in ("object_id", "id", "pk"):
+                        if key in input_value and input_value[key] is not None:
+                            return input_value[key]
+                elif input_value is not None:
+                    for key in ("object_id", "id", "pk"):
+                        if hasattr(input_value, key):
+                            value = getattr(input_value, key)
+                            if value is not None:
+                                return value
+
+                return None
+
+            def _resolve_instance(model_class, object_id):
+                if object_id is None:
+                    return None
+                try:
+                    return model_class.objects.get(pk=object_id)
+                except Exception:
                     try:
-                        obj = model_class.objects.get(id=kwargs["id"])
-                    except model_class.DoesNotExist:
-                        pass
+                        from graphql_relay import from_global_id
+
+                        _, decoded_id = from_global_id(str(object_id))
+                        return model_class.objects.get(pk=decoded_id)
+                    except Exception:
+                        return None
+
+            obj = _extract_object_instance(args, kwargs)
+            model_class = getattr(self, "model_class", None)
+            if obj is None and model_class is not None:
+                object_id = _extract_object_id(kwargs)
+                obj = _resolve_instance(model_class, object_id)
 
             result = checker.check_permission(user, obj)
             if not result.allowed:
@@ -549,6 +589,33 @@ class PermissionInfo(graphene.ObjectType):
     can_history = graphene.Boolean(description="Peut consulter l'historique")
 
 
+class PolicyDecisionInfo(graphene.ObjectType):
+    """Détails d'une décision de politique."""
+
+    name = graphene.String()
+    effect = graphene.String()
+    priority = graphene.Int()
+    reason = graphene.String()
+
+
+class PermissionExplanationInfo(graphene.ObjectType):
+    """Explication détaillée d'une vérification de permission."""
+
+    permission = graphene.String()
+    allowed = graphene.Boolean()
+    reason = graphene.String()
+    policy_decision = graphene.Field(PolicyDecisionInfo)
+    policy_matches = graphene.List(PolicyDecisionInfo)
+    roles = graphene.List(graphene.String)
+    effective_permissions = graphene.List(graphene.String)
+    context_required = graphene.Boolean()
+    context_allowed = graphene.Boolean()
+    context_reason = graphene.String()
+    model = graphene.String()
+    object_id = graphene.String()
+    operation = graphene.String()
+
+
 class PermissionQuery(graphene.ObjectType):
     """Queries pour vérifier les permissions."""
 
@@ -556,6 +623,14 @@ class PermissionQuery(graphene.ObjectType):
         PermissionInfo,
         model_name=graphene.String(),
         description="Permissions de l'utilisateur connecté",
+    )
+    explain_permission = graphene.Field(
+        PermissionExplanationInfo,
+        permission=graphene.String(required=True),
+        model_name=graphene.String(),
+        object_id=graphene.String(),
+        operation=graphene.String(),
+        description="Explique pourquoi une permission est accordée ou refusée.",
     )
 
     def resolve_my_permissions(self, info, model_name: str = None):
@@ -616,6 +691,87 @@ class PermissionQuery(graphene.ObjectType):
             )
 
         return permissions
+
+    def resolve_explain_permission(
+        self,
+        info,
+        permission: str,
+        model_name: str = None,
+        object_id: str = None,
+        operation: str = None,
+    ):
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            raise PermissionDenied("Authentification requise")
+
+        model_class = None
+        if model_name:
+            try:
+                model_class = apps.get_model(model_name)
+            except LookupError:
+                model_class = None
+
+        if operation is None and info.operation is not None:
+            try:
+                op_value = info.operation.operation.value
+            except Exception:
+                op_value = None
+            if op_value == "query":
+                operation = "read"
+            elif op_value == "mutation":
+                operation = "write"
+            elif op_value:
+                operation = op_value
+
+        context = PermissionContext(
+            user=user,
+            model_class=model_class,
+            object_id=object_id,
+            operation=operation,
+            additional_context={"request": getattr(info, "context", None)},
+        )
+
+        explanation = role_manager.explain_permission(user, permission, context)
+
+        policy_decision = None
+        if explanation.policy_decision:
+            policy_decision = PolicyDecisionInfo(
+                name=explanation.policy_decision.name,
+                effect=explanation.policy_decision.effect,
+                priority=explanation.policy_decision.priority,
+                reason=explanation.policy_decision.reason,
+            )
+
+        policy_matches = []
+        for match in explanation.policy_matches:
+            policy_matches.append(
+                PolicyDecisionInfo(
+                    name=match.name,
+                    effect=match.effect,
+                    priority=match.priority,
+                    reason=match.reason,
+                )
+            )
+
+        model_label = (
+            model_class._meta.label_lower if model_class is not None else None
+        )
+
+        return PermissionExplanationInfo(
+            permission=permission,
+            allowed=explanation.allowed,
+            reason=explanation.reason,
+            policy_decision=policy_decision,
+            policy_matches=policy_matches or None,
+            roles=explanation.user_roles or None,
+            effective_permissions=sorted(explanation.effective_permissions) if explanation.effective_permissions else None,
+            context_required=explanation.context_required,
+            context_allowed=explanation.context_allowed,
+            context_reason=explanation.context_reason,
+            model=model_label,
+            object_id=object_id,
+            operation=operation,
+        )
 
 
 class GraphQLOperationGuardChecker(BasePermissionChecker):

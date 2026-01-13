@@ -32,6 +32,8 @@ def generate_bulk_create_mutation(
     graphql_meta = get_model_graphql_meta(model)
 
     class BulkCreateMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             inputs = graphene.List(input_type, required=True)
 
@@ -153,6 +155,8 @@ def generate_bulk_update_mutation(
         data = input_type(required=True)
 
     class BulkUpdateMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             inputs = graphene.List(BulkUpdateInput, required=True)
 
@@ -273,6 +277,8 @@ def generate_bulk_delete_mutation(
     graphql_meta = get_model_graphql_meta(model)
 
     class BulkDeleteMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             ids = graphene.List(graphene.ID, required=True)
 

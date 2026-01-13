@@ -47,9 +47,18 @@ from .input_validation import (
     ValidationSeverity,
     validate_input,
 )
+from .policies import (
+    AccessPolicy,
+    PolicyContext,
+    PolicyEffect,
+    PolicyManager,
+    policy_manager,
+)
 from .rbac import (
+    PermissionExplanation,
     PermissionContext,
     PermissionScope,
+    PolicyDecisionDetail,
     RoleDefinition,
     RoleManager,
     RoleType,
@@ -72,6 +81,8 @@ __all__ = [
     'PermissionScope',
     'RoleDefinition',
     'PermissionContext',
+    'PermissionExplanation',
+    'PolicyDecisionDetail',
     'RoleManager',
     'role_manager',
     'require_role',
@@ -86,6 +97,13 @@ __all__ = [
     'field_permission_manager',
     'field_permission_required',
     'mask_sensitive_fields',
+
+    # Access policies
+    'PolicyEffect',
+    'PolicyContext',
+    'AccessPolicy',
+    'PolicyManager',
+    'policy_manager',
 
     # GraphQL Security
     'SecurityThreatLevel',

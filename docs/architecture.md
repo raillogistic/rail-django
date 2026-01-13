@@ -77,7 +77,7 @@ This document describes how Rail Django builds and serves GraphQL schemas.
 - Django middleware: `GraphQLAuthenticationMiddleware`,
   `GraphQLPerformanceMiddleware`, `GraphQLRateLimitMiddleware`,
   `PluginMiddleware`.
-- Graphene middleware: `GraphQLSecurityMiddleware` and custom middleware stack.
+- Graphene middleware: `GraphQLSecurityMiddleware`, `FieldPermissionMiddleware`, and custom middleware stack.
 
 Note: Graphene middleware must be wired into the GraphQL execution layer to
 have effect. Ensure your view passes the middleware list to Graphene.

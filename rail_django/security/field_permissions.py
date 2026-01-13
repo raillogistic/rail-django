@@ -30,6 +30,11 @@ from django.db import models
 from graphene import Field, ObjectType
 from graphql import GraphQLError
 
+from rail_django.config_proxy import get_setting
+
+from .policies import PolicyContext as AccessPolicyContext
+from .policies import PolicyEffect, policy_manager
+
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 logger = logging.getLogger(__name__)
@@ -79,6 +84,7 @@ class FieldContext:
     operation_type: str = "read"  # read, write, create, update, delete
     request_context: Dict[str, Any] = None
     model_class: Optional[Type[models.Model]] = None
+    classifications: Optional[Set[str]] = None
 
 
 class FieldPermissionManager:
@@ -92,6 +98,11 @@ class FieldPermissionManager:
         self._pattern_rules: Dict[str, List[FieldPermissionRule]] = {}
         self._global_rules: List[FieldPermissionRule] = []
         self._graphql_configs: Set[str] = set()
+        self._model_classifications: Dict[str, Set[str]] = {}
+        self._field_classifications: Dict[str, Dict[str, Set[str]]] = {}
+        self._policy_engine_enabled = bool(
+            get_setting("security_settings.enable_policy_engine", True)
+        )
         self._sensitive_fields = {
             "password",
             "token",
@@ -102,6 +113,32 @@ class FieldPermissionManager:
             "social_security",
             "credit_card",
             "bank_account",
+        }
+        self._classification_defaults = {
+            "pii": {
+                "email",
+                "phone",
+                "ssn",
+                "social_security",
+                "address",
+            },
+            "financial": {
+                "salary",
+                "wage",
+                "income",
+                "revenue",
+                "cost",
+                "price",
+                "credit_card",
+                "bank_account",
+            },
+            "credential": {
+                "password",
+                "token",
+                "secret",
+                "key",
+                "hash",
+            },
         }
 
         # Règles par défaut pour les champs sensibles
@@ -313,6 +350,148 @@ class FieldPermissionManager:
 
         return seen_tokens
 
+    def register_classification_tags(
+        self,
+        model_class: Union[Type[models.Model], str],
+        *,
+        model_tags: Optional[List[str]] = None,
+        field_tags: Optional[Dict[str, List[str]]] = None,
+    ) -> None:
+        if not model_class:
+            return
+        model_key = (
+            model_class.lower()
+            if isinstance(model_class, str)
+            else model_class._meta.label_lower
+        )
+        if model_tags:
+            tags = {str(tag) for tag in model_tags if tag}
+            if tags:
+                existing = self._model_classifications.setdefault(model_key, set())
+                existing.update(tags)
+        if field_tags:
+            field_map = self._field_classifications.setdefault(model_key, {})
+            for field_name, tags in field_tags.items():
+                if not field_name or not tags:
+                    continue
+                normalized_tags = {str(tag) for tag in tags if tag}
+                if not normalized_tags:
+                    continue
+                field_entry = field_map.setdefault(field_name, set())
+                field_entry.update(normalized_tags)
+
+    def _match_pattern(self, value: str, pattern: str) -> bool:
+        if not value:
+            return False
+        if pattern == "*" or pattern == value:
+            return True
+        if "*" in pattern:
+            fragment = pattern.replace("*", "")
+            return fragment in value
+        return False
+
+    def _coerce_access_level(self, value: Any) -> Optional[FieldAccessLevel]:
+        if value is None:
+            return None
+        if isinstance(value, FieldAccessLevel):
+            return value
+        mapping = {
+            "none": FieldAccessLevel.NONE,
+            "read": FieldAccessLevel.READ,
+            "write": FieldAccessLevel.WRITE,
+            "admin": FieldAccessLevel.ADMIN,
+        }
+        return mapping.get(str(value).lower())
+
+    def _coerce_visibility(self, value: Any) -> Optional[FieldVisibility]:
+        if value is None:
+            return None
+        if isinstance(value, FieldVisibility):
+            return value
+        mapping = {
+            "visible": FieldVisibility.VISIBLE,
+            "hidden": FieldVisibility.HIDDEN,
+            "masked": FieldVisibility.MASKED,
+            "redacted": FieldVisibility.REDACTED,
+        }
+        return mapping.get(str(value).lower())
+
+    def _get_classifications(self, context: FieldContext) -> Set[str]:
+        tags: Set[str] = set(context.classifications or [])
+        model_key = None
+        if context.model_class is not None:
+            model_key = context.model_class._meta.label_lower
+        elif context.instance is not None:
+            model_key = context.instance.__class__._meta.label_lower
+        if model_key:
+            tags.update(self._model_classifications.get(model_key, set()))
+        tags.update(self._model_classifications.get("*", set()))
+
+        field_name = context.field_name or ""
+        if field_name:
+            for lookup_key in (model_key, "*"):
+                if not lookup_key:
+                    continue
+                field_map = self._field_classifications.get(lookup_key, {})
+                for pattern, values in field_map.items():
+                    if self._match_pattern(field_name, pattern):
+                        tags.update(values)
+            for default_tag, patterns in self._classification_defaults.items():
+                for pattern in patterns:
+                    if self._match_pattern(field_name, pattern):
+                        tags.add(default_tag)
+                        break
+
+        context.classifications = tags
+        return tags
+
+    def _build_policy_context(self, context: FieldContext) -> AccessPolicyContext:
+        model_class = context.model_class
+        if model_class is None and context.instance is not None:
+            model_class = context.instance.__class__
+        object_id = None
+        if context.instance is not None:
+            object_id = getattr(context.instance, "pk", None)
+        classifications = self._get_classifications(context)
+        additional_context = context.request_context
+        request = None
+        if isinstance(additional_context, dict):
+            request = additional_context.get("request") or additional_context.get("context")
+        return AccessPolicyContext(
+            user=context.user,
+            permission=None,
+            model_class=model_class,
+            field_name=context.field_name,
+            operation=context.operation_type,
+            object_instance=context.instance,
+            object_id=str(object_id) if object_id is not None else None,
+            classifications=classifications,
+            additional_context=additional_context,
+            request=request,
+        )
+
+    def _get_policy_override(
+        self, context: FieldContext
+    ) -> Optional[Tuple[FieldAccessLevel, FieldVisibility, Any]]:
+        if not self._policy_engine_enabled:
+            return None
+        policy_context = self._build_policy_context(context)
+        decision = policy_manager.evaluate(policy_context)
+        if decision is None:
+            return None
+        access_level = self._coerce_access_level(decision.policy.access_level)
+        visibility = self._coerce_visibility(decision.policy.visibility)
+        mask_value = decision.policy.mask_value
+
+        if decision.effect == PolicyEffect.DENY:
+            access_level = access_level or FieldAccessLevel.NONE
+            visibility = visibility or FieldVisibility.HIDDEN
+        else:
+            access_level = access_level or FieldAccessLevel.READ
+            visibility = visibility or FieldVisibility.VISIBLE
+
+        return access_level, visibility, mask_value
+
     def get_field_access_level(self, context: FieldContext) -> FieldAccessLevel:
         """
         Détermine le niveau d'accès pour un champ.
@@ -325,6 +504,10 @@ class FieldPermissionManager:
         """
         if not context.user or not context.user.is_authenticated:
             return FieldAccessLevel.NONE
+
+        policy_override = self._get_policy_override(context)
+        if policy_override:
+            return policy_override[0]
 
         # Super utilisateur a accès à tout
         if context.user.is_superuser:
@@ -373,6 +556,13 @@ class FieldPermissionManager:
         Returns:
             Tuple (visibilité, valeur_masquée)
         """
+        if not context.user or not context.user.is_authenticated:
+            return FieldVisibility.HIDDEN, None
+
+        policy_override = self._get_policy_override(context)
+        if policy_override:
+            return policy_override[1], policy_override[2]
+
         access_level = self.get_field_access_level(context)
 
         if access_level == FieldAccessLevel.NONE:

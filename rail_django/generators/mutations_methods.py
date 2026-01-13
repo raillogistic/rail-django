@@ -118,6 +118,8 @@ def convert_method_to_mutation(
             output_type = self._convert_python_type_to_graphql(return_type)
 
     class ConvertedMethodMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             id = graphene.ID(required=True)
 
@@ -309,6 +311,8 @@ def generate_method_mutation(
             output_type = self._convert_python_type_to_graphql(return_type)
 
     class MethodMutation(graphene.Mutation):
+        model_class = model
+
         class Arguments:
             id = graphene.ID(required=True)
             if input_type:

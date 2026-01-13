@@ -17,6 +17,8 @@ from rail_django.security.rbac import (
     require_role,
     role_manager,
 )
+from rail_django.security.policies import AccessPolicy, PolicyEffect, policy_manager
+from test_app.models import Category
 
 pytestmark = pytest.mark.unit
 
@@ -185,3 +187,62 @@ def test_role_hierarchy_cycle_guard():
     permissions = manager.get_effective_permissions(user)
     assert "cycle.a" in permissions
     assert "cycle.b" in permissions
+
+
+@pytest.mark.django_db
+def test_policy_deny_overrides_role_permission():
+    policy_manager.clear_policies()
+    try:
+        role_name = "policy_deny_role"
+        role_manager.register_role(
+            RoleDefinition(
+                name=role_name,
+                description="Policy deny role",
+                role_type=RoleType.BUSINESS,
+                permissions=["project.read"],
+            )
+        )
+
+        user = User.objects.create_user(
+            username="policy_user", password="pass12345"
+        )
+        role_manager.assign_role_to_user(user, role_name)
+
+        policy_manager.register_policy(
+            AccessPolicy(
+                name="deny_project_read",
+                effect=PolicyEffect.DENY,
+                permissions=["project.read"],
+                priority=10,
+            )
+        )
+
+        assert role_manager.has_permission(user, "project.read") is False
+    finally:
+        policy_manager.clear_policies()
+
+
+@pytest.mark.django_db
+def test_owner_resolver_override_allows_contextual_access():
+    manager = RoleManager()
+    role_name = "resolver_owner_role"
+    manager.register_role(
+        RoleDefinition(
+            name=role_name,
+            description="Owner resolver role",
+            role_type=RoleType.BUSINESS,
+            permissions=["category.update_own"],
+        )
+    )
+
+    user = User.objects.create_user(username="resolver_user", password="pass12345")
+    manager.assign_role_to_user(user, role_name)
+
+    category = Category.objects.create(name="Secure", description="Secured")
+    context = PermissionContext(user=user, object_instance=category)
+
+    assert manager.has_permission(user, "category.update_own", context) is False
+
+    manager.register_owner_resolver(Category, lambda ctx: True)
+
+    assert manager.has_permission(user, "category.update_own", context) is True

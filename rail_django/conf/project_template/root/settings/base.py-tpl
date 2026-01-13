@@ -334,6 +334,18 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_authentication": True,
         # Enable authorization (permissions) checks
         "enable_authorization": True,
+        # Enable policy engine allow/deny rules
+        "enable_policy_engine": True,
+        # Cache permission checks per user/context
+        "enable_permission_cache": True,
+        # Permission cache TTL in seconds
+        "permission_cache_ttl_seconds": 300,
+        # Emit audit events for permission checks
+        "enable_permission_audit": False,
+        # Log all permission checks
+        "permission_audit_log_all": False,
+        # Log deny decisions when audit is enabled
+        "permission_audit_log_denies": True,
         # Enable rate limiting
         "enable_rate_limiting": False,
         # Requests per minute limit
@@ -353,6 +365,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_cors": True,
         # Check field-level permissions
         "enable_field_permissions": True,
+        # Reject or strip input fields when write access is missing
+        "field_permission_input_mode": "reject",
         # Check object-level permissions
         "enable_object_permissions": True,
         # Validate and sanitize input
@@ -381,6 +395,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_rate_limiting_middleware": True,
         # Enable input validation middleware
         "enable_validation_middleware": True,
+        # Enable field permission enforcement middleware
+        "enable_field_permission_middleware": True,
         # Enable CORS middleware
         "enable_cors_middleware": True,
         # Log all GraphQL queries

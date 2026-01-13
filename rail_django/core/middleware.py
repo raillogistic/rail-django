@@ -8,17 +8,24 @@ including authentication, logging, performance monitoring, and error handling.
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from graphql import DocumentNode
+from django.db import models
+from graphql import DocumentNode, GraphQLError
 
 from .performance import get_complexity_analyzer
 from .exceptions import ValidationError as GraphQLValidationError
 from .security import get_auth_manager, get_input_validator
 from .services import get_rate_limiter
 from ..config_proxy import get_setting
+from ..security.field_permissions import (
+    FieldAccessLevel,
+    FieldContext,
+    FieldVisibility,
+    field_permission_manager,
+)
 from ..plugins.base import plugin_manager
 
 logger = logging.getLogger(__name__)
@@ -34,6 +41,7 @@ class MiddlewareSettings:
     enable_error_handling_middleware: bool = True
     enable_rate_limiting_middleware: bool = True
     enable_validation_middleware: bool = True
+    enable_field_permission_middleware: bool = True
     enable_cors_middleware: bool = True
     log_queries: bool = True
     log_mutations: bool = True
@@ -421,6 +429,289 @@ class ValidationMiddleware(BaseMiddleware):
         return next_resolver(root, info, **kwargs)
 
 
+class FieldPermissionMiddleware(BaseMiddleware):
+    """Middleware for field output masking and input enforcement."""
+
+    def __init__(self, schema_name: Optional[str] = None):
+        super().__init__(schema_name)
+        self.input_mode = str(
+            get_setting(
+                "security_settings.field_permission_input_mode",
+                "reject",
+                schema_name,
+            )
+        ).lower()
+        self.enable_field_permissions = bool(
+            get_setting("security_settings.enable_field_permissions", True, schema_name)
+        )
+
+    def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
+        if (
+            not self.settings.enable_field_permission_middleware
+            or not self.enable_field_permissions
+        ):
+            return next_resolver(root, info, **kwargs)
+
+        if self._is_introspection_field(info):
+            return next_resolver(root, info, **kwargs)
+
+        user = getattr(info.context, "user", None)
+
+        if self._is_root_field(info) and self._is_mutation(info):
+            kwargs = self._enforce_input_permissions(user, info, kwargs)
+
+        result = next_resolver(root, info, **kwargs)
+        return self._apply_output_permissions(user, info, root, result)
+
+    @staticmethod
+    def _is_root_field(info: Any) -> bool:
+        path = getattr(info, "path", None)
+        if path is None:
+            return True
+        return getattr(path, "prev", None) is None
+
+    @staticmethod
+    def _is_introspection_field(info: Any) -> bool:
+        field_name = getattr(info, "field_name", "") or ""
+        if field_name.startswith("__"):
+            return True
+        parent_type = getattr(info, "parent_type", None)
+        parent_name = getattr(parent_type, "name", "") or ""
+        return parent_name.startswith("__")
+
+    @staticmethod
+    def _is_mutation(info: Any) -> bool:
+        operation = getattr(info, "operation", None)
+        return bool(
+            operation and getattr(operation, "operation", None) and
+            operation.operation.value == "mutation"
+        )
+
+    @staticmethod
+    def _unwrap_graphql_type(graphql_type: Any) -> Any:
+        while hasattr(graphql_type, "of_type"):
+            graphql_type = graphql_type.of_type
+        return graphql_type
+
+    def _resolve_parent_model_class(
+        self, info: Any, root: Any, result: Any
+    ) -> Optional[Type[models.Model]]:
+        if isinstance(root, models.Model):
+            return root.__class__
+        parent_type = self._unwrap_graphql_type(getattr(info, "parent_type", None))
+        graphene_type = getattr(parent_type, "graphene_type", None)
+        meta = getattr(graphene_type, "_meta", None)
+        model_class = getattr(meta, "model", None)
+        if model_class is not None:
+            return model_class
+        if isinstance(result, models.Model):
+            return result.__class__
+        return None
+
+    def _resolve_mutation_model_class(self, info: Any) -> Optional[Type[models.Model]]:
+        graphql_type = self._unwrap_graphql_type(getattr(info, "return_type", None))
+        graphene_type = getattr(graphql_type, "graphene_type", None)
+        if graphene_type is None:
+            return None
+        model_class = getattr(graphene_type, "model_class", None)
+        if model_class is not None:
+            return model_class
+        meta = getattr(graphene_type, "_meta", None)
+        return getattr(meta, "model", None)
+
+    def _resolve_operation_type(self, info: Any) -> str:
+        operation = getattr(info, "operation", None)
+        op_value = (
+            operation.operation.value
+            if operation and getattr(operation, "operation", None)
+            else "query"
+        )
+        if op_value == "mutation":
+            return self._resolve_mutation_operation(info.field_name or "")
+        return "read"
+
+    @staticmethod
+    def _resolve_mutation_operation(field_name: str) -> str:
+        name = (field_name or "").lower()
+        if name.startswith("bulk"):
+            name = name[4:]
+        if name.startswith(("create", "add", "register", "signup", "import")):
+            return "create"
+        if name.startswith(("delete", "remove", "archive", "purge", "clear")):
+            return "delete"
+        if name.startswith(("update", "set", "edit", "patch", "upsert", "enable", "disable")):
+            return "update"
+        if "delete" in name or "remove" in name:
+            return "delete"
+        if "create" in name or "add" in name:
+            return "create"
+        if "update" in name or "edit" in name or "patch" in name:
+            return "update"
+        return "write"
+
+    @staticmethod
+    def _normalize_payload(payload: Any) -> Optional[Dict[str, Any]]:
+        if payload is None:
+            return None
+        if isinstance(payload, dict):
+            return payload
+        if hasattr(payload, "items"):
+            try:
+                return dict(payload.items())
+            except Exception:
+                return dict(payload)
+        if hasattr(payload, "__dict__"):
+            return {
+                key: value
+                for key, value in vars(payload).items()
+                if not key.startswith("_")
+            }
+        return None
+
+    @staticmethod
+    def _resolve_instance(
+        model_class: Type[models.Model], object_id: Any
+    ) -> Optional[models.Model]:
+        if object_id is None:
+            return None
+        try:
+            return model_class.objects.get(pk=object_id)
+        except Exception:
+            try:
+                from graphql_relay import from_global_id
+
+                decoded_type, decoded_id = from_global_id(str(object_id))
+                return model_class.objects.get(pk=decoded_id)
+            except Exception:
+                return None
+
+    def _enforce_input_permissions(
+        self, user: Any, info: Any, kwargs: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        model_class = self._resolve_mutation_model_class(info)
+        if model_class is None:
+            return kwargs
+
+        operation = self._resolve_operation_type(info)
+        if operation == "delete":
+            return kwargs
+        if operation == "write":
+            operation = "update"
+
+        request_context = {"request": getattr(info, "context", None)}
+        disallowed_fields: List[str] = []
+        updated_kwargs = dict(kwargs)
+
+        def _check_payload(payload: Any, object_id: Any = None) -> Any:
+            payload_dict = self._normalize_payload(payload)
+            if payload_dict is None:
+                return payload
+            target_payload = (
+                payload_dict.get("data")
+                if isinstance(payload_dict.get("data"), dict)
+                else payload_dict
+            )
+            instance = None
+            if object_id is not None:
+                instance = self._resolve_instance(model_class, object_id)
+            blocked = []
+            for field_name in list(target_payload.keys()):
+                if field_name in {"id", "pk", "object_id"}:
+                    continue
+                base_field = field_name
+                if base_field.startswith("nested_"):
+                    base_field = base_field[len("nested_") :]
+                field_context = FieldContext(
+                    user=user,
+                    instance=instance,
+                    field_name=base_field,
+                    operation_type=operation,
+                    model_class=model_class,
+                    request_context=request_context,
+                )
+                access_level = field_permission_manager.get_field_access_level(
+                    field_context
+                )
+                if access_level not in (
+                    FieldAccessLevel.WRITE,
+                    FieldAccessLevel.ADMIN,
+                ):
+                    blocked.append(field_name)
+            if blocked and self.input_mode == "strip":
+                for field_name in blocked:
+                    target_payload.pop(field_name, None)
+            disallowed_fields.extend(blocked)
+            return payload_dict
+
+        if "input" in updated_kwargs:
+            object_id = updated_kwargs.get("id") or updated_kwargs.get("object_id")
+            updated_kwargs["input"] = _check_payload(
+                updated_kwargs["input"], object_id=object_id
+            )
+
+        if "inputs" in updated_kwargs and isinstance(updated_kwargs["inputs"], list):
+            sanitized_inputs = []
+            for payload in updated_kwargs["inputs"]:
+                payload_dict = self._normalize_payload(payload) or {}
+                object_id = (
+                    payload_dict.get("id")
+                    or payload_dict.get("pk")
+                    or payload_dict.get("object_id")
+                )
+                sanitized_inputs.append(_check_payload(payload, object_id=object_id))
+            updated_kwargs["inputs"] = sanitized_inputs
+
+        if disallowed_fields and self.input_mode != "strip":
+            raise GraphQLError(
+                f"Input fields not permitted: {', '.join(sorted(set(disallowed_fields)))}"
+            )
+
+        return updated_kwargs
+
+    def _apply_output_permissions(
+        self, user: Any, info: Any, root: Any, result: Any
+    ) -> Any:
+        field_name = getattr(info, "field_name", None)
+        if not field_name:
+            return result
+        model_class = self._resolve_parent_model_class(info, root, result)
+        if model_class is None:
+            return result
+
+        instance = root if isinstance(root, models.Model) else None
+        operation = self._resolve_operation_type(info)
+        field_context = FieldContext(
+            user=user,
+            instance=instance,
+            field_name=field_name,
+            operation_type=operation,
+            model_class=model_class,
+            request_context={"request": getattr(info, "context", None)},
+        )
+        visibility, mask_value = field_permission_manager.get_field_visibility(
+            field_context
+        )
+
+        if visibility == FieldVisibility.HIDDEN:
+            return None
+        if visibility == FieldVisibility.MASKED:
+            return mask_value
+        if visibility == FieldVisibility.REDACTED:
+            return self._redact_value(result)
+
+        return result
+
+    @staticmethod
+    def _redact_value(value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            if len(value) > 4:
+                return value[:2] + "*" * (len(value) - 4) + value[-2:]
+            return "****"
+        return "****"
+
+
 class ErrorHandlingMiddleware(BaseMiddleware):
     """Middleware for error handling."""
 
@@ -605,6 +896,7 @@ DEFAULT_MIDDLEWARE = [
     RateLimitingMiddleware,
     AccessGuardMiddleware,
     ValidationMiddleware,
+    FieldPermissionMiddleware,
     QueryComplexityMiddleware,
     PluginMiddleware,
     PerformanceMiddleware,

@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from rail_django.extensions.permissions import (
     CustomPermissionChecker,
     DjangoPermissionChecker,
+    OwnershipPermissionChecker,
     OperationType,
     PermissionLevel,
     PermissionManager,
@@ -20,7 +21,7 @@ from rail_django.extensions.permissions import (
     PermissionFilterMixin,
     require_permission,
 )
-from test_app.models import Category
+from test_app.models import Category, Profile
 
 pytestmark = pytest.mark.unit
 
@@ -99,3 +100,27 @@ def test_permission_query_returns_entries_for_model_name():
     assert len(result) == 1
     assert result[0].model_name == "test_app.category"
 
+
+@pytest.mark.django_db
+def test_require_permission_uses_input_object_id():
+    user = User.objects.create_user(username="owner_check", password="pass12345")
+    other_user = User.objects.create_user(
+        username="owner_check_other", password="pass12345"
+    )
+    profile = Profile.objects.create(user=other_user, bio="Hidden")
+    info = _InfoStub(user)
+
+    class _Mutation:
+        model_class = Profile
+
+        @require_permission(
+            OwnershipPermissionChecker(owner_field="user"),
+            PermissionLevel.OBJECT,
+        )
+        def mutate(self, info, input=None, **kwargs):
+            return "ok"
+
+    mutation = _Mutation()
+
+    with pytest.raises(PermissionDenied):
+        mutation.mutate(info, input={"id": profile.id})

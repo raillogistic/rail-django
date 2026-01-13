@@ -193,6 +193,16 @@ class AccessControlConfig:
     fields: List[FieldGuardConfig] = field(default_factory=list)
 
 
+@dataclass
+class ClassificationConfig:
+    """
+    Data classification tags for a model and its fields.
+    """
+
+    model: List[str] = field(default_factory=list)
+    fields: Dict[str, List[str]] = field(default_factory=dict)
+
+
 class GraphQLMeta:
     """
     Meta helper for configuring GraphQL behavior on Django models.
@@ -233,6 +243,7 @@ class GraphQLMeta:
     FieldGuard = FieldGuardConfig
     OperationGuard = OperationGuardConfig
     AccessControl = AccessControlConfig
+    Classification = ClassificationConfig
 
     def __init__(self, model_class: Type[models.Model]):
         """
@@ -253,6 +264,9 @@ class GraphQLMeta:
         self.ordering_config: OrderingConfig = self._build_ordering_config()
         self.resolvers: ResolverConfig = self._build_resolver_config()
         self.access_config: AccessControlConfig = self._build_access_control_config()
+        self.classification_config: ClassificationConfig = (
+            self._build_classification_config()
+        )
 
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom
@@ -281,6 +295,7 @@ class GraphQLMeta:
 
         self._register_roles()
         self._register_field_permissions()
+        self._register_classifications()
 
         self._validate_configuration()
 
@@ -528,6 +543,47 @@ class GraphQLMeta:
 
         return AccessControlConfig()
 
+    def _build_classification_config(self) -> ClassificationConfig:
+        """Construct classification tags for the model."""
+
+        if not self._meta_config:
+            return ClassificationConfig()
+
+        raw = getattr(self._meta_config, "classifications", None)
+        if raw is None:
+            raw = getattr(self._meta_config, "classification", None)
+        if raw is None:
+            raw = getattr(self._meta_config, "data_classification", None)
+
+        if isinstance(raw, ClassificationConfig):
+            return ClassificationConfig(
+                model=list(raw.model),
+                fields={name: list(tags) for name, tags in raw.fields.items()},
+            )
+
+        if isinstance(raw, (list, tuple, set)):
+            return ClassificationConfig(model=[str(tag) for tag in raw if tag])
+
+        if isinstance(raw, dict):
+            model_tags = raw.get("model") or raw.get("tags") or raw.get("model_tags")
+            if model_tags is None:
+                model_tags = raw.get("classifications") or []
+            field_tags = raw.get("fields") or raw.get("field_tags") or {}
+            normalized_fields = {}
+            for field_name, tags in field_tags.items():
+                if not field_name:
+                    continue
+                if isinstance(tags, (list, tuple, set)):
+                    normalized_fields[field_name] = [str(tag) for tag in tags if tag]
+                elif tags:
+                    normalized_fields[field_name] = [str(tags)]
+            return ClassificationConfig(
+                model=[str(tag) for tag in model_tags or [] if tag],
+                fields=normalized_fields,
+            )
+
+        return ClassificationConfig()
+
     def _coerce_role_config(self, name: str, value: Any) -> RoleConfig:
         if isinstance(value, RoleConfig):
             if not value.name:
@@ -659,6 +715,26 @@ class GraphQLMeta:
                     guard.field,
                     exc,
                 )
+
+    def _register_classifications(self) -> None:
+        if not (
+            self.classification_config.model or self.classification_config.fields
+        ):
+            return
+        components = _load_security_components()
+        field_permission_mgr = components["field_permission_manager"]
+        try:
+            field_permission_mgr.register_classification_tags(
+                self.model_class,
+                model_tags=self.classification_config.model,
+                field_tags=self.classification_config.fields,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not register classification tags for %s: %s",
+                self.model_class.__name__,
+                exc,
+            )
 
     def _coerce_access_level(self, value: str, components: Dict[str, Any]):
         FieldAccessLevel = components["FieldAccessLevel"]
