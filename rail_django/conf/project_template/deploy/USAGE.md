@@ -25,7 +25,51 @@ nano .env
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `PGHOST`, `PGUSER`, `PGPASSWORD`: Required for the automatic backup service.
 
-## 2. Deployment Steps
+## 2. One-Click Deployment (Recommended)
+
+From your project root:
+
+```bash
+bash deploy/deploy.sh
+```
+
+The script validates `.env` (creates it from `.env.example` if missing), ensures TLS
+certs exist, builds/starts containers, and runs migrations + collectstatic.
+
+### Optional Flags
+```bash
+bash deploy/deploy.sh --create-superuser --follow-logs
+```
+
+### Non-Interactive Superuser (CI/Automation)
+Set these in your `.env` and re-run the script:
+```bash
+DEPLOY_CREATE_SUPERUSER=1
+DJANGO_SUPERUSER_USERNAME=admin
+DJANGO_SUPERUSER_EMAIL=admin@example.com
+DJANGO_SUPERUSER_PASSWORD=change_me
+```
+
+### CI Example (Non-Interactive)
+In your CI job, export secrets as environment variables, then template `.env` and deploy:
+```bash
+cat > .env <<EOF
+DJANGO_DEBUG=False
+DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+DJANGO_SETTINGS_MODULE=root.settings.production
+DATABASE_URL=${DATABASE_URL}
+DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+
+DEPLOY_CREATE_SUPERUSER=1
+DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
+DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
+EOF
+
+bash deploy/deploy.sh
+```
+
+## 3. Manual Deployment Steps
 
 Run these commands from your project root:
 
@@ -52,13 +96,13 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py col
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
 ```
 
-## 3. Directory Structure
+## 4. Directory Structure
 
 - **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
 - **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
 - **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env`).
 
-## 4. Maintenance
+## 5. Maintenance
 
 ### Viewing Logs
 ```bash
@@ -78,7 +122,7 @@ docker-compose -f deploy/docker/docker-compose.yml up -d --build
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
 ```
 
-## 5. Security Recommendations
+## 6. Security Recommendations
 
 1.  **SSL/TLS**: Mandatory. Use company-issued certificates or self-signed certs for internal traffic.
 2.  **Firewall**: Configure `ufw` on your Ubuntu VM to allow traffic only from trusted internal subnets.
@@ -90,7 +134,7 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 3.  **Secrets**: Never commit your `.env` file to version control.
 4.  **Updates**: Keep the VM OS updated (`apt update && apt upgrade`).
 
-## 6. Setup HTTPS (Internal Network / Enterprise)
+## 7. Setup HTTPS (Internal Network / Enterprise)
 
 Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and mount your certificates into it.
 

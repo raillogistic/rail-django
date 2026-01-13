@@ -42,6 +42,9 @@ Options:
 
 Environment:
   DEPLOY_DOMAIN        Domain for self-signed certs when none exist.
+  DEPLOY_CREATE_SUPERUSER=1
+                       Create a superuser non-interactively from .env values.
+                       Requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD.
 EOF
 }
 
@@ -60,6 +63,13 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+is_truthy() {
+  case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|y|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 read_env() {
   local key="$1"
   local line
@@ -68,7 +78,9 @@ read_env() {
     echo ""
     return 0
   fi
-  echo "${line#*=}"
+  local value="${line#*=}"
+  value="${value%$'\r'}"
+  echo "$value"
 }
 
 require_cmd docker
@@ -167,6 +179,24 @@ fi
 if [ "$CREATE_SUPERUSER" -eq 1 ]; then
   note "Creating superuser (interactive)..."
   "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec web python manage.py createsuperuser
+elif is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
+  note "Creating superuser (non-interactive)..."
+  su_username="$(read_env DJANGO_SUPERUSER_USERNAME)"
+  su_email="$(read_env DJANGO_SUPERUSER_EMAIL)"
+  su_password="$(read_env DJANGO_SUPERUSER_PASSWORD)"
+
+  if [ -z "$su_username" ] || [ -z "$su_password" ]; then
+    die "DEPLOY_CREATE_SUPERUSER=1 requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD."
+  fi
+
+  if [ -n "$su_email" ]; then
+    "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web \
+      python manage.py createsuperuser --noinput --username "$su_username" --email "$su_email"
+  else
+    warn "DJANGO_SUPERUSER_EMAIL not set; createsuperuser may fail if email is required."
+    "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web \
+      python manage.py createsuperuser --noinput --username "$su_username"
+  fi
 fi
 
 note "Deployment complete."
