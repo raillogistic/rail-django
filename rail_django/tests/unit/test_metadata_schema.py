@@ -12,7 +12,8 @@ import pytest
 from django.contrib.auth.models import Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from graphql import GraphQLError
 from rail_django.testing import RailGraphQLTestClient
 
 from rail_django.core.settings import SchemaSettings
@@ -23,6 +24,7 @@ from rail_django.extensions.metadata import (
     ModelMetadataType,
     RelationshipMetadataType,
 )
+import rail_django.extensions.metadata as metadata_module
 
 
 class TestModel(models.Model):
@@ -48,6 +50,36 @@ class RelatedTestModel(models.Model):
         TestModel, on_delete=models.CASCADE, related_name="related_items"
     )
     value = models.IntegerField()
+
+    class Meta:
+        app_label = "test_app"
+
+
+class ParentModel(models.Model):
+    """Parent model for polymorphic table metadata tests."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "test_app"
+
+
+class TagModel(models.Model):
+    """Tag model for ManyToMany polymorphic table metadata tests."""
+
+    label = models.CharField(max_length=50)
+
+    class Meta:
+        app_label = "test_app"
+
+
+class PolymorphicChildModel(ParentModel):
+    """Child model with OneToOne and ManyToMany relations."""
+
+    partner = models.OneToOneField(
+        "self", on_delete=models.CASCADE, null=True, blank=True
+    )
+    tags = models.ManyToManyField(TagModel, related_name="children")
 
     class Meta:
         app_label = "test_app"
@@ -204,6 +236,8 @@ class TestModelMetadataQuery(TestCase):
             user=self.user,
             nested_fields=True,
             permissions_included=True,
+            include_filters=True,
+            include_mutations=True,
         )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
@@ -219,11 +253,10 @@ class TestModelMetadataQuery(TestCase):
         info.context = Mock()
         info.context.user = self.user
 
-        result = self.query.resolve_model_metadata(
-            info, app_name="test_app", model_name="TestModel"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_model_metadata(
+                info, app_name="test_app", model_name="TestModel"
+            )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
     def test_resolve_model_metadata_no_user(self, mock_get_settings):
@@ -238,11 +271,10 @@ class TestModelMetadataQuery(TestCase):
         info.context = Mock()
         info.context.user = None
 
-        result = self.query.resolve_model_metadata(
-            info, app_name="test_app", model_name="TestModel"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_model_metadata(
+                info, app_name="test_app", model_name="TestModel"
+            )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
     @patch(
@@ -265,11 +297,10 @@ class TestModelMetadataQuery(TestCase):
         info.context = Mock()
         info.context.user = self.user
 
-        result = self.query.resolve_model_metadata(
-            info, app_name="invalid_app", model_name="InvalidModel"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_model_metadata(
+                info, app_name="invalid_app", model_name="InvalidModel"
+            )
 
 
 class TestGraphQLIntegration(TestCase):
@@ -433,12 +464,184 @@ class TestEdgeCases(TestCase):
         info.context = Mock()
         info.context.user = self.user
 
-        result = query.resolve_model_metadata(
-            info, app_name="test_app", model_name="TestModel"
+        with self.assertRaises(GraphQLError):
+            query.resolve_model_metadata(
+                info, app_name="test_app", model_name="TestModel"
+            )
+
+
+class TestMetadataAccessGating(TestCase):
+    """Test access gating for metadata resolvers."""
+
+    def setUp(self):
+        self.query = ModelMetadataQuery()
+
+    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    def test_resolve_available_models_requires_auth(self, mock_get_settings):
+        mock_settings = Mock()
+        mock_settings.show_metadata = True
+        mock_get_settings.return_value = mock_settings
+
+        info = Mock()
+        info.context = Mock()
+        info.context.user = None
+
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_available_models(info)
+
+    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    def test_resolve_model_table_requires_auth(self, mock_get_settings):
+        mock_settings = Mock()
+        mock_settings.show_metadata = True
+        mock_get_settings.return_value = mock_settings
+
+        info = Mock()
+        info.context = Mock()
+        info.context.user = None
+
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_model_table(
+                info, app_name="test_app", model_name="TestModel"
+            )
+
+    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    def test_resolve_model_form_metadata_requires_auth(self, mock_get_settings):
+        mock_settings = Mock()
+        mock_settings.show_metadata = True
+        mock_get_settings.return_value = mock_settings
+
+        info = Mock()
+        info.context = Mock()
+        info.context.user = None
+
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_model_form_metadata(
+                info, app_name="test_app", model_name="TestModel"
+            )
+
+    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    def test_resolve_app_models_requires_auth(self, mock_get_settings):
+        mock_settings = Mock()
+        mock_settings.show_metadata = True
+        mock_get_settings.return_value = mock_settings
+
+        info = Mock()
+        info.context = Mock()
+        info.context.user = None
+
+        with self.assertRaises(GraphQLError):
+            self.query.resolve_app_models(info, app_name="test_app")
+
+
+class TestMetadataCaching(TestCase):
+    """Test caching settings and invalidation behavior."""
+
+    def setUp(self):
+        metadata_module._table_cache.clear()
+
+    @override_settings(DEBUG=False, RAIL_DJANGO_GRAPHQL={"METADATA": {}})
+    def test_table_cache_timeout_default_in_production(self):
+        metadata_module._load_table_cache_policy()
+        self.assertIsNone(metadata_module._get_table_cache_timeout())
+
+    @override_settings(
+        DEBUG=False,
+        RAIL_DJANGO_GRAPHQL={"METADATA": {"table_cache_timeout_seconds": 120}},
+    )
+    def test_table_cache_timeout_respects_override(self):
+        metadata_module._load_table_cache_policy()
+        self.assertEqual(metadata_module._get_table_cache_timeout(), 120)
+
+    @override_settings(
+        DEBUG=False,
+        RAIL_DJANGO_GRAPHQL={"METADATA": {"table_cache_enabled": False}},
+    )
+    @patch("rail_django.extensions.metadata.apps.get_model")
+    def test_table_cache_disabled(self, mock_get_model):
+        mock_get_model.return_value = TestModel
+        user = User.objects.create_user(username="cacheuser", password="testpass")
+        extractor = metadata_module.ModelTableExtractor()
+
+        extractor.extract_model_table_metadata(
+            app_name="test_app",
+            model_name="TestModel",
+            user=user,
+            include_filters=False,
+            include_mutations=False,
+            include_pdf_templates=False,
         )
 
-        # Should return None when settings are missing
-        self.assertIsNone(result)
+        self.assertEqual(len(metadata_module._table_cache), 0)
+
+    def test_invalidate_metadata_cache_removes_model_entries(self):
+        cache_key = metadata_module._make_table_cache_key(
+            "default",
+            "test_app",
+            "TestModel",
+            False,
+            exclude=[],
+            only=[],
+            include_nested=True,
+            only_lookup=[],
+            exclude_lookup=[],
+            include_filters=True,
+            include_mutations=True,
+            include_templates=True,
+        )
+        metadata_module._table_cache[cache_key] = {
+            "value": "value",
+            "expires_at": None,
+            "created_at": 0,
+        }
+
+        metadata_module.invalidate_metadata_cache(
+            model_name="TestModel", app_name="test_app"
+        )
+
+        self.assertNotIn(cache_key, metadata_module._table_cache)
+
+    @override_settings(
+        DEBUG=False,
+        RAIL_DJANGO_GRAPHQL={"METADATA": {"clear_cache_on_start": False}},
+    )
+    @patch("rail_django.extensions.metadata.invalidate_metadata_cache")
+    def test_invalidate_cache_on_startup_respects_setting(self, mock_invalidate):
+        metadata_module.invalidate_cache_on_startup()
+        mock_invalidate.assert_not_called()
+
+    @override_settings(
+        DEBUG=False,
+        RAIL_DJANGO_GRAPHQL={"METADATA": {"clear_cache_on_start": True}},
+    )
+    @patch("rail_django.extensions.metadata.invalidate_metadata_cache")
+    def test_invalidate_cache_on_startup_runs(self, mock_invalidate):
+        metadata_module.invalidate_cache_on_startup()
+        mock_invalidate.assert_called_once()
+
+
+class TestPolymorphicTableMetadata(TestCase):
+    """Test polymorphic/multi-table edge cases for table metadata."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="polyuser", password="testpass")
+        self.extractor = metadata_module.ModelTableExtractor()
+
+    @patch("rail_django.extensions.metadata.apps.get_model")
+    def test_polymorphic_hides_one_to_one_fields(self, mock_get_model):
+        mock_get_model.return_value = PolymorphicChildModel
+
+        metadata = self.extractor.extract_model_table_metadata(
+            app_name="test_app",
+            model_name="PolymorphicChildModel",
+            user=self.user,
+            include_filters=False,
+            include_mutations=False,
+            include_pdf_templates=False,
+        )
+
+        field_names = {field.name for field in metadata.fields}
+        self.assertNotIn("partner", field_names)
+        self.assertIn("tags", field_names)
 
 
 if __name__ == "__main__":

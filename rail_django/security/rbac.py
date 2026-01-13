@@ -113,6 +113,7 @@ class RoleManager:
         self._model_roles_registry: Set[str] = set()
         self._owner_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
         self._assignment_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
+        self._context_resolver_version = 1
 
         self._permission_cache_enabled = bool(
             get_setting("security_settings.enable_permission_cache", True)
@@ -268,6 +269,7 @@ class RoleManager:
         if not key:
             return
         self._owner_resolvers[key] = resolver
+        self._context_resolver_version += 1
 
     def register_assignment_resolver(
         self,
@@ -278,13 +280,19 @@ class RoleManager:
         if not key:
             return
         self._assignment_resolvers[key] = resolver
+        self._context_resolver_version += 1
 
     def _normalize_model_key(self, model_class: Union[Type[models.Model], str, None]) -> str:
         if model_class is None:
             return ""
         if isinstance(model_class, str):
             return model_class.lower()
-        return model_class._meta.label_lower
+        meta = getattr(model_class, "_meta", None)
+        label_lower = getattr(meta, "label_lower", None)
+        if label_lower:
+            return label_lower
+        name = getattr(model_class, "__name__", None)
+        return name.lower() if name else ""
 
     def _get_model_key_from_context(self, context: PermissionContext) -> str:
         if context.model_class is not None:
@@ -473,6 +481,7 @@ class RoleManager:
             return None
         version = self._get_cache_version(user_id)
         policy_version = policy_manager.get_version()
+        resolver_version = self._context_resolver_version
         model_label = ""
         object_id = ""
         operation = ""
@@ -481,16 +490,21 @@ class RoleManager:
             if model_class is None and context.object_instance is not None:
                 model_class = context.object_instance.__class__
             if model_class is not None:
-                model_label = model_class._meta.label_lower
+                model_label = self._normalize_model_key(model_class)
             object_id = str(
                 context.object_id
                 or getattr(context.object_instance, "pk", "")
                 or ""
             )
             operation = str(context.operation or "")
+            is_contextual = permission.endswith("_own") or permission.endswith(
+                "_assigned"
+            )
+            if is_contextual and not object_id:
+                return None
         return (
             f"{self._permission_cache_prefix}:{user_id}:{version}:{policy_version}:"
-            f"{permission}:{model_label}:{object_id}:{operation}"
+            f"{permission}:{model_label}:{object_id}:{operation}:{resolver_version}"
         )
 
     def _get_cached_permission(self, cache_key: Optional[str]) -> Optional[bool]:
@@ -727,7 +741,7 @@ class RoleManager:
             if model_class is None and context.object_instance is not None:
                 model_class = context.object_instance.__class__
             if model_class is not None:
-                model_label = model_class._meta.label_lower
+                model_label = self._normalize_model_key(model_class)
             object_id = str(
                 context.object_id
                 or getattr(context.object_instance, "pk", "")

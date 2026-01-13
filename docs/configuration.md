@@ -109,6 +109,25 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 }
 ```
 
+## Metadata settings
+
+Metadata exposure is gated by `schema_settings.show_metadata` and requires
+authentication. Configure caching and startup invalidation under
+`RAIL_DJANGO_GRAPHQL["METADATA"]`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "METADATA": {
+        "table_cache_enabled": True,
+        "table_cache_timeout_seconds": 0,  # 0 = no expiry; defaults to none in prod
+        "table_cache_max_entries": 1000,
+        "table_cache_authenticated": True,
+        "clear_cache_on_start": False,
+        "clear_cache_on_start_debug_only": False,
+    }
+}
+```
+
 ## Graphene settings
 
 Rail Django uses Graphene-Django. You can keep standard `GRAPHENE` settings:

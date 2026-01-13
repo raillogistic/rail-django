@@ -73,7 +73,8 @@ _table_cache_policy = {
     "enabled": True,
     "timeout_seconds": 600,
     "max_entries": 1000,
-    "cache_authenticated": False,
+    "cache_authenticated": True,
+    "timeout_configured": False,
 }
 _metadata_cache_lock = threading.RLock()
 _metadata_cache: Dict[str, Dict[str, Any]] = {}
@@ -89,9 +90,13 @@ _metadata_cache_policy = {
     "max_entries": 1000,
 }
 
+_filter_cache_lock = threading.RLock()
+_filter_class_cache: Dict[str, Any] = {}
+
 _metadata_version_lock = threading.RLock()
 _metadata_versions: Dict[str, str] = {}
 _global_metadata_seed = str(int(time.time() * 1000))
+_migration_context_cache: Optional[bool] = None
 
 
 def _generate_metadata_version() -> str:
@@ -160,14 +165,21 @@ def _load_table_cache_policy() -> None:
         _table_cache_policy["enabled"] = bool(
             metadata_cfg.get("table_cache_enabled", True)
         )
-        timeout_val = int(metadata_cfg.get("table_cache_timeout_seconds", 600))
-        _table_cache_policy["timeout_seconds"] = timeout_val if timeout_val > 0 else 600
+        timeout_configured = "table_cache_timeout_seconds" in metadata_cfg
+        try:
+            timeout_val = int(
+                metadata_cfg.get("table_cache_timeout_seconds", 600)
+            )
+        except (TypeError, ValueError):
+            timeout_val = 0
+        _table_cache_policy["timeout_seconds"] = timeout_val
+        _table_cache_policy["timeout_configured"] = timeout_configured
         max_entries_val = int(metadata_cfg.get("table_cache_max_entries", 1000))
         _table_cache_policy["max_entries"] = (
             max_entries_val if max_entries_val > 0 else 1000
         )
         _table_cache_policy["cache_authenticated"] = bool(
-            metadata_cfg.get("table_cache_authenticated", False)
+            metadata_cfg.get("table_cache_authenticated", True)
         )
     except Exception:
         # Keep defaults on failure
@@ -176,17 +188,24 @@ def _load_table_cache_policy() -> None:
                 "enabled": True,
                 "timeout_seconds": 600,
                 "max_entries": 1000,
-                "cache_authenticated": False,
+                "cache_authenticated": True,
+                "timeout_configured": False,
             }
         )
 
 
 def _get_table_cache_timeout() -> Optional[int]:
     """Return cache timeout for table metadata (None means no expiry)."""
-    if not _is_debug_mode():
+    timeout_configured = bool(_table_cache_policy.get("timeout_configured"))
+    if not _is_debug_mode() and not timeout_configured:
         return None
-    timeout_val = int(_table_cache_policy.get("timeout_seconds", 600))
-    return timeout_val if timeout_val > 0 else 600
+    try:
+        timeout_val = int(_table_cache_policy.get("timeout_seconds", 600))
+    except (TypeError, ValueError):
+        timeout_val = 0
+    if timeout_val <= 0:
+        return None
+    return timeout_val
 
 
 def _make_table_cache_key(
@@ -253,6 +272,14 @@ def _make_table_cache_key(
         if user_cache_key:
             fallback = f"{fallback}:user={user_cache_key}"
         return fallback
+
+
+def _make_filter_cache_key(schema_name: str, model: Type[models.Model]) -> str:
+    try:
+        model_label = getattr(model._meta, "label_lower", None) or model.__name__
+    except Exception:
+        model_label = model.__name__
+    return f"filter-class:{schema_name}:{model_label}"
 
 
 def _get_user_cache_key(user: Any) -> Optional[str]:
@@ -454,8 +481,8 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
             keys_to_delete = []
             for k in list(_table_cache.keys()):
                 parts = k.split(":")
-                cache_app = parts[3] if len(parts) > 3 else None
-                cache_model = parts[4] if len(parts) > 4 else None
+                cache_app = parts[2] if len(parts) > 2 else None
+                cache_model = parts[3] if len(parts) > 3 else None
                 if model_name or app_name:
                     if (not app_name or app_name == cache_app) and (
                         not model_name or model_name == cache_model
@@ -472,6 +499,29 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
             _metadata_cache_stats["deletes"] += len(_metadata_cache)
             _metadata_cache.clear()
         _metadata_cache_stats["invalidations"] += 1
+    with _filter_cache_lock:
+        if _filter_class_cache:
+            if model_name or app_name:
+                filter_keys = []
+                for key in list(_filter_class_cache.keys()):
+                    parts = key.split(":")
+                    cache_label = parts[2] if len(parts) > 2 else ""
+                    if model_name or app_name:
+                        label_parts = cache_label.split(".")
+                        cache_app = label_parts[0] if len(label_parts) > 0 else ""
+                        cache_model = label_parts[1] if len(label_parts) > 1 else ""
+                        if (
+                            not app_name
+                            or str(app_name).lower() == str(cache_app).lower()
+                        ) and (
+                            not model_name
+                            or str(model_name).lower() == str(cache_model).lower()
+                        ):
+                            filter_keys.append(key)
+                for key in filter_keys:
+                    _filter_class_cache.pop(key, None)
+            else:
+                _filter_class_cache.clear()
     if app_name and model_name:
         _bump_metadata_version(app_name=app_name, model_name=model_name)
     else:
@@ -531,6 +581,28 @@ def get_user_model_lazy():
     from django.contrib.auth import get_user_model
 
     return get_user_model()
+
+
+def _is_metadata_enabled(
+    schema_settings: Optional[Union[SchemaSettings, Dict[str, Any]]]
+) -> bool:
+    if not schema_settings:
+        return False
+    if isinstance(schema_settings, dict):
+        return bool(schema_settings.get("show_metadata"))
+    return bool(getattr(schema_settings, "show_metadata", False))
+
+
+def _require_metadata_access(info) -> Any:
+    schema_settings = get_core_schema_settings(
+        getattr(info.context, "schema_name", None)
+    )
+    if not _is_metadata_enabled(schema_settings):
+        raise GraphQLError("Metadata is disabled for this schema.")
+    user = getattr(info.context, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        raise GraphQLError("Authentication required to access metadata.")
+    return user
 
 
 @dataclass
@@ -754,7 +826,14 @@ class FieldMetadata:
     null: bool
     default_value: Any
     help_text: str
+    db_column: Optional[str]
+    db_type: Optional[str]
+    internal_type: Optional[str]
     max_length: Optional[int]
+    min_length: Optional[int]
+    min_value: Optional[Union[int, float]]
+    max_value: Optional[Union[int, float]]
+    regex: Optional[str]
     choices: Optional[List[Dict[str, str]]]
     is_primary_key: bool
     is_foreign_key: bool
@@ -774,6 +853,7 @@ class RelationshipMetadata:
 
     name: str
     relationship_type: str
+    cardinality: str
     related_model: str
     related_app: str
     to_field: Optional[str]
@@ -787,6 +867,18 @@ class RelationshipMetadata:
     related_name: Optional[str]
     has_permission: bool
     verbose_name: str
+
+
+def _relationship_cardinality(
+    is_reverse: bool, many_to_many: bool, one_to_one: bool, foreign_key: bool
+) -> str:
+    if many_to_many:
+        return "many_to_many"
+    if one_to_one:
+        return "one_to_one"
+    if foreign_key:
+        return "one_to_many" if is_reverse else "many_to_one"
+    return "unknown"
 
 
 @dataclass
@@ -818,6 +910,7 @@ class ModelPermissionMatrix:
 class ModelMetadata:
     """Complete metadata for a Django model."""
 
+    metadata_version: str
     app_name: str
     model_name: str
     verbose_name: str
@@ -828,7 +921,9 @@ class ModelMetadata:
     relationships: List[RelationshipMetadata]
     permissions: List[str]
     ordering: List[str]
+    default_ordering: List[str]
     unique_together: List[List[str]]
+    unique_constraints: List[Dict[str, Any]]
     indexes: List[Dict[str, Any]]
     abstract: bool
     proxy: bool
@@ -885,6 +980,7 @@ class FormRelationshipMetadata:
 
     name: str
     relationship_type: str
+    cardinality: str
     verbose_name: str
     help_text: str
     widget_type: str
@@ -1147,7 +1243,14 @@ class FieldMetadataType(graphene.ObjectType):
     null = graphene.Boolean(required=True, description="Whether field can be null")
     default_value = graphene.String(description="Default value as string")
     help_text = graphene.String(description="Field help text")
+    db_column = graphene.String(description="Database column name")
+    db_type = graphene.String(description="Database column type")
+    internal_type = graphene.String(description="Django internal field type")
     max_length = graphene.Int(description="Maximum length for string fields")
+    min_length = graphene.Int(description="Minimum length for string fields")
+    min_value = GenericScalar(description="Minimum allowed value")
+    max_value = GenericScalar(description="Maximum allowed value")
+    regex = graphene.String(description="Regex validation pattern")
     choices = graphene.List(ChoiceType, description="Field choices")
     is_primary_key = graphene.Boolean(
         required=True, description="Whether field is primary key"
@@ -1179,6 +1282,9 @@ class RelationshipMetadataType(graphene.ObjectType):
     name = graphene.String(required=True, description="Relationship field name")
     relationship_type = graphene.String(
         required=True, description="Type of relationship"
+    )
+    cardinality = graphene.String(
+        required=True, description="Relationship cardinality"
     )
     related_model = graphene.String(
         required=True,
@@ -1213,6 +1319,11 @@ class RelationshipMetadataType(graphene.ObjectType):
 class ModelMetadataType(graphene.ObjectType):
     """GraphQL type for complete model metadata."""
 
+    metadataVersion = graphene.String(
+        required=True,
+        description="Stable metadata version identifier for this model metadata",
+        source="metadata_version",
+    )
     app_name = graphene.String(required=True, description="Django app name")
     model_name = graphene.String(required=True, description="Model class name")
     verbose_name = graphene.String(required=True, description="Model verbose name")
@@ -1233,10 +1344,20 @@ class ModelMetadataType(graphene.ObjectType):
     ordering = graphene.List(
         graphene.String, required=True, description="Default ordering"
     )
+    default_ordering = graphene.List(
+        graphene.String,
+        required=True,
+        description="Fallback ordering applied when no explicit ordering is set",
+    )
     unique_together = graphene.List(
         graphene.List(graphene.String),
         required=True,
         description="Unique together constraints",
+    )
+    unique_constraints = graphene.List(
+        graphene.JSONString,
+        required=True,
+        description="Unique constraints defined on the model",
     )
     indexes = graphene.List(
         graphene.JSONString, required=True, description="Database indexes"
@@ -1313,6 +1434,9 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     name = graphene.String(required=True, description="Relationship field name")
     relationship_type = graphene.String(
         required=True, description="Type of relationship"
+    )
+    cardinality = graphene.String(
+        required=True, description="Relationship cardinality"
     )
     verbose_name = graphene.String(required=True, description="Field verbose name")
     help_text = graphene.String(description="Field help text")
@@ -1674,6 +1798,51 @@ class ModelMetadataExtractor:
 
         # Get max length
         max_length = getattr(field, "max_length", None)
+        min_length = getattr(field, "min_length", None)
+        min_value = None
+        max_value = None
+        regex = None
+        validators = getattr(field, "validators", None) or []
+        try:
+            from django.core.validators import (
+                MaxLengthValidator,
+                MaxValueValidator,
+                MinLengthValidator,
+                MinValueValidator,
+                RegexValidator,
+            )
+        except (ImportError, AttributeError) as exc:
+            logger.debug("Validator imports unavailable: %s", exc)
+        else:
+            for validator in validators:
+                if isinstance(validator, MinValueValidator):
+                    min_value = validator.limit_value
+                elif isinstance(validator, MaxValueValidator):
+                    max_value = validator.limit_value
+                elif isinstance(validator, MinLengthValidator) and min_length is None:
+                    min_length = validator.limit_value
+                elif isinstance(validator, MaxLengthValidator) and max_length is None:
+                    max_length = validator.limit_value
+                elif isinstance(validator, RegexValidator):
+                    try:
+                        regex = validator.regex.pattern
+                    except (AttributeError, TypeError):
+                        regex = str(getattr(validator, "regex", None) or "")
+
+        db_column = getattr(field, "db_column", None) or getattr(field, "column", None)
+        internal_type = None
+        try:
+            internal_type = field.get_internal_type()
+        except (AttributeError, TypeError, NotImplementedError):
+            internal_type = None
+
+        db_type = None
+        try:
+            from django.db import DatabaseError, connection
+
+            db_type = field.db_type(connection)
+        except (AttributeError, TypeError, ValueError, NotImplementedError, DatabaseError):
+            db_type = None
 
         # Get on_delete behavior for foreign keys (guard None)
         on_delete = None
@@ -1700,7 +1869,14 @@ class ModelMetadataExtractor:
             null=field.null,
             default_value=default_value,
             help_text=field.help_text or "",
+            db_column=db_column,
+            db_type=db_type,
+            internal_type=internal_type,
             max_length=max_length,
+            min_length=min_length,
+            min_value=min_value,
+            max_value=max_value,
+            regex=regex,
             choices=choices,
             is_primary_key=getattr(field, "primary_key", None),
             is_foreign_key=isinstance(field, models.ForeignKey),
@@ -1748,10 +1924,16 @@ class ModelMetadataExtractor:
 
         related_app_label = getattr(related_model._meta, "app_label", "")
         related_model_class_name = related_model.__name__
+        many_to_many = isinstance(field, models.ManyToManyField)
+        one_to_one = isinstance(field, models.OneToOneField)
+        foreign_key = isinstance(field, models.ForeignKey)
 
         return RelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
+            cardinality=_relationship_cardinality(
+                False, many_to_many, one_to_one, foreign_key
+            ),
             related_model=related_model_class_name,
             is_required=not field.blank,
             related_app=related_app_label,
@@ -1760,9 +1942,9 @@ class ModelMetadataExtractor:
             else None,
             from_field=field.name,
             is_reverse=False,
-            many_to_many=isinstance(field, models.ManyToManyField),
-            one_to_one=isinstance(field, models.OneToOneField),
-            foreign_key=isinstance(field, models.ForeignKey),
+            many_to_many=many_to_many,
+            one_to_one=one_to_one,
+            foreign_key=foreign_key,
             on_delete=on_delete,
             related_name=getattr(field, "related_name", None),
             has_permission=has_permission,
@@ -1770,7 +1952,7 @@ class ModelMetadataExtractor:
         )
 
     @cache_metadata(
-        timeout=1800, user_specific=False
+        timeout=1800, user_specific=True
     )  # 30 minutes cache for complete model metadata
     def extract_model_metadata(
         self,
@@ -1779,6 +1961,8 @@ class ModelMetadataExtractor:
         user,
         nested_fields: bool = True,
         permissions_included: bool = True,
+        include_filters: bool = True,
+        include_mutations: bool = True,
         current_depth: int = 0,
     ) -> Optional[ModelMetadata]:
         """
@@ -1790,6 +1974,8 @@ class ModelMetadataExtractor:
             user: Current user for permission checking
             nested_fields: Whether to include relationship metadata
             permissions_included: Whether to include permission information
+            include_filters: Whether to include filter metadata
+            include_mutations: Whether to include mutation metadata
 
         Returns:
             ModelMetadata with filtered fields based on permissions, or None on error
@@ -1837,28 +2023,77 @@ class ModelMetadataExtractor:
 
         # Always include reverse relationships
         if nested_fields:
-            reverse_relations = introspector.get_reverse_relations()
-            for rel_name, related_model in reverse_relations.items():
+            reverse_relations = []
+            if hasattr(model._meta, "related_objects"):
+                reverse_relations = list(model._meta.related_objects)
+            for rel in reverse_relations:
+                related_model = getattr(rel, "related_model", None)
+                if related_model is None or not hasattr(related_model, "_meta"):
+                    continue
+                accessor_name = rel.get_accessor_name()
+                rel_field = getattr(rel, "field", None)
+                many_to_many = bool(getattr(rel, "many_to_many", False)) or (
+                    rel_field is not None
+                    and isinstance(rel_field, models.ManyToManyField)
+                )
+                one_to_one = bool(getattr(rel, "one_to_one", False)) or (
+                    rel_field is not None and isinstance(rel_field, models.OneToOneField)
+                )
+                foreign_key = bool(getattr(rel, "many_to_one", False)) or (
+                    rel_field is not None and isinstance(rel_field, models.ForeignKey)
+                )
+                relationship_type = (
+                    rel_field.__class__.__name__ if rel_field else "ReverseRelation"
+                )
                 related_app_label = getattr(related_model._meta, "app_label", "")
                 relationships.append(
                     RelationshipMetadata(
-                        name=rel_name,
+                        name=accessor_name,
                         verbose_name=related_model._meta.verbose_name,
-                        relationship_type="ReverseRelation",
+                        relationship_type=relationship_type,
+                        cardinality=_relationship_cardinality(
+                            True, many_to_many, one_to_one, foreign_key
+                        ),
                         related_model=related_model.__name__,
                         related_app=related_app_label,
-                        to_field=None,
+                        to_field=getattr(rel_field, "name", None),
                         is_required=False,
-                        from_field=rel_name,
+                        from_field=accessor_name,
                         is_reverse=True,
-                        many_to_many=False,
-                        one_to_one=False,
-                        foreign_key=False,
+                        many_to_many=many_to_many,
+                        one_to_one=one_to_one,
+                        foreign_key=foreign_key,
                         on_delete=None,
-                        related_name=rel_name,
+                        related_name=accessor_name,
                         has_permission=True,
                     )
                 )
+            if not reverse_relations:
+                reverse_relations = introspector.get_reverse_relations()
+                for rel_name, related_model in reverse_relations.items():
+                    related_app_label = getattr(related_model._meta, "app_label", "")
+                    relationships.append(
+                        RelationshipMetadata(
+                            name=rel_name,
+                            verbose_name=related_model._meta.verbose_name,
+                            relationship_type="ReverseRelation",
+                            cardinality=_relationship_cardinality(
+                                True, False, False, False
+                            ),
+                            related_model=related_model.__name__,
+                            related_app=related_app_label,
+                            to_field=None,
+                            is_required=False,
+                            from_field=rel_name,
+                            is_reverse=True,
+                            many_to_many=False,
+                            one_to_one=False,
+                            foreign_key=False,
+                            on_delete=None,
+                            related_name=rel_name,
+                            has_permission=True,
+                        )
+                    )
 
         # Get model permissions for the user
         permissions = []
@@ -1881,6 +2116,12 @@ class ModelMetadataExtractor:
 
         # Get ordering
         ordering = list(model._meta.ordering) if model._meta.ordering else []
+        default_ordering = ordering.copy()
+        if not default_ordering:
+            if getattr(model._meta, "get_latest_by", None):
+                default_ordering = [f"-{model._meta.get_latest_by}"]
+            else:
+                default_ordering = [model._meta.pk.name]
 
         # Get unique_together
         unique_together = []
@@ -1888,6 +2129,22 @@ class ModelMetadataExtractor:
             unique_together = [
                 list(constraint) for constraint in model._meta.unique_together
             ]
+
+        # Get unique constraints
+        unique_constraints = []
+        if hasattr(model._meta, "constraints"):
+            for constraint in model._meta.constraints:
+                if isinstance(constraint, models.UniqueConstraint):
+                    unique_constraints.append(
+                        {
+                            "name": constraint.name,
+                            "fields": list(getattr(constraint, "fields", []) or []),
+                            "condition": str(constraint.condition)
+                            if getattr(constraint, "condition", None)
+                            else None,
+                            "deferrable": getattr(constraint, "deferrable", None),
+                        }
+                    )
 
         # Get indexes
         indexes = []
@@ -1898,16 +2155,23 @@ class ModelMetadataExtractor:
                         "name": index.name,
                         "fields": list(index.fields),
                         "unique": getattr(index, "unique", False),
+                        "condition": str(index.condition)
+                        if getattr(index, "condition", None)
+                        else None,
+                        "include": list(getattr(index, "include", []) or []),
                     }
                 )
 
         # Extract filter metadata
-        filters = self._extract_filter_metadata(model)
+        filters = self._extract_filter_metadata(model) if include_filters else []
 
         # Extract mutations metadata (user-aware for permission filtering)
-        mutations = self.extract_mutations_metadata(model, user)
+        mutations = (
+            self.extract_mutations_metadata(model, user) if include_mutations else []
+        )
 
         return ModelMetadata(
+            metadata_version=_get_metadata_version_value(app_name, model_name),
             app_name=model._meta.app_label,
             model_name=model.__name__,
             verbose_name=str(model._meta.verbose_name),
@@ -1918,7 +2182,9 @@ class ModelMetadataExtractor:
             relationships=relationships,
             permissions=permissions,
             ordering=ordering,
+            default_ordering=default_ordering,
             unique_together=unique_together,
+            unique_constraints=unique_constraints,
             indexes=indexes,
             abstract=model._meta.abstract,
             proxy=model._meta.proxy,
@@ -3393,6 +3659,10 @@ class ModelFormMetadataExtractor:
             # For reverse relationships like ManyToOneRel, generate a readable name
             verbose_name = field.name.replace("_", " ").title()
 
+        many_to_many = isinstance(field, models.ManyToManyField)
+        one_to_one = isinstance(field, models.OneToOneField)
+        foreign_key = isinstance(field, models.ForeignKey)
+
         # Detect reverse relationships using Django's reverse_related classes
         try:
             from django.db.models.fields.reverse_related import (
@@ -3402,6 +3672,12 @@ class ModelFormMetadataExtractor:
             )
 
             is_reverse = isinstance(field, (ManyToOneRel, ManyToManyRel, OneToOneRel))
+            if isinstance(field, ManyToManyRel):
+                many_to_many = True
+            elif isinstance(field, OneToOneRel):
+                one_to_one = True
+            elif isinstance(field, ManyToOneRel):
+                foreign_key = True
         except Exception:
             # Fallback: use multiple signals to detect reverse relations conservatively
             is_reverse = False
@@ -3434,6 +3710,9 @@ class ModelFormMetadataExtractor:
         return FormRelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
+            cardinality=_relationship_cardinality(
+                is_reverse, many_to_many, one_to_one, foreign_key
+            ),
             verbose_name=verbose_name,
             help_text=getattr(field, "help_text", "") or "",
             widget_type=widget_type,
@@ -3444,11 +3723,11 @@ class ModelFormMetadataExtractor:
             if hasattr(field, "remote_field") and field.remote_field
             else None,
             from_field=field.name,
-            many_to_many=isinstance(field, models.ManyToManyField),
-            one_to_one=isinstance(field, models.OneToOneField),
-            foreign_key=isinstance(field, models.ForeignKey),
+            many_to_many=many_to_many,
+            one_to_one=one_to_one,
+            foreign_key=foreign_key,
             is_reverse=is_reverse,
-            multiple=isinstance(field, models.ManyToManyField),
+            multiple=many_to_many,
             queryset_filters=self._to_json_safe(self._get_queryset_filters(field)),
             empty_label=self._get_empty_label(field),
             limit_choices_to=self._to_json_safe(
@@ -3468,7 +3747,7 @@ class ModelFormMetadataExtractor:
         )
 
     @cache_metadata(
-        timeout=1800, user_specific=False
+        timeout=1800, user_specific=True
     )  # 30 minutes cache for complete model form metadata
     def extract_model_form_metadata(
         self,
@@ -4321,8 +4600,15 @@ class ModelTableExtractor:
         debug_mode = _is_debug_mode()
         user_authenticated = bool(user and getattr(user, "is_authenticated", False))
         user_cache_key = _get_user_cache_key(user) if user_authenticated else None
-        cache_enabled = (not user_authenticated) or bool(user_cache_key)
+        cache_enabled = bool(_table_cache_policy.get("enabled", True))
         if debug_mode:
+            cache_enabled = False
+        if user_authenticated:
+            if not _table_cache_policy.get("cache_authenticated", False):
+                cache_enabled = False
+            elif not user_cache_key:
+                cache_enabled = False
+        else:
             cache_enabled = False
         cache_key = None
         if cache_enabled:
@@ -4352,8 +4638,13 @@ class ModelTableExtractor:
                         if cached is not None:
                             return cached
                     _table_cache_stats["misses"] += 1
-            except Exception:
-                pass
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                logger.debug(
+                    "Skipping table cache lookup for %s.%s: %s",
+                    app_name,
+                    model_name,
+                    exc,
+                )
 
         model = self._get_model(app_name, model_name)
         if not model:
@@ -4560,7 +4851,13 @@ class ModelTableExtractor:
                 filter_generator = AdvancedFilterGenerator(
                     enable_nested_filters=True, schema_name=self.schema_name
                 )
-                filter_class = filter_generator.generate_filter_set(model)
+                filter_cache_key = _make_filter_cache_key(self.schema_name, model)
+                with _filter_cache_lock:
+                    filter_class = _filter_class_cache.get(filter_cache_key)
+                if filter_class is None:
+                    filter_class = filter_generator.generate_filter_set(model)
+                    with _filter_cache_lock:
+                        _filter_class_cache[filter_cache_key] = filter_class
 
                 # Collect property metadata to label property-based filters
                 try:
@@ -5138,8 +5435,13 @@ class ModelTableExtractor:
                         for k, _ in oldest:
                             _table_cache.pop(k, None)
                             _table_cache_stats["deletes"] += 1
-            except Exception:
-                pass
+            except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                logger.debug(
+                    "Skipping table cache store for %s.%s: %s",
+                    app_label,
+                    model_label,
+                    exc,
+                )
         return metadata
 
 
@@ -5261,6 +5563,7 @@ class ModelMetadataQuery(graphene.ObjectType):
 
     def resolve_available_models(self, info) -> List[AvailableModelType]:
         """Resolve list of all available models."""
+        _require_metadata_access(info)
         available_models = []
         excluded_apps = ["admin", "auth", "contenttypes", "sessions"]
 
@@ -5305,35 +5608,39 @@ class ModelMetadataQuery(graphene.ObjectType):
         Returns:
             ModelMetadataType or None if not accessible
         """
-        schema_settings = get_core_schema_settings(
-            getattr(info.context, "schema_name", None)
+        user = _require_metadata_access(info)
+        selection_names = _get_requested_field_names(info)
+        selection_defined = bool(selection_names)
+        include_filters = (
+            True if not selection_defined else "filters" in selection_names
         )
-        if not schema_settings:
-            return None
-
-        show_metadata = getattr(schema_settings, "show_metadata", None)
-        if show_metadata is None and isinstance(schema_settings, dict):
-            show_metadata = schema_settings.get("show_metadata")
-        if not show_metadata:
-            return None
-
-        # Get user from context and require authentication
-        user = getattr(info.context, "user", None)
-        if not user or not getattr(user, "is_authenticated", False):
-            return None
+        include_mutations = (
+            True if not selection_defined else "mutations" in selection_names
+        )
 
         # Extract metadata via extractor which handles model lookup
         extractor = ModelMetadataExtractor(max_depth=max_depth)
-        metadata = extractor.extract_model_metadata(
-            app_name=app_name,
-            model_name=model_name,
-            user=user,
-            nested_fields=nested_fields,
-            permissions_included=permissions_included,
-        )
+        try:
+            metadata = extractor.extract_model_metadata(
+                app_name=app_name,
+                model_name=model_name,
+                user=user,
+                nested_fields=nested_fields,
+                permissions_included=permissions_included,
+                include_filters=include_filters,
+                include_mutations=include_mutations,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to extract metadata for %s.%s: %s",
+                app_name,
+                model_name,
+                exc,
+            )
+            raise GraphQLError("Unable to load model metadata.")
         # Handle extraction error returning None
         if metadata is None:
-            return None
+            raise GraphQLError("Model metadata not available.")
 
         # Return dataclass directly for Graphene to resolve attributes
         return metadata
@@ -5351,7 +5658,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         exclude_lookup: Optional[List[str]] = None,
     ) -> Optional[ModelTableType]:
         """Resolve comprehensive table metadata for a Django model."""
-        user = getattr(info.context, "user", None)
+        user = _require_metadata_access(info)
         extractor = ModelTableExtractor()
         selection_names = _get_requested_field_names(info)
         selection_defined = bool(selection_names)
@@ -5364,20 +5671,31 @@ class ModelMetadataQuery(graphene.ObjectType):
         include_pdf_templates = (
             True if not selection_defined else "pdfTemplates" in selection_names
         )
-        metadata = extractor.extract_model_table_metadata(
-            app_name=app_name,
-            model_name=model_name,
-            counts=counts,
-            exclude=exclude or [],
-            only=only or [],
-            include_nested=include_nested,
-            only_lookup=only_lookup or [],
-            exclude_lookup=exclude_lookup or [],
-            include_filters=include_filters,
-            include_mutations=include_mutations,
-            include_pdf_templates=include_pdf_templates,
-            user=user,
-        )
+        try:
+            metadata = extractor.extract_model_table_metadata(
+                app_name=app_name,
+                model_name=model_name,
+                counts=counts,
+                exclude=exclude or [],
+                only=only or [],
+                include_nested=include_nested,
+                only_lookup=only_lookup or [],
+                exclude_lookup=exclude_lookup or [],
+                include_filters=include_filters,
+                include_mutations=include_mutations,
+                include_pdf_templates=include_pdf_templates,
+                user=user,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to extract table metadata for %s.%s: %s",
+                app_name,
+                model_name,
+                exc,
+            )
+            raise GraphQLError("Unable to load table metadata.")
+        if metadata is None:
+            raise GraphQLError("Table metadata not available.")
         return metadata
 
     def resolve_model_form_metadata(
@@ -5403,27 +5721,33 @@ class ModelMetadataQuery(graphene.ObjectType):
         Returns:
             ModelFormMetadataType or None if not accessible
         """
-        # Get user from context
-        user = getattr(info.context, "user", None)
-        if not user or not getattr(user, "is_authenticated", False):
-            user = None
+        user = _require_metadata_access(info)
 
         # Extract form metadata via extractor which handles model lookup
         extractor = ModelFormMetadataExtractor(max_depth=1)
-        metadata = extractor.extract_model_form_metadata(
-            app_name=app_name,
-            model_name=model_name,
-            user=user,
-            nested_fields=nested_fields or [],
-            exclude=exclude or [],
-            only=only or [],
-            exclude_relationships=exclude_relationships or [],
-            only_relationships=only_relationships or [],
-        )
+        try:
+            metadata = extractor.extract_model_form_metadata(
+                app_name=app_name,
+                model_name=model_name,
+                user=user,
+                nested_fields=nested_fields or [],
+                exclude=exclude or [],
+                only=only or [],
+                exclude_relationships=exclude_relationships or [],
+                only_relationships=only_relationships or [],
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to extract form metadata for %s.%s: %s",
+                app_name,
+                model_name,
+                exc,
+            )
+            raise GraphQLError("Unable to load form metadata.")
 
         # Handle extraction error returning None
         if metadata is None:
-            return None
+            raise GraphQLError("Form metadata not available.")
 
         # Return dataclass directly for Graphene to resolve attributes
         return metadata
@@ -5446,16 +5770,21 @@ class ModelMetadataQuery(graphene.ObjectType):
             permissions_included: Include permission information when user is authenticated
             max_depth: Maximum relationship depth for related metadata
         """
-
-        user = getattr(info.context, "user", None)
-        if not user or not getattr(user, "is_authenticated", False):
-            permissions_included = False
+        user = _require_metadata_access(info)
+        selection_names = _get_requested_field_names(info)
+        selection_defined = bool(selection_names)
+        include_filters = (
+            True if not selection_defined else "filters" in selection_names
+        )
+        include_mutations = (
+            True if not selection_defined else "mutations" in selection_names
+        )
 
         try:
             app_config = apps.get_app_config(app_name)
         except LookupError:
             logger.warning("app_models requested for unknown app '%s'", app_name)
-            return []
+            raise GraphQLError("Unknown app requested.")
 
         extractor = ModelMetadataExtractor(max_depth=max_depth)
         models_metadata: List[ModelMetadataType] = []
@@ -5470,6 +5799,8 @@ class ModelMetadataQuery(graphene.ObjectType):
                     user=user,
                     nested_fields=nested_fields,
                     permissions_included=permissions_included,
+                    include_filters=include_filters,
+                    include_mutations=include_mutations,
                 )
                 if metadata is not None:
                     models_metadata.append(metadata)
@@ -5629,34 +5960,19 @@ def _is_in_migration_context():
     Returns:
         bool: True if in migration context
     """
+    global _migration_context_cache
+    if _migration_context_cache is not None:
+        return _migration_context_cache
+
     import sys
 
-    # Check if we're running migrations
-    if "migrate" in sys.argv:
+    migration_commands = {"migrate", "makemigrations", "showmigrations"}
+    if any(cmd in sys.argv for cmd in migration_commands):
+        _migration_context_cache = True
         return True
 
-    # Check if we're in a migration module
-    for frame_info in __import__("inspect").stack():
-        if "migrations" in frame_info.filename:
-            return True
-
+    _migration_context_cache = False
     return False
-
-
-def invalidate_cache_on_startup():
-    """
-    Invalidate metadata cache on application startup.
-
-    This ensures that cache is fresh when the application starts,
-    which is useful for deployments and development.
-    """
-    try:
-        logger.info("Invalidating metadata cache on application startup")
-        invalidate_metadata_cache()  # Invalidate all metadata cache
-        logger.info("Metadata cache invalidated successfully on startup")
-    except Exception as e:
-        logger.warning(f"Failed to invalidate metadata cache on startup: {e}")
-        # Don't raise exception to avoid breaking app startup
 
 
 # Cache warming functions

@@ -94,3 +94,5 @@ importing them in your schema build or including their URLs.
 
 - Exposes model metadata for frontends (forms, tables).
 - Enable with `schema_settings.show_metadata = True`.
+- Metadata is private and requires an authenticated user.
+- In production, metadata is cached for the process lifetime by default; tune via `RAIL_DJANGO_GRAPHQL["METADATA"]`.

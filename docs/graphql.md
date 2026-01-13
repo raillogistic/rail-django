@@ -237,7 +237,9 @@ mutation UpdateUser($id: ID!, $input: UserUpdateInput!) {
 ## Model metadata
 
 If `schema_settings.show_metadata` is enabled, GraphQL exposes metadata queries
-to help frontends build forms and tables. See `extensions.md` for details.
+to help frontends build forms and tables. Metadata requires an authenticated
+user and returns a `metadataVersion` field so clients can avoid refetching
+unchanged metadata. See `extensions.md` for details.
 
 ## Error handling
 
