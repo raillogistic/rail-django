@@ -52,6 +52,9 @@ you can exercise GraphQL middleware in unit tests.
 
 Tip: use `override_rail_settings(...)` around schema creation if you want to
 avoid persistent changes to `RAIL_DJANGO_GRAPHQL_SCHEMAS` during tests.
+Speed tip: register a schema with explicit `apps`/`models` (even for the
+`default` schema) so schema builds and snapshots avoid scanning all installed
+apps.
 
 ## Organization and Markers
 - `rail_django/tests/unit`: pure unit tests, no DB.

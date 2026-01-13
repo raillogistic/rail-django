@@ -24,6 +24,14 @@ from graphql import (
     GraphQLUnionType,
     get_named_type,
 )
+
+try:
+    from graphql import Undefined as _UNDEFINED
+except Exception:  # pragma: no cover - fallback for older graphql-core
+    try:
+        from graphql.pyutils import Undefined as _UNDEFINED
+    except Exception:  # pragma: no cover
+        _UNDEFINED = None
 from graphql.execution import execute
 from graphql.utilities import build_ast_schema, print_schema
 
@@ -402,7 +410,9 @@ class SchemaIntrospector:
                 'name': field_name,
                 'type': str(field_obj.type),
                 'description': getattr(field_obj, 'description', None),
-                'default_value': getattr(field_obj, 'default_value', None)
+                'default_value': self._normalize_default_value(
+                    getattr(field_obj, 'default_value', None)
+                ),
             }
             type_info.input_fields.append(field_info)
 
@@ -434,11 +444,34 @@ class SchemaIntrospector:
                     'name': arg_name,
                     'type': str(arg_obj.type),
                     'description': getattr(arg_obj, 'description', None),
-                    'default_value': getattr(arg_obj, 'default_value', None)
+                    'default_value': self._normalize_default_value(
+                        getattr(arg_obj, 'default_value', None)
+                    ),
                 }
                 field_info.args.append(arg_info)
 
         return field_info
+
+    def _normalize_default_value(self, value: Any) -> Any:
+        if _UNDEFINED is not None and value is _UNDEFINED:
+            return None
+        if type(value).__name__ == "UndefinedType":
+            return None
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (list, tuple)):
+            return [self._normalize_default_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                str(key): self._normalize_default_value(val)
+                for key, val in value.items()
+            }
+        if hasattr(value, "value"):
+            try:
+                return value.value
+            except Exception:
+                pass
+        return str(value)
 
     def _introspect_root_types(self, schema: GraphQLSchema, introspection: SchemaIntrospection):
         """Introspect root types (Query, Mutation, Subscription)."""
@@ -481,7 +514,9 @@ class SchemaIntrospector:
                         'name': arg_name,
                         'type': str(arg_obj.type),
                         'description': getattr(arg_obj, 'description', None),
-                        'default_value': getattr(arg_obj, 'default_value', None)
+                        'default_value': self._normalize_default_value(
+                            getattr(arg_obj, 'default_value', None)
+                        ),
                     }
                     directive_info.args.append(arg_info)
 

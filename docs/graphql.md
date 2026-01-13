@@ -10,6 +10,14 @@ example queries and mutations.
 
 Note: GraphiQL is controlled by `schema_settings.enable_graphiql`.
 
+## Persisted queries (APQ)
+
+Rail Django supports APQ-style persisted queries when enabled via
+`persisted_query_settings`. Clients send a `sha256Hash` inside
+`extensions.persistedQuery` and can omit the query body after the hash is
+registered. If `require_allowlist` is enabled, unknown hashes are rejected.
+See `extensions.md` and `configuration.md` for setup details.
+
 ## Field naming
 
 By default `auto_camelcase` is false, so field names are snake_case. If you set

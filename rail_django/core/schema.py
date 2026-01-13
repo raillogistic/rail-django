@@ -307,15 +307,23 @@ class SchemaBuilder:
         Returns:
             List[Type[models.Model]]: List of valid Django models
         """
-        # If registry is available and schema is registered, use registry's model discovery
-        if self.registry and self.schema_name != "default":
+        # If registry is available and provides explicit models, use registry discovery.
+        # Default schema can still be scoped by registry settings when present.
+        if self.registry:
             try:
+                schema_info = self.registry.get_schema(self.schema_name)
                 registry_models = self.registry.get_models_for_schema(self.schema_name)
                 if registry_models:
                     logger.debug(
                         f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}"
                     )
                     return registry_models
+                if schema_info and not schema_info.auto_discover:
+                    logger.debug(
+                        "Registry returned no models for schema '%s' with auto_discover disabled",
+                        self.schema_name,
+                    )
+                    return []
             except Exception as e:
                 logger.warning(
                     f"Failed to get models from registry for schema '{self.schema_name}': {e}"
@@ -998,13 +1006,43 @@ class SchemaBuilder:
 
                 # Register schema in the registry
                 try:
-                    from .registry import register_schema
+                    from .registry import register_schema, schema_registry
+
+                    existing = schema_registry.get_schema(self.schema_name)
+                    description = (
+                        existing.description
+                        if existing and existing.description
+                        else f"Auto-generated GraphQL schema for {self.schema_name}"
+                    )
+                    apps = existing.apps if existing else None
+                    exclude_models = existing.exclude_models if existing else None
+                    settings_payload = existing.settings if existing else None
+                    auto_discover = existing.auto_discover if existing else True
+                    enabled = existing.enabled if existing else True
+
+                    models = None
+                    if existing is not None:
+                        raw_models = existing.models or []
+                        normalized_models = []
+                        for model in raw_models:
+                            if hasattr(model, "_meta"):
+                                normalized_models.append(model._meta.label)
+                            else:
+                                normalized_models.append(str(model))
+                        models = normalized_models
+                    else:
+                        models = [model._meta.label for model in self._registered_models]
 
                     register_schema(
                         name=self.schema_name,
-                        description=f"Auto-generated GraphQL schema for {self.schema_name}",
+                        description=description,
                         version=str(self._schema_version),
-                        models=list(self._registered_models),
+                        apps=apps,
+                        models=models,
+                        exclude_models=exclude_models,
+                        settings=settings_payload,
+                        auto_discover=auto_discover,
+                        enabled=enabled,
                     )
                     logger.info(
                         f"Schema '{self.schema_name}' registered in schema registry"
@@ -1373,10 +1411,14 @@ def clear_all_schemas() -> None:
     Clear all schema builder instances.
     """
     with SchemaBuilder._lock:
-        for schema_name, builder in SchemaBuilder._instances.items():
-            builder.clear_schema()
+        builders = list(SchemaBuilder._instances.values())
         SchemaBuilder._instances.clear()
-        logger.info("All schemas cleared")
+    for builder in builders:
+        try:
+            builder.clear_schema()
+        except Exception:
+            logger.debug("Failed to clear schema builder", exc_info=True)
+    logger.info("All schemas cleared")
 
 
 def get_all_schema_names() -> List[str]:

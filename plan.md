@@ -186,3 +186,20 @@ Acceptance criteria:
 - Audit logging supports redaction fields/masks plus retention policy hooks.
 - Tests: unit coverage for access guards, input validation severity, audit redaction, cookie policy; integration coverage for JWT refresh rotation/reuse and audit retention.
 - Docs: updated security/configuration guidance for introspection roles, JWT hardening, and audit retention/redaction.
+
+## Resume (Phase 6 progress)
+- Added persisted query support (APQ-style) with allowlist and cache settings in `rail_django/extensions/persisted_queries.py`.
+- Integrated persisted queries into GraphQL view request handling.
+- Added plugin execution hooks, plugin middleware, and schema build hook support.
+- Added schema snapshot recording plus export/history/diff API endpoints with a new `SchemaSnapshotModel`.
+- Added optional observability integrations (Sentry/OpenTelemetry) and a subscriptions helper.
+- Updated defaults/settings and project templates for new plugin/persisted query/schema registry options.
+- Added migrations for schema registry settings and schema snapshots.
+- Tests added for persisted queries, plugin hooks, and schema registry endpoints (not run per request).
+- Docs updated across configuration, extensions, security, REST API, modules, and migration guidance.
+
+## Resume (Phase 7 progress)
+- Added migration guide covering new settings, endpoints, and optional dependencies.
+- Updated documentation to match new configuration, extensions, and API surface.
+- Updated project templates to include new settings for persisted queries, plugins, and schema registry snapshots.
+- Updated `docs/architecture.md` and `docs/graphql.md` with persisted query flow and plugin hooks.
