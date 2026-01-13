@@ -329,6 +329,35 @@ AUDIT_RETENTION_RUN_INTERVAL = 3600
 AUDIT_RETENTION_HOOK = None  # Optional dotted path or callable
 ```
 
+## Webhooks
+
+Model webhooks can include sensitive fields, so prefer explicit allowlists and
+redaction:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "webhook_settings": {
+        "enabled": True,
+        "endpoints": [
+            {
+                "name": "orders",
+                "url": "https://example.com/webhooks/orders",
+                "include_models": ["shop.Order"],
+                "signing_secret": "rotate-this",
+            },
+        ],
+        "include_fields": {"shop.order": ["id", "status", "total"]},
+        "redact_fields": ["email", "token"],
+    }
+}
+```
+
+When a signing secret is configured, each request includes an HMAC SHA256
+signature in the `X-Rail-Signature` header.
+
+If you use `auth_token_path` to fetch tokens, treat auth secrets and tokens as
+sensitive data and rotate them regularly.
+
 ## Recommended Django security settings
 
 See `rail_django.security_config.SecurityConfig.get_recommended_django_settings()`

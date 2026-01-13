@@ -88,6 +88,15 @@ class AppConfig(BaseAppConfig):
                 from .security.signals import connect_permission_cache_signals
 
                 connect_permission_cache_signals()
+            try:
+                from .webhooks.config import get_webhook_settings, webhooks_enabled
+                from .webhooks.signals import ensure_webhook_signals
+
+                webhook_settings = get_webhook_settings()
+                if webhooks_enabled(webhook_settings):
+                    ensure_webhook_signals()
+            except Exception as e:
+                logger.warning(f"Could not setup webhook signals: {e}")
         except ImportError as e:
             logger.debug(f"Signals module not found, skipping: {e}")
         except Exception as e:

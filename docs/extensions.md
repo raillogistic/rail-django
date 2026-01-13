@@ -62,6 +62,7 @@ importing them in your schema build or including their URLs.
 - Auto-generated subscriptions are enabled via `subscription_settings.enable_subscriptions`.
 - Supports per-model created/updated/deleted events with filter args.
 - Requires `channels-graphql-ws` (optional dependency).
+- Full reference: `docs/subscriptions.md`.
 
 ### Usage
 
@@ -159,6 +160,42 @@ export const client = new ApolloClient({
 
 - Structured audit logs for auth and sensitive actions.
 - Optional database, file, and webhook sinks.
+
+## Webhooks (`rail_django.webhooks`)
+
+- Async HTTP delivery for model created/updated/deleted events.
+- Configure via `RAIL_DJANGO_GRAPHQL["webhook_settings"]` (or the project template
+  `root/webhooks.py` file).
+- Optional HMAC signing via `X-Rail-Signature` headers.
+- Endpoints can target specific models with per-endpoint `include_models`/`exclude_models`.
+- Token auth is supported via `auth_token_path` (e.g. `rail_django.webhooks.auth.fetch_auth_token`).
+- Full reference: `docs/webhooks.md`.
+
+Example:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "webhook_settings": {
+        "enabled": True,
+        "endpoints": [
+            {
+                "name": "orders",
+                "url": "https://example.com/webhooks/orders",
+                "include_models": ["shop.Order"],
+            },
+            {
+                "name": "customers",
+                "url": "https://example.com/webhooks/customers",
+                "include_models": ["crm.Customer"],
+                "auth_token_path": "rail_django.webhooks.auth.fetch_auth_token",
+                "auth_url": "https://example.com/oauth/token",
+                "auth_payload": {"client_id": "id", "client_secret": "secret"},
+            },
+        ],
+        "events": {"created": True, "updated": True, "deleted": True},
+    }
+}
+```
 
 ## Performance metrics (`rail_django.extensions.performance_metrics`)
 

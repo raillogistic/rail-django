@@ -62,6 +62,8 @@ urlpatterns = [
 - `configuration.md`: Settings reference and examples
 - `security.md`: Auth, RBAC, and security controls
 - `extensions.md`: Built-in extensions (health, export, templating, MFA)
+- `webhooks.md`: Webhook delivery, payloads, and settings
+- `subscriptions.md`: Subscriptions setup, payloads, and filtering
 - `reporting.md`: Reporting datasets, query specs, and BI workflows
 - `architecture.md`: Internal architecture and request lifecycle
 - `modules.md`: Codebase map for contributors

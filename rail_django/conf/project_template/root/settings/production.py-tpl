@@ -111,6 +111,23 @@ AUDIT_ALERT_THRESHOLDS = {
 }
 
 # =============================================================================
+# WEBHOOKS (MODEL EVENTS)
+# =============================================================================
+
+WEBHOOK_URLS = env.list('RAIL_WEBHOOK_URLS', default=[])
+WEBHOOK_SECRET = env('RAIL_WEBHOOK_SIGNING_SECRET', default='')
+if WEBHOOK_URLS:
+    RAIL_DJANGO_WEBHOOKS["enabled"] = True
+    RAIL_DJANGO_WEBHOOKS["endpoints"] = [
+        {
+            "name": f"endpoint_{index}",
+            "url": url,
+            "signing_secret": WEBHOOK_SECRET or None,
+        }
+        for index, url in enumerate(WEBHOOK_URLS, start=1)
+    ]
+
+# =============================================================================
 # LIMITATION DE DÉBIT
 # =============================================================================
 

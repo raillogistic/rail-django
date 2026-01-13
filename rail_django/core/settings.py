@@ -111,6 +111,7 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
         "DEVELOPMENT",
         "I18N",
         "plugin_settings",
+        "webhook_settings",
     }
     if any(k in rail_settings for k in known_section_keys):
         return rail_settings

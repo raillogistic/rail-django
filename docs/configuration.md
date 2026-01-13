@@ -122,6 +122,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 
 Auto-generated subscriptions are disabled by default and require
 `channels-graphql-ws` for WebSocket support.
+Full reference: `docs/subscriptions.md`.
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -139,6 +140,84 @@ RAIL_DJANGO_GRAPHQL = {
     },
 }
 ```
+
+## Webhook settings
+
+Model webhooks send create/update/delete events to HTTP endpoints asynchronously.
+Configure them under `RAIL_DJANGO_GRAPHQL["webhook_settings"]` or use the
+project template file `root/webhooks.py`.
+Full reference: `docs/webhooks.md`.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "webhook_settings": {
+        "enabled": True,
+        "endpoints": [
+            {
+                "name": "orders",
+                "url": "https://example.com/webhooks/orders",
+                "include_models": ["shop.Order"],
+            },
+            {
+                "name": "customers",
+                "url": "https://example.com/webhooks/customers",
+                "include_models": ["crm.Customer"],
+                "headers": {"Authorization": "Bearer token"},
+                "signing_secret": "change-me",
+            },
+        ],
+        "events": {"created": True, "updated": True, "deleted": True},
+        "exclude_models": ["audit.AuditEvent"],
+        "async_backend": "thread",
+        "max_workers": 4,
+        "max_retries": 3,
+    },
+}
+```
+
+Key options:
+
+- `enabled`: master toggle.
+- `endpoints`: list of endpoint configs (url + optional headers/signing).
+- `events`: toggle created/updated/deleted delivery.
+- `include_models`/`exclude_models`: model allowlist/blocklist (use `app.Model`).
+- `include_fields`/`exclude_fields`: per-model field lists.
+- `redact_fields`: global or per-model field redaction.
+- `endpoints[].include_models`/`endpoints[].exclude_models`: per-endpoint model routing.
+- `auth_token_path`: dotted path to a token provider; uses `auth_header`/`auth_scheme`.
+- `auth_header`/`auth_scheme`: header name and prefix for token providers.
+- `auth_url`/`auth_payload`/`auth_headers`/`auth_timeout_seconds`: parameters for token fetchers.
+- `auth_token_field`: JSON field name used by token fetchers (default `access_token`).
+- `async_backend`: `thread`, `sync`, or `custom` (uses `async_task_path`).
+- `async_task_path`: dotted path to a custom enqueuer (Celery/RQ integration).
+- `retry_*`: retry/backoff controls and retryable status codes.
+
+If both global and per-endpoint allowlists are set, the effective models are
+the intersection of the two.
+
+Token helper:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "webhook_settings": {
+        "endpoints": [
+            {
+                "name": "ops",
+                "url": "https://example.com/webhooks/rail",
+                "auth_token_path": "rail_django.webhooks.auth.fetch_auth_token",
+                "auth_url": "https://example.com/oauth/token",
+                "auth_payload": {"client_id": "id", "client_secret": "secret"},
+                "auth_headers": {"Content-Type": "application/json"},
+                "auth_timeout_seconds": 10,
+                "auth_token_field": "access_token",
+            },
+        ],
+    },
+}
+```
+
+Token callables are invoked with `(endpoint, payload, payload_json)`; you can
+accept fewer arguments if you don't need them.
 
 ## Metadata settings
 

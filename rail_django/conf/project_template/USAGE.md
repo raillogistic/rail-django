@@ -40,6 +40,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
     *   [Input Sanitization](#input-sanitization)
 9.  [Extensions System](#9-extensions-system)
     *   [Audit Logging](#audit-logging)
+    *   [Webhooks](#webhooks)
     *   [Data Exporting (Excel/CSV)](#data-exporting-excelcsv)
     *   [Health Monitoring](#health-monitoring)
     *   [Subscriptions (Real-time)](#subscriptions-real-time)
@@ -880,6 +881,36 @@ The logs are stored in `AuditEventModel`. You can build an admin dashboard using
 from rail_django.extensions.audit import audit_logger
 dashboard_data = audit_logger.get_security_report(hours=24)
 ```
+
+### Webhooks
+Send model create/update/delete events to external systems.
+
+Configuration lives in `root/webhooks.py` and is wired into
+`RAIL_DJANGO_GRAPHQL["webhook_settings"]`.
+
+```python
+RAIL_DJANGO_WEBHOOKS = {
+    "enabled": True,
+    "endpoints": [
+        {
+            "name": "orders",
+            "url": "https://example.com/webhooks/orders",
+            "include_models": ["store.Order"],
+        },
+        {
+            "name": "customers",
+            "url": "https://example.com/webhooks/customers",
+            "include_models": ["crm.Customer"],
+            "auth_token_path": "rail_django.webhooks.auth.fetch_auth_token",
+            "auth_url": "https://example.com/oauth/token",
+            "auth_payload": {"client_id": "id", "client_secret": "secret"},
+        },
+    ],
+    "events": {"created": True, "updated": True, "deleted": True},
+}
+```
+
+Use `include_models`/`exclude_models` on each endpoint to route specific models.
 
 ### Data Exporting (Excel/CSV)
 Don't write CSV writers manually. Use the export endpoint.

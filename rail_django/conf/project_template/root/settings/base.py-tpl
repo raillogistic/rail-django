@@ -14,6 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Take environment variables from .env file
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
+from root.webhooks import RAIL_DJANGO_WEBHOOKS
+
 # Add the 'apps' directory to the Python path if not in startapp mode
 if os.environ.get('RAIL_STARTAPP') != 'true':
     sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
@@ -25,13 +27,13 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "daphne",
     "django.contrib.staticfiles",
     # Third-party apps
     "graphene_django",
     "django_filters",
     "corsheaders",
     # Subscriptions (WebSockets via Django Channels)
-    "daphne",
     "channels",
     # Rail Django app
     "rail_django",
@@ -456,6 +458,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Enable execution hooks from plugins
         "enable_execution_hooks": True,
     },
+    "webhook_settings": RAIL_DJANGO_WEBHOOKS,
     "error_handling": {
         # Return detailed error messages (False for production)
         "enable_detailed_errors": False,

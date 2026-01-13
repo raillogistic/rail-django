@@ -41,6 +41,35 @@ Accédez à l'interface GraphiQL sur `http://localhost:8000/graphql`.
 
 ---
 
+## Webhooks Quickstart (Demarrage rapide)
+
+Activez les webhooks de modeles (create/update/delete) via `root/webhooks.py`
+ou directement dans `RAIL_DJANGO_GRAPHQL`.
+
+```python
+# root/webhooks.py
+RAIL_DJANGO_WEBHOOKS = {
+    "enabled": True,
+    "endpoints": [
+        {
+            "name": "orders",
+            "url": "https://example.com/webhooks/orders",
+            "include_models": ["shop.Order"],
+        },
+        {
+            "name": "customers",
+            "url": "https://example.com/webhooks/customers",
+            "include_models": ["crm.Customer"],
+            "auth_token_path": "rail_django.webhooks.auth.fetch_auth_token",
+            "auth_url": "https://example.com/oauth/token",
+            "auth_payload": {"client_id": "id", "client_secret": "secret"},
+        },
+    ],
+}
+```
+
+---
+
 ## Supported Versions
 
 - Python 3.8+

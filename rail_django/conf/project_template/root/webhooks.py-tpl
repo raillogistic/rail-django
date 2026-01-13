@@ -1,0 +1,91 @@
+"""Webhook settings for Rail Django model events."""
+
+import os
+
+
+def _env_bool(name, default="false"):
+    value = os.getenv(name, default)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name):
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+WEBHOOK_URLS = _env_list("RAIL_WEBHOOK_URLS")
+WEBHOOK_SECRET = os.getenv("RAIL_WEBHOOK_SIGNING_SECRET", "").strip()
+
+RAIL_DJANGO_WEBHOOKS = {
+    "enabled": _env_bool("RAIL_WEBHOOKS_ENABLED", "false") and bool(WEBHOOK_URLS),
+    "endpoints": [
+        {
+            "name": f"endpoint_{index}",
+            "url": url,
+            "signing_secret": WEBHOOK_SECRET or None,
+            "include_models": [],
+        }
+        for index, url in enumerate(WEBHOOK_URLS, start=1)
+    ],
+    "events": {"created": True, "updated": True, "deleted": True},
+    "include_models": [],
+    "exclude_models": [],
+    "headers": {},
+    "timeout_seconds": 5,
+    "async_backend": "thread",
+    "max_workers": 4,
+    "max_retries": 3,
+}
+
+"""example
+RAIL_DJANGO_WEBHOOKS = {
+    "enabled": True,
+    "endpoints": [
+        {
+            "name": "orders",
+            "url": "https://example.com/webhooks/orders",
+            "include_models": ["shop.Order"],
+        },
+        {
+            "name": "customers",
+            "url": "https://example.com/webhooks/customers",
+            "include_models": ["crm.Customer"],
+            "auth_token_path": "rail_django.webhooks.auth.fetch_auth_token",
+            "auth_url": "https://example.com/oauth/token",
+            "auth_payload": {"client_id": "id", "client_secret": "secret"},
+            "auth_token_field": "access_token",
+        },
+    ],
+    "events": {"created": True, "updated": True, "deleted": True},
+    "include_models": [],
+    "exclude_models": [],
+    "include_fields": {"shop.order": ["id", "status", "total"]},
+    "redact_fields": ["email", "token"],
+    "async_backend": "thread",
+    "max_workers": 4,
+    "max_retries": 3,
+}
+"""
+
+# example
+"""
+RAIL_DJANGO_WEBHOOKS = {
+      "enabled": True,
+      "endpoints": [
+          {
+              "name": "ops",
+              "url": "https://example.com/webhooks/rail",
+              "signing_secret": "change-me",
+              "headers": {"Authorization": "Bearer token"},
+          },
+      ],
+      "events": {"created": True, "updated": True, "deleted": True},
+      "include_models": ["shop.Order", "shop.Invoice"],
+      "exclude_models": [],
+      "include_fields": {"shop.order": ["id", "status", "total", "updated_at"]},
+      "redact_fields": ["email", "token"],
+      "async_backend": "thread",
+      "max_workers": 4,
+      "max_retries": 3,
+}
+"""
