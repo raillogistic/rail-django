@@ -89,6 +89,7 @@ class FieldPermissionManager:
     def __init__(self):
         """Initialise le gestionnaire de permissions de champs."""
         self._field_rules: Dict[str, List[FieldPermissionRule]] = {}
+        self._pattern_rules: Dict[str, List[FieldPermissionRule]] = {}
         self._global_rules: List[FieldPermissionRule] = []
         self._graphql_configs: Set[str] = set()
         self._sensitive_fields = {
@@ -125,11 +126,19 @@ class FieldPermissionManager:
                 model_name="*",
                 access_level=FieldAccessLevel.NONE,
                 visibility=FieldVisibility.HIDDEN,
-                roles=["admin", "superadmin"],
             )
         )
 
-        # Champs de token - visibles seulement pour l'admin
+        # Champs de token - visibles pour l'admin, masqués pour les autres
+        self.register_field_rule(
+            FieldPermissionRule(
+                field_name="*token*",
+                model_name="*",
+                access_level=FieldAccessLevel.READ,
+                visibility=FieldVisibility.VISIBLE,
+                roles=["admin", "superadmin"],
+            )
+        )
         self.register_field_rule(
             FieldPermissionRule(
                 field_name="*token*",
@@ -137,7 +146,6 @@ class FieldPermissionManager:
                 access_level=FieldAccessLevel.READ,
                 visibility=FieldVisibility.MASKED,
                 mask_value="***HIDDEN***",
-                roles=["admin", "superadmin"],
             )
         )
 
@@ -159,9 +167,17 @@ class FieldPermissionManager:
                     field_name=field,
                     model_name="*",
                     access_level=FieldAccessLevel.READ,
+                    visibility=FieldVisibility.VISIBLE,
+                    roles=["manager", "admin", "superadmin"],
+                )
+            )
+            self.register_field_rule(
+                FieldPermissionRule(
+                    field_name=field,
+                    model_name="*",
+                    access_level=FieldAccessLevel.READ,
                     visibility=FieldVisibility.MASKED,
                     mask_value="***CONFIDENTIAL***",
-                    roles=["manager", "admin", "superadmin"],
                 )
             )
 
@@ -178,7 +194,37 @@ class FieldPermissionManager:
             self._field_rules[key] = []
 
         self._field_rules[key].append(rule)
+        if "*" in rule.field_name and rule.field_name != "*":
+            pattern_key = rule.model_name or "*"
+            if pattern_key not in self._pattern_rules:
+                self._pattern_rules[pattern_key] = []
+            self._pattern_rules[pattern_key].append(rule)
         logger.info(f"Règle de permission enregistrée pour {key}")
+
+    def _iter_field_rules(self, context: FieldContext) -> List[FieldPermissionRule]:
+        field_name = context.field_name
+        lookup_tokens = self._get_model_lookup_tokens(
+            context.instance, context.model_class
+        )
+
+        yielded: List[FieldPermissionRule] = []
+        seen_keys: Set[str] = set()
+        for token in lookup_tokens:
+            exact_key = f"{token}.{field_name}"
+            if exact_key in self._field_rules and exact_key not in seen_keys:
+                yielded.extend(self._field_rules[exact_key])
+                seen_keys.add(exact_key)
+
+            pattern_rules = self._pattern_rules.get(token, [])
+            if pattern_rules:
+                yielded.extend(pattern_rules)
+
+            wildcard_key = f"{token}.*"
+            if wildcard_key in self._field_rules and wildcard_key not in seen_keys:
+                yielded.extend(self._field_rules[wildcard_key])
+                seen_keys.add(wildcard_key)
+
+        return yielded
 
     def register_global_rule(self, rule: FieldPermissionRule):
         """
@@ -285,25 +331,9 @@ class FieldPermissionManager:
             return FieldAccessLevel.ADMIN
 
         # Vérifier les règles spécifiques au champ
-        field_name = context.field_name
-        lookup_tokens = self._get_model_lookup_tokens(
-            context.instance, context.model_class
-        )
-
-        search_keys: List[str] = []
-        seen: Set[str] = set()
-        for token in lookup_tokens:
-            for suffix in (field_name, "*"):
-                key = f"{token}.{suffix}"
-                if key not in seen:
-                    search_keys.append(key)
-                    seen.add(key)
-
-        for key in search_keys:
-            if key in self._field_rules:
-                for rule in self._field_rules[key]:
-                    if self._rule_applies(rule, context):
-                        return rule.access_level
+        for rule in self._iter_field_rules(context):
+            if self._rule_applies(rule, context):
+                return rule.access_level
 
         # Vérifier les règles globales
         for rule in self._global_rules:
@@ -349,28 +379,17 @@ class FieldPermissionManager:
             return FieldVisibility.HIDDEN, None
 
         # Vérifier les règles spécifiques de visibilité
-        field_name = context.field_name
-        lookup_tokens = self._get_model_lookup_tokens(
-            context.instance, context.model_class
-        )
+        for rule in self._iter_field_rules(context):
+            if self._rule_applies(rule, context):
+                return rule.visibility, rule.mask_value
 
-        search_keys: List[str] = []
-        seen: Set[str] = set()
-        for token in lookup_tokens:
-            for suffix in (field_name, "*"):
-                key = f"{token}.{suffix}"
-                if key not in seen:
-                    search_keys.append(key)
-                    seen.add(key)
-
-        for key in search_keys:
-            if key in self._field_rules:
-                for rule in self._field_rules[key]:
-                    if self._rule_applies(rule, context):
-                        return rule.visibility, rule.mask_value
+        # Vérifier les règles globales
+        for rule in self._global_rules:
+            if self._rule_applies(rule, context):
+                return rule.visibility, rule.mask_value
 
         # Vérifier si c'est un champ sensible
-        if self._is_sensitive_field(field_name):
+        if self._is_sensitive_field(context.field_name):
             return FieldVisibility.MASKED, "***HIDDEN***"
 
         return FieldVisibility.VISIBLE, None

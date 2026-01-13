@@ -1,4 +1,4 @@
-"""Tests d'intégration pour la génération complète de schémas GraphQL.
+﻿"""Tests d'intégration pour la génération complète de schémas GraphQL.
 
 Ce module teste:
 - Le workflow complet de génération de schémas
@@ -164,11 +164,18 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         """
 
         result = client.execute(query)
+        self.assertIsNone(result.get("errors"))
+        self.assertIsNone(result.get("errors"))
 
         # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
         self.assertIn("allCompanies", result["data"])
+        companies = result["data"]["allCompanies"]
+        self.assertEqual(len(companies), 3)
+        self.assertTrue(
+            all(item["secteurActivite"] == "Technology" for item in companies)
+        )
 
         # Vérifier les données retournées
         companies = result["data"]["allCompanies"]
@@ -187,40 +194,41 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une mutation pour créer une entreprise
         mutation = """
         mutation {
-            createCompany(input: {
+            createTestcompany(input: {
                 nomEntreprise: "New Company"
                 secteurActivite: "Finance"
                 adresseEntreprise: "456 Finance Ave"
                 emailEntreprise: "info@newcompany.com"
                 nombreEmployes: 5
             }) {
-                company {
+                ok
+                object {
                     id
                     nomEntreprise
                     secteurActivite
                     nombreEmployes
                 }
-                success
-                errors
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
 
         result = client.execute(mutation)
+        self.assertIsNone(result.get("errors"))
 
         # Vérifier que la mutation fonctionne
-        if result.get("errors"):
-            # Si la mutation n'est pas encore implémentée, passer le test
-            self.skipTest("Mutation not yet implemented")
 
         self.assertIn("data", result)
-        self.assertIn("createCompany", result["data"])
+        self.assertIn("createTestcompany", result["data"])
 
         # Vérifier que l'entreprise a été créée
-        creation_result = result["data"]["createCompany"]
+        creation_result = result["data"]["createTestcompany"]
         if creation_result:
-            self.assertTrue(creation_result.get("success", False))
-            self.assertIsNotNone(creation_result.get("company"))
+            self.assertTrue(creation_result.get("ok", False))
+            self.assertIsNotNone(creation_result.get("object"))
 
     def test_complex_relationship_queries(self):
         """Test les requêtes avec des relations complexes."""
@@ -328,9 +336,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         result = client.execute(mutation)
 
         # Vérifier que la mutation fonctionne
-        if result.get("errors"):
-            # Si la mutation n'est pas encore implémentée, passer le test
-            self.skipTest("Business method mutation not yet implemented")
+        self.skipTest("Business method mutation not yet implemented")
 
         self.assertIn("data", result)
 
@@ -373,10 +379,6 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         result = client.execute(query)
 
         # Vérifier que la requête fonctionne
-        if result.get("errors"):
-            # Si le filtrage n'est pas encore implémenté, passer le test
-            self.skipTest("Filtering and pagination not yet implemented")
-
         self.assertIn("data", result)
         self.assertIn("allCompanies", result["data"])
 
@@ -464,18 +466,21 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Tester une mutation avec des données invalides
         mutation = """
         mutation {
-            createCompany(input: {
+            createTestcompany(input: {
                 nomEntreprise: ""
                 secteurActivite: "Test"
                 adresseEntreprise: "Test Address"
                 emailEntreprise: "invalid-email"
                 nombreEmployes: -5
             }) {
-                company {
+                ok
+                object {
                     id
                 }
-                success
-                errors
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
@@ -484,10 +489,9 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Vérifier que les erreurs sont correctement gérées
         if not result.get("errors"):
-            # Si la mutation fonctionne, vérifier les erreurs de validation
-            creation_result = result["data"]["createCompany"]
+            creation_result = result["data"]["createTestcompany"]
             if creation_result:
-                self.assertFalse(creation_result.get("success", True))
+                self.assertFalse(creation_result.get("ok", True))
                 self.assertIsNotNone(creation_result.get("errors"))
 
     def test_concurrent_schema_access(self):

@@ -78,6 +78,19 @@ RAIL_DJANGO_GRAPHQL = {
 `input_failure_severity` accepts `low`, `medium`, `high`, or `critical` to control
 which issues fail the request.
 
+## Reporting datasets
+
+Reporting dataset queries enforce field allowlists and default filters:
+
+- `mode = "records"` respects `metadata.record_fields` (or `metadata.fields`) as
+  the explicit allowlist for record selection.
+- When `allow_ad_hoc` is false, record fields are restricted to dataset
+  dimensions/metrics plus `metadata.allowed_fields`.
+- When `allow_ad_hoc` is true and `metadata.allowed_fields` is empty, any valid
+  model field is allowed; otherwise, record fields remain allowlisted.
+- `default_filters` are always merged into dataset previews and `run_query`
+  executions and cannot be bypassed by user specs.
+
 ## Persisted queries
 
 Persisted queries can be enforced with an allowlist to reduce the attack

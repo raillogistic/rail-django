@@ -62,6 +62,7 @@ urlpatterns = [
 - `configuration.md`: Settings reference and examples
 - `security.md`: Auth, RBAC, and security controls
 - `extensions.md`: Built-in extensions (health, export, templating, MFA)
+- `reporting.md`: Reporting datasets, query specs, and BI workflows
 - `architecture.md`: Internal architecture and request lifecycle
 - `modules.md`: Codebase map for contributors
 - `testing.md`: Testing strategy and test utilities

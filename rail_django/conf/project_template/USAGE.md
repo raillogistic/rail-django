@@ -806,6 +806,48 @@ Guardrails (default-deny allowlists, row caps, filter/order limits, rate limitin
 are configured via `RAIL_DJANGO_EXPORT` in settings. Async jobs and export templates
 are also configured there. Use a shared cache (Redis) when async exports are enabled.
 
+### BI Reporting & Dashboards
+Turn your Django models into analytical datasets without writing SQL or Graphene resolvers.
+
+1.  **Define a Dataset:**
+    Create a `ReportingDataset` via the Django Admin or code.
+    ```python
+    from rail_django.extensions.reporting import ReportingDataset
+
+    ReportingDataset.objects.create(
+        code="sales_overview",
+        title="Monthly Sales",
+        source_app_label="store",
+        source_model="Order",
+        dimensions=[
+            {"field": "created_at", "transform": "trunc:month", "name": "month"},
+            {"field": "customer__country", "name": "country"}
+        ],
+        metrics=[
+            {"field": "total_amount", "aggregation": "sum", "name": "revenue"},
+            {"field": "id", "aggregation": "count", "name": "order_count"}
+        ]
+    )
+    ```
+
+2.  **Query via GraphQL:**
+    The framework exposes `reportingDataset(code: "sales_overview")` query.
+    ```graphql
+    query {
+      reportingDataset(code: "sales_overview") {
+        preview(limit: 100)
+      }
+    }
+    ```
+
+3.  **Postgres Accelerators:**
+    If you use PostgreSQL, the engine automatically unlocks advanced aggregations:
+    *   `list`: Returns a list of values (`ArrayAgg`).
+    *   `concat`: Returns a comma-separated string.
+    *   `percentile:0.95`: Calculates the 95th percentile.
+    *   `stddev` / `variance`: Statistical analysis.
+    *   **Full Text Search:** The "quick search" box uses native Postgres vector search instead of slow `LIKE` queries.
+
 ### Health Monitoring
 Expose a health check for Kubernetes or Load Balancers.
 
@@ -939,7 +981,8 @@ The project comes with a multi-stage `Dockerfile`.
 Ensure these are set in production (see `.env.example`):
 *   `DJANGO_SECRET_KEY`: Must be random and secret.
 *   `DJANGO_DEBUG`: **Must** be `False`.
-*   `ALLOWED_HOSTS`: List of valid domains.
+*   `DJANGO_ALLOWED_HOSTS`: List of valid domains.
+*   `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 *   `DATABASE_URL`: Connection string for PostgreSQL.
 *   `REDIS_URL`: Shared cache backend for async exports, rate limiting, and jobs.
 *   Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
@@ -947,7 +990,7 @@ Ensure these are set in production (see `.env.example`):
 *   Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
 
 ### Production Checklist
-1.  [ ] **HTTPS:** Ensure SSL is enabled (use Nginx or Load Balancer).
+1.  [ ] **HTTPS:** Ensure SSL is enabled (use the container Nginx or a load balancer).
 2.  [ ] **Secrets:** Move `.env` vars to a secure secret manager.
 3.  [ ] **Static Files:** Ensure `collectstatic` runs during build/deploy.
 4.  [ ] **Migrations:** Run `migrate` on release.
@@ -994,6 +1037,7 @@ nano .env
 - `DJANGO_SECRET_KEY`: A long, random string.
 - `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`).
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
+- `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `PGHOST`, `PGUSER`, `PGPASSWORD`: Required for the automatic backup service.
 
 ### 2. Deployment Steps
@@ -1063,90 +1107,32 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 
 ### 6. Setup HTTPS (Internal Network / Enterprise)
 
-Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. You should use **Host Nginx** to handle SSL using certificates provided by your IT department.
+Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and mount your certificates into it.
 
-#### Step 1: Adjust Docker Configuration
-Move the Docker container to a private port so the Host Nginx can take over port 80/443.
-
-1. Open `deploy/docker/docker-compose.yml`.
-2. Change the `nginx` service ports:
-   ```yaml
-   nginx:
-     # ...
-     ports:
-       - "127.0.0.1:8080:80"  # Bind to localhost port 8080
-   ```
-3. Restart your containers:
-   ```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
-```
-
-#### Step 2: Obtain Certificates
+#### Step 1: Obtain Certificates
 You have two options:
 
 **Option A: Official Company Certificate (Recommended)**
-Ask your IT/Security team for the SSL certificate for your internal domain (e.g., `app.corp.local`).
-You need two files:
-- `your_domain.crt` (The public certificate)
-- `your_domain.key` (The private key)
+Ask your IT/Security team for the SSL certificate for your internal domain (e.g., `app.corp.local`). Place the files here:
+- `deploy/nginx/certs/server.crt`
+- `deploy/nginx/certs/server.key`
 
 **Option B: Self-Signed Certificate (For Testing)**
 If you don't have an official cert, generate a self-signed one:
 ```bash
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout /etc/ssl/private/selfsigned.key \
-  -out /etc/ssl/certs/selfsigned.crt
+mkdir -p deploy/nginx/certs
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout deploy/nginx/certs/server.key \
+  -out deploy/nginx/certs/server.crt \
+  -subj "/CN=app.internal.corp"
 ```
 
-#### Step 3: Configure Host Nginx
-Install Nginx on the VM:
+#### Step 2: Configure Nginx
+Update `deploy/nginx/default.conf` and set `server_name` to your internal domain or IP. The template already redirects HTTP to HTTPS and listens on port 443.
+
+#### Step 3: Activate
 ```bash
-sudo apt update
-sudo apt install nginx
-```
-
-Create a secure configuration file:
-```bash
-sudo nano /etc/nginx/sites-available/my_internal_app
-```
-
-Paste this configuration (adjust paths and domain):
-
-```nginx
-server {
-    listen 80;
-    server_name app.internal.corp; # Your internal domain or IP
-    return 301 https://$host$request_uri; # Force HTTPS
-}
-
-server {
-    listen 443 ssl;
-    server_name app.internal.corp;
-
-    # Point to your certificates
-    ssl_certificate /etc/ssl/certs/your_domain.crt;      # Or selfsigned.crt
-    ssl_certificate_key /etc/ssl/private/your_domain.key; # Or selfsigned.key
-
-    # SSL Settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080; # Points to Docker Container
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-#### Step 4: Activate
-```bash
-sudo ln -s /etc/nginx/sites-available/my_internal_app /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
+docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
 
 ---

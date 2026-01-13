@@ -1,19 +1,51 @@
 #!/bin/sh
+set -e
+
+: "${DJANGO_SETTINGS_MODULE:=root.settings.production}"
+export DJANGO_SETTINGS_MODULE
 
 # Wait for database
 if [ "$DATABASE_URL" ]; then
     echo "Waiting for database..."
-    
-    # Extract host and port from DATABASE_URL
-    # Assumes format postgres://user:pass@host:port/dbname
-    # Simple parsing - for production might need something more robust
-    DB_HOST=$(echo $DATABASE_URL | sed -r 's/.*@([^:]+):.*/\1/')
-    DB_PORT=$(echo $DATABASE_URL | sed -r 's/.*:([0-9]+)\/.*/\1/')
-    
-    while ! nc -z $DB_HOST $DB_PORT; do
-      sleep 0.1
+
+    if ! command -v nc >/dev/null 2>&1; then
+        echo "Error: nc is required to check database availability."
+        exit 1
+    fi
+
+    DB_INFO=$(python - <<'PY'
+import os
+import sys
+from urllib.parse import urlparse
+
+url = os.environ.get("DATABASE_URL", "")
+parsed = urlparse(url)
+host = parsed.hostname
+port = parsed.port
+if not host or not port:
+    sys.exit(1)
+print(f"{host}:{port}")
+PY
+    ) || {
+        echo "Error: DATABASE_URL must include host and port."
+        exit 1
+    }
+
+    DB_HOST=${DB_INFO%:*}
+    DB_PORT=${DB_INFO##*:}
+    DB_WAIT_TIMEOUT=${DB_WAIT_TIMEOUT:-30}
+    DB_WAIT_INTERVAL=${DB_WAIT_INTERVAL:-1}
+    START_TIME=$(date +%s)
+
+    while ! nc -z -w 1 "$DB_HOST" "$DB_PORT"; do
+        NOW=$(date +%s)
+        if [ $((NOW - START_TIME)) -ge "$DB_WAIT_TIMEOUT" ]; then
+            echo "Error: Database not reachable after ${DB_WAIT_TIMEOUT}s."
+            exit 1
+        fi
+        sleep "$DB_WAIT_INTERVAL"
     done
-    
+
     echo "Database started"
 fi
 

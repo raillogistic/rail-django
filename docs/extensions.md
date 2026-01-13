@@ -21,6 +21,13 @@ importing them in your schema build or including their URLs.
 - Supports export templates and field formatters.
 - Export URLs require JWT auth decorators to be installed.
 
+## Reporting / BI (`rail_django.extensions.reporting`)
+
+- Datasets, visualizations, dashboards, and export jobs backed by Django models.
+- Reusable semantic layer (dimensions, metrics, computed fields) with JSON specs.
+- GraphQL auto schema exposes preview/query/describe actions on the models.
+- See `docs/reporting.md` for setup, query specs, and security rules.
+
 ## Templating / PDF (`rail_django.extensions.templating`)
 
 - Decorators `@model_pdf_template` and `@pdf_template` register PDF endpoints.

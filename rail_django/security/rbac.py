@@ -63,6 +63,8 @@ class PermissionContext:
     """Contexte d'une permission."""
     user: "AbstractUser"
     object_id: Optional[str] = None
+    object_instance: Optional[models.Model] = None
+    model_class: Optional[Type[models.Model]] = None
     organization_id: Optional[str] = None
     department_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -282,7 +284,8 @@ class RoleManager:
 
         return permissions
 
-    def _get_inherited_permissions(self, role_name: str) -> Set[str]:
+    def _get_inherited_permissions(self, role_name: str,
+                                   visited: Optional[Set[str]] = None) -> Set[str]:
         """
         Récupère les permissions héritées des rôles parents.
 
@@ -293,6 +296,12 @@ class RoleManager:
             Ensemble des permissions héritées
         """
         permissions = set()
+        if visited is None:
+            visited = set()
+        if role_name in visited:
+            logger.warning("Cycle detected in role hierarchy: %s", role_name)
+            return permissions
+        visited.add(role_name)
 
         if role_name in self._role_hierarchy:
             for parent_role in self._role_hierarchy[role_name]:
@@ -300,9 +309,24 @@ class RoleManager:
                 if parent_def:
                     permissions.update(parent_def.permissions)
                     # Récursion pour les rôles grands-parents
-                    permissions.update(self._get_inherited_permissions(parent_role))
+                    permissions.update(
+                        self._get_inherited_permissions(parent_role, visited)
+                    )
 
         return permissions
+
+    def _permission_in_effective_permissions(self, permission: str,
+                                             effective_permissions: Set[str]) -> bool:
+        if permission in effective_permissions:
+            return True
+        if '*' in effective_permissions:
+            return True
+        for perm in effective_permissions:
+            if perm.endswith('*'):
+                prefix = perm[:-1]
+                if permission.startswith(prefix):
+                    return True
+        return False
 
     def has_permission(self, user: "AbstractUser", permission: str,
                        context: PermissionContext = None) -> bool:
@@ -326,20 +350,20 @@ class RoleManager:
 
         effective_permissions = self.get_effective_permissions(user, context)
 
-        # Vérifier la permission exacte
-        if permission in effective_permissions:
-            return True
+        is_contextual = permission.endswith('_own') or permission.endswith('_assigned')
+        if is_contextual:
+            if not context:
+                return False
+            if not self._permission_in_effective_permissions(
+                permission, effective_permissions
+            ):
+                return False
+            return self._check_contextual_permission(user, permission, context)
 
-        # Vérifier les permissions génériques (*)
-        if '*' in effective_permissions:
+        if self._permission_in_effective_permissions(
+            permission, effective_permissions
+        ):
             return True
-
-        # Vérifier les permissions avec wildcards
-        for perm in effective_permissions:
-            if perm.endswith('*'):
-                prefix = perm[:-1]
-                if permission.startswith(prefix):
-                    return True
 
         # Vérifier les permissions contextuelles
         if context:
@@ -362,75 +386,78 @@ class RoleManager:
         """
         # Permissions sur ses propres objets
         if permission.endswith('_own'):
-            base_permission = permission[:-4]
-            if context.object_id:
-                # Vérifier si l'utilisateur est propriétaire de l'objet
-                return self._is_object_owner(user, context.object_id)
+            return self._is_object_owner(context)
 
         # Permissions sur les objets assignés
         if permission.endswith('_assigned'):
-            base_permission = permission[:-9]
-            if context.object_id:
-                return self._is_object_assigned(user, context.object_id)
+            return self._is_object_assigned(context)
 
         return False
 
-    def _is_object_owner(self, user: "AbstractUser", object_id: str) -> bool:
+    def _get_context_instance(self, context: PermissionContext) -> Optional[models.Model]:
+        if context.object_instance is not None:
+            return context.object_instance
+        if context.model_class is None or context.object_id is None:
+            return None
+        try:
+            return context.model_class.objects.get(pk=context.object_id)
+        except context.model_class.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.error("Error retrieving object: %s", e)
+            return None
+
+    def _is_object_owner(self, context: PermissionContext) -> bool:
         """
         Vérifie si l'utilisateur est propriétaire de l'objet.
 
         Args:
-            user: Utilisateur
-            object_id: ID de l'objet
+            context: Contexte de la permission
 
         Returns:
             True si l'utilisateur est propriétaire
         """
-        # Cette méthode doit être implémentée selon votre modèle de données
-        # Exemple générique :
-        try:
-            # Supposons que tous les objets ont un champ 'owner' ou 'created_by'
-            from django.apps import apps
-            for model in apps.get_models():
-                if hasattr(model, 'owner') or hasattr(model, 'created_by'):
-                    try:
-                        obj = model.objects.get(id=object_id)
-                        owner_field = 'owner' if hasattr(obj, 'owner') else 'created_by'
-                        return getattr(obj, owner_field) == user
-                    except model.DoesNotExist:
-                        continue
-        except Exception as e:
-            logger.error(f"Erreur lors de la vérification de propriété: {e}")
+        obj = self._get_context_instance(context)
+        if obj is None:
+            return False
+
+        user = context.user
+        for attr in ("owner", "created_by", "user"):
+            if hasattr(obj, attr):
+                value = getattr(obj, attr)
+                if value == user:
+                    return True
+                if getattr(value, "pk", value) == getattr(user, "pk", user):
+                    return True
 
         return False
 
-    def _is_object_assigned(self, user: "AbstractUser", object_id: str) -> bool:
+    def _is_object_assigned(self, context: PermissionContext) -> bool:
         """
         Vérifie si l'objet est assigné à l'utilisateur.
 
         Args:
-            user: Utilisateur
-            object_id: ID de l'objet
+            context: Contexte de la permission
 
         Returns:
             True si l'objet est assigné à l'utilisateur
         """
-        # Cette méthode doit être implémentée selon votre modèle de données
-        # Exemple générique :
-        try:
-            from django.apps import apps
-            for model in apps.get_models():
-                if hasattr(model, 'assigned_to') or hasattr(model, 'assignees'):
-                    try:
-                        obj = model.objects.get(id=object_id)
-                        if hasattr(obj, 'assigned_to'):
-                            return obj.assigned_to == user
-                        elif hasattr(obj, 'assignees'):
-                            return user in obj.assignees.all()
-                    except model.DoesNotExist:
-                        continue
-        except Exception as e:
-            logger.error(f"Erreur lors de la vérification d'assignation: {e}")
+        obj = self._get_context_instance(context)
+        if obj is None:
+            return False
+
+        user = context.user
+        if hasattr(obj, 'assigned_to'):
+            assigned_to = obj.assigned_to
+            if assigned_to == user:
+                return True
+            return getattr(assigned_to, "pk", assigned_to) == getattr(user, "pk", user)
+        if hasattr(obj, 'assignees'):
+            try:
+                assignees = obj.assignees.all()
+            except Exception:
+                return False
+            return user in assignees
 
         return False
 
@@ -534,6 +561,106 @@ def require_permission(permission: str, context_func: callable = None):
     Returns:
         Décorateur de vérification de permission
     """
+    def _extract_object_instance(args, kwargs):
+        for key in ("instance", "obj", "object"):
+            if key in kwargs and kwargs[key] is not None:
+                return kwargs[key]
+
+        for arg in args:
+            if hasattr(arg, "context"):
+                continue
+            if isinstance(arg, models.Model):
+                return arg
+
+        return None
+
+    def _extract_object_id(kwargs):
+        for key in ("object_id", "id", "pk"):
+            if key in kwargs and kwargs[key] is not None:
+                return kwargs[key]
+
+        input_value = kwargs.get("input")
+        if isinstance(input_value, dict):
+            for key in ("object_id", "id", "pk"):
+                if key in input_value and input_value[key] is not None:
+                    return input_value[key]
+        elif input_value is not None:
+            for key in ("object_id", "id", "pk"):
+                if hasattr(input_value, key):
+                    value = getattr(input_value, key)
+                    if value is not None:
+                        return value
+
+        return None
+
+    def _infer_model_class(info):
+        graphql_type = getattr(info, "return_type", None)
+        graphene_type = getattr(graphql_type, "graphene_type", None)
+        meta = getattr(graphene_type, "_meta", None)
+        return getattr(meta, "model", None)
+
+    def _normalize_permission_context(context, user, info, args, kwargs):
+        if context is None:
+            context = PermissionContext(user=user)
+        elif isinstance(context, dict):
+            known_keys = {
+                "user",
+                "object_instance",
+                "instance",
+                "object",
+                "object_id",
+                "id",
+                "pk",
+                "model_class",
+                "organization_id",
+                "department_id",
+                "project_id",
+                "additional_context",
+            }
+            extra = {key: value for key, value in context.items() if key not in known_keys}
+            additional_context = context.get("additional_context") or extra or None
+            context = PermissionContext(
+                user=user,
+                object_instance=(
+                    context.get("object_instance")
+                    or context.get("instance")
+                    or context.get("object")
+                ),
+                object_id=(
+                    context.get("object_id")
+                    or context.get("id")
+                    or context.get("pk")
+                ),
+                model_class=context.get("model_class"),
+                organization_id=context.get("organization_id"),
+                department_id=context.get("department_id"),
+                project_id=context.get("project_id"),
+                additional_context=additional_context,
+            )
+        elif not isinstance(context, PermissionContext):
+            context = PermissionContext(
+                user=user, additional_context={"value": context}
+            )
+
+        if context.user is None:
+            context.user = user
+
+        if context.object_instance is None:
+            context.object_instance = _extract_object_instance(args, kwargs)
+
+        if context.object_instance is not None and context.model_class is None:
+            context.model_class = context.object_instance.__class__
+
+        if context.object_id is None:
+            context.object_id = _extract_object_id(kwargs)
+            if context.object_id is None and context.object_instance is not None:
+                context.object_id = getattr(context.object_instance, "pk", None)
+
+        if context.model_class is None:
+            context.model_class = _infer_model_class(info)
+
+        return context
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -555,6 +682,7 @@ def require_permission(permission: str, context_func: callable = None):
             context = None
             if context_func:
                 context = context_func(*args, **kwargs)
+            context = _normalize_permission_context(context, user, info, args, kwargs)
 
             if not role_manager.has_permission(user, permission, context):
                 raise GraphQLError(f"Permission requise: {permission}")

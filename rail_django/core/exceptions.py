@@ -93,7 +93,12 @@ class GraphQLAutoError(GraphQLError):
             locations: Emplacements dans la requête GraphQL
             original_error: Exception originale qui a causé cette erreur
         """
-        super().__init__(message, locations=locations, path=path)
+        error_kwargs: Dict[str, Any] = {}
+        if path is not None:
+            error_kwargs["path"] = path
+        if original_error is not None:
+            error_kwargs["original_error"] = original_error
+        super().__init__(message, **error_kwargs)
 
         self.code = code
         self.field = field

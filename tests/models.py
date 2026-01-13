@@ -5,6 +5,7 @@ User = get_user_model()
 
 
 class TestCompany(models.Model):
+    __test__ = False
     nom_entreprise = models.CharField(max_length=200)
     secteur_activite = models.CharField(max_length=120)
     adresse_entreprise = models.CharField(max_length=255)
@@ -18,6 +19,7 @@ class TestCompany(models.Model):
 
 
 class TestEmployee(models.Model):
+    __test__ = False
     utilisateur_employe = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="test_employees"
     )
@@ -35,6 +37,7 @@ class TestEmployee(models.Model):
 
 
 class TestSkillCategory(models.Model):
+    __test__ = False
     nom_categorie = models.CharField(max_length=120)
     description_categorie = models.TextField(blank=True)
 
@@ -44,6 +47,7 @@ class TestSkillCategory(models.Model):
 
 
 class TestSkill(models.Model):
+    __test__ = False
     nom_competence = models.CharField(max_length=120)
     description_competence = models.TextField(blank=True)
     niveau_requis = models.CharField(max_length=40)
@@ -57,6 +61,7 @@ class TestSkill(models.Model):
 
 
 class TestProject(models.Model):
+    __test__ = False
     nom_projet = models.CharField(max_length=120)
     description_projet = models.TextField(blank=True)
     entreprise_projet = models.ForeignKey(
@@ -69,6 +74,7 @@ class TestProject(models.Model):
 
 
 class TestProjectAssignment(models.Model):
+    __test__ = False
     projet = models.ForeignKey(
         TestProject, on_delete=models.CASCADE, related_name="assignments"
     )
@@ -83,6 +89,7 @@ class TestProjectAssignment(models.Model):
 
 
 class TestCustomer(models.Model):
+    __test__ = False
     nom_client = models.CharField(max_length=120)
     prenom_client = models.CharField(max_length=120)
     email_client = models.EmailField(unique=True)
@@ -100,6 +107,7 @@ class TestCustomer(models.Model):
 
 
 class TestAccount(models.Model):
+    __test__ = False
     numero_compte = models.CharField(max_length=50, unique=True)
     client_compte = models.ForeignKey(
         TestCustomer, on_delete=models.CASCADE, related_name="comptes_client"

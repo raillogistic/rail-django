@@ -58,7 +58,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Créer un client via GraphQL
         mutation = """
         mutation {
-            createCustomer(input: {
+            createTestcustomer(input: {
                 nomClient: "Dupont"
                 prenomClient: "Jean"
                 emailClient: "jean.dupont@example.com"
@@ -68,14 +68,17 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
                 codePostal: "75001"
                 paysClient: "France"
             }) {
-                customer {
+                ok
+                object {
                     id
                     nomClient
                     prenomClient
                     emailClient
                 }
-                success
-                errors
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
@@ -83,7 +86,15 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         result = self.client.execute(mutation)
 
         # Vérifier que la création fonctionne
-        self.skipTest("Create mutation not yet implemented")
+        self.assertIsNone(result.get("errors"))
+        payload = result["data"]["createTestcustomer"]
+        self.assertTrue(payload["ok"])
+        self.assertIsNotNone(payload["object"])
+        self.assertTrue(
+            TestCustomer.objects.filter(
+                email_client="jean.dupont@example.com"
+            ).exists()
+        )
 
     def test_read_operations(self):
         """Test les opérations de lecture en base de données."""
@@ -150,22 +161,25 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         mutation = (
             """
         mutation {
-            updateCustomer(
+            updateTestcustomer(
                 id: "%s"
                 input: {
                     villeClient: "Cannes"
                     soldeCompte: 750.00
                 }
             ) {
-                customer {
+                ok
+                object {
                     id
                     nomClient
                     prenomClient
                     villeClient
                     soldeCompte
                 }
-                success
-                errors
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
@@ -175,7 +189,10 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         result = self.client.execute(mutation)
 
         # Vérifier que la mise à jour fonctionne
-        self.skipTest("Update mutation not yet implemented")
+        self.assertIsNone(result.get("errors"))
+        payload = result["data"]["updateTestcustomer"]
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["object"]["villeClient"], "Cannes")
 
     def test_delete_operations(self):
         """Test les opérations de suppression en base de données."""
@@ -192,9 +209,15 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         mutation = (
             """
         mutation {
-            deleteCustomer(id: "%s") {
-                success
-                errors
+            deleteTestcustomer(id: "%s") {
+                ok
+                object {
+                    id
+                }
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
@@ -204,7 +227,10 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         result = self.client.execute(mutation)
 
         # Vérifier que la suppression fonctionne
-        self.skipTest("Delete mutation not yet implemented")
+        self.assertIsNone(result.get("errors"))
+        payload = result["data"]["deleteTestcustomer"]
+        self.assertTrue(payload["ok"])
+        self.assertFalse(TestCustomer.objects.filter(id=customer_id).exists())
 
     def test_complex_relationships_operations(self):
         """Test les opérations avec des relations complexes."""
@@ -358,17 +384,20 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Tenter de créer un client avec des données invalides
         mutation = """
         mutation {
-            createCustomer(input: {
+            createTestcustomer(input: {
                 nomClient: ""
                 prenomClient: "Test"
                 emailClient: "invalid-email"
                 soldeCompte: -100.00
             }) {
-                customer {
+                ok
+                object {
                     id
                 }
-                success
-                errors
+                errors {
+                    field
+                    message
+                }
             }
         }
         """
@@ -377,10 +406,10 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Vérifier que les erreurs de validation sont gérées
         if not result.get("errors"):
-            creation_result = result["data"]["createCustomer"]
+            creation_result = result["data"]["createTestcustomer"]
             if creation_result:
                 # La création devrait échouer
-                self.assertFalse(creation_result.get("success", True))
+                self.assertFalse(creation_result.get("ok", True))
                 self.assertIsNotNone(creation_result.get("errors"))
 
         # Vérifier qu'aucun client invalide n'a été créé

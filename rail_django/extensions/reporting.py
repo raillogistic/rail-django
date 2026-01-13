@@ -23,7 +23,7 @@ from uuid import UUID
 from django.apps import apps
 from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist, ValidationError
-from django.db import models
+from django.db import connection, models
 from django.db.models import (
     Avg,
     Count,
@@ -35,6 +35,16 @@ from django.db.models import (
     Q,
     Sum,
     Value,
+)
+from django.contrib.postgres.aggregates import (
+    ArrayAgg,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BoolAnd,
+    BoolOr,
+    JSONBAgg,
+    StringAgg,
 )
 from django.db.models.functions import (
     ExtractDay,
@@ -100,6 +110,7 @@ class MetricSpec:
     help_text: str = ""
     format: Optional[str] = None
     filter: Optional[Any] = None
+    options: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -142,6 +153,17 @@ AGGREGATION_MAP = {
     "avg": lambda expr, *, filter_q=None: Avg(expr, filter=filter_q),
     "min": lambda expr, *, filter_q=None: Min(expr, filter=filter_q),
     "max": lambda expr, *, filter_q=None: Max(expr, filter=filter_q),
+}
+
+POSTGRES_AGGREGATIONS = {
+    "array_agg",
+    "bit_and",
+    "bit_or",
+    "bit_xor",
+    "bool_and",
+    "bool_or",
+    "jsonb_agg",
+    "string_agg",
 }
 
 SAFE_EXPR_NODES = (
@@ -473,6 +495,11 @@ class DatasetExecutionEngine:
     def _meta(self) -> dict:
         return dict(self.dataset.metadata or {})
 
+    def _default_pk_field(self) -> str:
+        pk = getattr(self.model._meta, "pk", None)
+        name = getattr(pk, "name", None)
+        return name or "id"
+
     def _allow_ad_hoc(self) -> bool:
         return bool(self._meta().get("allow_ad_hoc"))
 
@@ -508,6 +535,56 @@ class DatasetExecutionEngine:
         allowed |= self._allowed_ad_hoc_fields()
         return {value for value in allowed if value and isinstance(value, str)}
 
+    def _record_field_allowlist(self) -> Optional[set[str]]:
+        """
+        Allow-list for records mode field selection.
+
+        Priority:
+        - explicit `metadata.record_fields`
+        - fallback to `metadata.fields`
+        - if allow_ad_hoc + allowed_fields configured, use allowed fields
+        - if allow_ad_hoc and no allowlist, allow any valid field
+        - otherwise, restrict to dataset dimensions/metrics + allowed_fields
+        """
+
+        meta = self._meta()
+        configured = meta.get("record_fields")
+        if isinstance(configured, list) and configured:
+            return {str(item).strip() for item in configured if item}
+
+        configured = meta.get("fields")
+        if isinstance(configured, list) and configured:
+            return {str(item).strip() for item in configured if item}
+
+        if self._allow_ad_hoc():
+            if self._allowed_ad_hoc_fields():
+                return self._allowed_where_fields()
+            return None
+
+        return self._allowed_where_fields()
+
+    def _normalize_field_list(
+        self,
+        fields: Iterable[Any],
+        *,
+        warnings: List[str],
+        allowlist: Optional[set[str]] = None,
+        label: str = "Champ",
+    ) -> List[str]:
+        normalized: List[str] = []
+        for value in fields:
+            if not value:
+                continue
+            field_name = str(value)
+            if not self._validate_field_path(field_name):
+                warnings.append(f"{label} invalide: {field_name}")
+                continue
+            if allowlist is not None and field_name not in allowlist:
+                warnings.append(f"{label} non autorise: {field_name}")
+                continue
+            normalized.append(field_name)
+        return normalized
+
     def _validate_field_path(self, field_path: str) -> bool:
         """
         Validate a Django ORM field path (including relations via `__`).
@@ -540,6 +617,14 @@ class DatasetExecutionEngine:
                 or field_path in self._allowed_where_fields()
             )
         return field_path in self._allowed_where_fields()
+
+    def _merge_default_filters(self, where: Any) -> Any:
+        default_filters_raw: Any = self.dataset.default_filters or []
+        if not default_filters_raw:
+            return where
+        if where:
+            return {"op": "and", "items": [default_filters_raw, where]}
+        return default_filters_raw
 
     def _load_dimensions(self) -> List[DimensionSpec]:
         entries = self.dataset.dimensions or []
@@ -592,6 +677,9 @@ class DatasetExecutionEngine:
                         help_text=item.get("help_text", ""),
                         format=item.get("format"),
                         filter=item.get("filter"),
+                        options=item.get("options")
+                        if isinstance(item.get("options"), dict)
+                        else None,
                     )
                 )
             except Exception:
@@ -685,6 +773,53 @@ class DatasetExecutionEngine:
 
         raise ReportingError(f"Transformation non supportee: {transform}")
 
+    def _build_postgres_aggregation(
+        self,
+        agg_name: str,
+        expr_field: str,
+        *,
+        filter_q: Optional[Q],
+        options: Optional[dict],
+    ) -> Any:
+        if connection.vendor != "postgresql":
+            raise ReportingError(
+                f"Agregation '{agg_name}' requiert PostgreSQL."
+            )
+
+        options = options or {}
+        ordering = _to_ordering(
+            options.get("ordering") or options.get("order_by") or options.get("order")
+        )
+        extra: Dict[str, Any] = {}
+        if filter_q is not None:
+            extra["filter"] = filter_q
+        if options.get("distinct"):
+            extra["distinct"] = True
+        if ordering:
+            extra["ordering"] = ordering
+        if "default" in options:
+            extra["default"] = options.get("default")
+
+        if agg_name == "string_agg":
+            delimiter = options.get("delimiter", ", ")
+            return StringAgg(expr_field, delimiter, **extra)
+        if agg_name == "array_agg":
+            return ArrayAgg(expr_field, **extra)
+        if agg_name == "jsonb_agg":
+            return JSONBAgg(expr_field, **extra)
+        if agg_name == "bool_and":
+            return BoolAnd(expr_field, **extra)
+        if agg_name == "bool_or":
+            return BoolOr(expr_field, **extra)
+        if agg_name == "bit_and":
+            return BitAnd(expr_field, **extra)
+        if agg_name == "bit_or":
+            return BitOr(expr_field, **extra)
+        if agg_name == "bit_xor":
+            return BitXor(expr_field, **extra)
+
+        raise ReportingError(f"Agregation non supportee: {agg_name}")
+
     def _build_annotations(
         self,
         metrics: List[MetricSpec],
@@ -700,6 +835,7 @@ class DatasetExecutionEngine:
             ):
                 expr_field = "pk"
 
+            options = metric.options or {}
             filter_q = None
             if metric.filter:
                 filter_q, _, _ = self._compile_filter_tree(
@@ -710,6 +846,16 @@ class DatasetExecutionEngine:
 
             if agg_name == "count":
                 annotations[metric.name] = Count(expr_field, filter=filter_q)
+                continue
+
+            if agg_name in POSTGRES_AGGREGATIONS:
+                if not expr_field:
+                    raise ReportingError(
+                        f"Agregation '{agg_name}' requiert un champ."
+                    )
+                annotations[metric.name] = self._build_postgres_aggregation(
+                    agg_name, expr_field, filter_q=filter_q, options=options
+                )
                 continue
 
             agg_factory = AGGREGATION_MAP.get(agg_name)
@@ -950,6 +1096,7 @@ class DatasetExecutionEngine:
                     "format": metric.format,
                     "field": metric.field,
                     "aggregation": metric.aggregation,
+                    "options": metric.options,
                 }
             )
         for computed in computed_fields:
@@ -1019,7 +1166,9 @@ class DatasetExecutionEngine:
         if simple_dimension_fields or alias_exprs:
             queryset = queryset.values(*simple_dimension_fields, **alias_exprs)
         elif not annotations:
-            fallback_fields = (self.dataset.metadata or {}).get("fields") or ["id"]
+            fallback_fields = (self.dataset.metadata or {}).get("fields") or [
+                self._default_pk_field()
+            ]
             queryset = queryset.values(*fallback_fields)
 
         if annotations:
@@ -1056,8 +1205,12 @@ class DatasetExecutionEngine:
             queryset = queryset.order_by(*resolved_ordering)
 
         bounded_limit = None
-        if limit:
-            bounded_limit = min(int(limit), self._max_limit())
+        if limit is not None:
+            limit_value = _coerce_int(limit, default=0)
+            if limit_value < 0:
+                warnings.append(f"Limite negative ignoree: {limit}")
+                limit_value = 0
+            bounded_limit = min(limit_value, self._max_limit())
             queryset = queryset[:bounded_limit]
 
         rows = list(queryset)
@@ -1177,6 +1330,9 @@ class DatasetExecutionEngine:
                         help_text=entry.get("help_text", ""),
                         format=entry.get("format"),
                         filter=entry.get("filter"),
+                        options=entry.get("options")
+                        if isinstance(entry.get("options"), dict)
+                        else None,
                     )
                 )
                 continue
@@ -1369,6 +1525,7 @@ class DatasetExecutionEngine:
         )
         where = spec.get("filters") if "filters" in spec else spec.get("where")
         having = spec.get("having")
+        where = self._merge_default_filters(where)
 
         cache_enabled = spec.get("cache", True)
         ttl = self._cache_ttl_seconds()
@@ -1395,23 +1552,58 @@ class DatasetExecutionEngine:
             )
             warnings.extend(where_warnings)
 
-            fields = spec.get("fields") or self._meta().get("fields") or ["id"]
+            meta_fields = self._meta().get("fields") or []
+            if isinstance(meta_fields, str):
+                meta_fields = [meta_fields]
+            if not isinstance(meta_fields, list):
+                meta_fields = []
+
+            fields_specified = "fields" in spec
+            pk_field = self._default_pk_field()
+            fields = (
+                spec.get("fields")
+                if fields_specified
+                else (meta_fields or [pk_field])
+            )
             if isinstance(fields, str):
                 fields = [fields]
             if not isinstance(fields, list):
-                fields = ["id"]
-            selected_fields = [str(value) for value in fields if value]
-            selected_fields = [
-                field for field in selected_fields if self._validate_field_path(field)
-            ]
-            if not selected_fields:
-                selected_fields = ["id"]
+                fields = [pk_field]
 
-            resolved_ordering = [
-                token
-                for token in ordering
-                if self._validate_field_path(token.lstrip("-"))
-            ]
+            allowed_record_fields = self._record_field_allowlist()
+            selected_fields = self._normalize_field_list(
+                fields,
+                warnings=warnings,
+                allowlist=allowed_record_fields,
+                label="Champ",
+            )
+            if not selected_fields and fields_specified and meta_fields:
+                selected_fields = self._normalize_field_list(
+                    meta_fields,
+                    warnings=warnings,
+                    allowlist=allowed_record_fields,
+                    label="Champ",
+                )
+            if not selected_fields:
+                if allowed_record_fields is None or pk_field in (
+                    allowed_record_fields or set()
+                ):
+                    selected_fields = [pk_field]
+                else:
+                    raise ReportingError(
+                        "Aucun champ autorise pour le mode records."
+                    )
+
+            resolved_ordering: List[str] = []
+            for token in ordering:
+                name = token.lstrip("-")
+                if not self._validate_field_path(name):
+                    warnings.append(f"Tri invalide: {token}")
+                    continue
+                if allowed_record_fields is not None and name not in allowed_record_fields:
+                    warnings.append(f"Tri non autorise: {token}")
+                    continue
+                resolved_ordering.append(token)
             if resolved_ordering:
                 queryset = queryset.order_by(*resolved_ordering)
 
@@ -1480,12 +1672,24 @@ class DatasetExecutionEngine:
         }
         alias_map = {dim.field: dim.name for dim in alias_dimensions}
 
-        if simple_dimension_fields or alias_exprs:
-            queryset = queryset.values(*simple_dimension_fields, **alias_exprs)
-
         annotations = self._build_annotations(
             metrics, allowed_where_fields=allowed_where_fields
         )
+
+        fallback_fields: List[str] = []
+        if simple_dimension_fields or alias_exprs:
+            queryset = queryset.values(*simple_dimension_fields, **alias_exprs)
+        elif not annotations:
+            fallback_fields = self._normalize_field_list(
+                self._meta().get("fields") or [self._default_pk_field()],
+                warnings=warnings,
+                allowlist=None,
+                label="Champ",
+            )
+            if not fallback_fields:
+                fallback_fields = [self._default_pk_field()]
+            queryset = queryset.values(*fallback_fields)
+
         if annotations:
             queryset = queryset.annotate(**annotations)
 
@@ -1497,6 +1701,7 @@ class DatasetExecutionEngine:
                 set(simple_dimension_fields)
                 | set(alias_exprs.keys())
                 | set(annotations.keys())
+                | set(fallback_fields)
             )
             computed_annotations: Dict[str, Any] = {}
             for computed in computed_query:
@@ -1904,6 +2109,15 @@ class ReportingDataset(models.Model):
             )
 
     def build_engine(self) -> DatasetExecutionEngine:
+        from django.db import connection
+
+        if connection.vendor == "postgresql":
+            try:
+                from .reporting_psql import PostgresDatasetExecutionEngine
+
+                return PostgresDatasetExecutionEngine(self)
+            except ImportError:
+                pass
         return DatasetExecutionEngine(self)
 
     def _runtime_filters(self, filters: Optional[dict]) -> List[FilterSpec]:
