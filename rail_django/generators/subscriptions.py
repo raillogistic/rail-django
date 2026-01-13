@@ -11,7 +11,7 @@ import copy
 import hashlib
 import logging
 import re
-from typing import Any, Dict, Iterable, Optional, Type
+from typing import Any, Dict, Iterable, Optional, Tuple, Type
 
 import graphene
 from django.contrib.auth.models import AnonymousUser
@@ -356,6 +356,48 @@ class SubscriptionGenerator:
         if not user or not user.is_authenticated:
             raise GraphQLError("Authentication required")
 
+    def _normalize_model_filters(self) -> Tuple[set, set]:
+        include_models = self.settings.include_models or []
+        exclude_models = self.settings.exclude_models or []
+
+        def _normalize(values):
+            normalized = set()
+            for value in values:
+                if value is None:
+                    continue
+                text = str(value).strip()
+                if text:
+                    normalized.add(text.lower())
+            return normalized
+
+        return _normalize(include_models), _normalize(exclude_models)
+
+    def _model_tokens(self, model: Type[models.Model]) -> set:
+        app_label = getattr(model._meta, "app_label", "")
+        model_name = model.__name__
+        label = getattr(model._meta, "label", f"{app_label}.{model_name}")
+        label_lower = getattr(model._meta, "label_lower", f"{app_label}.{model_name}")
+
+        tokens = {
+            label,
+            label_lower,
+            f"{app_label}.{model_name}",
+            f"{app_label}.{model_name.lower()}",
+            model_name,
+            model_name.lower(),
+        }
+        return {token.lower() for token in tokens if token}
+
+    def _model_is_allowed(self, model: Type[models.Model]) -> bool:
+        include_set, exclude_set = self._normalize_model_filters()
+        tokens = self._model_tokens(model)
+
+        if include_set and not (tokens & include_set):
+            return False
+        if exclude_set and (tokens & exclude_set):
+            return False
+        return True
+
     def _build_subscription_class(
         self,
         model: Type[models.Model],
@@ -450,6 +492,8 @@ class SubscriptionGenerator:
     ) -> Dict[str, graphene.Field]:
         if not self.settings.enable_subscriptions:
             return {}
+        if not self._model_is_allowed(model):
+            return {}
 
         model_type = self.type_generator.generate_object_type(model)
         filter_input = self.filter_generator.generate_complex_filter_input(model)
@@ -482,5 +526,7 @@ class SubscriptionGenerator:
         if not self.settings.enable_subscriptions:
             return subscriptions
         for model in models_list:
+            if not self._model_is_allowed(model):
+                continue
             subscriptions.update(self.generate_model_subscriptions(model))
         return subscriptions

@@ -42,6 +42,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
     *   [Audit Logging](#audit-logging)
     *   [Data Exporting (Excel/CSV)](#data-exporting-excelcsv)
     *   [Health Monitoring](#health-monitoring)
+    *   [Subscriptions (Real-time)](#subscriptions-real-time)
     *   [Multi-Factor Authentication (MFA)](#multi-factor-authentication-mfa)
     *   [PDF Templating Engine](#pdf-templating-engine)
 10. [Performance Tuning](#10-performance-tuning)
@@ -272,6 +273,10 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_delete": True,
         # Enable filters argument on subscription fields
         "enable_filters": True,
+        # Optional allowlist of models for subscriptions
+        "include_models": [],
+        # Optional blocklist of models for subscriptions
+        "exclude_models": [],
     },
     "performance_settings": {
         # Apply select_related/prefetch_related
@@ -963,6 +968,112 @@ query {
   }
 }
 ```
+
+### Subscriptions (Real-time)
+Auto-generate GraphQL subscriptions for per-model create/update/delete events.
+
+1.  **Install dependencies:**
+    `pip install -r requirements.txt`
+
+2.  **Backend config (already included in the template):**
+    ```python
+    INSTALLED_APPS = [
+        "daphne",
+        "channels",
+        # ...
+    ]
+
+    ASGI_APPLICATION = "root.asgi.application"
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
+
+    RAIL_DJANGO_GRAPHQL = {
+        "subscription_settings": {
+            "enable_subscriptions": True,
+            "enable_create": True,
+            "enable_update": True,
+            "enable_delete": True,
+            "enable_filters": True,
+            "include_models": [],
+            "exclude_models": [],
+        },
+    }
+    ```
+
+3.  **WebSocket routing (already included in the template):**
+    Use the same schema name you expose at `/graphql/` (default: `gql`).
+    ```python
+    # root/asgi.py
+    from channels.routing import ProtocolTypeRouter, URLRouter
+    from django.core.asgi import get_asgi_application
+    from django.urls import path
+    from rail_django.extensions.subscriptions import get_subscription_consumer
+
+    django_asgi_app = get_asgi_application()
+
+    application = ProtocolTypeRouter({
+        "http": django_asgi_app,
+        "websocket": URLRouter([
+            path("graphql/", get_subscription_consumer("gql")),
+        ]),
+    })
+    ```
+
+4.  **Use Redis channel layers in production (optional):**
+    Install `channels-redis` and swap the channel layer:
+    ```python
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+        },
+    }
+    ```
+
+5.  **Subscribe from GraphQL:**
+    Subscription field names are snake_case (for example `category_created`).
+    ```graphql
+    subscription {
+      category_created(filters: { name: { icontains: "book" } }) {
+        event
+        id
+        node {
+          id
+          name
+        }
+      }
+    }
+    ```
+
+6.  **Apollo React client example:**
+    ```tsx
+    import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
+    import { WebSocketLink } from "@apollo/client/link/ws";
+    import { getMainDefinition } from "@apollo/client/utilities";
+
+    const httpLink = new HttpLink({ uri: "/graphql/gql/" });
+    const wsLink = new WebSocketLink({
+      uri: "ws://localhost:8000/graphql/",
+      options: { reconnect: true },
+    });
+
+    const link = split(
+      ({ query }) => {
+        const def = getMainDefinition(query);
+        return def.kind === "OperationDefinition" && def.operation === "subscription";
+      },
+      wsLink,
+      httpLink
+    );
+
+    export const client = new ApolloClient({
+      link,
+      cache: new InMemoryCache(),
+    });
+    ```
 
 ### Multi-Factor Authentication (MFA)
 Secure your high-value users.

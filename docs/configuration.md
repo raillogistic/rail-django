@@ -36,6 +36,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_update": True,
         "enable_delete": True,
         "enable_filters": True,
+        "include_models": [],
+        "exclude_models": [],
     },
     "type_generation_settings": {
         "exclude_fields": {},
@@ -129,6 +131,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_update": True,
         "enable_delete": True,
         "enable_filters": True,
+        "include_models": ["shop.Order", "User"],
+        "exclude_models": ["audit.AuditEvent"],
     },
     "schema_settings": {
         "subscription_field_allowlist": ["order_created", "order_updated"],

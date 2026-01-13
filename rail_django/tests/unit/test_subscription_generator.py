@@ -7,6 +7,7 @@ import types
 from unittest.mock import patch
 
 import pytest
+import graphene
 from django.test import TestCase
 from test_app.models import Category
 
@@ -41,12 +42,37 @@ class TestSubscriptionGenerator(TestCase):
                 generator.generate_model_subscriptions(Category)
 
     def test_generator_registers_subscription_fields(self):
-        class DummySubscriptionBase:
+        class DummySubscriptionBase(graphene.ObjectType):
             SKIP = object()
 
             @classmethod
             def broadcast(cls, *args, **kwargs):
                 return None
+
+            @classmethod
+            def Field(
+                cls,
+                name=None,
+                description=None,
+                deprecation_reason=None,
+                required=False,
+            ):
+                from graphene.types.argument import to_arguments
+                from graphene.utils.props import props
+
+                arguments = {}
+                args_class = getattr(cls, "Arguments", None)
+                if args_class is not None:
+                    arguments = props(args_class)
+
+                return graphene.Field(
+                    cls,
+                    args=to_arguments(arguments),
+                    name=name,
+                    description=description,
+                    deprecation_reason=deprecation_reason,
+                    required=required,
+                )
 
         dummy_module = types.SimpleNamespace(Subscription=DummySubscriptionBase)
 
@@ -65,3 +91,61 @@ class TestSubscriptionGenerator(TestCase):
 
         subscriptions = list(iter_subscriptions_for_model(Category, "created"))
         assert subscriptions
+
+    def test_generator_respects_model_filters(self):
+        class DummySubscriptionBase(graphene.ObjectType):
+            SKIP = object()
+
+            @classmethod
+            def broadcast(cls, *args, **kwargs):
+                return None
+
+            @classmethod
+            def Field(
+                cls,
+                name=None,
+                description=None,
+                deprecation_reason=None,
+                required=False,
+            ):
+                from graphene.types.argument import to_arguments
+                from graphene.utils.props import props
+
+                arguments = {}
+                args_class = getattr(cls, "Arguments", None)
+                if args_class is not None:
+                    arguments = props(args_class)
+
+                return graphene.Field(
+                    cls,
+                    args=to_arguments(arguments),
+                    name=name,
+                    description=description,
+                    deprecation_reason=deprecation_reason,
+                    required=required,
+                )
+
+        dummy_module = types.SimpleNamespace(Subscription=DummySubscriptionBase)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setitem(sys.modules, "channels_graphql_ws", dummy_module)
+            settings = SubscriptionGeneratorSettings(
+                enable_subscriptions=True,
+                include_models=["OtherModel"],
+            )
+            generator = SubscriptionGenerator(TypeGenerator(), settings=settings)
+            fields = generator.generate_model_subscriptions(Category)
+
+        assert fields == {}
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setitem(sys.modules, "channels_graphql_ws", dummy_module)
+            settings = SubscriptionGeneratorSettings(
+                enable_subscriptions=True,
+                include_models=["Category"],
+                exclude_models=["Category"],
+            )
+            generator = SubscriptionGenerator(TypeGenerator(), settings=settings)
+            fields = generator.generate_model_subscriptions(Category)
+
+        assert fields == {}

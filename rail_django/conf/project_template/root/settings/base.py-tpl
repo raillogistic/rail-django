@@ -30,6 +30,9 @@ INSTALLED_APPS = [
     "graphene_django",
     "django_filters",
     "corsheaders",
+    # Subscriptions (WebSockets via Django Channels)
+    "daphne",
+    "channels",
     # Rail Django app
     "rail_django",
     # Project apps
@@ -137,6 +140,23 @@ GRAPHENE = {
     'ATOMIC_MUTATIONS': True,
 }
 
+# Subscriptions (WebSockets via Django Channels)
+ASGI_APPLICATION = "root.asgi.application"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
+# For production, switch to Redis-backed channels:
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [env.tuple("REDIS_HOST", default=("127.0.0.1", 6379))],
+#         },
+#     },
+# }
+
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
@@ -216,6 +236,8 @@ RAIL_DJANGO_GRAPHQL = {
         "query_field_allowlist": None,
         # Allowlist root mutation fields (None = no filtering)
         "mutation_field_allowlist": None,
+        # Allowlist root subscription fields (None = no filtering)
+        "subscription_field_allowlist": None,
     },
     "type_generation_settings": {
         # Fields to exclude globally by name from all types
@@ -284,6 +306,20 @@ RAIL_DJANGO_GRAPHQL = {
         "nested_relations_config": {},
         # Configuration for specific nested fields
         "nested_field_config": {},
+    },
+    "subscription_settings": {
+        # Enable auto-generated subscriptions
+        "enable_subscriptions": True,
+        # Toggle model create/update/delete events
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        # Enable filters argument on subscription fields
+        "enable_filters": True,
+        # Optional allowlist of models for subscriptions
+        "include_models": [],
+        # Optional blocklist of models for subscriptions
+        "exclude_models": [],
     },
     "performance_settings": {
         # Optimize DB queries using select_related/prefetch_related

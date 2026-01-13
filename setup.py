@@ -27,6 +27,9 @@ setup(
         "requests>=2.32.4",
         "sentry-sdk>=2.8.0",
         "pillow>=10.3.0",
+        "channels>=4.0.0",
+        "channels-graphql-ws>=0.9.0",
+        "daphne>=4.0.0",
     ],
     entry_points={
         "console_scripts": [

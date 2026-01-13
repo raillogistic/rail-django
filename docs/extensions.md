@@ -63,6 +63,84 @@ importing them in your schema build or including their URLs.
 - Supports per-model created/updated/deleted events with filter args.
 - Requires `channels-graphql-ws` (optional dependency).
 
+### Usage
+
+Backend config (settings + ASGI):
+
+```python
+# settings.py
+INSTALLED_APPS = [
+    "daphne",
+    "channels",
+    # ...
+]
+
+ASGI_APPLICATION = "root.asgi.application"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+    },
+}
+
+RAIL_DJANGO_GRAPHQL = {
+    "subscription_settings": {
+        "enable_subscriptions": True,
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+        "enable_filters": True,
+        "include_models": [],
+        "exclude_models": [],
+    },
+}
+```
+
+```python
+# root/asgi.py
+from channels.routing import ProtocolTypeRouter, URLRouter
+from django.core.asgi import get_asgi_application
+from django.urls import path
+from rail_django.extensions.subscriptions import get_subscription_consumer
+
+django_asgi_app = get_asgi_application()
+
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
+    "websocket": URLRouter([
+        path("graphql/", get_subscription_consumer("gql")),
+    ]),
+})
+```
+
+Apollo React client example:
+
+```tsx
+import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
+import { WebSocketLink } from "@apollo/client/link/ws";
+import { getMainDefinition } from "@apollo/client/utilities";
+
+const httpLink = new HttpLink({ uri: "/graphql/gql/" });
+const wsLink = new WebSocketLink({
+  uri: "ws://localhost:8000/graphql/",
+  options: { reconnect: true },
+});
+
+const link = split(
+  ({ query }) => {
+    const def = getMainDefinition(query);
+    return def.kind === "OperationDefinition" && def.operation === "subscription";
+  },
+  wsLink,
+  httpLink
+);
+
+export const client = new ApolloClient({
+  link,
+  cache: new InMemoryCache(),
+});
+```
+
 ## Rate limiting (`rail_django.extensions.rate_limiting`)
 
 - Graphene middleware that applies request-level rate limiting at root fields.

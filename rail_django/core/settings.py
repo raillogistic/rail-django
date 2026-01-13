@@ -376,6 +376,8 @@ class SubscriptionGeneratorSettings:
     enable_update: bool = True
     enable_delete: bool = True
     enable_filters: bool = True
+    include_models: List[str] = field(default_factory=list)
+    exclude_models: List[str] = field(default_factory=list)
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "SubscriptionGeneratorSettings":

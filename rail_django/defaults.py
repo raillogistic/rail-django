@@ -85,6 +85,8 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_update": True,
         "enable_delete": True,
         "enable_filters": True,
+        "include_models": [],
+        "exclude_models": [],
     },
     "performance_settings": {
         "enable_query_optimization": True,
