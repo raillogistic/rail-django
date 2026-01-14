@@ -19,9 +19,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # install dependencies
-COPY requirements.txt requirements.txt
+COPY requirements/ requirements/
 RUN pip install --upgrade pip
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements/prod.txt
 
 
 #########
@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 netcat-o
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/requirements.txt .
+COPY --from=builder /app/requirements/ requirements/
 RUN pip install --no-cache /wheels/*
 
 # copy entrypoint.sh

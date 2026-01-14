@@ -120,7 +120,7 @@ my_platform/
 │   └── wsgi.py         # WSGI entry point
 ├── apps/               # Directory for your Django apps
 │   └── core/           # Example core app
-├── requirements.txt    # Project dependencies
+├── requirements/       # Project dependencies (base, dev, prod)
 └── Dockerfile          # Production-ready Docker build
 ```
 
@@ -1000,7 +1000,7 @@ query {
 Auto-generate GraphQL subscriptions for per-model create/update/delete events.
 
 1.  **Install dependencies:**
-    `pip install -r requirements.txt`
+    `pip install -r requirements/base.txt`
 
 2.  **Backend config (already included in the template):**
     ```python
