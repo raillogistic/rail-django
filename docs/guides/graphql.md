@@ -94,6 +94,42 @@ For each Django model, Rail Django generates a set of root fields:
 If a custom manager is exposed, the name becomes `<model>__<manager>` for the
 single field and `<model>s__<manager>` for list queries.
 
+## GraphQLMeta configuration
+
+GraphQLMeta is the per-model configuration class in `rail_django/core/meta.py`.
+It controls field exposure, filtering, ordering, and access guards for the
+auto-generated schema. Define it as an inner class on your model:
+
+```python
+from django.db import models
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+
+
+class Customer(models.Model):
+    name = models.CharField(max_length=200)
+    email = models.EmailField()
+    status = models.CharField(max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        fields = GraphQLMetaConfig.Fields(
+            exclude=["internal_notes"],
+            read_only=["status"],
+        )
+        filtering = GraphQLMetaConfig.Filtering(
+            quick=["name", "email"],
+            fields={
+                "status": GraphQLMetaConfig.FilterField(
+                    lookups=["exact", "in"],
+                    choices=["active", "paused"],
+                ),
+            },
+        )
+        ordering = GraphQLMetaConfig.Ordering(default=["-created_at"])
+```
+
+For detailed usage and access control examples, see the [GraphQLMeta guide](../reference/meta.md).
+
 ## Single item query
 
 ```graphql

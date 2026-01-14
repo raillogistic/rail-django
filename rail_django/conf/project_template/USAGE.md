@@ -569,38 +569,35 @@ class Product(models.Model):
 ```
 
 ### The `graphql_meta` Class
-To customize how a specific model appears in the API, add a `graphql_meta` attribute. This is the **most powerful** feature for fine-grained control.
+To customize how a specific model appears in the API, define an inner
+`GraphQLMeta` (or legacy `GraphqlMeta`) class on the model. This is the most
+direct way to control field exposure, filtering, ordering, and access guards.
 
 ```python
-from rail_django.core.meta import GraphQLMeta
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 
 class Product(models.Model):
     # ... fields ...
-    
-    graphql_meta = GraphQLMeta(
-        # Exclude internal fields from the API
-        exclude=["cost_price", "supplier_notes"],
-        
-        # Make specific fields read-only
-        readonly_fields=["sku"],
-        
-        # Configure field-level permissions
-        field_permissions={
-            "profit_margin": {
-                "roles": ["manager", "admin"],
-                "level": "read"
-            }
-        },
-        
-        # Customize the lookup field (instead of ID)
-        lookup_field="sku",
-        
-        # Add extra filter capabilities
-        filter_fields={
-            "price": ["gt", "lt", "range"],
-            "name": ["icontains", "istartswith"]
-        }
-    )
+
+    # Use GraphQLMeta or GraphqlMeta as the inner class name.
+    class GraphqlMeta(GraphQLMetaConfig):
+        fields = GraphQLMetaConfig.Fields(
+            exclude=["cost_price", "supplier_notes"],
+            read_only=["sku"],
+        )
+        filtering = GraphQLMetaConfig.Filtering(
+            quick=["name", "sku"],
+            fields={
+                "price": GraphQLMetaConfig.FilterField(lookups=["gt", "lt", "range"]),
+                "name": GraphQLMetaConfig.FilterField(
+                    lookups=["icontains", "istartswith"]
+                ),
+            },
+        )
+        ordering = GraphQLMetaConfig.Ordering(
+            allowed=["name", "price"],
+            default=["-price"],
+        )
 ```
 
 You can also tag data classifications and reuse policy bundles:
@@ -610,12 +607,11 @@ class Customer(models.Model):
     email = models.EmailField()
     salary = models.DecimalField(max_digits=10, decimal_places=2)
 
-    graphql_meta = GraphQLMeta(
-        classifications=GraphQLMeta.Classification(
+    class GraphQLMeta(GraphQLMetaConfig):
+        classifications = GraphQLMetaConfig.Classification(
             model=["pii"],
             fields={"salary": ["financial"]},
         )
-    )
 ```
 
 ---

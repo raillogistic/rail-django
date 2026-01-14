@@ -38,7 +38,7 @@ python manage.py runserver
 Open GraphiQL at `http://localhost:8000/graphql`.
 
 ## Usage
-See the [quickstart](docs/getting-started/quickstart.md) for the basic workflow, and the [GraphQL guide](docs/guides/graphql.md) for how to define types, queries, and mutations.
+See the [quickstart](docs/getting-started/quickstart.md) for the basic workflow, the [GraphQL guide](docs/guides/graphql.md) for how to define types, queries, and mutations, and the [GraphQLMeta guide](docs/reference/meta.md) for per-model configuration.
 
 ## Supported versions
 - Python 3.8+
@@ -60,6 +60,7 @@ Guides
 
 Reference
 - [Configuration](docs/reference/configuration.md)
+- [GraphQLMeta](docs/reference/meta.md)
 - [Security](docs/reference/security.md)
 
 Internals and testing

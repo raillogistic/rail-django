@@ -41,7 +41,8 @@ Authorization uses a hybrid RBAC system:
 - Assignments use Django `Group` records.
 - The permission manager also checks GraphQLMeta guards (per model).
 
-Use GraphQLMeta to guard operations per model and to hide fields.
+Use GraphQLMeta to guard operations per model and to hide fields. See the
+[GraphQLMeta guide](meta.md) for configuration examples and field-level rules.
 
 ## Policy engine
 

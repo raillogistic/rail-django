@@ -31,6 +31,7 @@ organizes the documentation for API consumers and integrators.
 ## Reference
 
 - [Configuration](reference/configuration.md)
+- [GraphQLMeta](reference/meta.md)
 - [Security](reference/security.md)
 
 ## Operations
