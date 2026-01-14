@@ -27,7 +27,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "enable_graphiql": True,
         "auto_refresh_on_model_change": False,
         "auto_refresh_on_migration": True,
-        "prebuild_on_startup": False,
+        "prebuild_on_startup": True,
         "authentication_required": True,
         "enable_pagination": True,
         "auto_camelcase": False,
@@ -80,7 +80,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "nested_field_config": {},
     },
     "subscription_settings": {
-        "enable_subscriptions": False,
+        "enable_subscriptions": True,
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,

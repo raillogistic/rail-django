@@ -490,20 +490,68 @@ class SubscriptionGenerator:
     def generate_model_subscriptions(
         self, model: Type[models.Model]
     ) -> Dict[str, graphene.Field]:
+        # Check global enabled flag
         if not self.settings.enable_subscriptions:
             return {}
+
+        # Check model allow/deny lists from settings
         if not self._model_is_allowed(model):
             return {}
 
-        model_type = self.type_generator.generate_object_type(model)
-        filter_input = self.filter_generator.generate_complex_filter_input(model)
-        subscriptions: Dict[str, graphene.Field] = {}
+        # Check GraphQLMeta configuration
+        graphql_meta = get_model_graphql_meta(model)
+        meta_subs = getattr(graphql_meta, "subscriptions", None)
 
+        # If meta.subscriptions is explicitly False, disable
+        if meta_subs is False:
+            return {}
+
+        # Default event configuration from settings
         event_config = {
             "created": self.settings.enable_create,
             "updated": self.settings.enable_update,
             "deleted": self.settings.enable_delete,
         }
+
+        # Override with GraphQLMeta if present
+        if meta_subs is not None:
+            if isinstance(meta_subs, (list, tuple)):
+                # ["create", "update"]
+                # Map "create" -> "created", "update" -> "updated", etc. if needed
+                # But let's assume users use "created", "updated", "deleted" or "create", "update", "delete"
+                subs_set = {str(s).lower() for s in meta_subs}
+                
+                # Normalize aliases
+                if "create" in subs_set: subs_set.add("created")
+                if "update" in subs_set: subs_set.add("updated")
+                if "delete" in subs_set: subs_set.add("deleted")
+
+                event_config["created"] = "created" in subs_set
+                event_config["updated"] = "updated" in subs_set
+                event_config["deleted"] = "deleted" in subs_set
+            elif isinstance(meta_subs, dict):
+                # {"create": True, "update": False}
+                # Normalize keys
+                normalized = {}
+                for k, v in meta_subs.items():
+                    k_lower = str(k).lower()
+                    if k_lower == "create": k_lower = "created"
+                    if k_lower == "update": k_lower = "updated"
+                    if k_lower == "delete": k_lower = "deleted"
+                    normalized[k_lower] = bool(v)
+                
+                if "created" in normalized: event_config["created"] = normalized["created"]
+                if "updated" in normalized: event_config["updated"] = normalized["updated"]
+                if "deleted" in normalized: event_config["deleted"] = normalized["deleted"]
+            elif meta_subs is True:
+                 # Enable all
+                 event_config["created"] = True
+                 event_config["updated"] = True
+                 event_config["deleted"] = True
+
+        model_type = self.type_generator.generate_object_type(model)
+        filter_input = self.filter_generator.generate_complex_filter_input(model)
+        subscriptions: Dict[str, graphene.Field] = {}
 
         for event, enabled in event_config.items():
             if not enabled:

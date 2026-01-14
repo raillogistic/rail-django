@@ -52,6 +52,27 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+## Model-specific Configuration
+
+You can configure subscriptions per-model using `GraphQLMeta`:
+
+```python
+class Project(models.Model):
+    # ... fields ...
+
+    class GraphQLMeta:
+        # Enable all events
+        subscriptions = True
+        
+        # Or specify allowed events
+        # subscriptions = ["create", "update"]
+        
+        # Or use a dictionary for granular control
+        # subscriptions = {"create": True, "delete": False}
+```
+
+This overrides the global `enable_create`, `enable_update`, etc. settings for that specific model.
+
 ## ASGI wiring
 
 ```python
