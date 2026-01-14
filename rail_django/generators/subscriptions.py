@@ -11,11 +11,13 @@ import copy
 import hashlib
 import logging
 import re
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, Optional, Tuple, Type
 
 import graphene
 from django.contrib.auth.models import AnonymousUser
 from django.db import models
+from django.utils import timezone
 from graphql import GraphQLError
 
 from ..core.meta import get_model_graphql_meta
@@ -28,6 +30,16 @@ from .types import TypeGenerator
 logger = logging.getLogger(__name__)
 
 _GROUP_NAME_SAFE_RE = re.compile(r"[^0-9A-Za-z_.-]")
+_DATE_SUFFIXES = (
+    "today",
+    "yesterday",
+    "this_week",
+    "past_week",
+    "this_month",
+    "past_month",
+    "this_year",
+    "past_year",
+)
 
 
 def _get_subscription_base() -> Type:
@@ -67,35 +79,121 @@ def _copy_filter_payload(filters: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _get_context_user(info: graphene.ResolveInfo) -> Any:
+    context = getattr(info, "context", None)
+    if context is None:
+        return None
+    if isinstance(context, dict):
+        user = context.get("user")
+        if user is not None:
+            return user
+        scope = context.get("scope")
+        if isinstance(scope, dict):
+            return scope.get("user")
+        return None
+    user = getattr(context, "user", None)
+    if user is not None:
+        return user
+    scope = getattr(context, "scope", None)
+    if isinstance(scope, dict):
+        return scope.get("user")
+    return None
+
+
+def _coerce_date(value: Any) -> Optional[date]:
+    if isinstance(value, datetime):
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def _coerce_model_value(value: Any) -> Any:
+    if isinstance(value, models.Model):
+        return value.pk
+    return value
+
+
+def _coerce_expected(value: Any) -> Any:
+    if isinstance(value, models.Model):
+        return value.pk
+    if isinstance(value, (list, tuple, set)):
+        coerced = [item.pk if isinstance(item, models.Model) else item for item in value]
+        return tuple(coerced) if isinstance(value, tuple) else coerced
+    return value
+
+
+def _build_instance_from_snapshot(
+    model: Type[models.Model], snapshot: Dict[str, Any]
+) -> Optional[models.Model]:
+    if not snapshot:
+        return None
+    field_names = {field.attname for field in model._meta.concrete_fields}
+    instance = model()
+    for key, value in snapshot.items():
+        if key == "pk":
+            key = model._meta.pk.attname
+        if key in field_names:
+            setattr(instance, key, value)
+    if getattr(instance, "pk", None) is not None:
+        instance._state.adding = False
+    return instance
+
+
+def _build_instance_from_payload(
+    model: Type[models.Model], payload: Any
+) -> Optional[models.Model]:
+    if not isinstance(payload, dict):
+        return None
+    instance = payload.get("instance")
+    if isinstance(instance, model):
+        return instance
+    snapshot = payload.get("snapshot") or payload.get("instance_data") or payload.get("data")
+    if isinstance(snapshot, dict):
+        instance = _build_instance_from_snapshot(model, snapshot)
+        if instance is not None:
+            return instance
+    pk = payload.get("pk") or payload.get("id") or payload.get("instance_id")
+    if pk is not None:
+        instance = model()
+        setattr(instance, model._meta.pk.attname, pk)
+        instance._state.adding = False
+        return instance
+    return None
+
+
 def _apply_field_masks(
     instance: models.Model, info: graphene.ResolveInfo, model: Type[models.Model]
 ) -> models.Model:
-    context_user = getattr(getattr(info, "context", None), "user", None)
+    masked_instance = copy.copy(instance)
+    context_user = _get_context_user(info)
     if context_user is None:
         context_user = AnonymousUser()
     if getattr(context_user, "is_superuser", False):
-        return instance
+        return masked_instance
 
-    field_defs = list(instance._meta.concrete_fields)
+    field_defs = list(masked_instance._meta.concrete_fields)
     snapshot: Dict[str, Any] = {}
 
     for field in field_defs:
         if field.is_relation and (field.many_to_one or field.one_to_one):
-            val = getattr(instance, field.attname, None)
+            val = getattr(masked_instance, field.attname, None)
         else:
-            val = getattr(instance, field.name, None)
+            val = getattr(masked_instance, field.name, None)
         snapshot[field.name] = val
 
-    masked = mask_sensitive_fields(snapshot, context_user, model, instance=instance)
+    masked = mask_sensitive_fields(snapshot, context_user, model, instance=masked_instance)
     for field in field_defs:
         name = field.name
         attname = getattr(field, "attname", name)
         if name in masked:
-            instance.__dict__[attname] = masked[name]
+            masked_instance.__dict__[attname] = masked[name]
         else:
-            instance.__dict__[attname] = None
+            masked_instance.__dict__[attname] = None
 
-    return instance
+    return masked_instance
 
 
 def _coerce_iterable(value: Any) -> Iterable:
@@ -135,6 +233,8 @@ def _resolve_values(obj: Any, path_parts: Iterable[str]) -> list:
 
 
 def _compare_value(value: Any, lookup: str, expected: Any) -> bool:
+    value = _coerce_model_value(value)
+    expected = _coerce_expected(expected)
     if lookup == "exact":
         return value == expected
     if lookup == "iexact":
@@ -218,6 +318,73 @@ def _compare_value(value: Any, lookup: str, expected: Any) -> bool:
         if lookup == "has_keys":
             return all(key in value for key in (expected or []))
         return any(key in value for key in (expected or []))
+    if lookup == "week_day":
+        date_value = _coerce_date(value)
+        if date_value is None or expected is None:
+            return False
+        try:
+            expected_day = int(expected)
+        except (TypeError, ValueError):
+            return False
+        # Django's week_day uses 1=Sunday, 2=Monday ... 7=Saturday.
+        django_week_day = (date_value.isoweekday() % 7) + 1
+        return django_week_day == expected_day
+    if lookup in {
+        "today",
+        "yesterday",
+        "this_week",
+        "past_week",
+        "this_month",
+        "past_month",
+        "this_year",
+        "past_year",
+    }:
+        if not expected:
+            return True
+        date_value = _coerce_date(value)
+        if date_value is None:
+            return False
+        today = timezone.localdate()
+        if lookup == "today":
+            return date_value == today
+        if lookup == "yesterday":
+            return date_value == (today - timedelta(days=1))
+        if lookup in {"this_week", "past_week"}:
+            days_since_monday = today.weekday()
+            this_week_start = today - timedelta(days=days_since_monday)
+            this_week_end = this_week_start + timedelta(days=6)
+            if lookup == "this_week":
+                return this_week_start <= date_value <= this_week_end
+            past_week_start = this_week_start - timedelta(days=7)
+            past_week_end = this_week_start - timedelta(days=1)
+            return past_week_start <= date_value <= past_week_end
+        if lookup in {"this_month", "past_month"}:
+            this_month_start = today.replace(day=1)
+            if today.month == 12:
+                next_month_start = today.replace(year=today.year + 1, month=1, day=1)
+            else:
+                next_month_start = today.replace(month=today.month + 1, day=1)
+            this_month_end = next_month_start - timedelta(days=1)
+            if lookup == "this_month":
+                return this_month_start <= date_value <= this_month_end
+            if this_month_start.month == 1:
+                past_month_start = this_month_start.replace(
+                    year=this_month_start.year - 1, month=12, day=1
+                )
+            else:
+                past_month_start = this_month_start.replace(
+                    month=this_month_start.month - 1, day=1
+                )
+            past_month_end = this_month_start - timedelta(days=1)
+            return past_month_start <= date_value <= past_month_end
+        if lookup in {"this_year", "past_year"}:
+            this_year_start = today.replace(month=1, day=1)
+            this_year_end = today.replace(month=12, day=31)
+            if lookup == "this_year":
+                return this_year_start <= date_value <= this_year_end
+            past_year_start = this_year_start.replace(year=this_year_start.year - 1)
+            past_year_end = this_year_end.replace(year=this_year_end.year - 1)
+            return past_year_start <= date_value <= past_year_end
     return False
 
 
@@ -245,6 +412,25 @@ def _evaluate_filter_dict(instance: Any, filter_dict: Dict[str, Any]) -> bool:
     for key, expected in filter_dict.items():
         if key in {"AND", "OR", "NOT"}:
             continue
+        suffix_match = None
+        for suffix in _DATE_SUFFIXES:
+            suffix_token = f"_{suffix}"
+            if key.endswith(suffix_token):
+                suffix_match = suffix
+                field_path = key[: -len(suffix_token)]
+                if not expected:
+                    break
+                values = (
+                    _resolve_values(instance, field_path.split("__"))
+                    if field_path
+                    else []
+                )
+                matched = any(_compare_value(value, suffix, True) for value in values)
+                if not matched:
+                    return False
+                break
+        if suffix_match is not None:
+            continue
         parts = key.split("__")
         lookup = "exact"
         if parts[-1] in {
@@ -271,6 +457,15 @@ def _evaluate_filter_dict(instance: Any, filter_dict: Dict[str, Any]) -> bool:
             "has_key",
             "has_keys",
             "has_any_keys",
+            "week_day",
+            "today",
+            "yesterday",
+            "this_week",
+            "past_week",
+            "this_month",
+            "past_month",
+            "this_year",
+            "past_year",
         }:
             lookup = parts.pop()
 
@@ -368,7 +563,7 @@ class SubscriptionGenerator:
         if not schema_settings.authentication_required:
             return
 
-        user = getattr(getattr(info, "context", None), "user", None)
+        user = _get_context_user(info)
         if not user or not user.is_authenticated:
             raise GraphQLError("Authentication required")
 
@@ -450,9 +645,7 @@ class SubscriptionGenerator:
             return [group_name]
 
         def publish(payload, info, filters: Optional[Dict[str, Any]] = None, **kwargs):
-            instance = None
-            if isinstance(payload, dict):
-                instance = payload.get("instance")
+            instance = _build_instance_from_payload(model, payload)
             if instance is None:
                 return _skip()
 

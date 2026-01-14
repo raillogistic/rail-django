@@ -44,5 +44,8 @@ def iter_subscriptions_for_model(
             yield schema_name, subscription_class
 
 
-def clear_subscription_registry() -> None:
+def clear_subscription_registry(schema_name: Optional[str] = None) -> None:
+    if schema_name:
+        _SUBSCRIPTION_REGISTRY.pop(schema_name, None)
+        return
     _SUBSCRIPTION_REGISTRY.clear()

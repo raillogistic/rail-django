@@ -42,6 +42,8 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+Subscriptions are enabled by default; set `enable_subscriptions` to `False` to disable.
+
 Allowlist subscription fields (optional):
 
 ```python
@@ -93,6 +95,7 @@ CHANNEL_LAYERS = {
 
 ```python
 # root/asgi.py
+from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import path
@@ -102,10 +105,10 @@ django_asgi_app = get_asgi_application()
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": URLRouter([
+    "websocket": AuthMiddlewareStack(URLRouter([
         path("graphql/", get_subscription_consumer("gql")),
         path("graphql/graphiql/", get_subscription_consumer("gql")),
-    ]),
+    ])),
 })
 ```
 

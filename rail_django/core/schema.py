@@ -534,6 +534,16 @@ class SchemaBuilder:
         """
         self._subscription_fields = {}
         try:
+            from ..subscriptions.registry import clear_subscription_registry
+
+            clear_subscription_registry(self.schema_name)
+        except Exception:
+            logger.debug(
+                "Failed to clear subscription registry for schema '%s'",
+                self.schema_name,
+                exc_info=True,
+            )
+        try:
             subscriptions = self.subscription_generator.generate_all_subscriptions(
                 models
             )

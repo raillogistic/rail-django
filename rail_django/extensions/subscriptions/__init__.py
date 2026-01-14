@@ -37,6 +37,10 @@ def get_subscription_consumer(schema_name: str = "default") -> Any:
 
         async def on_connect(self, payload):
             self.scope["schema_name"] = schema_name
+            self.user = self.scope.get("user")
             await super().on_connect(payload)
 
-    return RailGraphqlWsConsumer.as_asgi()
+    as_asgi = getattr(RailGraphqlWsConsumer, "as_asgi", None)
+    if callable(as_asgi):
+        return RailGraphqlWsConsumer.as_asgi()
+    return RailGraphqlWsConsumer

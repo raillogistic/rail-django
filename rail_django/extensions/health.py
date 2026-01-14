@@ -545,21 +545,6 @@ class HealthChecker:
                 "alias": cache_alias,
             }
 
-            # Try to get Redis info if available
-            if hasattr(cache_backend, "_cache") and hasattr(
-                cache_backend._cache, "info"
-            ):
-                redis_info = cache_backend._cache.info()
-                cache_info.update(
-                    {
-                        "redis_version": redis_info.get("redis_version"),
-                        "used_memory": redis_info.get("used_memory_human"),
-                        "connected_clients": redis_info.get("connected_clients"),
-                        "keyspace_hits": redis_info.get("keyspace_hits", 0),
-                        "keyspace_misses": redis_info.get("keyspace_misses", 0),
-                    }
-                )
-
             return cache_info
 
         except Exception as e:

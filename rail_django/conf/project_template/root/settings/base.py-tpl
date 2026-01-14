@@ -85,7 +85,7 @@ WSGI_APPLICATION = 'root.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
-    'default': env.db('DATABASE_URL', default='postgres://postgres:postgres@localhost:5432/{{ project_name }}')
+    'default': env.db('DATABASE_URL', default='postgres://mkhaled:KhaledRM250@localhost:5432/test_lib')
 }
 
 # Password validation
@@ -149,15 +149,6 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
-# For production, switch to Redis-backed channels:
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels_redis.core.RedisChannelLayer",
-#         "CONFIG": {
-#             "hosts": [env.tuple("REDIS_HOST", default=("127.0.0.1", 6379))],
-#         },
-#     },
-# }
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)

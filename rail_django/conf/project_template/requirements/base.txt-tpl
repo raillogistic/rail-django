@@ -7,9 +7,7 @@ django-environ==0.11.2
 django-fsm>=2.8.1
 graphql-relay>=3.2.0
 gunicorn>=21.2.0
-psycopg2==2.9.9
 psycopg2-binary==2.9.9
-redis>=4.5.5
 channels>=4.0.0
 daphne>=4.0.0
 git+https://github.com/datadvance/DjangoChannelsGraphqlWs.git

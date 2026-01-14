@@ -279,7 +279,7 @@ RAIL_DJANGO_GRAPHQL = {
     },
     "subscription_settings": {
         # Enable auto-generated subscriptions
-        "enable_subscriptions": False,
+        "enable_subscriptions": True,
         # Toggle model create/update/delete events
         "enable_create": True,
         "enable_update": True,
@@ -943,7 +943,7 @@ This returns a binary stream of the generated Excel file.
 
 Guardrails (default-deny allowlists, row caps, filter/order limits, rate limiting)
 are configured via `RAIL_DJANGO_EXPORT` in settings. Async jobs and export templates
-are also configured there. Use a shared cache (Redis) when async exports are enabled.
+are also configured there. Use a shared cache backend when async exports are enabled.
 
 ### BI Reporting & Dashboards
 Turn your Django models into analytical datasets without writing SQL or Graphene resolvers.
@@ -1046,6 +1046,7 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
     Use the same schema name you expose at `/graphql/` (default: `gql`).
     ```python
     # root/asgi.py
+    from channels.auth import AuthMiddlewareStack
     from channels.routing import ProtocolTypeRouter, URLRouter
     from django.core.asgi import get_asgi_application
     from django.urls import path
@@ -1055,23 +1056,16 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
 
     application = ProtocolTypeRouter({
         "http": django_asgi_app,
-        "websocket": URLRouter([
+        "websocket": AuthMiddlewareStack(URLRouter([
             path("graphql/", get_subscription_consumer("gql")),
             path("graphql/graphiql/", get_subscription_consumer("gql")),
-        ]),
+        ])),
     })
     ```
 
-4.  **Use Redis channel layers in production (optional):**
-    Install `channels-redis` and swap the channel layer:
-    ```python
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
-        },
-    }
-    ```
+4.  **Production note:**
+    In-memory channel layers are per-process. If you run multiple workers, use a
+    channel layer that supports multi-process messaging.
 
 5.  **Subscribe from GraphQL:**
     Subscription field names are snake_case (for example `category_created`).
@@ -1230,7 +1224,7 @@ Ensure these are set in production (see `.env.example`):
 *   `DJANGO_ALLOWED_HOSTS`: List of valid domains.
 *   `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 *   `DATABASE_URL`: Connection string for PostgreSQL.
-*   `REDIS_URL`: Shared cache backend for async exports, rate limiting, and jobs.
+*   `CACHE_PATH`: Path for the shared cache backend (file-based).
 *   Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
 *   Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
 *   Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).

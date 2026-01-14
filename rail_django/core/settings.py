@@ -372,7 +372,7 @@ class MutationGeneratorSettings:
 class SubscriptionGeneratorSettings:
     """Settings for controlling GraphQL subscription generation."""
 
-    enable_subscriptions: bool = False
+    enable_subscriptions: bool = True
     enable_create: bool = True
     enable_update: bool = True
     enable_delete: bool = True

@@ -609,7 +609,7 @@ LOGGING = {
 
         next_steps = [
             "1. Ajoutez les middlewares de sécurité à votre MIDDLEWARE dans settings.py",
-            "2. Configurez votre cache (Redis ou Memcached) pour la limitation de débit",
+            "2. Configurez votre cache partage pour la limitation de debit",
             "3. Définissez les variables d'environnement nécessaires",
             "4. Testez la configuration avec: python manage.py security_check",
         ]
@@ -630,7 +630,7 @@ LOGGING = {
         warnings = [
             "⚠️  Activez HTTPS en production (SECURE_SSL_REDIRECT = True)",
             "⚠️  Utilisez une SECRET_KEY forte et unique",
-            "⚠️  Configurez un cache persistant (Redis/Memcached)",
+            "⚠️  Configurez un cache persistant (backend partage)",
             "⚠️  Surveillez régulièrement les logs de sécurité",
         ]
 

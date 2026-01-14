@@ -281,7 +281,7 @@ Notes:
 
 - Scopes: `user`, `ip`, `user_or_ip`, `user_ip`, `global`.
 - GraphQL limits are enforced once per request (root field), not per field.
-- The limiter uses Django cache; configure a shared backend (Redis) in production.
+- The limiter uses Django cache; configure a shared backend in production.
 - Legacy settings are still supported when `RAIL_DJANGO_RATE_LIMITING` is unset
   (`security_settings.enable_rate_limiting`, `rate_limit_requests_per_minute`,
   `rate_limit_requests_per_hour`, `GRAPHQL_REQUESTS_LIMIT`,
