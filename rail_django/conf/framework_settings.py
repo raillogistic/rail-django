@@ -157,6 +157,10 @@ CORS_ALLOWED_ORIGINS = (
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = LIBRARY_DEFAULTS
+if DEBUG:
+    RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[
+        "enable_query_depth_limiting"
+    ] = False
 APPEND_SLASH = True
 
 # Audit logging defaults

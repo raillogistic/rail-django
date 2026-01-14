@@ -1,10 +1,14 @@
 # Configuration Guide
 
-Rail Django reads configuration from three sources, in this order:
+Rail Django resolves configuration from four sources, in this order:
 
 1. `RAIL_DJANGO_GRAPHQL_SCHEMAS[<schema_name>]`
 2. `RAIL_DJANGO_GRAPHQL`
-3. `rail_django.defaults.LIBRARY_DEFAULTS`
+3. `ENVIRONMENT` defaults from `rail_django.defaults.ENVIRONMENT_DEFAULTS`
+4. `rail_django.defaults.LIBRARY_DEFAULTS`
+
+Note: the `ConfigLoader` applies `ENVIRONMENT` defaults, while the
+`SettingsProxy` resolves schema/global overrides on top of library defaults.
 
 ## Minimal settings
 
@@ -122,7 +126,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 
 Auto-generated subscriptions are disabled by default and require
 `channels-graphql-ws` for WebSocket support.
-Full reference: `docs/subscriptions.md`.
+Full reference: `../guides/subscriptions.md`.
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -146,7 +150,7 @@ RAIL_DJANGO_GRAPHQL = {
 Model webhooks send create/update/delete events to HTTP endpoints asynchronously.
 Configure them under `RAIL_DJANGO_GRAPHQL["webhook_settings"]` or use the
 project template file `root/webhooks.py`.
-Full reference: `docs/webhooks.md`.
+Full reference: `../guides/webhooks.md`.
 
 ```python
 RAIL_DJANGO_GRAPHQL = {

@@ -88,7 +88,7 @@ Le framework est structuré en modules découplés pour assurer une maintenance 
 *   **`rail_django.security`**: Implémente le moteur de permissions fines et le RBAC.
 *   **`rail_django.extensions`**: Regroupe les fonctionnalités pluggables (Santé, Audit, Export).
 
-Pour une analyse détaillée du fonctionnement interne, consultez le dossier [**docs/**](docs/README.md).
+Pour une analyse détaillée du fonctionnement interne, consultez le dossier [**docs/**](docs/index.md).
 
 ---
 
@@ -119,10 +119,10 @@ class Document(models.Model):
 
 Une documentation technique détaillée axée sur le fonctionnement du code est disponible dans le répertoire `docs/` :
 
-*   [**Architecture Internals**](docs/architecture.md) : Pipeline de construction et design patterns.
-*   [**Modules & Classes**](docs/modules.md) : Référence technique des composants.
-*   [**Security Internals**](docs/security.md) : Détails de l'implémentation RBAC et Audit.
-*   [**Configuration system**](docs/configuration.md) : Fonctionnement du `SettingsProxy`.
+*   [**Architecture Internals**](docs/contributing/architecture.md) : Pipeline de construction et design patterns.
+*   [**Modules & Classes**](docs/contributing/modules.md) : Référence technique des composants.
+*   [**Security Internals**](docs/reference/security.md) : Détails de l'implémentation RBAC et Audit.
+*   [**Configuration system**](docs/reference/configuration.md) : Fonctionnement du `SettingsProxy`.
 
 ---
 

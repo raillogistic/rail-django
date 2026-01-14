@@ -11,3 +11,9 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default=env('SECRET_KEY', default='{{ secr
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+# Allow GraphiQL introspection depth during development.
+if "RAIL_DJANGO_GRAPHQL" in globals():
+    RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[
+        "enable_query_depth_limiting"
+    ] = False

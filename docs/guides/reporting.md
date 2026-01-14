@@ -137,7 +137,7 @@ Notes:
 
 - `default_filters` are always merged into `run_query`.
 - Records mode fields are allowlisted by `metadata.record_fields` (or
-  `metadata.fields`), plus `allow_ad_hoc` rules. See `docs/security.md`.
+  `metadata.fields`), plus `allow_ad_hoc` rules. See `../reference/security.md`.
 - `limit=0` returns an empty result set; negative limits are ignored with a
   warning.
 
@@ -228,5 +228,5 @@ render into a file.
 
 ## Security notes
 
-See `docs/security.md` for reporting allowlists, `record_fields`, and
+See `../reference/security.md` for reporting allowlists, `record_fields`, and
 `allow_ad_hoc` rules.

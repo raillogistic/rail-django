@@ -18,7 +18,7 @@ Rail Django supports APQ-style persisted queries when enabled via
 registered. If `enforce_allowlist` is enabled, unknown hashes are rejected.
 When `enforce_allowlist` is false, unknown hashes return `PERSISTED_QUERY_NOT_FOUND`
 so clients can register them when `allow_unregistered` is enabled. See
-`extensions.md` and `configuration.md` for setup details.
+`../extensions/persisted-queries.md` and `../reference/configuration.md` for setup details.
 
 ## Field naming
 
@@ -239,7 +239,7 @@ mutation UpdateUser($id: ID!, $input: UserUpdateInput!) {
 If `schema_settings.show_metadata` is enabled, GraphQL exposes metadata queries
 to help frontends build forms and tables. Metadata requires an authenticated
 user and returns a `metadataVersion` field so clients can avoid refetching
-unchanged metadata. See `extensions.md` for details.
+unchanged metadata. See `../extensions/metadata.md` for details.
 
 ## Error handling
 

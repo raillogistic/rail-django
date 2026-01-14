@@ -31,6 +31,8 @@ This reference maps the main modules to their responsibilities.
 - `generators/mutations_methods.py`: method mutation builders and audit helpers
 - `generators/mutations_errors.py`: mutation error helpers
 - `generators/mutations_limits.py`: nested input validation limits
+- `generators/nested_operations.py`: nested create/update/delete helpers
+- `generators/inheritance.py`: model inheritance resolution helpers
 - `generators/filters.py`: advanced filter input generation
 - `generators/introspector.py`: model metadata inspection
 - `generators/subscriptions.py`: auto-generated subscription fields
@@ -64,8 +66,12 @@ This reference maps the main modules to their responsibilities.
 - `extensions/validation.py`: validation query helpers and re-exports
 - `extensions/templating.py`: PDF endpoints via decorator
 - `extensions/health.py`: health checks
+- `extensions/metadata.py`: model metadata schema and caching
 - `extensions/optimization.py`: selection-set driven query optimization
 - `extensions/rate_limiting.py`: Graphene middleware backed by the shared limiter
+- `extensions/reporting.py`: reporting datasets and BI helpers
+- `extensions/mfa.py`: MFA helpers and guards
+- `extensions/performance_metrics.py`: query metrics collection
 - `extensions/virus_scanner.py`: ClamAV integration
 - `extensions/persisted_queries.py`: APQ-style persisted query support
 - `extensions/observability.py`: Sentry/OpenTelemetry plugin hooks

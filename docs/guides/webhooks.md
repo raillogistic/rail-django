@@ -166,9 +166,9 @@ Settings:
 
 Settings are merged in this order:
 
-1. `RAIL_DJANGO_GRAPHQL["webhook_settings"]`
-2. `RAIL_DJANGO_WEBHOOKS` (optional override, used by project template)
-3. `rail_django.defaults.LIBRARY_DEFAULTS["webhook_settings"]`
+1. `rail_django.defaults.LIBRARY_DEFAULTS["webhook_settings"]`
+2. `RAIL_DJANGO_GRAPHQL["webhook_settings"]`
+3. `RAIL_DJANGO_WEBHOOKS` (optional override, used by project template)
 
 Project template:
 

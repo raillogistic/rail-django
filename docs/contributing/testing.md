@@ -64,9 +64,9 @@ Pytest defaults to `rail_django.conf.test_settings`, which uses SQLite via
 `rail_django/conf/framework_settings.py`. Override `DJANGO_SETTINGS_MODULE` if
 you need another database backend.
 
-## Latest test status (local)
-- `pytest -m unit`: 82 passed, 2 skipped
-- `pytest -m integration`: 25 passed
+## Test status
+
+See CI for the latest test results.
 
 ## Full test inventory
 This is the full map of every test module and its focus.
