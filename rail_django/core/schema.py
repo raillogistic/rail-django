@@ -26,6 +26,8 @@ from graphene_django.debug import DjangoDebug
 logger = logging.getLogger(__name__)
 
 _GRAPHQL_NAME_INVALID_RE = re.compile(r"[^_0-9A-Za-z]")
+_SYSTEM_EXCLUDED_APPS = {"admin", "contenttypes", "sessions"}
+_SYSTEM_EXCLUDED_MODEL_NAMES = {"logentry"}
 
 
 class SchemaBuilder:
@@ -273,6 +275,19 @@ class SchemaBuilder:
 
         app_label = model._meta.app_label
         model_name = model.__name__
+        model_label = model._meta.model_name
+
+        if app_label in _SYSTEM_EXCLUDED_APPS:
+            logger.debug(
+                "Excluding model %s from app %s (system app excluded)",
+                model_name,
+                app_label,
+            )
+            return False
+
+        if model_label in _SYSTEM_EXCLUDED_MODEL_NAMES:
+            logger.debug("Excluding model %s (system model excluded)", model_name)
+            return False
 
         # Check app exclusions from schema_settings
         excluded_apps = self._get_schema_setting("excluded_apps", [])
@@ -331,6 +346,9 @@ class SchemaBuilder:
                 schema_info = self.registry.get_schema(self.schema_name)
                 registry_models = self.registry.get_models_for_schema(self.schema_name)
                 if registry_models:
+                    registry_models = [
+                        model for model in registry_models if self._is_valid_model(model)
+                    ]
                     logger.debug(
                         f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}"
                     )

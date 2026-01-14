@@ -25,6 +25,9 @@
 - Prefer `rail_django.testing` helpers (`build_schema`, `RailGraphQLTestClient`) for isolated schema tests.
 - Focus coverage on schema generation, security controls, and error handling as described in `docs/testing.md`.
 
+## Documentation Guidelines
+- Documentation should always be written in plain English.
+
 ## Commit & Pull Request Guidelines
 - Recent commits use short, descriptive summaries (often imperative or terse). Keep the first line concise; add a body for complex changes.
 - No PR template is defined. Include a clear description, tests run, and any docs/config changes. Link related issues when applicable.
