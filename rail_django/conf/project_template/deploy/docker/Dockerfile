@@ -12,9 +12,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DEFAULT_TIMEOUT=120 \
-    PIP_RETRIES=10
+    PIP_RETRIES=10 \
+    PIP_PROGRESS_BAR=off
 
 # install system dependencies
 RUN apt-get update && \
@@ -25,18 +25,23 @@ RUN apt-get update && \
 # install dependencies
 COPY requirements/ requirements/
 RUN pip install --upgrade pip
-RUN success=; \
-    for attempt in 1 2 3 4 5; do \
-        if pip wheel --wheel-dir /app/wheels -r requirements/prod.txt; then \
-            success=1; \
-            break; \
+RUN mkdir -p /app/wheels
+RUN if [ -d requirements/wheels ] && [ "$(ls -A requirements/wheels)" ]; then \
+        cp -r requirements/wheels/. /app/wheels; \
+    else \
+        success=; \
+        for attempt in 1 2 3 4 5; do \
+            if pip wheel --wheel-dir /app/wheels -r requirements/prod.txt; then \
+                success=1; \
+                break; \
+            fi; \
+            echo "pip wheel failed (attempt ${attempt}); retrying in 5s..." >&2; \
+            sleep 5; \
+        done; \
+        if [ -z "$success" ]; then \
+            echo "pip wheel failed after 5 attempts." >&2; \
+            exit 1; \
         fi; \
-        echo "pip wheel failed (attempt ${attempt}); retrying in 5s..." >&2; \
-        sleep 5; \
-    done; \
-    if [ -z "$success" ]; then \
-        echo "pip wheel failed after 5 attempts." >&2; \
-        exit 1; \
     fi
 
 
