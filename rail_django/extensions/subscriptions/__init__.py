@@ -35,4 +35,8 @@ def get_subscription_consumer(schema_name: str = "default") -> Any:
     class RailGraphqlWsConsumer(channels_graphql_ws.GraphqlWsConsumer):
         schema = get_schema(schema_name)
 
-    return RailGraphqlWsConsumer
+        async def on_connect(self, payload):
+            self.scope["schema_name"] = schema_name
+            await super().on_connect(payload)
+
+    return RailGraphqlWsConsumer.as_asgi()

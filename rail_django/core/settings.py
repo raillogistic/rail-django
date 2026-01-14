@@ -440,7 +440,7 @@ class SchemaSettings:
     prebuild_on_startup: bool = False
 
     # Require authentication for the schema by default
-    authentication_required: bool = True
+    authentication_required: bool = False
 
     # Enable pagination support
     enable_pagination: bool = True

@@ -1057,6 +1057,7 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
         "http": django_asgi_app,
         "websocket": URLRouter([
             path("graphql/", get_subscription_consumer("gql")),
+            path("graphql/graphiql/", get_subscription_consumer("gql")),
         ]),
     })
     ```

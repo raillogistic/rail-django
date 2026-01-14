@@ -28,7 +28,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "auto_refresh_on_model_change": False,
         "auto_refresh_on_migration": True,
         "prebuild_on_startup": True,
-        "authentication_required": True,
+        "authentication_required": False,
         "enable_pagination": True,
         "auto_camelcase": False,
         "disable_security_mutations": False,

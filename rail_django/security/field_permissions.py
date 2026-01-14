@@ -502,7 +502,7 @@ class FieldPermissionManager:
         Returns:
             Niveau d'accès autorisé
         """
-        if not context.user or not context.user.is_authenticated:
+        if context.user is None:
             return FieldAccessLevel.NONE
 
         policy_override = self._get_policy_override(context)
@@ -529,17 +529,22 @@ class FieldPermissionManager:
             target_model = context.instance.__class__
 
         if target_model is not None:
-            app_label = target_model._meta.app_label
-            model_name_lower = target_model._meta.model_name
+            # Pour les utilisateurs non authentifiés, on ne vérifie pas les permissions Django
+            # sauf si c'est explicitement requis (ce qui est géré par les règles ci-dessus).
+            # Si on arrive ici, c'est qu'aucune règle n'a bloqué l'accès.
+            
+            if context.user.is_authenticated:
+                app_label = target_model._meta.app_label
+                model_name_lower = target_model._meta.model_name
 
-            if context.operation_type in ["create", "update", "delete"]:
-                perm_name = f"{app_label}.change_{model_name_lower}"
+                if context.operation_type in ["create", "update", "delete"]:
+                    perm_name = f"{app_label}.change_{model_name_lower}"
+                    if self._safe_has_perm(context.user, perm_name):
+                        return FieldAccessLevel.WRITE
+
+                perm_name = f"{app_label}.view_{model_name_lower}"
                 if self._safe_has_perm(context.user, perm_name):
-                    return FieldAccessLevel.WRITE
-
-            perm_name = f"{app_label}.view_{model_name_lower}"
-            if self._safe_has_perm(context.user, perm_name):
-                return FieldAccessLevel.READ
+                    return FieldAccessLevel.READ
 
         # Fallback: permettre la lecture si aucune règle spécifique n'existe
         return FieldAccessLevel.READ
@@ -556,7 +561,7 @@ class FieldPermissionManager:
         Returns:
             Tuple (visibilité, valeur_masquée)
         """
-        if not context.user or not context.user.is_authenticated:
+        if context.user is None:
             return FieldVisibility.HIDDEN, None
 
         policy_override = self._get_policy_override(context)
@@ -866,7 +871,7 @@ def mask_sensitive_fields(
     Returns:
         Données avec champs masqués
     """
-    if not user or not user.is_authenticated:
+    if user is None:
         return {}
 
     result = data.copy()

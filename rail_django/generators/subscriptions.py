@@ -339,7 +339,7 @@ class SubscriptionGenerator:
         self,
         type_generator: TypeGenerator,
         settings: Optional[SubscriptionGeneratorSettings] = None,
-        schema_name: str = "default",
+        schema_name: str = "gql",
     ) -> None:
         self.type_generator = type_generator
         self.schema_name = schema_name
@@ -349,9 +349,25 @@ class SubscriptionGenerator:
         self.filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
 
     def _ensure_authentication(self, info: graphene.ResolveInfo) -> None:
-        schema_settings = SchemaSettings.from_schema(self.schema_name)
+        # Determine effective schema name (priority: context > generator default)
+        schema_name = getattr(info.context, "schema_name", None)
+        if not schema_name and isinstance(info.context, dict):
+            schema_name = info.context.get("schema_name")
+        
+        # Check scope if available (Channels)
+        if not schema_name and hasattr(info.context, "scope"):
+             schema_name = info.context.scope.get("schema_name")
+        elif not schema_name and isinstance(info.context, dict) and "scope" in info.context:
+             schema_name = info.context["scope"].get("schema_name")
+
+        if not schema_name:
+            schema_name = self.schema_name
+
+        schema_settings = SchemaSettings.from_schema(schema_name)
+
         if not schema_settings.authentication_required:
             return
+
         user = getattr(getattr(info, "context", None), "user", None)
         if not user or not user.is_authenticated:
             raise GraphQLError("Authentication required")
