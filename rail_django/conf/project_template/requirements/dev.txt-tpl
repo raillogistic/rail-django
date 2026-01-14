@@ -1,2 +1,3 @@
 -r base.txt
-git+https://github.com/raillogistic/rail-django.git#egg=rail-django
+rail-django>=0.1.0
+black>=24.3.0

@@ -108,6 +108,18 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     ```
     Access the GraphiQL playground at: `http://localhost:8000/graphql/graphiql/`
 
+### Dependency Management
+Rail Django uses a split requirements system to separate development and production dependencies.
+
+*   `requirements/base.txt`: Core dependencies required for the application to run.
+*   `requirements/dev.txt`: Extends `base.txt` with development tools (e.g., `black`) and installs `rail-django` from PyPI or locally.
+*   `requirements/prod.txt`: Extends `base.txt` with production-specific settings and installs `rail-django` directly from the official GitHub repository.
+
+To install dependencies for development:
+```bash
+pip install -r requirements/dev.txt
+```
+
 ### Project Structure
 Rail Django enforces a clean architecture to keep your codebase scalable.
 
