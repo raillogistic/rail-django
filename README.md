@@ -6,6 +6,7 @@ It reduces boilerplate and enforces secure, production-ready defaults.
 ## Quick links
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+- [Usage](#usage)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -36,6 +37,9 @@ python manage.py runserver
 
 Open GraphiQL at `http://localhost:8000/graphql`.
 
+## Usage
+See the [quickstart](docs/getting-started/quickstart.md) for the basic workflow, and the [GraphQL guide](docs/guides/graphql.md) for how to define types, queries, and mutations.
+
 ## Supported versions
 - Python 3.8+
 - Django 4.2+
@@ -43,29 +47,29 @@ Open GraphiQL at `http://localhost:8000/graphql`.
 - graphene-django 3.1.5+
 
 ## Documentation
-Start at `docs/index.md` for the full table of contents.
+Start at [docs/index.md](docs/index.md) for the full table of contents.
 
 Getting started
-- `docs/getting-started/quickstart.md`
-- `docs/getting-started/cli.md`
-- `docs/getting-started/migration.md`
+- [Quickstart](docs/getting-started/quickstart.md)
+- [CLI](docs/getting-started/cli.md)
+- [Migration](docs/getting-started/migration.md)
 
 Guides
-- `docs/guides/index.md`
-- `docs/guides/graphql.md`
+- [Guides index](docs/guides/index.md)
+- [GraphQL](docs/guides/graphql.md)
 
 Reference
-- `docs/reference/configuration.md`
-- `docs/reference/security.md`
+- [Configuration](docs/reference/configuration.md)
+- [Security](docs/reference/security.md)
 
 Internals and testing
-- `docs/contributing/architecture.md`
-- `docs/contributing/modules.md`
-- `docs/contributing/testing.md`
+- [Architecture](docs/contributing/architecture.md)
+- [Modules](docs/contributing/modules.md)
+- [Testing](docs/contributing/testing.md)
 
 Extensions and operations
-- `docs/extensions/index.md`
-- `docs/operations/index.md`
+- [Extensions](docs/extensions/index.md)
+- [Operations](docs/operations/index.md)
 
 ## Contributing
 Contributions are welcome. Please read the contributor docs before opening a pull request.
