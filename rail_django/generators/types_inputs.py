@@ -35,7 +35,7 @@ def generate_input_type(
     if cache_key in self._input_type_registry:
         return self._input_type_registry[cache_key]
 
-    introspector = ModelIntrospector(model)
+    introspector = ModelIntrospector.for_model(model)
     fields = introspector.get_model_fields()
     relationships = introspector.get_model_relationships()
 
@@ -250,7 +250,7 @@ def get_or_create_nested_input_type(
     if cache_key in self._input_type_registry:
         return self._input_type_registry[cache_key]
 
-    introspector = ModelIntrospector(model)
+    introspector = ModelIntrospector.for_model(model)
     fields = introspector.get_model_fields()
     relationships = introspector.get_model_relationships()
 

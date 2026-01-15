@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "rail_django",
     # Project apps
     "root",
+    "store",
 ]
 
 # App labels are used by the schema generator for include/exclude rules.

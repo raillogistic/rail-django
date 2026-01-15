@@ -2641,7 +2641,7 @@ class AdvancedFilterGenerator:
         filters = {}
 
         # Use ModelIntrospector to detect properties
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         properties = introspector.properties
 
         for property_name, property_info in properties.items():

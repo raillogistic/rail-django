@@ -1989,7 +1989,7 @@ class ModelMetadataExtractor:
             )
             return None
 
-        introspector = ModelIntrospector(model, self.schema_name)
+        introspector = ModelIntrospector.for_model(model, self.schema_name)
 
         # Extract field metadata with permission filtering using concrete model fields
         fields = []
@@ -2404,7 +2404,7 @@ class ModelMetadataExtractor:
                 try:
                     from ..generators.introspector import ModelIntrospector
 
-                    introspector = ModelIntrospector(model, self.schema_name)
+                    introspector = ModelIntrospector.for_model(model, self.schema_name)
                     property_map = getattr(introspector, "properties", {}) or {}
                     property_names = set(property_map.keys())
 
@@ -3097,7 +3097,7 @@ class ModelMetadataExtractor:
         try:
             from ..generators.introspector import ModelIntrospector
 
-            introspector = ModelIntrospector(model)
+            introspector = ModelIntrospector.for_model(model)
             model_methods = introspector.get_model_methods()
 
             for method_name, method_info in model_methods.items():
@@ -4651,7 +4651,7 @@ class ModelTableExtractor:
             return None
 
         meta = model._meta
-        introspector = ModelIntrospector(model, self.schema_name)
+        introspector = ModelIntrospector.for_model(model, self.schema_name)
         mutations: list[MutationMetadata] = []
         if include_mutations:
             try:

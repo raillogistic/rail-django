@@ -6,6 +6,8 @@ Django models and extracting metadata required for generating GraphQL schemas.
 """
 
 import inspect
+import threading
+import weakref
 from typing import Any, Dict, List, Optional, Type, Union, get_args, get_origin
 
 from django.db import models
@@ -193,6 +195,33 @@ class ModelIntrospector:
         self.model = model
         self.schema_name = schema_name or "default"
         self._meta = getattr(model, "_meta", None)
+
+    _cache: "weakref.WeakKeyDictionary[type[models.Model], dict[str, ModelIntrospector]]" = (
+        weakref.WeakKeyDictionary()
+    )
+    _cache_lock = threading.Lock()
+
+    @classmethod
+    def for_model(
+        cls, model: type[models.Model], schema_name: Optional[str] = None
+    ) -> "ModelIntrospector":
+        schema_key = schema_name or "default"
+        with cls._cache_lock:
+            per_model = cls._cache.get(model)
+            if per_model is None:
+                per_model = {}
+                cls._cache[model] = per_model
+            cached = per_model.get(schema_key)
+            if cached is not None:
+                return cached
+            instance = cls(model, schema_name=schema_key)
+            per_model[schema_key] = instance
+            return instance
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        with cls._cache_lock:
+            cls._cache.clear()
 
     @cached_property
     def managers(self) -> dict[str, ManagerInfo]:

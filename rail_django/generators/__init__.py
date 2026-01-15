@@ -92,7 +92,7 @@ def get_mutation_generator(
     return MutationGenerator(type_generator, settings=settings, schema_name=schema_name)
 
 
-def get_model_introspector():
+def get_model_introspector(model, schema_name: str | None = None):
     """
     Get a ModelIntrospector instance.
 
@@ -101,4 +101,4 @@ def get_model_introspector():
     """
     from .introspector import ModelIntrospector
 
-    return ModelIntrospector()
+    return ModelIntrospector.for_model(model, schema_name)

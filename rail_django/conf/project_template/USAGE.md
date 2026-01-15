@@ -131,7 +131,7 @@ my_platform/
 │   ├── urls.py         # Global URL routing
 │   └── wsgi.py         # WSGI entry point
 ├── apps/               # Directory for your Django apps
-│   └── core/           # Example core app
+│   └── store/          # Example storefront app
 ├── requirements/       # Project dependencies (base, dev, prod)
 └── Dockerfile          # Production-ready Docker build
 ```
@@ -1380,3 +1380,4 @@ docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ---
 
 **Rail Django** - *Build faster, scale better.*
+

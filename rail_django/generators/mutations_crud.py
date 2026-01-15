@@ -234,7 +234,7 @@ def generate_create_mutation(
             processed_data = input_data.copy()
 
             # Get model relationships
-            introspector = ModelIntrospector(model)
+            introspector = ModelIntrospector.for_model(model)
             relationships = introspector.get_model_relationships()
 
             # Define mandatory fields that require either direct or nested value
@@ -589,7 +589,7 @@ def generate_update_mutation(
             processed_data = input_data.copy()
 
             # Get model relationships
-            introspector = ModelIntrospector(model)
+            introspector = ModelIntrospector.for_model(model)
             relationships = introspector.get_model_relationships()
 
             # Get mandatory fields for this model

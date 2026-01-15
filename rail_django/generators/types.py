@@ -203,7 +203,7 @@ class TypeGenerator:
         # Introspect actual model fields once
         from rail_django.generators.introspector import ModelIntrospector
 
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         all_fields = introspector.get_model_fields()
         valid_field_names = set(all_fields.keys())
 
@@ -464,7 +464,7 @@ class TypeGenerator:
 
         from django_filters import FilterSet
 
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         fields = introspector.get_model_fields()
 
         # Define filter fields
@@ -571,7 +571,7 @@ class TypeGenerator:
         """
         Determines which fields should be filterable and what operations are available.
         """
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         fields = introspector.get_model_fields()
 
         filterable_fields = {}

@@ -282,12 +282,14 @@ ENVIRONMENT_DEFAULTS: dict[str, dict[str, Any]] = {
         "schema_settings": {
             "enable_graphiql": True,
             "enable_introspection": True,
+            "prebuild_on_startup": False,
         }
     },
     "testing": {
         "schema_settings": {
             "enable_graphiql": False,
             "enable_introspection": True,
+            "prebuild_on_startup": False,
         }
     },
     "production": {

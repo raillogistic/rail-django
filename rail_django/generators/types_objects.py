@@ -21,7 +21,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
     if model in self._type_registry:
         return self._type_registry[model]
 
-    introspector = ModelIntrospector(model)
+    introspector = ModelIntrospector.for_model(model)
     fields = introspector.get_model_fields()
     relationships = introspector.get_model_relationships()
     maskable_fields = self._get_maskable_fields(model)

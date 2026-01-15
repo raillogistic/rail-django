@@ -404,7 +404,7 @@ class SchemaBuilder:
             # Get model managers using introspector
             from ..generators.introspector import ModelIntrospector
 
-            introspector = ModelIntrospector(model)
+            introspector = ModelIntrospector.for_model(model)
             managers = introspector.get_model_managers()
 
             # Generate queries for each manager

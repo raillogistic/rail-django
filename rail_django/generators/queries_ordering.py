@@ -139,7 +139,7 @@ def split_order_specs(
     if not order_by:
         return [], []
     try:
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         prop_names = set(introspector.properties.keys())
     except Exception:
         prop_names = set()

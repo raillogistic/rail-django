@@ -229,7 +229,7 @@ class MutationGenerator:
 
         # Generate method mutations if enabled
 
-        introspector = ModelIntrospector(model)
+        introspector = ModelIntrospector.for_model(model)
         for method_name, method_info in introspector.get_model_methods().items():
             if method_info.is_mutation and not method_info.is_private:
                 mutation = self.generate_method_mutation(model, method_info)
