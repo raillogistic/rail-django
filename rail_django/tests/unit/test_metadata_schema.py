@@ -556,20 +556,20 @@ class TestMetadataCaching(TestCase):
         DEBUG=False,
         RAIL_DJANGO_GRAPHQL={"METADATA": {"table_cache_enabled": False}},
     )
-    @patch("rail_django.extensions.metadata.apps.get_model")
-    def test_table_cache_disabled(self, mock_get_model):
-        mock_get_model.return_value = TestModel
+    def test_table_cache_disabled(self):
         user = User.objects.create_user(username="cacheuser", password="testpass")
         extractor = metadata_module.ModelTableExtractor()
 
-        extractor.extract_model_table_metadata(
-            app_name="test_app",
-            model_name="TestModel",
-            user=user,
-            include_filters=False,
-            include_mutations=False,
-            include_pdf_templates=False,
-        )
+        with patch("rail_django.extensions.metadata.apps.get_model") as mock_get_model:
+            mock_get_model.return_value = TestModel
+            extractor.extract_model_table_metadata(
+                app_name="test_app",
+                model_name="TestModel",
+                user=user,
+                include_filters=False,
+                include_mutations=False,
+                include_pdf_templates=False,
+            )
 
         self.assertEqual(len(metadata_module._table_cache), 0)
 

@@ -6,6 +6,7 @@ Users import * from this file in their project's settings.py.
 import copy
 import json
 import os
+import sys
 from pathlib import Path
 
 from django.db.backends.signals import connection_created
@@ -43,6 +44,20 @@ INSTALLED_APPS = [
     # Framework apps
     "rail_django",
 ]
+
+
+def _should_include_rail_test_apps() -> bool:
+    if not any(arg in {"test", "pytest"} for arg in sys.argv):
+        return False
+    repo_root = Path(__file__).resolve().parents[2]
+    return (repo_root / "test_app").is_dir() and (repo_root / "tests").is_dir()
+
+
+if _should_include_rail_test_apps():
+    for app_name in ("test_app", "tests"):
+        if app_name not in INSTALLED_APPS:
+            INSTALLED_APPS.append(app_name)
+    MIGRATION_MODULES = {"test_app": None, "tests": None}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
