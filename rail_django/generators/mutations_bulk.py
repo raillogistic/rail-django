@@ -50,6 +50,9 @@ def generate_bulk_create_mutation(
             cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkCreateMutation":
             try:
+                self._enforce_model_permission(
+                    info, model, "bulk_create", graphql_meta
+                )
                 graphql_meta.ensure_operation_access("create", info=info)
                 graphql_meta.ensure_operation_access("bulk_create", info=info)
 
@@ -186,6 +189,9 @@ def generate_bulk_update_mutation(
             cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkUpdateMutation":
             try:
+                self._enforce_model_permission(
+                    info, model, "bulk_update", graphql_meta
+                )
                 def _perform_update(info, target, payload):
                     for field, value in payload.items():
                         setattr(target, field, value)
@@ -318,6 +324,9 @@ def generate_bulk_delete_mutation(
             cls, root: Any, info: graphene.ResolveInfo, ids: list[str]
         ) -> "BulkDeleteMutation":
             try:
+                self._enforce_model_permission(
+                    info, model, "bulk_delete", graphql_meta
+                )
                 instances = model.objects.filter(pk__in=ids)
                 if len(instances) != len(ids):
                     found_ids = set(str(instance.pk) for instance in instances)

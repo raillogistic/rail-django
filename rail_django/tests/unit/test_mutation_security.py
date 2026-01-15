@@ -167,6 +167,24 @@ def test_nested_create_enforces_related_guard():
 
 
 @pytest.mark.django_db
+def test_create_mutation_requires_model_permission():
+    generator = MutationGenerator(TypeGenerator())
+    create_mutation = generator.generate_create_mutation(Category)
+    user = User.objects.create_user(username="perm_user", password="pass12345")
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+    result = create_mutation.mutate(
+        None,
+        info,
+        input={"name": "alpha", "description": ""},
+    )
+    assert result.ok is False
+    assert result.errors
+    message = result.errors[0].message
+    assert "permission" in message.lower()
+    assert "test_app.add_category" in message
+
+
+@pytest.mark.django_db
 def test_field_permission_middleware_checks_nested_fields():
     user = User.objects.create_user(username="nested_user", password="pass12345")
     content_type = ContentType.objects.get_for_model(Post)
@@ -218,7 +236,9 @@ def test_full_clean_runs_for_create_mutation():
     try:
         generator = MutationGenerator(TypeGenerator())
         create_mutation = generator.generate_create_mutation(Category)
-        info = SimpleNamespace(context=SimpleNamespace(user=User()))
+        info = SimpleNamespace(
+            context=SimpleNamespace(user=User(is_superuser=True))
+        )
         result = create_mutation.mutate(
             None,
             info,
@@ -243,7 +263,9 @@ def test_input_validator_errors_surface_in_mutations():
     generator = MutationGenerator(TypeGenerator())
     generator.input_validator = _StubValidator()
     create_mutation = generator.generate_create_mutation(Category)
-    info = SimpleNamespace(context=SimpleNamespace(user=User()))
+    info = SimpleNamespace(
+        context=SimpleNamespace(user=User(is_superuser=True))
+    )
     result = create_mutation.mutate(
         None,
         info,

@@ -43,8 +43,10 @@ Authorization uses a hybrid RBAC system:
 
 Auto-generated model queries enforce Django model permissions by default. The
 required permission is built as `<app_label>.<codename>_<model>` with the
-codename defaulting to `view`. Configure `query_settings` to change or disable
-the default check, or define GraphQLMeta access guards per model.
+codename defaulting to `view`. Auto-generated CRUD mutations enforce
+`add`/`change`/`delete` permissions by default. Configure `query_settings` or
+`mutation_settings` to change or disable the default checks, or define
+GraphQLMeta access guards per model.
 
 Use GraphQLMeta to guard operations per model and to hide fields. See the
 [GraphQLMeta guide](meta.md) for configuration examples and field-level rules.

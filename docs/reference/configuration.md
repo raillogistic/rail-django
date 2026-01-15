@@ -35,6 +35,12 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_delete": True,
         "enable_bulk_operations": False,
         "enable_nested_relations": True,
+        "require_model_permissions": True,
+        "model_permission_codenames": {
+            "create": "add",
+            "update": "change",
+            "delete": "delete",
+        },
     },
     "subscription_settings": {
         "enable_subscriptions": True,
@@ -119,6 +125,15 @@ permission codename (default: `view`), and the permission string is built as
 override the default model permission check. Set
 `query_settings.require_model_permissions` to `False` to disable the default
 check. Use `model_permission_codename: "add"` if you prefer create permissions.
+
+## Mutation permissions
+
+Auto-generated CRUD mutations require a Django permission by default. The
+permission string is built as `<app_label>.<codename>_<model>` with default
+codenames of `add` (create), `change` (update), and `delete` (delete). Override
+the mapping with `mutation_settings.model_permission_codenames`, or disable the
+default check with `mutation_settings.require_model_permissions`. GraphQLMeta
+access guards for the operation override the default model permission check.
 
 ## Schema-specific overrides
 

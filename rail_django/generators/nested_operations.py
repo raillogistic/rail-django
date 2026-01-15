@@ -14,6 +14,7 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.db.models import Q
+from graphql import GraphQLError
 
 from ..core.error_handling import get_error_handler
 from ..core.meta import get_model_graphql_meta
@@ -112,9 +113,72 @@ class NestedOperationHandler:
         if info is None:
             return
         graphql_meta = get_model_graphql_meta(model)
+        self._enforce_model_permission(info, model, operation, graphql_meta)
         graphql_meta.ensure_operation_access(
             operation, info=info, instance=instance
         )
+
+    def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
+        guards = getattr(graphql_meta, "_operation_guards", None) or {}
+        return operation in guards or "*" in guards
+
+    def _build_model_permission_name(
+        self, model: type[models.Model], codename: str
+    ) -> str:
+        app_label = model._meta.app_label
+        model_name = model._meta.model_name
+        return f"{app_label}.{codename}_{model_name}"
+
+    def _normalize_permission_operation(self, operation: str) -> str:
+        normalized = str(operation or "").strip().lower()
+        if normalized.startswith("bulk_"):
+            normalized = normalized[len("bulk_") :]
+        return normalized
+
+    def _get_permission_codename(self, operation: str) -> Optional[str]:
+        normalized = self._normalize_permission_operation(operation)
+        mapping = getattr(self.mutation_settings, "model_permission_codenames", None)
+        codename = None
+        if isinstance(mapping, dict):
+            codename = mapping.get(operation) or mapping.get(normalized)
+        if codename is None:
+            return None
+        codename = str(codename or "").strip()
+        return codename or None
+
+    def _enforce_model_permission(
+        self,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        operation: str,
+        graphql_meta=None,
+    ) -> None:
+        if not getattr(
+            self.authorization_manager.settings, "enable_authorization", True
+        ):
+            return
+        if not getattr(self.mutation_settings, "require_model_permissions", True):
+            return
+
+        normalized = self._normalize_permission_operation(operation)
+        if graphql_meta is not None:
+            if self._has_operation_guard(graphql_meta, operation):
+                return
+            if normalized and self._has_operation_guard(graphql_meta, normalized):
+                return
+
+        user = getattr(getattr(info, "context", None), "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            raise GraphQLError("Authentication required")
+
+        codename = self._get_permission_codename(operation)
+        if not codename:
+            return
+
+        permission_name = self._build_model_permission_name(model, codename)
+        has_perm = getattr(user, "has_perm", None)
+        if not callable(has_perm) or not has_perm(permission_name):
+            raise GraphQLError(f"Permission required: {permission_name}")
 
     def _save_instance(self, instance: models.Model) -> None:
         instance.full_clean()

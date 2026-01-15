@@ -58,6 +58,7 @@ def generate_create_mutation(
             cls, root: Any, info: graphene.ResolveInfo, input: dict[str, Any]
         ) -> "CreateMutation":
             try:
+                self._enforce_model_permission(info, model, "create", graphql_meta)
                 graphql_meta.ensure_operation_access("create", info=info)
                 # Handle double quotes in string fields
                 input = cls._sanitize_input_data(input)
@@ -393,6 +394,8 @@ def generate_update_mutation(
                     key: value for key, value in input.items() if key != "id"
                 }
 
+                self._enforce_model_permission(info, model, "update", graphql_meta)
+
                 # Normalize enum inputs (GraphQL Enum -> underlying Django values)
                 update_data = cls._normalize_enum_inputs(update_data, model)
 
@@ -721,6 +724,7 @@ def generate_delete_mutation(
             cls, root: Any, info: graphene.ResolveInfo, id: str
         ) -> "DeleteMutation":
             try:
+                self._enforce_model_permission(info, model, "delete", graphql_meta)
                 instance = model.objects.get(pk=id)
                 graphql_meta.ensure_operation_access(
                     "delete", info=info, instance=instance
