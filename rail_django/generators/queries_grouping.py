@@ -67,6 +67,9 @@ def generate_grouping_query(
 
     @optimize_query()
     def resolver(root: Any, info: graphene.ResolveInfo, **kwargs):
+        self._enforce_model_permission(info, model, "list", graphql_meta)
+        graphql_meta.ensure_operation_access("list", info=info)
+
         group_by: Optional[str] = kwargs.get("group_by")
         if not group_by:
             return []
@@ -84,7 +87,6 @@ def generate_grouping_query(
 
         manager = getattr(model, manager_name)
         queryset = manager.all()
-        graphql_meta.ensure_operation_access("list", info=info)
 
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)

@@ -26,6 +26,8 @@ RAIL_DJANGO_GRAPHQL = {
         "max_property_ordering_results": 2000,
         "property_ordering_warn_on_cap": True,
         "additional_lookup_fields": {},
+        "require_model_permissions": True,
+        "model_permission_codename": "view",
     },
     "mutation_settings": {
         "enable_create": True,
@@ -107,6 +109,16 @@ Nested relation writes are controlled by `mutation_settings.enable_nested_relati
 and can be overridden per model/field via `nested_relations_config` and
 `nested_field_config`. When disabled, `nested_*` inputs are not generated and
 nested payloads are rejected during mutation execution.
+
+## Query permissions
+
+Auto-generated model queries (list, single, paginated) require a Django
+permission by default. `query_settings.model_permission_codename` controls the
+permission codename (default: `view`), and the permission string is built as
+`<app_label>.<codename>_<model>`. GraphQLMeta access guards for the operation
+override the default model permission check. Set
+`query_settings.require_model_permissions` to `False` to disable the default
+check. Use `model_permission_codename: "add"` if you prefer create permissions.
 
 ## Schema-specific overrides
 

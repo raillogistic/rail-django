@@ -15,12 +15,43 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 def gql_client():
     harness = build_schema(schema_name="test", apps=["test_app"])
     User = get_user_model()
-    user = User.objects.create_user(username="graphql_user", password="pass12345")
+    user = User.objects.create_superuser(
+        username="graphql_admin",
+        email="graphql_admin@example.com",
+        password="pass12345",
+    )
     return RailGraphQLTestClient(harness.schema, schema_name="test", user=user)
 
 
 def _create_category(name="General"):
     return Category.objects.create(name=name, description="")
+
+
+def test_posts_query_requires_model_permission(gql_client):
+    category = _create_category()
+    Post.objects.create(title="Restricted Post", category=category)
+
+    User = get_user_model()
+    user = User.objects.create_user(username="no_perm_user", password="pass12345")
+
+    query = """
+    query {
+        posts {
+            title
+        }
+    }
+    """
+    result = gql_client.execute(query, user=user)
+    errors = result.get("errors") or []
+    assert errors
+    first_error = errors[0]
+    message = (
+        first_error.get("message", "")
+        if isinstance(first_error, dict)
+        else str(first_error)
+    )
+    assert "permission" in message.lower()
+    assert "test_app.view_post" in message
 
 
 def test_simple_quick_filter(gql_client):

@@ -51,7 +51,14 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Générer le schéma
         self.schema = self.schema_generator.get_schema()
-        self.client = RailGraphQLTestClient(self.schema, schema_name="default")
+        self.user = User.objects.create_superuser(
+            username="db_admin",
+            email="db_admin@example.com",
+            password="pass12345",
+        )
+        self.client = RailGraphQLTestClient(
+            self.schema, schema_name="default", user=self.user
+        )
 
     def test_create_operations(self):
         """Test les opérations de création en base de données."""

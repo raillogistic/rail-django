@@ -41,6 +41,11 @@ Authorization uses a hybrid RBAC system:
 - Assignments use Django `Group` records.
 - The permission manager also checks GraphQLMeta guards (per model).
 
+Auto-generated model queries enforce Django model permissions by default. The
+required permission is built as `<app_label>.<codename>_<model>` with the
+codename defaulting to `view`. Configure `query_settings` to change or disable
+the default check, or define GraphQLMeta access guards per model.
+
 Use GraphQLMeta to guard operations per model and to hide fields. See the
 [GraphQLMeta guide](meta.md) for configuration examples and field-level rules.
 

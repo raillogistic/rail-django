@@ -34,6 +34,7 @@ def generate_single_query(
     def resolve_single(root, info, id):
         """Resolver for single object queries."""
         try:
+            self._enforce_model_permission(info, model, "retrieve", graphql_meta)
             manager = getattr(model, manager_name)
             instance = manager.get(pk=id)
             graphql_meta.ensure_operation_access(
@@ -73,9 +74,19 @@ def generate_list_query(
     )
     if self.settings.use_relay and DjangoFilterConnectionField is not None:
         # Use Relay connection for cursor-based pagination
+        @optimize_query()
+        def resolver(root: Any, info: graphene.ResolveInfo, **kwargs):
+            self._enforce_model_permission(info, model, "list", graphql_meta)
+            graphql_meta.ensure_operation_access("list", info=info)
+            manager = getattr(model, manager_name)
+            queryset = manager.all()
+            queryset = self.optimizer.optimize_queryset(queryset, info, model)
+            return queryset
+
         return DjangoFilterConnectionField(
             model_type,
             filterset_class=filter_class,
+            resolver=resolver,
             description=f"Retrieve a list of {model_name} instances with pagination using {manager_name} manager",
         )
 
@@ -83,9 +94,10 @@ def generate_list_query(
     def resolver(
         root: Any, info: graphene.ResolveInfo, **kwargs
     ) -> list[models.Model]:
+        self._enforce_model_permission(info, model, "list", graphql_meta)
+        graphql_meta.ensure_operation_access("list", info=info)
         manager = getattr(model, manager_name)
         queryset = manager.all()
-        graphql_meta.ensure_operation_access("list", info=info)
 
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)

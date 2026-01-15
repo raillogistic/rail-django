@@ -12,6 +12,7 @@ from django.utils import timezone
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 from rail_django.extensions.templating import model_pdf_template
 
+from .access_control import STORE_ROLES, catalog_operations, order_operations
 
 def _coerce_filter_value(args, kwargs):
     # Support both django-filter (qs, name, value) and GraphQLMeta (qs, value).
@@ -206,26 +207,8 @@ class Product(models.Model):
             allow_related=False,
         )
         access = GraphQLMetaConfig.AccessControl(
-            operations={
-                "list": GraphQLMetaConfig.OperationGuard(
-                    allow_anonymous=True,
-                    require_authentication=False,
-                ),
-                "retrieve": GraphQLMetaConfig.OperationGuard(
-                    allow_anonymous=True,
-                    require_authentication=False,
-                ),
-                "create": GraphQLMetaConfig.OperationGuard(
-                    permissions=["store.add_product"],
-                    deny_message="Product creation requires authentication.",
-                ),
-                "update": GraphQLMetaConfig.OperationGuard(
-                    permissions=["store.change_product"]
-                ),
-                "delete": GraphQLMetaConfig.OperationGuard(
-                    permissions=["store.delete_product"]
-                ),
-            },
+            roles=STORE_ROLES,
+            operations=catalog_operations(allow_anonymous_read=True),
             fields=[
                 GraphQLMetaConfig.FieldGuard(
                     field="price",
@@ -459,92 +442,8 @@ class Order(models.Model):
             fields={"balance_due": "resolve_balance_due"},
         )
         access = GraphQLMetaConfig.AccessControl(
-            roles={
-                "order_viewer": GraphQLMetaConfig.Role(
-                    description="Read-only access to orders.",
-                    role_type="functional",
-                    permissions=["store.view_order"],
-                ),
-                "order_manager": GraphQLMetaConfig.Role(
-                    description="Create and update orders.",
-                    role_type="business",
-                    permissions=[
-                        "store.view_order",
-                        "store.add_order",
-                        "store.change_order",
-                    ],
-                    parent_roles=["order_viewer"],
-                ),
-                "order_admin": GraphQLMetaConfig.Role(
-                    description="Full control of orders.",
-                    role_type="system",
-                    permissions=[
-                        "store.view_order",
-                        "store.add_order",
-                        "store.change_order",
-                        "store.delete_order",
-                        "store.view_risk_score",
-                        "store.view_customer_pii",
-                    ],
-                    parent_roles=["order_manager"],
-                    is_system_role=True,
-                    max_users=5,
-                ),
-                "finance_analyst": GraphQLMetaConfig.Role(
-                    description="Access to financial details.",
-                    role_type="business",
-                    permissions=["store.view_order", "store.view_financials"],
-                ),
-            },
-            operations={
-                "list": GraphQLMetaConfig.OperationGuard(
-                    roles=[
-                        "order_viewer",
-                        "order_manager",
-                        "order_admin",
-                        "finance_analyst",
-                    ],
-                    permissions=["store.view_order"],
-                    require_authentication=True,
-                    match="any",
-                    deny_message="Order listing requires authentication.",
-                ),
-                "retrieve": GraphQLMetaConfig.OperationGuard(
-                    roles=[
-                        "order_viewer",
-                        "order_manager",
-                        "order_admin",
-                        "finance_analyst",
-                    ],
-                    permissions=["store.view_order"],
-                    condition="can_access_order",
-                    require_authentication=True,
-                    match="any",
-                    deny_message="You do not have access to this order.",
-                ),
-                "create": GraphQLMetaConfig.OperationGuard(
-                    roles=["order_manager", "order_admin"],
-                    permissions=["store.add_order"],
-                    require_authentication=True,
-                    match="any",
-                    deny_message="Only order managers can create orders.",
-                ),
-                "update": GraphQLMetaConfig.OperationGuard(
-                    roles=["order_manager", "order_admin"],
-                    permissions=["store.change_order"],
-                    condition="can_modify_order",
-                    require_authentication=True,
-                    match="all",
-                    deny_message="Only assigned managers can update orders.",
-                ),
-                "delete": GraphQLMetaConfig.OperationGuard(
-                    roles=["order_admin"],
-                    permissions=["store.delete_order"],
-                    require_authentication=True,
-                    match="all",
-                    deny_message="Only order admins can delete orders.",
-                ),
-            },
+            roles=STORE_ROLES,
+            operations=order_operations(),
             fields=[
                 GraphQLMetaConfig.FieldGuard(
                     field="payment_token",

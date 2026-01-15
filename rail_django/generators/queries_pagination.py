@@ -78,9 +78,10 @@ def generate_paginated_query(
     def resolver(
         root: Any, info: graphene.ResolveInfo, **kwargs
     ) -> PaginatedConnection:
+        self._enforce_model_permission(info, model, operation_name, graphql_meta)
+        graphql_meta.ensure_operation_access(operation_name, info=info)
         manager = getattr(model, manager_name)
         queryset = manager.all()
-        graphql_meta.ensure_operation_access(operation_name, info=info)
 
         try:
             page = int(kwargs.get("page", 1))

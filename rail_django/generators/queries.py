@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import graphene
 from django.contrib.auth.models import AnonymousUser
 from django.db import models
+from graphql import GraphQLError
 
 from ..core.security import get_authz_manager
 from ..core.services import get_query_optimizer
@@ -231,6 +232,49 @@ class QueryGenerator:
         self, items: list[Any], prop_specs: list[str]
     ) -> list[Any]:
         return _apply_property_ordering(items, prop_specs)
+
+    def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
+        guards = getattr(graphql_meta, "_operation_guards", None) or {}
+        return operation in guards or "*" in guards
+
+    def _build_model_permission_name(
+        self, model: type[models.Model], codename: str
+    ) -> str:
+        app_label = model._meta.app_label
+        model_name = model._meta.model_name
+        return f"{app_label}.{codename}_{model_name}"
+
+    def _enforce_model_permission(
+        self,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        operation: str,
+        graphql_meta=None,
+    ) -> None:
+        if not getattr(
+            self.authorization_manager.settings, "enable_authorization", True
+        ):
+            return
+        if not getattr(self.settings, "require_model_permissions", True):
+            return
+        if graphql_meta is not None and self._has_operation_guard(
+            graphql_meta, operation
+        ):
+            return
+
+        user = getattr(getattr(info, "context", None), "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            raise GraphQLError("Authentication required")
+
+        codename = getattr(self.settings, "model_permission_codename", "view")
+        codename = str(codename or "").strip()
+        if not codename:
+            return
+
+        permission_name = self._build_model_permission_name(model, codename)
+        has_perm = getattr(user, "has_perm", None)
+        if not callable(has_perm) or not has_perm(permission_name):
+            raise GraphQLError(f"Permission required: {permission_name}")
 
     def generate_single_query(
         self, model: type[models.Model], manager_name: str = "objects"

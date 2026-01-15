@@ -62,6 +62,8 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "max_property_ordering_results": 2000,
         "property_ordering_warn_on_cap": True,
         "additional_lookup_fields": {},
+        "require_model_permissions": True,
+        "model_permission_codename": "view",
     },
     "mutation_settings": {
         "generate_create": True,
