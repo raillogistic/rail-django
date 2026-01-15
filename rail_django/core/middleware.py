@@ -585,6 +585,52 @@ class FieldPermissionMiddleware(BaseMiddleware):
             except Exception:
                 return None
 
+    @staticmethod
+    def _resolve_related_model(
+        model_class: type[models.Model], field_name: str
+    ) -> Optional[type[models.Model]]:
+        if model_class is None:
+            return None
+        try:
+            field = model_class._meta.get_field(field_name)
+            related_model = getattr(field, "related_model", None)
+            if related_model is not None:
+                return related_model
+        except Exception:
+            pass
+        try:
+            for rel in model_class._meta.related_objects:
+                accessor = rel.get_accessor_name()
+                if accessor == field_name:
+                    return rel.related_model
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _iter_nested_payloads(value: Any) -> list[dict[str, Any]]:
+        nested_payloads: list[dict[str, Any]] = []
+        if isinstance(value, dict):
+            for key in ("create", "update", "set"):
+                if key in value:
+                    nested_payloads.extend(
+                        FieldPermissionMiddleware._iter_nested_payloads(value[key])
+                    )
+            if set(value.keys()).issubset({"connect", "disconnect", "set"}):
+                if nested_payloads:
+                    return nested_payloads
+                return []
+            if nested_payloads:
+                return nested_payloads
+            nested_payloads.append(value)
+            return nested_payloads
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    nested_payloads.append(item)
+            return nested_payloads
+        return nested_payloads
+
     def _enforce_input_permissions(
         self, user: Any, info: Any, kwargs: dict[str, Any]
     ) -> dict[str, Any]:
@@ -602,7 +648,12 @@ class FieldPermissionMiddleware(BaseMiddleware):
         disallowed_fields: list[str] = []
         updated_kwargs = dict(kwargs)
 
-        def _check_payload(payload: Any, object_id: Any = None) -> Any:
+        def _check_payload(
+            payload: Any,
+            *,
+            model_class: type[models.Model],
+            object_id: Any = None,
+        ) -> Any:
             payload_dict = self._normalize_payload(payload)
             if payload_dict is None:
                 return payload
@@ -641,12 +692,40 @@ class FieldPermissionMiddleware(BaseMiddleware):
                 for field_name in blocked:
                     target_payload.pop(field_name, None)
             disallowed_fields.extend(blocked)
+
+            for field_name, value in list(target_payload.items()):
+                if field_name in {"id", "pk", "object_id"}:
+                    continue
+                base_field = field_name
+                if base_field.startswith("nested_"):
+                    base_field = base_field[len("nested_") :]
+                related_model = self._resolve_related_model(
+                    model_class, base_field
+                )
+                if related_model is None:
+                    continue
+                for nested_payload in self._iter_nested_payloads(value):
+                    nested_dict = self._normalize_payload(nested_payload)
+                    if not isinstance(nested_dict, dict):
+                        continue
+                    nested_id = (
+                        nested_dict.get("id")
+                        or nested_dict.get("pk")
+                        or nested_dict.get("object_id")
+                    )
+                    _check_payload(
+                        nested_dict,
+                        model_class=related_model,
+                        object_id=nested_id,
+                    )
             return payload_dict
 
         if "input" in updated_kwargs:
             object_id = updated_kwargs.get("id") or updated_kwargs.get("object_id")
             updated_kwargs["input"] = _check_payload(
-                updated_kwargs["input"], object_id=object_id
+                updated_kwargs["input"],
+                model_class=model_class,
+                object_id=object_id,
             )
 
         if "inputs" in updated_kwargs and isinstance(updated_kwargs["inputs"], list):
@@ -658,7 +737,13 @@ class FieldPermissionMiddleware(BaseMiddleware):
                     or payload_dict.get("pk")
                     or payload_dict.get("object_id")
                 )
-                sanitized_inputs.append(_check_payload(payload, object_id=object_id))
+                sanitized_inputs.append(
+                    _check_payload(
+                        payload,
+                        model_class=model_class,
+                        object_id=object_id,
+                    )
+                )
             updated_kwargs["inputs"] = sanitized_inputs
 
         if disallowed_fields and self.input_mode != "strip":

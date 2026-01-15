@@ -270,6 +270,9 @@ mutation UpdateUser($id: ID!, $input: UserUpdateInput!) {
 }
 ```
 
+Note: `id` is required as the top-level mutation argument. `input.id` is optional
+and kept for backwards compatibility.
+
 ## Model metadata
 
 If `schema_settings.show_metadata` is enabled, GraphQL exposes metadata queries

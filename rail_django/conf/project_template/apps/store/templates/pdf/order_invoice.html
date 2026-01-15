@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice {{ order.order_number }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        color: #222;
+        margin: 0;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+      th,
+      td {
+        padding: 8px;
+        border-bottom: 1px solid #e0e0e0;
+        text-align: left;
+      }
+      tfoot td {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Invoice</h1>
+    <p>Order: {{ order.order_number }}</p>
+    <p>Customer: {{ order.customer.email }}</p>
+    <p>Date: {{ order.placed_at|date:"Y-m-d" }}</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Qty</th>
+          <th>Unit</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.product.name }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.unit_price }}</td>
+          <td>{{ item.line_total }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4">No items</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Subtotal</td>
+          <td>{{ order.subtotal_amount }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">Tax</td>
+          <td>{{ order.tax_amount }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">Shipping</td>
+          <td>{{ order.shipping_amount }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">Discount</td>
+          <td>{{ order.discount_amount }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">Total</td>
+          <td>{{ order.total_amount }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </body>
+</html>

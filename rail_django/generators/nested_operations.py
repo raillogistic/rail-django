@@ -16,6 +16,7 @@ from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 
 from ..core.error_handling import get_error_handler
+from ..core.meta import get_model_graphql_meta
 from ..core.services import get_query_optimizer
 from ..core.security import get_authz_manager, get_input_validator
 from ..core.settings import MutationGeneratorSettings
@@ -101,11 +102,50 @@ class NestedOperationHandler:
         # Default to enabled
         return True
 
+    def _ensure_operation_access(
+        self,
+        model: type[models.Model],
+        operation: str,
+        info: Optional[graphene.ResolveInfo],
+        instance: Optional[models.Model] = None,
+    ) -> None:
+        if info is None:
+            return
+        graphql_meta = get_model_graphql_meta(model)
+        graphql_meta.ensure_operation_access(
+            operation, info=info, instance=instance
+        )
+
+    def _save_instance(self, instance: models.Model) -> None:
+        instance.full_clean()
+        instance.save()
+
+    def _has_nested_payload(self, value: Any) -> bool:
+        if isinstance(value, dict):
+            if "create" in value or "update" in value:
+                return True
+            if "set" in value:
+                set_value = value.get("set")
+                if isinstance(set_value, dict):
+                    return True
+                if isinstance(set_value, list) and any(
+                    isinstance(item, dict) for item in set_value
+                ):
+                    return True
+            allowed = {"connect", "disconnect", "set"}
+            if set(value.keys()).issubset(allowed):
+                return False
+            return True
+        if isinstance(value, list):
+            return any(isinstance(item, dict) for item in value)
+        return False
+
     def handle_nested_create(
         self,
         model: type[models.Model],
         input_data: dict[str, Any],
         parent_instance: Optional[models.Model] = None,
+        info: Optional[graphene.ResolveInfo] = None,
     ) -> models.Model:
         """
         Handles nested create operations with validation and relationship management.
@@ -122,6 +162,7 @@ class NestedOperationHandler:
             ValidationError: If validation fails or circular references detected
         """
         try:
+            self._ensure_operation_access(model, "create", info)
             # First, process nested_ prefixed fields and extract them
             processed_input = self._process_nested_fields(input_data)
 
@@ -167,7 +208,13 @@ class NestedOperationHandler:
                 if value is None:
                     continue
 
+                use_nested = self._should_use_nested_operations(model, field_name)
                 if isinstance(value, dict):
+                    if not use_nested:
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     # Nested create
                     if "id" in value:
                         # Update existing object
@@ -175,12 +222,12 @@ class NestedOperationHandler:
                             pk=value["id"]
                         )
                         regular_fields[field_name] = self.handle_nested_update(
-                            field.related_model, value, related_instance
+                            field.related_model, value, related_instance, info=info
                         )
                     else:
                         # Create new object
                         regular_fields[field_name] = self.handle_nested_create(
-                            field.related_model, value
+                            field.related_model, value, info=info
                         )
                 elif isinstance(value, (str, int, uuid.UUID)):
                     # Reference to existing object - convert ID to model instance
@@ -194,6 +241,12 @@ class NestedOperationHandler:
 
                     try:
                         related_instance = field.related_model.objects.get(pk=pk_value)
+                        self._ensure_operation_access(
+                            field.related_model,
+                            "retrieve",
+                            info,
+                            instance=related_instance,
+                        )
                         regular_fields[field_name] = related_instance
                     except field.related_model.DoesNotExist:
                         # Explicitly map error to the input field name
@@ -217,21 +270,30 @@ class NestedOperationHandler:
                     regular_fields[field_name] = value
 
             # Create the main instance
-            instance = model.objects.create(**regular_fields)
+            instance = model(**regular_fields)
+            self._save_instance(instance)
 
             # Handle reverse relationships after instance creation
             for field_name, (related_field, value) in reverse_fields.items():
                 if value is None:
                     continue
+                use_nested = self._should_use_nested_operations(model, field_name)
 
                 # Handle different types of reverse relationship data
                 if isinstance(value, list):
+                    if not use_nested and self._has_nested_payload(value):
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     # List can contain either IDs (to connect existing objects) or dicts (to create new objects)
                     for item in value:
                         if isinstance(item, dict):
                             # Create new object and set the foreign key to point to our instance
                             item[related_field.field.name] = instance.pk
-                            self.handle_nested_create(related_field.related_model, item)
+                            self.handle_nested_create(
+                                related_field.related_model, item, info=info
+                            )
                         elif isinstance(item, (str, int, uuid.UUID)):
                             # Connect existing object to this instance
                             pk_value = item
@@ -242,9 +304,19 @@ class NestedOperationHandler:
                                     pass
 
                             try:
-                                related_field.related_model.objects.filter(
+                                related_obj = related_field.related_model.objects.get(
                                     pk=pk_value
-                                ).update(**{related_field.field.name: instance})
+                                )
+                                self._ensure_operation_access(
+                                    related_field.related_model,
+                                    "update",
+                                    info,
+                                    instance=related_obj,
+                                )
+                                setattr(
+                                    related_obj, related_field.field.name, instance
+                                )
+                                self._save_instance(related_obj)
                             except Exception as e:
                                 raise ValidationError(
                                     {
@@ -253,6 +325,11 @@ class NestedOperationHandler:
                                 )
 
                 elif isinstance(value, dict):
+                    if not use_nested and self._has_nested_payload(value):
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     # Handle operations like create, connect, disconnect
                     if "create" in value:
                         create_data = value["create"]
@@ -262,22 +339,35 @@ class NestedOperationHandler:
                                     # Set the foreign key to point to our instance
                                     item[related_field.field.name] = instance.pk
                                     self.handle_nested_create(
-                                        related_field.related_model, item
+                                        related_field.related_model, item, info=info
                                     )
                         elif isinstance(create_data, dict):
                             # Single object to create
                             create_data[related_field.field.name] = instance.pk
                             self.handle_nested_create(
-                                related_field.related_model, create_data
+                                related_field.related_model, create_data, info=info
                             )
 
                     if "connect" in value:
                         # Connect existing objects to this instance
                         connect_ids = value["connect"]
                         if isinstance(connect_ids, list):
-                            related_field.related_model.objects.filter(
+                            related_objects = related_field.related_model.objects.filter(
                                 pk__in=connect_ids
-                            ).update(**{related_field.field.name: instance})
+                            )
+                            for related_obj in related_objects:
+                                self._ensure_operation_access(
+                                    related_field.related_model,
+                                    "update",
+                                    info,
+                                    instance=related_obj,
+                                )
+                                setattr(
+                                    related_obj,
+                                    related_field.field.name,
+                                    instance,
+                                )
+                                self._save_instance(related_obj)
 
             # Handle many-to-many relationships after instance creation
             for field_name, (field, value) in m2m_fields.items():
@@ -298,15 +388,27 @@ class NestedOperationHandler:
                                 related_obj = field.related_model.objects.get(
                                     pk=item["id"]
                                 )
+                                self._ensure_operation_access(
+                                    field.related_model,
+                                    "retrieve",
+                                    info,
+                                    instance=related_obj,
+                                )
                             else:
                                 # Create new object only if nested operations are enabled
                                 related_obj = self.handle_nested_create(
-                                    field.related_model, item
+                                    field.related_model, item, info=info
                                 )
                             related_objects.append(related_obj)
                         elif isinstance(item, (str, int, uuid.UUID)):
                             # Direct ID reference - always allowed
                             related_obj = field.related_model.objects.get(pk=item)
+                            self._ensure_operation_access(
+                                field.related_model,
+                                "retrieve",
+                                info,
+                                instance=related_obj,
+                            )
                             related_objects.append(related_obj)
                         elif isinstance(item, dict) and not use_nested:
                             # If nested is disabled but dict is provided, raise error
@@ -321,10 +423,11 @@ class NestedOperationHandler:
                     use_nested = self._should_use_nested_operations(model, field_name)
 
                     if not use_nested:
-                        raise ValidationError(
-                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                            f"Use ID references instead."
-                        )
+                        if self._has_nested_payload(value):
+                            raise ValidationError(
+                                f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                                f"Use ID references instead."
+                            )
 
                     # Handle operations like connect, create, disconnect
                     if "connect" in value:
@@ -333,13 +436,22 @@ class NestedOperationHandler:
                             existing_objects = field.related_model.objects.filter(
                                 pk__in=connect_ids
                             )
+                            for related_obj in existing_objects:
+                                self._ensure_operation_access(
+                                    field.related_model,
+                                    "retrieve",
+                                    info,
+                                    instance=related_obj,
+                                )
                             m2m_manager.add(*existing_objects)
 
                     if "create" in value:
                         create_data = value["create"]
                         if isinstance(create_data, list):
                             new_objects = [
-                                self.handle_nested_create(field.related_model, item)
+                                self.handle_nested_create(
+                                    field.related_model, item, info=info
+                                )
                                 for item in create_data
                             ]
                             m2m_manager.add(*new_objects)
@@ -350,6 +462,13 @@ class NestedOperationHandler:
                             objects_to_remove = field.related_model.objects.filter(
                                 pk__in=disconnect_ids
                             )
+                            for related_obj in objects_to_remove:
+                                self._ensure_operation_access(
+                                    field.related_model,
+                                    "retrieve",
+                                    info,
+                                    instance=related_obj,
+                                )
                             m2m_manager.remove(*objects_to_remove)
 
             return instance
@@ -396,6 +515,7 @@ class NestedOperationHandler:
         model: type[models.Model],
         input_data: dict[str, Any],
         instance: models.Model,
+        info: Optional[graphene.ResolveInfo] = None,
     ) -> models.Model:
         """
         Handles nested update operations with validation and relationship management.
@@ -409,6 +529,7 @@ class NestedOperationHandler:
             Updated model instance
         """
         try:
+            self._ensure_operation_access(model, "update", info, instance=instance)
             # First, process nested_ prefixed fields and extract them
             processed_input = self._process_nested_fields(input_data)
 
@@ -458,19 +579,25 @@ class NestedOperationHandler:
                 if value is None:
                     setattr(instance, field_name, None)
                 elif isinstance(value, dict):
+                    use_nested = self._should_use_nested_operations(model, field_name)
+                    if not use_nested:
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     if "id" in value:
                         # Update existing related object
                         related_instance = field.related_model.objects.get(
                             pk=value["id"]
                         )
                         updated_instance = self.handle_nested_update(
-                            field.related_model, value, related_instance
+                            field.related_model, value, related_instance, info=info
                         )
                         setattr(instance, field_name, updated_instance)
                     else:
                         # Create new related object
                         new_instance = self.handle_nested_create(
-                            field.related_model, value
+                            field.related_model, value, info=info
                         )
                         setattr(instance, field_name, new_instance)
                 elif isinstance(value, (str, int, uuid.UUID)):
@@ -484,6 +611,12 @@ class NestedOperationHandler:
 
                     try:
                         related_instance = field.related_model.objects.get(pk=pk_value)
+                        self._ensure_operation_access(
+                            field.related_model,
+                            "retrieve",
+                            info,
+                            instance=related_instance,
+                        )
                         setattr(instance, field_name, related_instance)
                     except field.related_model.DoesNotExist:
                         raise ValidationError(
@@ -499,12 +632,18 @@ class NestedOperationHandler:
                         )
 
             # Save the instance
-            instance.save()
+            self._save_instance(instance)
 
             # Handle reverse relationships (e.g., updating comments for a post)
             for field_name, (related_field, value) in reverse_fields.items():
                 if value is None:
                     continue
+                use_nested = self._should_use_nested_operations(model, field_name)
+                if not use_nested and self._has_nested_payload(value):
+                    raise ValidationError(
+                        f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                        f"Use ID references instead."
+                    )
 
                 # Handle different types of reverse relationship data
                 if isinstance(value, list):
@@ -528,6 +667,12 @@ class NestedOperationHandler:
                                         related_field.related_model.objects.get(
                                             pk=item["id"]
                                         )
+                                    )
+                                    self._ensure_operation_access(
+                                        related_field.related_model,
+                                        "update",
+                                        info,
+                                        instance=existing_obj,
                                     )
                                     # Ensure the object belongs to this instance
                                     if (
@@ -567,6 +712,12 @@ class NestedOperationHandler:
                                                         related_obj = field.related_model.objects.get(
                                                             pk=pk_val
                                                         )
+                                                        self._ensure_operation_access(
+                                                            field.related_model,
+                                                            "retrieve",
+                                                            info,
+                                                            instance=related_obj,
+                                                        )
                                                         setattr(
                                                             existing_obj,
                                                             key,
@@ -582,6 +733,7 @@ class NestedOperationHandler:
                                                                 field.related_model,
                                                                 val,
                                                                 related_obj,
+                                                                info=info,
                                                             )
                                                             setattr(
                                                                 existing_obj,
@@ -590,7 +742,9 @@ class NestedOperationHandler:
                                                             )
                                                         else:
                                                             new_related = self.handle_nested_create(
-                                                                field.related_model, val
+                                                                field.related_model,
+                                                                val,
+                                                                info=info,
                                                             )
                                                             setattr(
                                                                 existing_obj,
@@ -604,7 +758,7 @@ class NestedOperationHandler:
                                             except:
                                                 # Fallback to direct assignment for non-model fields
                                                 setattr(existing_obj, key, val)
-                                    existing_obj.save()
+                                    self._save_instance(existing_obj)
                                     updated_object_ids.add(
                                         int(item["id"])
                                     )  # Convert to int for consistent comparison
@@ -642,6 +796,12 @@ class NestedOperationHandler:
                                                         pk=pk_val
                                                     )
                                                 )
+                                                self._ensure_operation_access(
+                                                    field.related_model,
+                                                    "retrieve",
+                                                    info,
+                                                    instance=related_obj,
+                                                )
                                                 processed_item[key] = related_obj
                                             elif isinstance(val, dict):
                                                 # Handle nested object creation/update
@@ -656,6 +816,7 @@ class NestedOperationHandler:
                                                             field.related_model,
                                                             val,
                                                             related_obj,
+                                                            info=info,
                                                         )
                                                     )
                                                     processed_item[key] = (
@@ -664,7 +825,9 @@ class NestedOperationHandler:
                                                 else:
                                                     new_related = (
                                                         self.handle_nested_create(
-                                                            field.related_model, val
+                                                            field.related_model,
+                                                            val,
+                                                            info=info,
                                                         )
                                                     )
                                                     processed_item[key] = new_related
@@ -680,7 +843,9 @@ class NestedOperationHandler:
                                         processed_item[key] = val
 
                                 new_obj = self.handle_nested_create(
-                                    related_field.related_model, processed_item
+                                    related_field.related_model,
+                                    processed_item,
+                                    info=info,
                                 )
                                 if hasattr(new_obj, "pk"):
                                     updated_object_ids.add(new_obj.pk)
@@ -694,9 +859,19 @@ class NestedOperationHandler:
                                     pass
 
                             try:
-                                related_field.related_model.objects.filter(
+                                related_obj = related_field.related_model.objects.get(
                                     pk=pk_val
-                                ).update(**{related_field.field.name: instance})
+                                )
+                                self._ensure_operation_access(
+                                    related_field.related_model,
+                                    "update",
+                                    info,
+                                    instance=related_obj,
+                                )
+                                setattr(
+                                    related_obj, related_field.field.name, instance
+                                )
+                                self._save_instance(related_obj)
                                 updated_object_ids.add(
                                     pk_val
                                 )  # Store actual PK value
@@ -721,8 +896,14 @@ class NestedOperationHandler:
                     continue
 
                 m2m_manager = getattr(instance, field_name)
+                use_nested = self._should_use_nested_operations(model, field_name)
 
                 if isinstance(value, dict):
+                    if not use_nested and self._has_nested_payload(value):
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     # Handle operations like connect, create, disconnect, set
                     if "set" in value:
                         # Replace all relationships
@@ -735,9 +916,15 @@ class NestedOperationHandler:
                                         related_obj = field.related_model.objects.get(
                                             pk=item["id"]
                                         )
+                                        self._ensure_operation_access(
+                                            field.related_model,
+                                            "retrieve",
+                                            info,
+                                            instance=related_obj,
+                                        )
                                     else:
                                         related_obj = self.handle_nested_create(
-                                            field.related_model, item
+                                            field.related_model, item, info=info
                                         )
                                     related_objects.append(related_obj)
                                 elif isinstance(item, (str, int, uuid.UUID)):
@@ -749,6 +936,12 @@ class NestedOperationHandler:
                                             pass
                                     related_obj = field.related_model.objects.get(
                                         pk=pk_val
+                                    )
+                                    self._ensure_operation_access(
+                                        field.related_model,
+                                        "retrieve",
+                                        info,
+                                        instance=related_obj,
                                     )
                                     related_objects.append(related_obj)
                             m2m_manager.set(related_objects)
@@ -768,6 +961,12 @@ class NestedOperationHandler:
                                     related_obj = field.related_model.objects.get(
                                         pk=pk_val
                                     )
+                                    self._ensure_operation_access(
+                                        field.related_model,
+                                        "retrieve",
+                                        info,
+                                        instance=related_obj,
+                                    )
                                     m2m_manager.add(related_obj)
 
                     if "create" in value:
@@ -775,7 +974,9 @@ class NestedOperationHandler:
                         create_data = value["create"]
                         if isinstance(create_data, list):
                             new_objects = [
-                                self.handle_nested_create(field.related_model, item)
+                                self.handle_nested_create(
+                                    field.related_model, item, info=info
+                                )
                                 for item in create_data
                             ]
                             m2m_manager.add(*new_objects)
@@ -795,6 +996,12 @@ class NestedOperationHandler:
                                     related_obj = field.related_model.objects.get(
                                         pk=pk_val
                                     )
+                                    self._ensure_operation_access(
+                                        field.related_model,
+                                        "retrieve",
+                                        info,
+                                        instance=related_obj,
+                                    )
                                     m2m_manager.remove(related_obj)
 
                     if "update" in value:
@@ -807,10 +1014,18 @@ class NestedOperationHandler:
                                         pk=item["id"]
                                     )
                                     self.handle_nested_update(
-                                        field.related_model, item, related_instance
+                                        field.related_model,
+                                        item,
+                                        related_instance,
+                                        info=info,
                                     )
 
                 elif isinstance(value, list):
+                    if not use_nested and self._has_nested_payload(value):
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
                     # Handle simple list of strings/dicts for nested creation
                     related_objects = []
                     for item in value:
@@ -839,6 +1054,12 @@ class NestedOperationHandler:
                                             pk=item["id"]
                                         )
 
+                                self._ensure_operation_access(
+                                    field.related_model,
+                                    "retrieve",
+                                    info,
+                                    instance=related_obj,
+                                )
                                 # If there are other fields besides 'id', update the object
                                 update_data = {
                                     k: v for k, v in item.items() if k != "id"
@@ -846,12 +1067,15 @@ class NestedOperationHandler:
                                 if update_data:
                                     # Update the existing object with new data
                                     related_obj = self.handle_nested_update(
-                                        field.related_model, item, related_obj
+                                        field.related_model,
+                                        item,
+                                        related_obj,
+                                        info=info,
                                     )
                             else:
                                 # Create new object from dict data
                                 related_obj = self.handle_nested_create(
-                                    field.related_model, item
+                                    field.related_model, item, info=info
                                 )
                             related_objects.append(related_obj)
                         elif isinstance(item, str):
@@ -861,12 +1085,20 @@ class NestedOperationHandler:
                                 field.related_model, "_nested_name_field", "name"
                             )
                             related_obj = self.handle_nested_create(
-                                field.related_model, {name_field: item}
+                                field.related_model,
+                                {name_field: item},
+                                info=info,
                             )
                             related_objects.append(related_obj)
                         elif isinstance(item, (int, uuid.UUID)):
                             # Get existing object by ID
                             related_obj = field.related_model.objects.get(pk=item)
+                            self._ensure_operation_access(
+                                field.related_model,
+                                "retrieve",
+                                info,
+                                instance=related_obj,
+                            )
                             related_objects.append(related_obj)
 
                     # Replace all relationships with the new set

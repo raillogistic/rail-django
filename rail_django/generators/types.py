@@ -329,8 +329,8 @@ class TypeGenerator:
     ) -> bool:
         """
         Determine if a field should be required for update mutations.
-        - id is required for updates
         - mandatory fields defined by _get_mandatory_fields are always required
+        - id is required at the mutation argument level, not in the input payload
         """
         # Check if this field is mandatory for this model
         if model and field_name:

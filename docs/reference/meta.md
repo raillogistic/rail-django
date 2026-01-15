@@ -123,7 +123,9 @@ field guards.
 ### Operation guards
 
 Operation guards are checked by auto-generated list, retrieve, create, update,
-delete, bulk, and subscription operations.
+delete, bulk, and subscription operations. Method mutations also enforce an
+operation guard inferred from the method name (or action kind) on the target
+instance.
 
 ```python
 class GraphQLMeta(GraphQLMetaConfig):
@@ -162,6 +164,8 @@ Guard notes:
 - `allow_anonymous` and `require_authentication` can override auth checks.
 - `match="all"` requires every rule (roles, permissions, condition) to pass.
 - Use `*` to define a fallback guard for all operations.
+- Bulk mutations enforce both the base operation guard and the `bulk_*` guard.
+- Nested create/update/connect operations apply related-model guards (`create`, `update`, `retrieve`) for touched models.
 
 ### Field guards
 

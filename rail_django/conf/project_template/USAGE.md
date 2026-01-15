@@ -717,6 +717,9 @@ mutation {
 }
 ```
 
+Note: `id` is required as the top-level mutation argument. `input.id` is optional
+and kept for backwards compatibility.
+
 **Delete:**
 ```graphql
 mutation {

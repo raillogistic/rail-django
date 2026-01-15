@@ -101,6 +101,9 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+Input enforcement traverses nested mutation payloads (including `nested_*` inputs
+and `create`/`update`/`set` structures) and applies related-model field rules.
+
 ### Classification tags
 
 You can tag fields or models with classifications (e.g., `pii`, `financial`) and
@@ -182,6 +185,10 @@ RAIL_DJANGO_GRAPHQL = {
 that sanitizes strings, applies allowlisted HTML rules, and flags high-risk
 patterns. You can wrap resolvers with `@validate_input` or use
 `InputValidator.validate_payload` directly.
+
+Auto-generated CRUD, bulk, and method mutations also call
+`InputValidator.validate_and_sanitize` and run `model.full_clean()` before save,
+so model validators and `clean()` hooks are enforced.
 
 Recommended configuration:
 

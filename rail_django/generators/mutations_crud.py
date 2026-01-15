@@ -10,9 +10,11 @@ from django.db import IntegrityError, models, transaction
 
 from ..core.meta import get_model_graphql_meta
 from .introspector import ModelIntrospector
+from ..core.exceptions import GraphQLAutoError
 from .mutations_errors import (
     MutationError,
     build_error_list,
+    build_graphql_auto_errors,
     build_integrity_errors,
     build_mutation_error,
     build_validation_errors,
@@ -72,6 +74,10 @@ def generate_create_mutation(
                         if key not in read_only_fields
                     }
 
+                input = self.input_validator.validate_and_sanitize(
+                    model.__name__, input
+                )
+
                 # Use the nested operation handler for advanced nested operations
                 nested_handler = cls._get_nested_handler(info)
 
@@ -94,7 +100,9 @@ def generate_create_mutation(
 
                 # Handle nested create with comprehensive validation and transaction management
                 def _perform_create(info, payload):
-                    return nested_handler.handle_nested_create(model, payload)
+                    return nested_handler.handle_nested_create(
+                        model, payload, info=info
+                    )
 
                 audited_create = _wrap_with_audit(model, "create", _perform_create)
                 instance = audited_create(info, input)
@@ -103,6 +111,9 @@ def generate_create_mutation(
 
             except ValidationError as exc:
                 error_objects = build_validation_errors(exc)
+                return cls(ok=False, object=None, errors=error_objects)
+            except GraphQLAutoError as exc:
+                error_objects = build_graphql_auto_errors(exc)
                 return cls(ok=False, object=None, errors=error_objects)
             except IntegrityError as exc:
                 transaction.set_rollback(True)
@@ -394,6 +405,10 @@ def generate_update_mutation(
                         if key not in read_only_fields
                     }
 
+                update_data = self.input_validator.validate_and_sanitize(
+                    model.__name__, update_data
+                )
+
                 # Decode GraphQL ID to database ID if needed
                 try:
                     # Try to use the ID as-is first (for integer IDs)
@@ -435,7 +450,9 @@ def generate_update_mutation(
 
                 # Handle nested update with comprehensive validation and transaction management
                 def _perform_update(info, target, payload):
-                    return nested_handler.handle_nested_update(model, payload, target)
+                    return nested_handler.handle_nested_update(
+                        model, payload, target, info=info
+                    )
 
                 audited_update = _wrap_with_audit(model, "update", _perform_update)
                 instance = audited_update(info, instance, update_data)
@@ -451,6 +468,9 @@ def generate_update_mutation(
                 return UpdateMutation(ok=False, object=None, errors=error_objects)
             except ValidationError as exc:
                 error_objects = build_validation_errors(exc)
+                return UpdateMutation(ok=False, object=None, errors=error_objects)
+            except GraphQLAutoError as exc:
+                error_objects = build_graphql_auto_errors(exc)
                 return UpdateMutation(ok=False, object=None, errors=error_objects)
             except IntegrityError as exc:
                 transaction.set_rollback(True)

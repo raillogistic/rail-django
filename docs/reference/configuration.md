@@ -101,6 +101,13 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+## Mutation settings
+
+Nested relation writes are controlled by `mutation_settings.enable_nested_relations`
+and can be overridden per model/field via `nested_relations_config` and
+`nested_field_config`. When disabled, `nested_*` inputs are not generated and
+nested payloads are rejected during mutation execution.
+
 ## Schema-specific overrides
 
 ```python

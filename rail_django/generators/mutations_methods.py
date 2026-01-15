@@ -9,9 +9,12 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 
+from ..core.exceptions import GraphQLAutoError
+from ..core.meta import get_model_graphql_meta
 from .introspector import MethodInfo
 from .mutations_errors import (
     MutationError,
+    build_graphql_auto_errors,
     build_integrity_errors,
     build_mutation_error,
     build_validation_errors,
@@ -43,6 +46,14 @@ def _infer_audit_operation(name: Optional[str]) -> str:
     if "create" in lowered or "add" in lowered:
         return "create"
     return "update"
+
+
+def _infer_guard_operation(
+    name: Optional[str], action_kind: Optional[str] = None
+) -> str:
+    if action_kind == "confirm":
+        return "update"
+    return _infer_audit_operation(name)
 
 
 def convert_method_to_mutation(
@@ -117,6 +128,9 @@ def convert_method_to_mutation(
         else:
             output_type = self._convert_python_type_to_graphql(return_type)
 
+    graphql_meta = get_model_graphql_meta(model)
+    guard_operation = _infer_guard_operation(method_name)
+
     class ConvertedMethodMutation(graphene.Mutation):
         model_class = model
 
@@ -152,6 +166,9 @@ def convert_method_to_mutation(
                         )
 
                 instance = model.objects.get(pk=id)
+                graphql_meta.ensure_operation_access(
+                    guard_operation, info=info, instance=instance
+                )
                 method_func = getattr(instance, method_name)
 
                 # Filter kwargs to only include method parameters
@@ -159,10 +176,15 @@ def convert_method_to_mutation(
                 filtered_kwargs = {
                     k: v for k, v in kwargs.items() if k in method_params
                 }
+                if filtered_kwargs:
+                    filtered_kwargs = self.input_validator.validate_and_sanitize(
+                        model.__name__, filtered_kwargs
+                    )
 
                 def _perform_method(info, target, payload):
                     result = method_func(**payload)
                     if isinstance(result, models.Model):
+                        result.full_clean()
                         result.save()
                     return result
 
@@ -183,6 +205,13 @@ def convert_method_to_mutation(
                             message=f"{model_name} with id {id} does not exist"
                         )
                     ],
+                )
+            except GraphQLAutoError as exc:
+                transaction.set_rollback(True)
+                return cls(
+                    ok=False,
+                    result=None,
+                    errors=build_graphql_auto_errors(exc),
                 )
             except Exception as exc:
                 transaction.set_rollback(True)
@@ -266,6 +295,8 @@ def generate_method_mutation(
         requires_permissions = [legacy_perm] if legacy_perm else None
     atomic = getattr(method, "_atomic", True)
     action_kind = getattr(method, "_action_kind", None)
+    guard_operation = _infer_guard_operation(method_name, action_kind)
+    graphql_meta = get_model_graphql_meta(model)
 
     # Create input type for method arguments
     if custom_input_type:
@@ -368,6 +399,9 @@ def generate_method_mutation(
         def _execute_method(cls, model, method_name, id, input, info):
             try:
                 instance = model.objects.get(pk=id)
+                graphql_meta.ensure_operation_access(
+                    guard_operation, info=info, instance=instance
+                )
                 method_func = getattr(instance, method_name)
 
                 def _perform_method(info, target, payload):
@@ -376,6 +410,7 @@ def generate_method_mutation(
                     else:
                         result = method_func()
                     if isinstance(result, models.Model):
+                        result.full_clean()
                         result.save()
                     return result
 
@@ -383,7 +418,12 @@ def generate_method_mutation(
                 audited_method = _wrap_with_audit(
                     model, audit_operation, _perform_method
                 )
-                result = audited_method(info, instance, input)
+                validated_input = input
+                if isinstance(input, dict):
+                    validated_input = self.input_validator.validate_and_sanitize(
+                        model.__name__, input
+                    )
+                result = audited_method(info, instance, validated_input)
 
                 return cls(ok=True, result=result, errors=[])
 
@@ -413,6 +453,14 @@ def generate_method_mutation(
                     ok=False,
                     result=None,
                     errors=build_integrity_errors(model, exc),
+                )
+            except GraphQLAutoError as exc:
+                if atomic:
+                    transaction.set_rollback(True)
+                return cls(
+                    ok=False,
+                    result=None,
+                    errors=build_graphql_auto_errors(exc),
                 )
             except Exception as e:
                 if atomic:

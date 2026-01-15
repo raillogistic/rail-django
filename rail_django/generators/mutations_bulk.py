@@ -8,9 +8,11 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 
+from ..core.exceptions import GraphQLAutoError
 from ..core.meta import get_model_graphql_meta
 from .mutations_errors import (
     MutationError,
+    build_graphql_auto_errors,
     build_integrity_errors,
     build_mutation_error,
     build_validation_errors,
@@ -48,16 +50,23 @@ def generate_bulk_create_mutation(
             cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkCreateMutation":
             try:
+                graphql_meta.ensure_operation_access("create", info=info)
                 graphql_meta.ensure_operation_access("bulk_create", info=info)
 
                 def _perform_create(info, payload):
-                    return model.objects.create(**payload)
+                    instance = model(**payload)
+                    instance.full_clean()
+                    instance.save()
+                    return instance
 
                 audited_create = _wrap_with_audit(model, "create", _perform_create)
                 instances = []
                 for input_data in inputs:
                     # Normalize enum inputs (GraphQL Enum -> underlying Django values)
                     input_data = cls._normalize_enum_inputs(input_data, model)
+                    input_data = self.input_validator.validate_and_sanitize(
+                        model.__name__, input_data
+                    )
                     instance = audited_create(info, input_data)
                     instances.append(instance)
 
@@ -68,6 +77,12 @@ def generate_bulk_create_mutation(
                     ok=False,
                     objects=[],
                     errors=build_validation_errors(e),
+                )
+            except GraphQLAutoError as exc:
+                return cls(
+                    ok=False,
+                    objects=[],
+                    errors=build_graphql_auto_errors(exc),
                 )
             except IntegrityError as e:
                 transaction.set_rollback(True)
@@ -171,8 +186,6 @@ def generate_bulk_update_mutation(
             cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkUpdateMutation":
             try:
-                graphql_meta.ensure_operation_access("bulk_update", info=info)
-
                 def _perform_update(info, target, payload):
                     for field, value in payload.items():
                         setattr(target, field, value)
@@ -187,9 +200,15 @@ def generate_bulk_update_mutation(
                     graphql_meta.ensure_operation_access(
                         "bulk_update", info=info, instance=instance
                     )
+                    graphql_meta.ensure_operation_access(
+                        "update", info=info, instance=instance
+                    )
                     # Normalize enum inputs for update payload
                     update_data = cls._normalize_enum_inputs(
                         input_data["data"], model
+                    )
+                    update_data = self.input_validator.validate_and_sanitize(
+                        model.__name__, update_data
                     )
                     instance = audited_update(info, instance, update_data)
                     instances.append(instance)
@@ -209,6 +228,12 @@ def generate_bulk_update_mutation(
             except ValidationError as exc:
                 return cls(
                     ok=False, objects=[], errors=build_validation_errors(exc)
+                )
+            except GraphQLAutoError as exc:
+                return cls(
+                    ok=False,
+                    objects=[],
+                    errors=build_graphql_auto_errors(exc),
                 )
             except IntegrityError as exc:
                 transaction.set_rollback(True)
@@ -293,7 +318,6 @@ def generate_bulk_delete_mutation(
             cls, root: Any, info: graphene.ResolveInfo, ids: list[str]
         ) -> "BulkDeleteMutation":
             try:
-                graphql_meta.ensure_operation_access("bulk_delete", info=info)
                 instances = model.objects.filter(pk__in=ids)
                 if len(instances) != len(ids):
                     found_ids = set(str(instance.pk) for instance in instances)
@@ -312,6 +336,9 @@ def generate_bulk_delete_mutation(
                 for inst in deleted_instances:
                     graphql_meta.ensure_operation_access(
                         "bulk_delete", info=info, instance=inst
+                    )
+                    graphql_meta.ensure_operation_access(
+                        "delete", info=info, instance=inst
                     )
 
                 def _perform_delete(info, target):

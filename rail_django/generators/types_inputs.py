@@ -47,7 +47,7 @@ def generate_input_type(
             continue
 
         if field_name == "id":
-            # Keep ID only for update mutations so the identifier travels inside the input payload
+            # Keep ID only for update mutations; input ID is optional because the top-level id arg is required.
             if mutation_type != "update":
                 continue
 
@@ -55,7 +55,7 @@ def generate_input_type(
                 self._get_input_field_type(field_info.field_type) or graphene.ID
             )
             input_fields[field_name] = graphene.InputField(
-                graphene.NonNull(field_type), description=field_info.help_text
+                field_type, description=field_info.help_text
             )
             continue
 
@@ -155,24 +155,28 @@ def generate_input_type(
                 input_fields[field_name] = graphene.ID()
 
             # 2. Add nested field: nested_<field_name>
-            nested_field_name = f"nested_{field_name}"
-            nested_input_type = self._get_or_create_nested_input_type(
-                rel_info.related_model, mutation_type, exclude_parent_field=model
-            )
-            input_fields[nested_field_name] = graphene.InputField(nested_input_type)
+            if self._should_include_nested_field(model, field_name):
+                nested_field_name = f"nested_{field_name}"
+                nested_input_type = self._get_or_create_nested_input_type(
+                    rel_info.related_model, mutation_type, exclude_parent_field=model
+                )
+                input_fields[nested_field_name] = graphene.InputField(
+                    nested_input_type
+                )
 
         elif rel_info.relationship_type == "ManyToManyField":
             # 1. Add direct ID list field: <field_name>
             input_fields[field_name] = graphene.JSONString()
 
             # 2. Add nested field: nested_<field_name>
-            nested_field_name = f"nested_{field_name}"
-            nested_input_type = self._get_or_create_nested_input_type(
-                rel_info.related_model, mutation_type, exclude_parent_field=model
-            )
-            input_fields[nested_field_name] = graphene.InputField(
-                graphene.List(nested_input_type)
-            )
+            if self._should_include_nested_field(model, field_name):
+                nested_field_name = f"nested_{field_name}"
+                nested_input_type = self._get_or_create_nested_input_type(
+                    rel_info.related_model, mutation_type, exclude_parent_field=model
+                )
+                input_fields[nested_field_name] = graphene.InputField(
+                    graphene.List(nested_input_type)
+                )
 
     # Add reverse relationship fields with dual field generation for nested operations (e.g., comments for Post)
     if include_reverse_relations:
@@ -191,13 +195,16 @@ def generate_input_type(
             input_fields[field_name] = graphene.List(graphene.ID)
 
             # 2. Add nested field: nested_<field_name>
-            nested_field_name = f"nested_{field_name}"
-            # Use the appropriate mutation type for nested input generation
-            nested_mutation_type = "create" if mutation_type == "create" else "update"
-            nested_input_type = self._get_or_create_nested_input_type(
-                related_model, nested_mutation_type, exclude_parent_field=model
-            )
-            input_fields[nested_field_name] = graphene.List(nested_input_type)
+            if self._should_include_nested_field(model, field_name):
+                nested_field_name = f"nested_{field_name}"
+                # Use the appropriate mutation type for nested input generation
+                nested_mutation_type = (
+                    "create" if mutation_type == "create" else "update"
+                )
+                nested_input_type = self._get_or_create_nested_input_type(
+                    related_model, nested_mutation_type, exclude_parent_field=model
+                )
+                input_fields[nested_field_name] = graphene.List(nested_input_type)
 
     # Create the input type class
     # Generate different class names for different mutation types

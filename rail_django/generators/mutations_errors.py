@@ -7,6 +7,8 @@ import re
 
 import graphene
 from django.core.exceptions import ValidationError
+
+from ..core.exceptions import GraphQLAutoError
 from django.db import IntegrityError, models
 
 
@@ -121,6 +123,29 @@ def build_error_list(messages: list[str]) -> list[MutationError]:
         field = _extract_field_from_message(str(message))
         errors.append(build_mutation_error(message=str(message), field=field))
     return errors
+
+
+def build_graphql_auto_errors(error: GraphQLAutoError) -> list[MutationError]:
+    details = getattr(error, "details", {}) or {}
+    validation_errors = details.get("validation_errors")
+    if isinstance(validation_errors, dict):
+        errors: list[MutationError] = []
+        for field_name, messages in validation_errors.items():
+            if not isinstance(messages, (list, tuple)):
+                messages = [messages]
+            for message in messages:
+                errors.append(
+                    build_mutation_error(
+                        message=str(message), field=str(field_name)
+                    )
+                )
+        if errors:
+            return errors
+    return [
+        build_mutation_error(
+            message=str(error), field=getattr(error, "field", None)
+        )
+    ]
 
 
 def _map_column_to_field(model: type[models.Model], column: str) -> Optional[str]:
