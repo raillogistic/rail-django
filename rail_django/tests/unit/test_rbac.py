@@ -18,6 +18,7 @@ from rail_django.security.rbac import (
     role_manager,
 )
 from rail_django.security.policies import AccessPolicy, PolicyEffect, policy_manager
+from rail_django.security.role_loader import load_app_role_definitions
 from test_app.models import Category
 
 pytestmark = pytest.mark.unit
@@ -246,3 +247,18 @@ def test_owner_resolver_override_allows_contextual_access():
     manager.register_owner_resolver(Category, lambda ctx: True)
 
     assert manager.has_permission(user, "category.update_own", context) is True
+
+
+def test_roles_json_loader_registers_roles(tmp_path):
+    roles_file = tmp_path / "roles.json"
+    roles_file.write_text(
+        '{"roles":[{"name":"file_role","role_type":"business","permissions":["project.read"]}]}',
+        encoding="utf-8",
+    )
+    try:
+        count = load_app_role_definitions([SimpleNamespace(path=str(tmp_path))])
+        assert count == 1
+        assert role_manager.get_role_definition("file_role") is not None
+    finally:
+        role_manager._roles_cache.pop("file_role", None)
+        role_manager._role_hierarchy.pop("file_role", None)

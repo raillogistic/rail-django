@@ -823,6 +823,49 @@ context = PermissionContext(user=request.user, object_instance=project)
 role_manager.has_permission(request.user, "project.update_own", context)
 ```
 
+You can also define role definitions per app in `roles.json` (created by
+`startapp`). The loader scans installed apps at startup and registers roles
+alongside code-defined RBAC.
+
+**Detailed example (`apps/store/roles.json`):**
+```json
+{
+  "roles": [
+    {
+      "name": "catalog_viewer",
+      "description": "Read-only access to the catalog.",
+      "role_type": "functional",
+      "permissions": ["store.view_product", "store.view_category"]
+    },
+    {
+      "name": "catalog_editor",
+      "description": "Create and update catalog entries.",
+      "role_type": "business",
+      "permissions": [
+        "store.view_product",
+        "store.add_product",
+        "store.change_product"
+      ],
+      "parent_roles": ["catalog_viewer"]
+    },
+    {
+      "name": "catalog_admin",
+      "description": "Full control over catalog data.",
+      "role_type": "system",
+      "permissions": ["store.*"],
+      "parent_roles": ["catalog_editor"],
+      "is_system_role": true,
+      "max_users": 5
+    }
+  ]
+}
+```
+
+Notes:
+- Place the file at the app root (for example `apps/store/roles.json`).
+- The loader runs on startup; restart the server to pick up changes.
+- Roles are additive and do not override built-in system roles or GraphQLMeta roles with the same name.
+
 ### Field-Level Security
 You can hide fields dynamically based on who is asking.
 

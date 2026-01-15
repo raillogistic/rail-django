@@ -33,6 +33,9 @@ class AppConfig(BaseAppConfig):
             # Setup Django signals
             self._setup_signals()
 
+            # Load RBAC role files from installed apps
+            self._load_role_files()
+
             # Validate library configuration
             self._validate_configuration()
 
@@ -113,6 +116,20 @@ class AppConfig(BaseAppConfig):
             logger.warning(f"Configuration validation failed: {e}")
             if self._is_debug_mode():
                 raise
+
+    def _load_role_files(self):
+        """Load roles.json definitions from installed apps."""
+        try:
+            from .security.role_loader import load_app_role_definitions
+
+            registered_count = load_app_role_definitions()
+            if registered_count:
+                logger.info(
+                    "Registered %s role definitions from roles.json files",
+                    registered_count,
+                )
+        except Exception as exc:
+            logger.warning("Could not load role definitions: %s", exc)
 
     def _initialize_schema_registry(self):
         """Initialize the schema registry."""

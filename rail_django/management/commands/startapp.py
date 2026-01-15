@@ -17,6 +17,13 @@ class Command(StartAppCommand):
         )
 
     def handle(self, **options):
+        if not options.get("template") and not options.get("minimal"):
+            template_path = os.path.join(
+                os.path.dirname(rail_django.__file__),
+                "conf",
+                "app_template",
+            )
+            options["template"] = template_path
         if options.get("minimal"):
             # If minimal flag is set, force the template to our minimal one
             # unless the user explicitly provided another template (which would be ambiguous, 
