@@ -1,10 +1,12 @@
+# Base dependencies for rail-django projects (single source of truth).
+# Requires Python 3.11+
 Django>=4.2.27
-graphene>=3.3.0
+graphene>=3.4.1
 graphene-django>=3.1.5
 django-filter>=24.2
 django-cors-headers>=4.3.0
 django-environ==0.11.2
-django-fsm>=2.8.1
+django-fsm>=3.0.0
 graphql-relay>=3.2.0
 gunicorn>=21.2.0
 psycopg2-binary==2.9.9

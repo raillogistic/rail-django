@@ -45,7 +45,7 @@ class RequestMetrics:
     database_time: float = 0.0
     cache_hits: int = 0
     cache_misses: int = 0
-    n_plus_one_queries: List[Dict[str, Any]] = field(default_factory=list)
+    n_plus_one_queries: list[dict[str, Any]] = field(default_factory=list)
     n_plus_one_count: int = 0
 
     # Métriques de ressources
@@ -58,8 +58,8 @@ class RequestMetrics:
     user_id: Optional[int] = None
 
     # Erreurs
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def is_slow_query(self) -> bool:
@@ -82,7 +82,7 @@ class QueryMetricsCollector:
         self.total_time = 0.0
         self.n_plus_one_threshold = n_plus_one_threshold
         self.max_sql_length = max_sql_length
-        self._fingerprints: Dict[str, Dict[str, Any]] = {}
+        self._fingerprints: dict[str, dict[str, Any]] = {}
 
     def execute_wrapper(self, execute, sql, params, many, context):
         start = time.perf_counter()
@@ -99,7 +99,7 @@ class QueryMetricsCollector:
             data["count"] += 1
             data["total_time"] += duration
 
-    def get_n_plus_one_candidates(self, limit: int = 5) -> List[Dict[str, Any]]:
+    def get_n_plus_one_candidates(self, limit: int = 5) -> list[dict[str, Any]]:
         candidates = [
             {"sql": self._truncate_sql(sql), "count": data["count"]}
             for sql, data in self._fingerprints.items()
@@ -135,8 +135,8 @@ class PerformanceAggregator:
 
     def __init__(self, window_size: int = 1000):
         self.window_size = window_size
-        self.metrics_history: Deque[RequestMetrics] = deque(maxlen=window_size)
-        self.alerts_history: Deque[PerformanceAlert] = deque(maxlen=100)
+        self.metrics_history: deque[RequestMetrics] = deque(maxlen=window_size)
+        self.alerts_history: deque[PerformanceAlert] = deque(maxlen=100)
         self.lock = threading.Lock()
 
         # Statistiques agrégées
@@ -153,7 +153,7 @@ class PerformanceAggregator:
             # Vérifier les alertes
             self._check_alerts(metrics)
 
-    def get_aggregated_stats(self) -> Dict[str, Any]:
+    def get_aggregated_stats(self) -> dict[str, Any]:
         """Retourne les statistiques agrégées."""
         current_time = time.time()
 
@@ -543,11 +543,11 @@ class GraphQLPerformanceView(View):
 
         return JsonResponse(data, safe=False)
 
-    def get_performance_stats(self) -> Dict[str, Any]:
+    def get_performance_stats(self) -> dict[str, Any]:
         """Retourne les statistiques de performance."""
         return self.aggregator.get_aggregated_stats()
 
-    def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_recent_alerts(self, limit: int = 50) -> list[dict[str, Any]]:
         """Retourne les alertes récentes."""
         alerts = list(self.aggregator.alerts_history)[-limit:]
         return [
@@ -564,7 +564,7 @@ class GraphQLPerformanceView(View):
             for alert in alerts
         ]
 
-    def get_slow_queries(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_slow_queries(self, limit: int = 20) -> list[dict[str, Any]]:
         """Retourne les requêtes les plus lentes."""
         slow_queries = [
             m

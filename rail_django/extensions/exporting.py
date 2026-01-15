@@ -248,7 +248,7 @@ EXPORT_DEFAULTS = {
 }
 
 
-def _get_export_settings() -> Dict[str, Any]:
+def _get_export_settings() -> dict[str, Any]:
     """Return merged export settings with defaults applied."""
     export_settings = getattr(settings, "RAIL_DJANGO_EXPORT", None)
     if export_settings is None:
@@ -273,7 +273,7 @@ def _get_export_settings() -> Dict[str, Any]:
     return merged
 
 
-def _model_key_candidates(model: type) -> List[str]:
+def _model_key_candidates(model: type) -> list[str]:
     """Return possible identifiers for a model."""
     return [
         model._meta.label_lower,
@@ -283,12 +283,12 @@ def _model_key_candidates(model: type) -> List[str]:
     ]
 
 
-def _normalize_allowed_list(values: Iterable[Any]) -> List[str]:
+def _normalize_allowed_list(values: Iterable[Any]) -> list[str]:
     """Normalize allowlist values into lowercase strings."""
     return [str(value).strip().lower() for value in values if str(value).strip()]
 
 
-def _is_model_allowed(model: type, export_settings: Dict[str, Any]) -> bool:
+def _is_model_allowed(model: type, export_settings: dict[str, Any]) -> bool:
     """Check if the model is allowed for export."""
     allowed_models = export_settings.get("allowed_models") or []
     if not allowed_models:
@@ -298,7 +298,7 @@ def _is_model_allowed(model: type, export_settings: Dict[str, Any]) -> bool:
     return any(key.lower() in allowed for key in _model_key_candidates(model))
 
 
-def _get_allowed_fields(model: type, export_settings: Dict[str, Any]) -> List[str]:
+def _get_allowed_fields(model: type, export_settings: dict[str, Any]) -> list[str]:
     """Return the allowed field accessors for a model, if configured."""
     allowed_fields = export_settings.get("allowed_fields") or {}
     if not isinstance(allowed_fields, dict):
@@ -328,7 +328,7 @@ def _normalize_filter_value(value: str) -> str:
 
 def _get_model_scoped_list(
     model: type, config_value: Any
-) -> Optional[List[str]]:
+) -> Optional[list[str]]:
     """Return a model-scoped list from a dict keyed by model identifiers."""
     if not isinstance(config_value, dict):
         return None
@@ -347,7 +347,7 @@ def _get_model_scoped_list(
 
 def _get_model_scoped_dict(
     model: type, config_value: Any
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Return a model-scoped dict from a dict keyed by model identifiers."""
     if not isinstance(config_value, dict):
         return None
@@ -362,7 +362,7 @@ def _get_model_scoped_dict(
     return None
 
 
-def _get_export_fields(model: type, export_settings: Dict[str, Any]) -> List[str]:
+def _get_export_fields(model: type, export_settings: dict[str, Any]) -> list[str]:
     """Return explicit export field allowlist (full-path)."""
     export_fields = export_settings.get("export_fields")
     if export_fields is None:
@@ -373,7 +373,7 @@ def _get_export_fields(model: type, export_settings: Dict[str, Any]) -> List[str
     return [_normalize_accessor_value(value) for value in scoped]
 
 
-def _get_export_exclude(model: type, export_settings: Dict[str, Any]) -> List[str]:
+def _get_export_exclude(model: type, export_settings: dict[str, Any]) -> list[str]:
     """Return explicit export field denylist (full-path)."""
     scoped = _get_model_scoped_list(model, export_settings.get("export_exclude"))
     if scoped is None:
@@ -382,8 +382,8 @@ def _get_export_exclude(model: type, export_settings: Dict[str, Any]) -> List[st
 
 
 def _get_filterable_fields(
-    model: type, export_settings: Dict[str, Any], export_fields: List[str]
-) -> List[str]:
+    model: type, export_settings: dict[str, Any], export_fields: list[str]
+) -> list[str]:
     """Return filterable fields (full-path) in __ notation."""
     scoped = _get_model_scoped_list(model, export_settings.get("filterable_fields"))
     if scoped is None or not scoped:
@@ -392,8 +392,8 @@ def _get_filterable_fields(
 
 
 def _get_orderable_fields(
-    model: type, export_settings: Dict[str, Any], export_fields: List[str]
-) -> List[str]:
+    model: type, export_settings: dict[str, Any], export_fields: list[str]
+) -> list[str]:
     """Return orderable fields (full-path) in __ notation."""
     scoped = _get_model_scoped_list(model, export_settings.get("orderable_fields"))
     if scoped is None or not scoped:
@@ -402,8 +402,8 @@ def _get_orderable_fields(
 
 
 def _get_field_formatters(
-    model: type, export_settings: Dict[str, Any]
-) -> Dict[str, Any]:
+    model: type, export_settings: dict[str, Any]
+) -> dict[str, Any]:
     """Return field formatter mappings for a model."""
     formatters = export_settings.get("field_formatters") or {}
     scoped = _get_model_scoped_dict(model, formatters)
@@ -422,7 +422,7 @@ def _get_field_formatters(
     return {}
 
 
-def _get_export_templates(export_settings: Dict[str, Any]) -> Dict[str, Any]:
+def _get_export_templates(export_settings: dict[str, Any]) -> dict[str, Any]:
     """Return configured export templates."""
     templates = export_settings.get("export_templates") or {}
     if not isinstance(templates, dict):
@@ -444,7 +444,7 @@ def _export_job_payload_key(job_id: str) -> str:
     return f"rail:export_job_payload:{job_id}"
 
 
-def _get_export_storage_dir(export_settings: Dict[str, Any]) -> Path:
+def _get_export_storage_dir(export_settings: dict[str, Any]) -> Path:
     async_settings = export_settings.get("async_jobs") or {}
     storage_dir = async_settings.get("storage_dir")
     if storage_dir:
@@ -457,19 +457,19 @@ def _get_export_storage_dir(export_settings: Dict[str, Any]) -> Path:
     return path
 
 
-def _get_export_job(job_id: str) -> Optional[Dict[str, Any]]:
+def _get_export_job(job_id: str) -> Optional[dict[str, Any]]:
     return cache.get(_export_job_cache_key(job_id))
 
 
 def _set_export_job(
-    job_id: str, job: Dict[str, Any], *, timeout: int
+    job_id: str, job: dict[str, Any], *, timeout: int
 ) -> None:
     cache.set(_export_job_cache_key(job_id), job, timeout=timeout)
 
 
 def _update_export_job(
-    job_id: str, updates: Dict[str, Any], *, timeout: int
-) -> Optional[Dict[str, Any]]:
+    job_id: str, updates: dict[str, Any], *, timeout: int
+) -> Optional[dict[str, Any]]:
     job = _get_export_job(job_id)
     if not job:
         return None
@@ -621,7 +621,7 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
     return parsed
 
 
-def _cleanup_export_job_files(job: Dict[str, Any]) -> None:
+def _cleanup_export_job_files(job: dict[str, Any]) -> None:
     file_path = job.get("file_path")
     if not file_path:
         return
@@ -633,7 +633,7 @@ def _cleanup_export_job_files(job: Dict[str, Any]) -> None:
         return
 
 
-def _job_access_allowed(request: Any, job: Dict[str, Any]) -> bool:
+def _job_access_allowed(request: Any, job: dict[str, Any]) -> bool:
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
         return False
@@ -683,7 +683,7 @@ class ModelExporter:
         app_name: str,
         model_name: str,
         *,
-        export_settings: Optional[Dict[str, Any]] = None,
+        export_settings: Optional[dict[str, Any]] = None,
     ):
         """
         Initialize the exporter with model information and GraphQL filter generator.
@@ -777,8 +777,8 @@ class ModelExporter:
             )
 
     def _normalize_ordering(
-        self, ordering: Optional[Union[str, List[str]]]
-    ) -> List[str]:
+        self, ordering: Optional[Union[str, list[str]]]
+    ) -> list[str]:
         """Normalize and validate ordering input into a list of field expressions."""
         if not ordering:
             return []
@@ -789,8 +789,8 @@ class ModelExporter:
         else:
             return []
 
-        normalized: List[str] = []
-        invalid: List[str] = []
+        normalized: list[str] = []
+        invalid: list[str] = []
         for item in items:
             desc = item.startswith("-")
             field_name = item[1:] if desc else item
@@ -846,17 +846,17 @@ class ModelExporter:
 
         return None
 
-    def _collect_related_paths(self, accessors: Iterable[str]) -> Dict[str, List[str]]:
+    def _collect_related_paths(self, accessors: Iterable[str]) -> dict[str, list[str]]:
         """Collect select_related and prefetch_related paths for accessors."""
-        select_related: Set[str] = set()
-        prefetch_related: Set[str] = set()
+        select_related: set[str] = set()
+        prefetch_related: set[str] = set()
 
         for accessor in accessors:
             if not accessor:
                 continue
             parts = accessor.split(".")
             current_model = self.model
-            path_parts: List[str] = []
+            path_parts: list[str] = []
             prefetch_mode = False
             relation_depth = 0
 
@@ -950,9 +950,9 @@ class ModelExporter:
     def _validate_accessor(
         self,
         accessor: str,
-        export_fields: List[str],
-        export_exclude: List[str],
-        sensitive_fields: List[str],
+        export_fields: list[str],
+        export_exclude: list[str],
+        sensitive_fields: list[str],
         require_export_fields: bool,
     ) -> Optional[str]:
         """Validate accessor syntax and model traversal."""
@@ -1022,11 +1022,11 @@ class ModelExporter:
 
     def validate_fields(
         self,
-        fields: List[Union[str, Dict[str, str]]],
+        fields: list[Union[str, dict[str, str]]],
         *,
         user: Optional[Any] = None,
-        export_settings: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, str]]:
+        export_settings: Optional[dict[str, Any]] = None,
+    ) -> list[dict[str, str]]:
         """Validate and normalize fields based on allowlist and permissions."""
         export_settings = export_settings or self.export_settings
         export_fields = _get_export_fields(self.model, export_settings)
@@ -1048,8 +1048,8 @@ class ModelExporter:
                 f"Export denied: schema is not configured for model {self.model._meta.label}"
             )
 
-        parsed_fields: List[Dict[str, str]] = []
-        denied_fields: List[str] = []
+        parsed_fields: list[dict[str, str]] = []
+        denied_fields: list[str] = []
 
         for field_config in fields:
             parsed_field = self.parse_field_config(field_config)
@@ -1091,7 +1091,7 @@ class ModelExporter:
 
     def _analyze_filter_tree(
         self, filter_input: Any, *, current_or_depth: int = 0
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Return (filter_count, max_or_depth) for a filter tree."""
         if not filter_input:
             return 0, current_or_depth
@@ -1195,9 +1195,9 @@ class ModelExporter:
 
     def validate_filters(
         self,
-        variables: Optional[Dict[str, Any]] = None,
+        variables: Optional[dict[str, Any]] = None,
         *,
-        export_settings: Optional[Dict[str, Any]] = None,
+        export_settings: Optional[dict[str, Any]] = None,
     ) -> None:
         """Validate filter input against allowlists and guardrails."""
         if not variables:
@@ -1244,8 +1244,8 @@ class ModelExporter:
 
     def get_queryset(
         self,
-        variables: Optional[Dict[str, Any]] = None,
-        ordering: Optional[Union[str, List[str]]] = None,
+        variables: Optional[dict[str, Any]] = None,
+        ordering: Optional[Union[str, list[str]]] = None,
         fields: Optional[Iterable[str]] = None,
         max_rows: Optional[int] = None,
     ) -> models.QuerySet:
@@ -1290,7 +1290,7 @@ class ModelExporter:
             raise ExportError(f"Error building queryset: {e}")
 
     def apply_graphql_filters(
-        self, queryset: models.QuerySet, variables: Dict[str, Any]
+        self, queryset: models.QuerySet, variables: dict[str, Any]
     ) -> models.QuerySet:
         """
         Apply GraphQL filters to the queryset using the filter generator.
@@ -1514,8 +1514,8 @@ class ModelExporter:
         return value
 
     def parse_field_config(
-        self, field_config: Union[str, Dict[str, str]]
-    ) -> Dict[str, str]:
+        self, field_config: Union[str, dict[str, str]]
+    ) -> dict[str, str]:
         """
         Parse field configuration to extract accessor and title.
 
@@ -1582,7 +1582,7 @@ class ModelExporter:
             self.logger.debug(f"Could not get verbose name for {field_path}: {e}")
             return field_path.replace("_", " ").title()
 
-    def get_field_headers(self, fields: List[Union[str, Dict[str, str]]]) -> List[str]:
+    def get_field_headers(self, fields: list[Union[str, dict[str, str]]]) -> list[str]:
         """
         Generate column headers for the export with flexible field format support.
 
@@ -1721,11 +1721,11 @@ class ModelExporter:
 
     def export_to_csv(
         self,
-        fields: List[Union[str, Dict[str, str]]],
-        variables: Optional[Dict[str, Any]] = None,
-        ordering: Optional[Union[str, List[str]]] = None,
+        fields: list[Union[str, dict[str, str]]],
+        variables: Optional[dict[str, Any]] = None,
+        ordering: Optional[Union[str, list[str]]] = None,
         max_rows: Optional[int] = None,
-        parsed_fields: Optional[List[Dict[str, str]]] = None,
+        parsed_fields: Optional[list[dict[str, str]]] = None,
         output: Optional[io.StringIO] = None,
         progress_callback: Optional[Callable[[int], None]] = None,
         chunk_size: Optional[int] = None,
@@ -1784,11 +1784,11 @@ class ModelExporter:
 
     def export_to_excel(
         self,
-        fields: List[Union[str, Dict[str, str]]],
-        variables: Optional[Dict[str, Any]] = None,
-        ordering: Optional[Union[str, List[str]]] = None,
+        fields: list[Union[str, dict[str, str]]],
+        variables: Optional[dict[str, Any]] = None,
+        ordering: Optional[Union[str, list[str]]] = None,
         max_rows: Optional[int] = None,
-        parsed_fields: Optional[List[Dict[str, str]]] = None,
+        parsed_fields: Optional[list[dict[str, str]]] = None,
         output: Optional[io.BytesIO] = None,
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> bytes:
@@ -2309,7 +2309,7 @@ class ExportView(View):
         *,
         success: bool,
         error_message: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[dict[str, Any]] = None,
     ) -> None:
         """Log an audit event for export activity."""
         if not log_audit_event or not AuditEventType:
@@ -2328,7 +2328,7 @@ class ExportView(View):
         )
 
     def _get_rate_limit_identifier(
-        self, request: Any, export_settings: Dict[str, Any]
+        self, request: Any, export_settings: dict[str, Any]
     ) -> str:
         """Resolve the rate limit identifier for the request."""
         user = getattr(request, "user", None)
@@ -2368,7 +2368,7 @@ class ExportView(View):
         return False
 
     def _check_rate_limit(
-        self, request: Any, export_settings: Dict[str, Any]
+        self, request: Any, export_settings: dict[str, Any]
     ) -> Optional[JsonResponse]:
         """Apply a basic rate limit using Django cache."""
         config = export_settings.get("rate_limit") or {}
@@ -2398,8 +2398,8 @@ class ExportView(View):
         return None
 
     def _resolve_max_rows(
-        self, data: Dict[str, Any], export_settings: Dict[str, Any]
-    ) -> Tuple[Optional[int], Optional[JsonResponse]]:
+        self, data: dict[str, Any], export_settings: dict[str, Any]
+    ) -> tuple[Optional[int], Optional[JsonResponse]]:
         """Resolve max rows with request override and config cap."""
         config_max_rows = export_settings.get("max_rows", None)
         requested_max = data.get("max_rows", data.get("limit"))
@@ -2434,9 +2434,9 @@ class ExportView(View):
         self,
         request: Any,
         template_name: str,
-        data: Dict[str, Any],
-        export_settings: Dict[str, Any],
-    ) -> Union[Dict[str, Any], JsonResponse]:
+        data: dict[str, Any],
+        export_settings: dict[str, Any],
+    ) -> Union[dict[str, Any], JsonResponse]:
         """Merge a named export template into the request payload."""
         templates = _get_export_templates(export_settings)
         template = templates.get(template_name)
@@ -2474,7 +2474,7 @@ class ExportView(View):
 
         return merged
 
-    def _template_allowed(self, request: Any, template: Dict[str, Any]) -> bool:
+    def _template_allowed(self, request: Any, template: dict[str, Any]) -> bool:
         """Check whether a user can access a template."""
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
@@ -2520,13 +2520,13 @@ class ExportView(View):
         *,
         request: Any,
         exporter: ModelExporter,
-        parsed_fields: List[Dict[str, str]],
-        variables: Dict[str, Any],
-        ordering: Optional[Union[str, List[str]]],
+        parsed_fields: list[dict[str, str]],
+        variables: dict[str, Any],
+        ordering: Optional[Union[str, list[str]]],
         max_rows: Optional[int],
         filename: str,
         file_extension: str,
-        export_settings: Dict[str, Any],
+        export_settings: dict[str, Any],
     ) -> JsonResponse:
         """Create and enqueue an export job for async processing."""
         async_settings = export_settings.get("async_jobs") or {}
@@ -2610,7 +2610,7 @@ class ExportView(View):
         )
 
     def _enforce_model_permissions(
-        self, request: Any, model: type, export_settings: Dict[str, Any]
+        self, request: Any, model: type, export_settings: dict[str, Any]
     ) -> Optional[JsonResponse]:
         """Check model allowlist and permissions."""
         if not _is_model_allowed(model, export_settings):
@@ -2664,9 +2664,9 @@ class ExportView(View):
         self,
         *,
         exporter: ModelExporter,
-        parsed_fields: List[Dict[str, str]],
-        variables: Dict[str, Any],
-        ordering: Optional[Union[str, List[str]]],
+        parsed_fields: list[dict[str, str]],
+        variables: dict[str, Any],
+        ordering: Optional[Union[str, list[str]]],
         max_rows: Optional[int],
         filename: str,
         chunk_size: int,
@@ -2915,11 +2915,11 @@ def get_export_urls():
 def export_model_to_csv(
     app_name: str,
     model_name: str,
-    fields: List[Union[str, Dict[str, str]]],
-    variables: Optional[Dict[str, Any]] = None,
-    ordering: Optional[Union[str, List[str]]] = None,
+    fields: list[Union[str, dict[str, str]]],
+    variables: Optional[dict[str, Any]] = None,
+    ordering: Optional[Union[str, list[str]]] = None,
     *,
-    export_settings: Optional[Dict[str, Any]] = None,
+    export_settings: Optional[dict[str, Any]] = None,
 ) -> str:
     """
     Programmatically export model data to CSV format with flexible field format support.
@@ -2942,11 +2942,11 @@ def export_model_to_csv(
 def export_model_to_excel(
     app_name: str,
     model_name: str,
-    fields: List[Union[str, Dict[str, str]]],
-    variables: Optional[Dict[str, Any]] = None,
-    ordering: Optional[Union[str, List[str]]] = None,
+    fields: list[Union[str, dict[str, str]]],
+    variables: Optional[dict[str, Any]] = None,
+    ordering: Optional[Union[str, list[str]]] = None,
     *,
-    export_settings: Optional[Dict[str, Any]] = None,
+    export_settings: Optional[dict[str, Any]] = None,
 ) -> bytes:
     """
     Programmatically export model data to Excel format with flexible field format support.

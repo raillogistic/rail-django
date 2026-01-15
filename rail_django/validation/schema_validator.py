@@ -34,19 +34,19 @@ class SchemaInfo:
     schema: Optional[GraphQLSchema] = None
     version: Optional[str] = None
     description: Optional[str] = None
-    apps: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    apps: Optional[list[str]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 @dataclass
 class ValidationResult:
     """Result of schema validation."""
     is_valid: bool
-    errors: List[str]
-    warnings: List[str]
-    info: List[str]
+    errors: list[str]
+    warnings: list[str]
+    info: list[str]
     schema_name: str
-    validation_details: Dict[str, Any]
+    validation_details: dict[str, Any]
 
     @property
     def has_errors(self) -> bool:
@@ -58,7 +58,7 @@ class ValidationResult:
         """Check if validation has warnings."""
         return len(self.warnings) > 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             'is_valid': self.is_valid,
@@ -228,7 +228,7 @@ class SchemaValidator:
                 'SCHEMA_VALIDATION_ERROR'
             )
 
-    def _validate_django_apps(self, app_names: List[str], schema_name: str):
+    def _validate_django_apps(self, app_names: list[str], schema_name: str):
         """Validate Django app dependencies."""
         for app_name in app_names:
             try:
@@ -295,7 +295,7 @@ class SchemaValidator:
         # This is a simplified check - a full implementation would be more complex
         visited = set()
 
-        def check_type(type_obj, path: Set[str]):
+        def check_type(type_obj, path: set[str]):
             if hasattr(type_obj, 'name') and type_obj.name in path:
                 self.error_handler.add_warning(
                     'schema',
@@ -330,7 +330,7 @@ class SchemaValidator:
         except Exception as e:
             logger.warning(f"Could not check deprecated fields for '{schema_name}': {e}")
 
-    def _get_validation_details(self, schema_info) -> Dict[str, Any]:
+    def _get_validation_details(self, schema_info) -> dict[str, Any]:
         """Get detailed validation information."""
         details = {
             'schema_name': getattr(schema_info, 'name', 'unknown'),

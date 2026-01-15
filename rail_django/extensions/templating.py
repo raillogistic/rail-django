@@ -192,7 +192,7 @@ TEMPLATE_POSTPROCESS_DEFAULTS = {
 }
 
 
-def _merge_dict(defaults: Dict[str, Any], overrides: Any) -> Dict[str, Any]:
+def _merge_dict(defaults: dict[str, Any], overrides: Any) -> dict[str, Any]:
     """Shallow-merge dict settings with safe fallbacks."""
     merged = dict(defaults)
     if isinstance(overrides, dict):
@@ -249,7 +249,7 @@ def _patch_pydyf_pdf() -> None:
         )
 
 
-def _templating_settings() -> Dict[str, Any]:
+def _templating_settings() -> dict[str, Any]:
     """
     Safely read the templating defaults from settings.
 
@@ -259,31 +259,31 @@ def _templating_settings() -> Dict[str, Any]:
     return getattr(settings, "RAIL_DJANGO_GRAPHQL_TEMPLATING", {})
 
 
-def _templating_dict(key: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+def _templating_dict(key: str, defaults: dict[str, Any]) -> dict[str, Any]:
     return _merge_dict(defaults, _templating_settings().get(key))
 
 
-def _templating_rate_limit() -> Dict[str, Any]:
+def _templating_rate_limit() -> dict[str, Any]:
     return _templating_dict("rate_limit", TEMPLATE_RATE_LIMIT_DEFAULTS)
 
 
-def _templating_cache() -> Dict[str, Any]:
+def _templating_cache() -> dict[str, Any]:
     return _templating_dict("cache", TEMPLATE_CACHE_DEFAULTS)
 
 
-def _templating_async() -> Dict[str, Any]:
+def _templating_async() -> dict[str, Any]:
     return _templating_dict("async_jobs", TEMPLATE_ASYNC_DEFAULTS)
 
 
-def _templating_catalog() -> Dict[str, Any]:
+def _templating_catalog() -> dict[str, Any]:
     return _templating_dict("catalog", TEMPLATE_CATALOG_DEFAULTS)
 
 
-def _templating_url_fetcher_allowlist() -> Dict[str, Any]:
+def _templating_url_fetcher_allowlist() -> dict[str, Any]:
     return _templating_dict("url_fetcher_allowlist", TEMPLATE_URL_FETCHER_DEFAULTS)
 
 
-def _templating_postprocess_defaults() -> Dict[str, Any]:
+def _templating_postprocess_defaults() -> dict[str, Any]:
     return _templating_dict("postprocess", TEMPLATE_POSTPROCESS_DEFAULTS)
 
 
@@ -299,7 +299,7 @@ def _templating_preview_enabled() -> bool:
     return bool(_templating_settings().get("enable_preview", settings.DEBUG))
 
 
-def _default_template_config() -> Dict[str, str]:
+def _default_template_config() -> dict[str, str]:
     """
     Provide default styling that can be overridden per template.
 
@@ -343,8 +343,8 @@ def _url_prefix() -> str:
     return _templating_settings().get("url_prefix", "templates")
 
 
-def _default_file_roots() -> List[Path]:
-    roots: List[Path] = []
+def _default_file_roots() -> list[Path]:
+    roots: list[Path] = []
     candidates = [
         getattr(settings, "STATIC_ROOT", None),
         getattr(settings, "MEDIA_ROOT", None),
@@ -371,9 +371,9 @@ def _default_file_roots() -> List[Path]:
     return roots
 
 
-def _resolve_file_roots(allowlist: Dict[str, Any]) -> List[Path]:
+def _resolve_file_roots(allowlist: dict[str, Any]) -> list[Path]:
     file_roots = allowlist.get("file_roots") or []
-    roots: List[Path] = []
+    roots: list[Path] = []
     if file_roots:
         for entry in file_roots:
             try:
@@ -434,7 +434,7 @@ def _build_safe_url_fetcher(base_url: Optional[str]) -> Optional[Callable]:
     base_host = (base_parsed.hostname or "").lower() if base_parsed else ""
     base_is_http = base_scheme in ("http", "https")
 
-    def safe_fetcher(url: str) -> Dict[str, Any]:
+    def safe_fetcher(url: str) -> dict[str, Any]:
         resolved_url = url
         parsed = urlparse(url)
         scheme = (parsed.scheme or "").lower()
@@ -476,7 +476,7 @@ class TemplateMeta:
     content_template: str
     footer_template: Optional[str]
     url_path: Optional[str]
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
     roles: Sequence[str] = field(default_factory=tuple)
     permissions: Sequence[str] = field(default_factory=tuple)
     guard: Optional[str] = None
@@ -484,14 +484,14 @@ class TemplateMeta:
     title: Optional[str] = None
     allow_client_data: bool = False
     client_data_fields: Sequence[str] = field(default_factory=tuple)
-    client_data_schema: Sequence[Dict[str, Any]] = field(default_factory=tuple)
+    client_data_schema: Sequence[dict[str, Any]] = field(default_factory=tuple)
 
 
 @dataclass
 class TemplateDefinition:
     """Runtime representation of a registered PDF template."""
 
-    model: Optional[Type[models.Model]]
+    model: Optional[type[models.Model]]
     method_name: Optional[str]
     handler: Optional[Callable[..., Any]]
     source: str
@@ -499,7 +499,7 @@ class TemplateDefinition:
     content_template: str
     footer_template: str
     url_path: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     roles: Sequence[str]
     permissions: Sequence[str]
     guard: Optional[str]
@@ -507,7 +507,7 @@ class TemplateDefinition:
     title: str
     allow_client_data: bool
     client_data_fields: Sequence[str]
-    client_data_schema: Sequence[Dict[str, Any]]
+    client_data_schema: Sequence[dict[str, Any]]
 
 
 @dataclass
@@ -561,14 +561,14 @@ def _clean_client_value(value: Any) -> str:
 
 
 def _normalize_client_schema(
-    fields: Sequence[str], schema: Sequence[Dict[str, Any]]
-) -> Sequence[Dict[str, Any]]:
+    fields: Sequence[str], schema: Sequence[dict[str, Any]]
+) -> Sequence[dict[str, Any]]:
     """
     Normalize client data schema. When explicit schema is provided, enforce name/type.
     Otherwise derive from field names.
     """
 
-    normalized: Dict[str, Dict[str, Any]] = {}
+    normalized: dict[str, dict[str, Any]] = {}
 
     for entry in schema or []:
         name = str(entry.get("name", "")).strip()
@@ -589,10 +589,10 @@ class TemplateRegistry:
     """Keeps track of all registered PDF templates exposed by models."""
 
     def __init__(self) -> None:
-        self._templates: Dict[str, TemplateDefinition] = {}
+        self._templates: dict[str, TemplateDefinition] = {}
 
     def register(
-        self, model: Type[models.Model], method_name: str, meta: TemplateMeta
+        self, model: type[models.Model], method_name: str, meta: TemplateMeta
     ) -> None:
         """
         Register a template for a model method.
@@ -702,7 +702,7 @@ class TemplateRegistry:
         """Retrieve a registered template by its URL path."""
         return self._templates.get(url_path)
 
-    def all(self) -> Dict[str, TemplateDefinition]:
+    def all(self) -> dict[str, TemplateDefinition]:
         """Expose all templates (primarily for introspection and tests)."""
         return dict(self._templates)
 
@@ -716,7 +716,7 @@ def model_pdf_template(
     header: Optional[str] = None,
     footer: Optional[str] = None,
     url: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
     roles: Optional[Iterable[str]] = None,
     permissions: Optional[Iterable[str]] = None,
     guard: Optional[str] = None,
@@ -724,7 +724,7 @@ def model_pdf_template(
     title: Optional[str] = None,
     allow_client_data: bool = False,
     client_data_fields: Optional[Iterable[str]] = None,
-    client_data_schema: Optional[Iterable[Dict[str, Any]]] = None,
+    client_data_schema: Optional[Iterable[dict[str, Any]]] = None,
 ) -> Callable:
     """
     Decorator to expose a model method as a PDF endpoint rendered with WeasyPrint.
@@ -776,7 +776,7 @@ def pdf_template(
     header: Optional[str] = None,
     footer: Optional[str] = None,
     url: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
     roles: Optional[Iterable[str]] = None,
     permissions: Optional[Iterable[str]] = None,
     guard: Optional[str] = None,
@@ -784,7 +784,7 @@ def pdf_template(
     title: Optional[str] = None,
     allow_client_data: bool = False,
     client_data_fields: Optional[Iterable[str]] = None,
-    client_data_schema: Optional[Iterable[Dict[str, Any]]] = None,
+    client_data_schema: Optional[Iterable[dict[str, Any]]] = None,
 ) -> Callable:
     """
     Decorator to expose a standalone function as a PDF endpoint.
@@ -829,7 +829,7 @@ def pdf_template(
     return decorator
 
 
-def _render_template(template_path: Optional[str], context: Dict[str, Any]) -> str:
+def _render_template(template_path: Optional[str], context: dict[str, Any]) -> str:
     """
     Render a template path with context. Returns an empty string when no template is provided.
 
@@ -847,7 +847,7 @@ def _render_template(template_path: Optional[str], context: Dict[str, Any]) -> s
 
 
 def _build_style_block(
-    config: Dict[str, Any], *, extra_css_chunks: Optional[Iterable[str]] = None
+    config: dict[str, Any], *, extra_css_chunks: Optional[Iterable[str]] = None
 ) -> str:
     """
     Convert style configuration into a CSS block usable by WeasyPrint.
@@ -902,7 +902,7 @@ def _css_escape(value: str) -> str:
 
 def _page_stamp_content(text: str) -> str:
     tokens = re.split(r"(\{page\}|\{pages\})", text)
-    parts: List[str] = []
+    parts: list[str] = []
     for token in tokens:
         if token == "{page}":
             parts.append("counter(page)")
@@ -913,7 +913,7 @@ def _page_stamp_content(text: str) -> str:
     return " ".join(parts) if parts else "\"\""
 
 
-def _build_page_stamp_css(page_stamps: Optional[Dict[str, Any]]) -> str:
+def _build_page_stamp_css(page_stamps: Optional[dict[str, Any]]) -> str:
     if not page_stamps:
         return ""
 
@@ -940,7 +940,7 @@ def _build_page_stamp_css(page_stamps: Optional[Dict[str, Any]]) -> str:
     )
 
 
-def _build_watermark_assets(watermark: Optional[Dict[str, Any]]) -> Tuple[str, str]:
+def _build_watermark_assets(watermark: Optional[dict[str, Any]]) -> tuple[str, str]:
     if not watermark:
         return "", ""
 
@@ -1181,7 +1181,7 @@ def evaluate_template_access(
 
 def _extract_client_data(
     request: HttpRequest, template_def: TemplateDefinition
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Extract whitelisted client-provided values from the request (query params only).
     """
@@ -1199,7 +1199,7 @@ def _extract_client_data(
     if not allowed_keys:
         return {}
 
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     for key in allowed_keys:
         if key in request.GET:
             data[key] = _clean_client_value(request.GET.get(key))
@@ -1256,8 +1256,8 @@ def _call_function_handler(
     allows_varargs = any(param.kind == param.VAR_POSITIONAL for param in params.values())
     accepts_kwargs = any(param.kind == param.VAR_KEYWORD for param in params.values())
     request_param = params.get("request")
-    args: List[Any] = []
-    kwargs: Dict[str, Any] = {}
+    args: list[Any] = []
+    kwargs: dict[str, Any] = {}
 
     if request_param:
         if request_param.kind == request_param.KEYWORD_ONLY:
@@ -1284,9 +1284,9 @@ def _build_template_context(
     request: HttpRequest,
     instance: Optional[models.Model],
     template_def: TemplateDefinition,
-    client_data: Optional[Dict[str, Any]] = None,
+    client_data: Optional[dict[str, Any]] = None,
     pk: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     data: Any = {}
     if template_def.source == "model":
         method = getattr(instance, template_def.method_name or "", None)
@@ -1334,7 +1334,7 @@ class PdfRenderer:
     """Renderer interface for PDF engines."""
 
     name = "base"
-    features: Dict[str, bool] = {}
+    features: dict[str, bool] = {}
 
     def render(
         self,
@@ -1342,7 +1342,7 @@ class PdfRenderer:
         *,
         base_url: Optional[str],
         url_fetcher: Optional[Callable],
-        config: Dict[str, Any],
+        config: dict[str, Any],
     ) -> bytes:
         raise NotImplementedError
 
@@ -1360,7 +1360,7 @@ class WeasyPrintRenderer(PdfRenderer):
         *,
         base_url: Optional[str],
         url_fetcher: Optional[Callable],
-        config: Dict[str, Any],
+        config: dict[str, Any],
     ) -> bytes:
         if not WEASYPRINT_AVAILABLE or not HTML:
             raise RuntimeError("WeasyPrint is not installed")
@@ -1384,7 +1384,7 @@ class WkhtmltopdfRenderer(PdfRenderer):
         *,
         base_url: Optional[str],
         url_fetcher: Optional[Callable],
-        config: Dict[str, Any],
+        config: dict[str, Any],
     ) -> bytes:
         binary = shutil.which("wkhtmltopdf")
         if not binary:
@@ -1418,7 +1418,7 @@ class WkhtmltopdfRenderer(PdfRenderer):
                     continue
 
 
-_RENDERER_REGISTRY: Dict[str, PdfRenderer] = {}
+_RENDERER_REGISTRY: dict[str, PdfRenderer] = {}
 
 
 def register_pdf_renderer(name: str, renderer: PdfRenderer) -> None:
@@ -1454,7 +1454,7 @@ def _sanitize_filename(filename: str) -> str:
     return cleaned or "document"
 
 
-def _normalize_page_stamps(value: Any) -> Optional[Dict[str, Any]]:
+def _normalize_page_stamps(value: Any) -> Optional[dict[str, Any]]:
     if not value:
         return None
     if value is True:
@@ -1466,7 +1466,7 @@ def _normalize_page_stamps(value: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _normalize_watermark(value: Any) -> Optional[Dict[str, Any]]:
+def _normalize_watermark(value: Any) -> Optional[dict[str, Any]]:
     if not value:
         return None
     if isinstance(value, str):
@@ -1477,9 +1477,9 @@ def _normalize_watermark(value: Any) -> Optional[Dict[str, Any]]:
 
 
 def _resolve_postprocess_config(
-    config: Optional[Dict[str, Any]],
-    overrides: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    config: Optional[dict[str, Any]],
+    overrides: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     defaults = _templating_postprocess_defaults()
     merged = _merge_dict(defaults, (config or {}).get("postprocess"))
     if overrides:
@@ -1498,8 +1498,8 @@ def render_template_html(
     header_html: str,
     content_html: str,
     footer_html: str,
-    config: Dict[str, Any],
-    postprocess: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any],
+    postprocess: Optional[dict[str, Any]] = None,
 ) -> str:
     postprocess_config = _resolve_postprocess_config(config, postprocess)
     postprocess_enabled = bool(postprocess_config.get("enable", False))
@@ -1537,11 +1537,11 @@ def render_template_html(
 def render_pdf_from_html(
     html_content: str,
     *,
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
     base_url: Optional[str] = None,
     url_fetcher: Optional[Callable] = None,
     renderer: Optional[str] = None,
-    postprocess: Optional[Dict[str, Any]] = None,
+    postprocess: Optional[dict[str, Any]] = None,
 ) -> bytes:
     config = {**_default_template_config(), **(config or {})}
     base_url = base_url or str(settings.BASE_DIR)
@@ -1561,15 +1561,15 @@ def render_pdf_from_html(
 
 def render_pdf(
     template: str,
-    context: Dict[str, Any],
-    config: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any],
+    config: Optional[dict[str, Any]] = None,
     *,
     header_template: Optional[str] = None,
     footer_template: Optional[str] = None,
     base_url: Optional[str] = None,
     url_fetcher: Optional[Callable] = None,
     renderer: Optional[str] = None,
-    postprocess: Optional[Dict[str, Any]] = None,
+    postprocess: Optional[dict[str, Any]] = None,
 ) -> bytes:
     config = {**_default_template_config(), **(config or {})}
     header_path = _default_header() if header_template is None else header_template
@@ -1604,8 +1604,8 @@ class PdfBuilder:
         self._header_html: Optional[str] = None
         self._content_html: Optional[str] = None
         self._footer_html: Optional[str] = None
-        self._context: Dict[str, Any] = {}
-        self._config: Dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
+        self._config: dict[str, Any] = {}
 
     def header(self, template_path: Optional[str]) -> "PdfBuilder":
         self._header_template = template_path
@@ -1645,7 +1645,7 @@ class PdfBuilder:
         base_url: Optional[str] = None,
         url_fetcher: Optional[Callable] = None,
         renderer: Optional[str] = None,
-        postprocess: Optional[Dict[str, Any]] = None,
+        postprocess: Optional[dict[str, Any]] = None,
     ) -> bytes:
         config = {**_default_template_config(), **self._config}
 
@@ -1704,7 +1704,7 @@ class PdfBuilder:
 
 
 def _apply_pdf_encryption(
-    pdf_bytes: bytes, encryption: Dict[str, Any], *, strict: bool
+    pdf_bytes: bytes, encryption: dict[str, Any], *, strict: bool
 ) -> bytes:
     if not encryption:
         return pdf_bytes
@@ -1731,7 +1731,7 @@ def _apply_pdf_encryption(
 
 
 def _load_watermark_pdf_bytes(
-    watermark: Dict[str, Any], *, config: Dict[str, Any]
+    watermark: dict[str, Any], *, config: dict[str, Any]
 ) -> Optional[bytes]:
     if watermark.get("pdf_bytes"):
         return watermark.get("pdf_bytes")
@@ -1762,7 +1762,7 @@ def _load_watermark_pdf_bytes(
 
 
 def _apply_pdf_watermark_overlay(
-    pdf_bytes: bytes, watermark: Dict[str, Any], *, config: Dict[str, Any], strict: bool
+    pdf_bytes: bytes, watermark: dict[str, Any], *, config: dict[str, Any], strict: bool
 ) -> bytes:
     if not watermark or watermark.get("mode", "css") != "overlay":
         return pdf_bytes
@@ -1790,7 +1790,7 @@ def _apply_pdf_watermark_overlay(
 
 
 def _apply_pdf_signature(
-    pdf_bytes: bytes, signature: Dict[str, Any], *, strict: bool
+    pdf_bytes: bytes, signature: dict[str, Any], *, strict: bool
 ) -> bytes:
     if not signature:
         return pdf_bytes
@@ -1838,8 +1838,8 @@ def _apply_pdf_signature(
 def _apply_pdf_postprocessing(
     pdf_bytes: bytes,
     *,
-    config: Optional[Dict[str, Any]] = None,
-    postprocess: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
+    postprocess: Optional[dict[str, Any]] = None,
 ) -> bytes:
     config = config or {}
     postprocess_config = _resolve_postprocess_config(config, postprocess)
@@ -1862,14 +1862,14 @@ def _apply_pdf_postprocessing(
     return result
 
 
-def _cache_settings_for_template(template_def: TemplateDefinition) -> Dict[str, Any]:
+def _cache_settings_for_template(template_def: TemplateDefinition) -> dict[str, Any]:
     overrides = {}
     if isinstance(template_def.config, dict):
         overrides = template_def.config.get("cache") or {}
     return _merge_dict(_templating_cache(), overrides)
 
 
-def _hash_payload(payload: Dict[str, Any]) -> str:
+def _hash_payload(payload: dict[str, Any]) -> str:
     serialized = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(serialized).hexdigest()
 
@@ -1879,13 +1879,13 @@ def _build_pdf_cache_key(
     *,
     pk: Optional[str],
     user: Optional[Any],
-    client_data: Dict[str, Any],
-    cache_settings: Dict[str, Any],
+    client_data: dict[str, Any],
+    cache_settings: dict[str, Any],
 ) -> Optional[str]:
     if not cache_settings.get("enable", False):
         return None
 
-    payload: Dict[str, Any] = {"template": template_def.url_path, "pk": pk}
+    payload: dict[str, Any] = {"template": template_def.url_path, "pk": pk}
     if cache_settings.get("vary_on_user", True):
         payload["user"] = getattr(user, "id", None) or "anon"
     if cache_settings.get("vary_on_client_data", True):
@@ -1906,7 +1906,7 @@ def _pdf_job_payload_key(job_id: str) -> str:
     return f"rail:pdf_job_payload:{job_id}"
 
 
-def _get_pdf_storage_dir(async_settings: Dict[str, Any]) -> Path:
+def _get_pdf_storage_dir(async_settings: dict[str, Any]) -> Path:
     storage_dir = async_settings.get("storage_dir")
     if storage_dir:
         path = Path(str(storage_dir))
@@ -1918,17 +1918,17 @@ def _get_pdf_storage_dir(async_settings: Dict[str, Any]) -> Path:
     return path
 
 
-def _get_pdf_job(job_id: str) -> Optional[Dict[str, Any]]:
+def _get_pdf_job(job_id: str) -> Optional[dict[str, Any]]:
     return cache.get(_pdf_job_cache_key(job_id))
 
 
-def _set_pdf_job(job_id: str, job: Dict[str, Any], *, timeout: int) -> None:
+def _set_pdf_job(job_id: str, job: dict[str, Any], *, timeout: int) -> None:
     cache.set(_pdf_job_cache_key(job_id), job, timeout=timeout)
 
 
 def _update_pdf_job(
-    job_id: str, updates: Dict[str, Any], *, timeout: int
-) -> Optional[Dict[str, Any]]:
+    job_id: str, updates: dict[str, Any], *, timeout: int
+) -> Optional[dict[str, Any]]:
     job = _get_pdf_job(job_id)
     if not job:
         return None
@@ -1951,7 +1951,7 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _job_access_allowed(request: Any, job: Dict[str, Any]) -> bool:
+def _job_access_allowed(request: Any, job: dict[str, Any]) -> bool:
     user = _resolve_request_user(request)
     if not user or not getattr(user, "is_authenticated", False):
         return False
@@ -1962,7 +1962,7 @@ def _job_access_allowed(request: Any, job: Dict[str, Any]) -> bool:
 
 
 def _notify_pdf_job_webhook(
-    job: Dict[str, Any], async_settings: Dict[str, Any]
+    job: dict[str, Any], async_settings: dict[str, Any]
 ) -> None:
     webhook_url = async_settings.get("webhook_url")
     if not webhook_url:
@@ -2109,10 +2109,10 @@ def generate_pdf_async(
     request: HttpRequest,
     template_def: TemplateDefinition,
     pk: Optional[str],
-    client_data: Dict[str, Any],
+    client_data: dict[str, Any],
     base_url: Optional[str] = None,
     renderer: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     async_settings = _templating_async()
     backend = str(async_settings.get("backend", "thread")).lower()
     expires_seconds = int(async_settings.get("expires_seconds", 3600))
@@ -2184,7 +2184,7 @@ def generate_pdf_async(
     }
 
 
-def _cleanup_pdf_job_files(job: Dict[str, Any]) -> None:
+def _cleanup_pdf_job_files(job: dict[str, Any]) -> None:
     file_path = job.get("file_path")
     if not file_path:
         return
@@ -2405,9 +2405,9 @@ class PdfTemplateView(View):
         request: HttpRequest,
         instance: Optional[models.Model],
         template_def: TemplateDefinition,
-        client_data: Optional[Dict[str, Any]] = None,
+        client_data: Optional[dict[str, Any]] = None,
         pk: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Build template context combining the model instance and method payload.
 
@@ -2480,7 +2480,7 @@ class PdfTemplateView(View):
         return f"{_sanitize_filename(base_name)}.pdf"
 
     def _get_rate_limit_identifier(
-        self, request: HttpRequest, rate_limit: Dict[str, Any]
+        self, request: HttpRequest, rate_limit: dict[str, Any]
     ) -> str:
         user = _resolve_request_user(request)
         if user and getattr(user, "is_authenticated", False):
@@ -2556,7 +2556,7 @@ class PdfTemplateView(View):
     def _render_pdf(
         self,
         template_def: TemplateDefinition,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         *,
         base_url: Optional[str] = None,
         renderer: Optional[str] = None,

@@ -27,10 +27,10 @@ class SchemaHarness:
     registry: SchemaRegistry
 
 
-def _normalize_headers(headers: Optional[Mapping[str, str]]) -> Dict[str, str]:
+def _normalize_headers(headers: Optional[Mapping[str, str]]) -> dict[str, str]:
     if not headers:
         return {}
-    normalized: Dict[str, str] = {}
+    normalized: dict[str, str] = {}
     for key, value in headers.items():
         if not key:
             continue
@@ -47,7 +47,7 @@ def build_request(
     *,
     user: Any = None,
     headers: Optional[Mapping[str, str]] = None,
-    data: Optional[Dict[str, Any]] = None,
+    data: Optional[dict[str, Any]] = None,
     body: Optional[str] = None,
     schema_name: str = "default",
 ):
@@ -96,7 +96,7 @@ def build_schema(
     schema_name: str = "test",
     apps: Optional[Iterable[str]] = None,
     models: Optional[Iterable[str]] = None,
-    settings: Optional[Dict[str, Any]] = None,
+    settings: Optional[dict[str, Any]] = None,
 ) -> SchemaHarness:
     registry = SchemaRegistry()
     registry.register_schema(
@@ -130,7 +130,7 @@ class RailGraphQLTestClient:
         self,
         query: str,
         *,
-        variables: Optional[Dict[str, Any]] = None,
+        variables: Optional[dict[str, Any]] = None,
         user: Any = None,
         headers: Optional[Mapping[str, str]] = None,
         operation_name: Optional[str] = None,
@@ -159,10 +159,10 @@ class RailGraphQLTestClient:
 @contextmanager
 def override_rail_settings(
     *,
-    global_settings: Optional[Dict[str, Any]] = None,
-    schema_settings: Optional[Dict[str, Any]] = None,
+    global_settings: Optional[dict[str, Any]] = None,
+    schema_settings: Optional[dict[str, Any]] = None,
 ):
-    overrides: Dict[str, Any] = {}
+    overrides: dict[str, Any] = {}
     if global_settings is not None:
         overrides["RAIL_DJANGO_GRAPHQL"] = global_settings
     if schema_settings is not None:

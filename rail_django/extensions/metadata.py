@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 # Lightweight, targeted cache for model_table metadata only
 _table_cache_lock = threading.RLock()
-_table_cache: Dict[str, Dict[str, Any]] = {}
+_table_cache: dict[str, dict[str, Any]] = {}
 _table_cache_stats = {
     "hits": 0,
     "misses": 0,
@@ -77,7 +77,7 @@ _table_cache_policy = {
     "timeout_configured": False,
 }
 _metadata_cache_lock = threading.RLock()
-_metadata_cache: Dict[str, Dict[str, Any]] = {}
+_metadata_cache: dict[str, dict[str, Any]] = {}
 _metadata_cache_stats = {
     "hits": 0,
     "misses": 0,
@@ -91,10 +91,10 @@ _metadata_cache_policy = {
 }
 
 _filter_cache_lock = threading.RLock()
-_filter_class_cache: Dict[str, Any] = {}
+_filter_class_cache: dict[str, Any] = {}
 
 _metadata_version_lock = threading.RLock()
-_metadata_versions: Dict[str, str] = {}
+_metadata_versions: dict[str, str] = {}
 _global_metadata_seed = str(int(time.time() * 1000))
 _migration_context_cache: Optional[bool] = None
 
@@ -213,11 +213,11 @@ def _make_table_cache_key(
     app_name: str,
     model_name: str,
     counts: bool,
-    exclude: Optional[List[str]] = None,
-    only: Optional[List[str]] = None,
+    exclude: Optional[list[str]] = None,
+    only: Optional[list[str]] = None,
     include_nested: bool = True,
-    only_lookup: Optional[List[str]] = None,
-    exclude_lookup: Optional[List[str]] = None,
+    only_lookup: Optional[list[str]] = None,
+    exclude_lookup: Optional[list[str]] = None,
     include_filters: bool = True,
     include_mutations: bool = True,
     include_templates: bool = True,
@@ -274,7 +274,7 @@ def _make_table_cache_key(
         return fallback
 
 
-def _make_filter_cache_key(schema_name: str, model: Type[models.Model]) -> str:
+def _make_filter_cache_key(schema_name: str, model: type[models.Model]) -> str:
     try:
         model_label = getattr(model._meta, "label_lower", None) or model.__name__
     except Exception:
@@ -367,7 +367,7 @@ def _get_metadata_cache_timeout(timeout: Optional[int]) -> Optional[int]:
 def _make_metadata_cache_key(
     func, bound_args: inspect.BoundArguments, user_specific: bool, user_cache_key: Optional[str]
 ) -> str:
-    parts: List[str] = [f"{func.__module__}.{func.__qualname__}"]
+    parts: list[str] = [f"{func.__module__}.{func.__qualname__}"]
     for name, value in bound_args.arguments.items():
         if name == "self":
             parts.append(f"self={_self_cache_token(value)}")
@@ -584,7 +584,7 @@ def get_user_model_lazy():
 
 
 def _is_metadata_enabled(
-    schema_settings: Optional[Union[SchemaSettings, Dict[str, Any]]]
+    schema_settings: Optional[Union[SchemaSettings, dict[str, Any]]]
 ) -> bool:
     if not schema_settings:
         return False
@@ -614,8 +614,8 @@ class InputFieldMetadata:
     required: bool
     default_value: Optional[Any] = None
     description: Optional[str] = None
-    choices: Optional[List[Dict[str, Any]]] = None
-    validation_rules: Optional[Dict[str, Any]] = None
+    choices: Optional[list[dict[str, Any]]] = None
+    validation_rules: Optional[dict[str, Any]] = None
     widget_type: Optional[str] = None
     placeholder: Optional[str] = None
     help_text: Optional[str] = None
@@ -635,18 +635,18 @@ class MutationMetadata:
     name: str
     method_name: Optional[str] = None
     description: Optional[str] = None
-    input_fields: List[InputFieldMetadata] = field(default_factory=list)
+    input_fields: list[InputFieldMetadata] = field(default_factory=list)
     return_type: Optional[str] = None
     input_type: Optional[str] = None
     requires_authentication: bool = True
-    required_permissions: List[str] = field(default_factory=list)
+    required_permissions: list[str] = field(default_factory=list)
     mutation_type: str = "custom"  # create, update, delete, custom
     model_name: Optional[str] = None
-    form_config: Optional[Dict[str, Any]] = None
-    validation_schema: Optional[Dict[str, Any]] = None
+    form_config: Optional[dict[str, Any]] = None
+    validation_schema: Optional[dict[str, Any]] = None
     success_message: Optional[str] = None
-    error_messages: Optional[Dict[str, str]] = None
-    action: Optional[Dict[str, Any]] = None
+    error_messages: Optional[dict[str, str]] = None
+    action: Optional[dict[str, Any]] = None
 
 
 # ChoiceType : {"value":str,"label":str}    graphene class
@@ -834,7 +834,7 @@ class FieldMetadata:
     min_value: Optional[Union[int, float]]
     max_value: Optional[Union[int, float]]
     regex: Optional[str]
-    choices: Optional[List[Dict[str, str]]]
+    choices: Optional[list[dict[str, str]]]
     is_primary_key: bool
     is_foreign_key: bool
     is_unique: bool
@@ -903,7 +903,7 @@ class ModelPermissionMatrix:
     can_read: bool = True
     can_list: bool = True
     can_history: bool = True
-    reasons: Dict[str, Optional[str]] = field(default_factory=dict)
+    reasons: dict[str, Optional[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -917,19 +917,19 @@ class ModelMetadata:
     verbose_name_plural: str
     table_name: str
     primary_key_field: str
-    fields: List[FieldMetadata]
-    relationships: List[RelationshipMetadata]
-    permissions: List[str]
-    ordering: List[str]
-    default_ordering: List[str]
-    unique_together: List[List[str]]
-    unique_constraints: List[Dict[str, Any]]
-    indexes: List[Dict[str, Any]]
+    fields: list[FieldMetadata]
+    relationships: list[RelationshipMetadata]
+    permissions: list[str]
+    ordering: list[str]
+    default_ordering: list[str]
+    unique_together: list[list[str]]
+    unique_constraints: list[dict[str, Any]]
+    indexes: list[dict[str, Any]]
     abstract: bool
     proxy: bool
     managed: bool
-    filters: List[Dict[str, Any]]
-    mutations: List["MutationMetadata"]
+    filters: list[dict[str, Any]]
+    mutations: list["MutationMetadata"]
 
 
 @dataclass
@@ -944,7 +944,7 @@ class FormFieldMetadata:
     widget_type: str
     placeholder: Optional[str] = None
     default_value: Any = None
-    choices: Optional[List[Dict[str, str]]] = None
+    choices: Optional[list[dict[str, str]]] = None
     # Django CharField attributes
     max_length: Optional[int] = None
     min_length: Optional[int] = None
@@ -963,13 +963,13 @@ class FormFieldMetadata:
     unique: bool = False
     editable: bool = True
     # Validation attributes
-    validators: Optional[List[str]] = None
-    error_messages: Optional[Dict[str, str]] = None
+    validators: Optional[list[str]] = None
+    error_messages: Optional[dict[str, str]] = None
     # Form-specific attributes
     disabled: bool = False
     readonly: bool = False
     css_classes: Optional[str] = None
-    data_attributes: Optional[Dict[str, str]] = None
+    data_attributes: Optional[dict[str, str]] = None
     has_permission: bool = True
     permissions: Optional[FieldPermissionMetadata] = None
 
@@ -997,14 +997,14 @@ class FormRelationshipMetadata:
     is_reverse: bool = False
     # Form-specific attributes
     multiple: bool = False
-    queryset_filters: Optional[Dict[str, Any]] = None
+    queryset_filters: Optional[dict[str, Any]] = None
     empty_label: Optional[str] = None
-    limit_choices_to: Optional[Dict[str, Any]] = None
+    limit_choices_to: Optional[dict[str, Any]] = None
     # UI attributes
     disabled: bool = False
     readonly: bool = False
     css_classes: Optional[str] = None
-    data_attributes: Optional[Dict[str, str]] = None
+    data_attributes: Optional[dict[str, str]] = None
     has_permission: bool = True
     permissions: Optional[FieldPermissionMetadata] = None
 
@@ -1021,11 +1021,11 @@ class ModelFormMetadata:
     form_title: str
 
     form_description: Optional[str]
-    fields: List[FormFieldMetadata]
-    relationships: List[FormRelationshipMetadata]
-    nested: List["ModelFormMetadata"] = field(default_factory=list)
+    fields: list[FormFieldMetadata]
+    relationships: list[FormRelationshipMetadata]
+    nested: list["ModelFormMetadata"] = field(default_factory=list)
     # Form configuration
-    field_order: Optional[List[str]] = None
+    field_order: Optional[list[str]] = None
     # When this instance is produced as a nested metadata entry for a relationship,
     # these attributes describe the parent relationship that led to this nesting.
     # They remain None for top-level metadata.
@@ -1035,15 +1035,15 @@ class ModelFormMetadata:
     to_field: Optional[str] = None
     from_field: Optional[str] = None
     is_required: Optional[bool] = None
-    exclude_fields: List[str] = field(default_factory=list)
-    readonly_fields: List[str] = field(default_factory=list)
+    exclude_fields: list[str] = field(default_factory=list)
+    readonly_fields: list[str] = field(default_factory=list)
     # Validation and permissions
-    required_permissions: List[str] = field(default_factory=list)
-    form_validation_rules: Optional[Dict[str, Any]] = None
+    required_permissions: list[str] = field(default_factory=list)
+    form_validation_rules: Optional[dict[str, Any]] = None
     # UI configuration
-    form_layout: Optional[Dict[str, Any]] = None
+    form_layout: Optional[dict[str, Any]] = None
     css_classes: Optional[str] = None
-    form_attributes: Optional[Dict[str, str]] = None
+    form_attributes: Optional[dict[str, str]] = None
     permissions: Optional[ModelPermissionMatrix] = None
 
 
@@ -1076,14 +1076,14 @@ class TemplateActionMetadata:
     url_path: str
     guard: Optional[str]
     require_authentication: bool
-    roles: List[str]
-    permissions: List[str]
+    roles: list[str]
+    permissions: list[str]
     allowed: bool
     denial_reason: Optional[str] = None
     allow_client_data: bool = False
-    client_data_fields: List[str] = field(default_factory=list)
-    client_data_schema: List[Dict[str, Any]] = field(default_factory=list)
-    client_data_schema: List[Dict[str, Any]] = field(default_factory=list)
+    client_data_fields: list[str] = field(default_factory=list)
+    client_data_schema: list[dict[str, Any]] = field(default_factory=list)
+    client_data_schema: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -1097,22 +1097,22 @@ class ModelTableMetadata:
     verboseNamePlural: str
     tableName: str
     primaryKey: str
-    ordering: List[str]
-    defaultOrdering: List[str]
+    ordering: list[str]
+    defaultOrdering: list[str]
     get_latest_by: Optional[str]
-    managers: List[str]
+    managers: list[str]
     managed: bool
-    fields: List[TableFieldMetadata]
-    generics: List[TableFieldMetadata]
-    filters: List[Dict[str, Any]]
+    fields: list[TableFieldMetadata]
+    generics: list[TableFieldMetadata]
+    filters: list[dict[str, Any]]
     permissions: Optional[ModelPermissionMatrix] = None
-    mutations: List[MutationMetadata] = field(default_factory=list)
-    pdf_templates: List[TemplateActionMetadata] = field(default_factory=list)
+    mutations: list[MutationMetadata] = field(default_factory=list)
+    pdf_templates: list[TemplateActionMetadata] = field(default_factory=list)
 
 
 def _build_field_permission_snapshot(
     user,
-    model_class: Type[models.Model],
+    model_class: type[models.Model],
     field_name: str,
 ) -> Optional[FieldPermissionMetadata]:
     """Build a permission snapshot for a field."""
@@ -1152,7 +1152,7 @@ def _build_field_permission_snapshot(
 
 
 def _build_model_permission_matrix(
-    model: Type[models.Model], user
+    model: type[models.Model], user
 ) -> ModelPermissionMatrix:
     """Compute CRUD permissions for a model and user."""
 
@@ -1174,7 +1174,7 @@ def _build_model_permission_matrix(
         "list": "list",
         "history": "history",
     }
-    reasons: Dict[str, Optional[str]] = {}
+    reasons: dict[str, Optional[str]] = {}
 
     if not user or not getattr(user, "is_authenticated", False):
         for op in operations.keys():
@@ -1188,7 +1188,7 @@ def _build_model_permission_matrix(
             reasons=reasons,
         )
 
-    guard_results: Dict[str, Dict[str, Any]] = {}
+    guard_results: dict[str, dict[str, Any]] = {}
     try:
         graphql_meta = get_model_graphql_meta(model)
     except Exception:
@@ -1753,7 +1753,7 @@ class ModelMetadataExtractor:
         if payload is None:
             return None
         if isinstance(payload, dict):
-            cleaned: Dict[str, Any] = {}
+            cleaned: dict[str, Any] = {}
             for key, val in payload.items():
                 if callable(val):
                     continue
@@ -2224,7 +2224,7 @@ class ModelMetadataExtractor:
     @cache_metadata(
         timeout=1800, user_specific=False
     )  # 30 minutes cache for filter metadata (not user-specific)
-    def _extract_filter_metadata(self, model) -> List[Dict[str, Any]]:
+    def _extract_filter_metadata(self, model) -> list[dict[str, Any]]:
         """
         Extract comprehensive filter metadata for a Django model with enhanced features.
 
@@ -2831,8 +2831,8 @@ class ModelMetadataExtractor:
 
     @cache_metadata(timeout=900, user_specific=True)
     def extract_mutations_metadata(
-        self, model: Type[models.Model], user=None
-    ) -> List[MutationMetadata]:
+        self, model: type[models.Model], user=None
+    ) -> list[MutationMetadata]:
         """
         Extract mutation metadata for a Django model.
 
@@ -2904,7 +2904,7 @@ class ModelMetadataExtractor:
             return []
 
     def _extract_create_mutation_metadata(
-        self, model: Type[models.Model], mutation_generator
+        self, model: type[models.Model], mutation_generator
     ) -> Optional[MutationMetadata]:
         """Extract metadata for create mutation."""
         try:
@@ -2934,7 +2934,7 @@ class ModelMetadataExtractor:
             return None
 
     def _extract_update_mutation_metadata(
-        self, model: Type[models.Model], mutation_generator
+        self, model: type[models.Model], mutation_generator
     ) -> Optional[MutationMetadata]:
         """Extract metadata for update mutation."""
         try:
@@ -2972,7 +2972,7 @@ class ModelMetadataExtractor:
             return None
 
     def _extract_delete_mutation_metadata(
-        self, model: Type[models.Model], mutation_generator
+        self, model: type[models.Model], mutation_generator
     ) -> Optional[MutationMetadata]:
         """Extract metadata for delete mutation."""
         try:
@@ -3009,8 +3009,8 @@ class ModelMetadataExtractor:
             return None
 
     def _extract_bulk_mutations_metadata(
-        self, model: Type[models.Model], mutation_generator
-    ) -> List[MutationMetadata]:
+        self, model: type[models.Model], mutation_generator
+    ) -> list[MutationMetadata]:
         """Extract metadata for bulk mutations."""
         mutations = []
         model_name = model.__name__
@@ -3089,8 +3089,8 @@ class ModelMetadataExtractor:
         return mutations
 
     def _extract_method_mutations_metadata(
-        self, model: Type[models.Model], mutation_generator, user=None
-    ) -> List[MutationMetadata]:
+        self, model: type[models.Model], mutation_generator, user=None
+    ) -> list[MutationMetadata]:
         """Extract metadata for method-based mutations."""
         mutations = []
 
@@ -3114,7 +3114,7 @@ class ModelMetadataExtractor:
         return mutations
 
     def _extract_method_mutation_metadata(
-        self, model: Type[models.Model], method_name: str, method_info, user=None
+        self, model: type[models.Model], method_name: str, method_info, user=None
     ) -> Optional[MutationMetadata]:
         """Extract metadata for a specific method mutation."""
         try:
@@ -3184,8 +3184,8 @@ class ModelMetadataExtractor:
             return None
 
     def _extract_input_fields_from_model(
-        self, model: Type[models.Model], mutation_type: str
-    ) -> List[InputFieldMetadata]:
+        self, model: type[models.Model], mutation_type: str
+    ) -> list[InputFieldMetadata]:
         """Extract input fields from Django model fields."""
         input_fields = []
 
@@ -3312,15 +3312,15 @@ class ModelMetadataExtractor:
         else:
             return "text"
 
-    def _extract_input_fields_from_method(self, method) -> List[InputFieldMetadata]:
+    def _extract_input_fields_from_method(self, method) -> list[InputFieldMetadata]:
         """Extract input fields from method signature (with decorator overrides)."""
         import inspect
         from datetime import date, datetime, time
 
-        input_fields: List[InputFieldMetadata] = []
+        input_fields: list[InputFieldMetadata] = []
         signature = inspect.signature(method)
         action_ui = getattr(method, "_action_ui", {}) or {}
-        field_overrides: Dict[str, Dict[str, Any]] = action_ui.get("fields", {}) or {}
+        field_overrides: dict[str, dict[str, Any]] = action_ui.get("fields", {}) or {}
 
         for param_name, param in signature.parameters.items():
             if param_name == "self":
@@ -3353,7 +3353,7 @@ class ModelMetadataExtractor:
                     field_type = "Date" if base_annotation is date else "DateTime"
                 elif base_annotation is time:
                     field_type = "Time"
-                elif origin in (list, List, tuple, set):
+                elif origin in (list, tuple, set):
                     inner = args[0] if args else Any
                     inner_type = "String"
                     if inner == int:
@@ -3754,11 +3754,11 @@ class ModelFormMetadataExtractor:
         app_name: str,
         model_name: str,
         user,
-        nested_fields: List[str] = None,
-        exclude: Optional[List[str]] = None,
-        only: Optional[List[str]] = None,
-        exclude_relationships: Optional[List[str]] = None,
-        only_relationships: Optional[List[str]] = None,
+        nested_fields: list[str] = None,
+        exclude: Optional[list[str]] = None,
+        only: Optional[list[str]] = None,
+        exclude_relationships: Optional[list[str]] = None,
+        only_relationships: Optional[list[str]] = None,
         current_depth: int = 0,
         visited_models: set = None,
     ) -> Optional[ModelFormMetadata]:
@@ -3867,8 +3867,8 @@ class ModelFormMetadataExtractor:
         form_relationships = []
         # Track declared order across fields and relationships
         # Keep forward relationships in the main order and push reverse relationships to the end
-        declared_forward_order: List[str] = []
-        declared_reverse_order: List[str] = []
+        declared_forward_order: list[str] = []
+        declared_reverse_order: list[str] = []
 
         for field in meta.get_fields():
             # Global name-based exclusions
@@ -4147,7 +4147,7 @@ class ModelFormMetadataExtractor:
 
         return f"Enter {field.verbose_name.lower()}"
 
-    def _get_queryset_filters(self, field) -> Optional[Dict[str, Any]]:
+    def _get_queryset_filters(self, field) -> Optional[dict[str, Any]]:
         """Get queryset filters for relationship fields."""
         if hasattr(field, "limit_choices_to") and field.limit_choices_to:
             return field.limit_choices_to
@@ -4185,7 +4185,7 @@ class ModelFormMetadataExtractor:
 
         return " ".join(classes)
 
-    def _get_data_attributes(self, field) -> Optional[Dict[str, Any]]:
+    def _get_data_attributes(self, field) -> Optional[dict[str, Any]]:
         """Get data attributes for form fields."""
         attributes = {}
 
@@ -4197,7 +4197,7 @@ class ModelFormMetadataExtractor:
 
         return attributes if attributes else None
 
-    def _get_form_validation_rules(self, model) -> Optional[Dict[str, Any]]:
+    def _get_form_validation_rules(self, model) -> Optional[dict[str, Any]]:
         """Get form validation rules for the model."""
         return {
             "validate_on_blur": True,
@@ -4205,7 +4205,7 @@ class ModelFormMetadataExtractor:
             "show_errors_inline": True,
         }
 
-    def _get_form_layout(self, model) -> Optional[Dict[str, Any]]:
+    def _get_form_layout(self, model) -> Optional[dict[str, Any]]:
         """Get form layout configuration."""
         return {
             "layout_type": "vertical",
@@ -4217,7 +4217,7 @@ class ModelFormMetadataExtractor:
         """Get CSS classes for the form."""
         return f"model-form {model._meta.app_label}-{model._meta.model_name}-form"
 
-    def _get_form_attributes(self, model) -> Optional[Dict[str, Any]]:
+    def _get_form_attributes(self, model) -> Optional[dict[str, Any]]:
         """Get form HTML attributes."""
         return {
             "novalidate": False,
@@ -4400,7 +4400,7 @@ class ModelTableExtractor:
                 args = [arg for arg in get_args(py_type) if arg is not type(None)]
                 return _to_graphql_str(args[0]) if args else "String"
 
-            if origin in (list, List):
+            if origin is list:
                 args = get_args(py_type)
                 inner = _to_graphql_str(args[0]) if args else "String"
                 return f"List[{inner}]"
@@ -4426,8 +4426,8 @@ class ModelTableExtractor:
         )
 
     def _collect_pdf_templates(
-        self, model: Type[models.Model], user=None
-    ) -> List[TemplateActionMetadata]:
+        self, model: type[models.Model], user=None
+    ) -> list[TemplateActionMetadata]:
         """
         Gather template metadata registered via @model_pdf_template for the model.
         """
@@ -4442,7 +4442,7 @@ class ModelTableExtractor:
 
         prefix = _templating_url_prefix().strip("/")
         api_prefix = f"/api/{prefix}".rstrip("/")
-        templates: List[TemplateActionMetadata] = []
+        templates: list[TemplateActionMetadata] = []
 
         for url_path, definition in registry_entries:
             if definition.model is not model:
@@ -4583,13 +4583,13 @@ class ModelTableExtractor:
         self,
         app_name: str,
         model_name: str,
-        custom_fields: Optional[List[str]] = None,
+        custom_fields: Optional[list[str]] = None,
         counts: bool = False,
-        exclude: Optional[List[str]] = None,
-        only: Optional[List[str]] = None,
+        exclude: Optional[list[str]] = None,
+        only: Optional[list[str]] = None,
         include_nested: bool = True,
-        only_lookup: Optional[List[str]] = None,
-        exclude_lookup: Optional[List[str]] = None,
+        only_lookup: Optional[list[str]] = None,
+        exclude_lookup: Optional[list[str]] = None,
         include_filters: bool = True,
         include_mutations: bool = True,
         include_pdf_templates: bool = True,
@@ -4652,7 +4652,7 @@ class ModelTableExtractor:
 
         meta = model._meta
         introspector = ModelIntrospector(model, self.schema_name)
-        mutations: List[MutationMetadata] = []
+        mutations: list[MutationMetadata] = []
         if include_mutations:
             try:
                 mutations = self.metadata_extractor.extract_mutations_metadata(
@@ -4724,8 +4724,8 @@ class ModelTableExtractor:
         ]
         managed = bool(getattr(meta, "managed", True))
 
-        table_fields: List[TableFieldMetadata] = []
-        generic_fields: List[TableFieldMetadata] = []
+        table_fields: list[TableFieldMetadata] = []
+        generic_fields: list[TableFieldMetadata] = []
 
         # For polymorphic models, we need to handle inheritance hierarchy properly
         # to ensure fields from all parent classes are included in child metadata
@@ -4843,7 +4843,7 @@ class ModelTableExtractor:
                 self._build_table_field_for_reverse_count(introspector, model)
             )
         # Filters: exclusively use AdvancedFilterGenerator for table filter extraction
-        filters: List[Dict[str, Any]] = []
+        filters: list[dict[str, Any]] = []
         if include_filters:
             try:
                 from ..generators.filters import AdvancedFilterGenerator
@@ -4865,7 +4865,7 @@ class ModelTableExtractor:
                 except Exception:
                     properties_dict = {}
 
-                grouped_filter_dict: Dict[str, Dict[str, Any]] = {}
+                grouped_filter_dict: dict[str, dict[str, Any]] = {}
                 base_filters = getattr(filter_class, "base_filters", {}) or {}
 
                 for fname, finstance in base_filters.items():
@@ -5045,7 +5045,7 @@ class ModelTableExtractor:
                     # Helper to build an option dict
                     def _make_option(
                         name: str, lookup: str, label_for_help: str, choices_src: Any
-                    ) -> Dict[str, Any]:
+                    ) -> dict[str, Any]:
                         return {
                             "name": name,
                             "lookup_expr": lookup,
@@ -5241,13 +5241,13 @@ class ModelTableExtractor:
 
                 # Apply filter selection variables (exclude, only, include_nested, only_lookup, exclude_lookup)
                 def _apply_filter_selection(
-                    filters_in: List[Dict[str, Any]],
-                    only_fields: Optional[List[str]] = None,
-                    exclude_fields: Optional[List[str]] = None,
+                    filters_in: list[dict[str, Any]],
+                    only_fields: Optional[list[str]] = None,
+                    exclude_fields: Optional[list[str]] = None,
                     include_nested_val: bool = True,
-                    only_lk: Optional[List[str]] = None,
-                    exclude_lk: Optional[List[str]] = None,
-                ) -> List[Dict[str, Any]]:
+                    only_lk: Optional[list[str]] = None,
+                    exclude_lk: Optional[list[str]] = None,
+                ) -> list[dict[str, Any]]:
                     """
                     Purpose: Filter the computed filters according to selection variables.
                     Args:
@@ -5270,7 +5270,7 @@ class ModelTableExtractor:
                     only_lk_set = set(only_lk or [])
                     exclude_lk_set = set(exclude_lk or [])
 
-                    result: List[Dict[str, Any]] = []
+                    result: list[dict[str, Any]] = []
                     for grp in filters_in:
                         parent_name = grp.get("field_name")
 
@@ -5561,7 +5561,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         description="Return the metadata for every model declared in the specified Django app.",
     )
 
-    def resolve_available_models(self, info) -> List[AvailableModelType]:
+    def resolve_available_models(self, info) -> list[AvailableModelType]:
         """Resolve list of all available models."""
         _require_metadata_access(info)
         available_models = []
@@ -5651,11 +5651,11 @@ class ModelMetadataQuery(graphene.ObjectType):
         app_name: str,
         model_name: str,
         counts: bool = False,
-        exclude: Optional[List[str]] = None,
-        only: Optional[List[str]] = None,
+        exclude: Optional[list[str]] = None,
+        only: Optional[list[str]] = None,
         include_nested: bool = True,
-        only_lookup: Optional[List[str]] = None,
-        exclude_lookup: Optional[List[str]] = None,
+        only_lookup: Optional[list[str]] = None,
+        exclude_lookup: Optional[list[str]] = None,
     ) -> Optional[ModelTableType]:
         """Resolve comprehensive table metadata for a Django model."""
         user = _require_metadata_access(info)
@@ -5703,11 +5703,11 @@ class ModelMetadataQuery(graphene.ObjectType):
         info,
         app_name: str,
         model_name: str,
-        nested_fields: List[str] = None,
-        exclude: Optional[List[str]] = None,
-        only: Optional[List[str]] = None,
-        exclude_relationships: Optional[List[str]] = None,
-        only_relationships: Optional[List[str]] = None,
+        nested_fields: list[str] = None,
+        exclude: Optional[list[str]] = None,
+        only: Optional[list[str]] = None,
+        exclude_relationships: Optional[list[str]] = None,
+        only_relationships: Optional[list[str]] = None,
     ) -> Optional[ModelFormMetadataType]:
         """
         Resolve model form metadata for frontend form construction.
@@ -5759,7 +5759,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         nested_fields: bool = True,
         permissions_included: bool = True,
         max_depth: int = 1,
-    ) -> List[ModelMetadataType]:
+    ) -> list[ModelMetadataType]:
         """
         Resolve metadata for every model inside the provided Django app.
 
@@ -5787,7 +5787,7 @@ class ModelMetadataQuery(graphene.ObjectType):
             raise GraphQLError("Unknown app requested.")
 
         extractor = ModelMetadataExtractor(max_depth=max_depth)
-        models_metadata: List[ModelMetadataType] = []
+        models_metadata: list[ModelMetadataType] = []
         for model in app_config.get_models():
             # Filter out Historical models (django-simple-history)
             if model.__name__.startswith("Historical"):
@@ -6018,7 +6018,7 @@ def warm_metadata_cache(app_name: str = None, model_name: str = None, user=None)
         logger.info("Warmed metadata cache for all models")
 
 
-def get_cache_stats() -> Dict[str, Any]:
+def get_cache_stats() -> dict[str, Any]:
     """
     Purpose: Return TTL cache statistics for model table metadata.
 

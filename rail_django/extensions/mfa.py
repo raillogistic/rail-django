@@ -67,9 +67,9 @@ class MFAManager:
             settings, "MFA_SMS_TOKEN_VALIDITY", 300
         )  # 5 minutes
         # In-memory SMS token store: {"userId_deviceId": (token, expires_ts)}
-        self._sms_tokens: Dict[str, Tuple[str, float]] = {}
+        self._sms_tokens: dict[str, tuple[str, float]] = {}
 
-    def setup_totp_device(self, user: "AbstractUser", device_name: str) -> Tuple["MFADevice", str]:
+    def setup_totp_device(self, user: "AbstractUser", device_name: str) -> tuple["MFADevice", str]:
         """
         Configure un appareil TOTP pour l'utilisateur.
 
@@ -314,7 +314,7 @@ class MFAManager:
         fingerprint_data = f"{ip_address}:{user_agent}"
         return hashlib.sha256(fingerprint_data.encode()).hexdigest()
 
-    def get_backup_codes(self, user: "AbstractUser") -> List[str]:
+    def get_backup_codes(self, user: "AbstractUser") -> list[str]:
         """
         Récupère les codes de récupération non utilisés de l'utilisateur.
 
@@ -334,7 +334,7 @@ class MFAManager:
         backup_codes = backup_device.backup_codes.filter(is_used=False)
         return [code.code for code in backup_codes]
 
-    def regenerate_backup_codes(self, user: "AbstractUser") -> List[str]:
+    def regenerate_backup_codes(self, user: "AbstractUser") -> list[str]:
         """
         Régénère les codes de récupération pour l'utilisateur.
 
@@ -361,7 +361,7 @@ class MFAManager:
         # Générer de nouveaux codes
         return self._generate_backup_codes(backup_device)
 
-    def _generate_backup_codes(self, device: "MFADevice") -> List[str]:
+    def _generate_backup_codes(self, device: "MFADevice") -> list[str]:
         """
         Génère des codes de récupération pour un appareil.
 

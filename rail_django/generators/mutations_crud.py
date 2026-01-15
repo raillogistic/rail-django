@@ -23,8 +23,8 @@ from .nested_operations import NestedOperationHandler
 
 
 def generate_create_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for creating a new model instance.
     Supports nested creates for related objects.
@@ -53,7 +53,7 @@ def generate_create_mutation(
         @classmethod
         @transaction.atomic
         def mutate(
-            cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]
+            cls, root: Any, info: graphene.ResolveInfo, input: dict[str, Any]
         ) -> "CreateMutation":
             try:
                 graphql_meta.ensure_operation_access("create", info=info)
@@ -121,7 +121,7 @@ def generate_create_mutation(
                 return cls(ok=False, object=None, errors=error_objects)
 
         @classmethod
-        def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        def _sanitize_input_data(cls, input_data: dict[str, Any]) -> dict[str, Any]:
             """
             Sanitize input data to handle double quotes and other special characters.
 
@@ -149,8 +149,8 @@ def generate_create_mutation(
 
         @classmethod
         def _normalize_enum_inputs(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
             """
             Purpose: Normalize GraphQL Enum inputs to their underlying Django field values.
             Args:
@@ -165,7 +165,7 @@ def generate_create_mutation(
                 >>> isinstance(normalized['status'], str)
                 True
             """
-            normalized: Dict[str, Any] = input_data.copy()
+            normalized: dict[str, Any] = input_data.copy()
 
             # Build mapping of choice fields for the model
             choice_fields = {
@@ -196,8 +196,8 @@ def generate_create_mutation(
 
         @classmethod
         def _process_dual_fields(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
             """
             Process dual fields with automatic priority handling and validation.
 
@@ -286,7 +286,7 @@ def generate_create_mutation(
             return processed_data
 
         @classmethod
-        def _get_mandatory_fields(cls, model: Type[models.Model]) -> List[str]:
+        def _get_mandatory_fields(cls, model: type[models.Model]) -> list[str]:
             """
             Get list of mandatory fields for the given model.
 
@@ -325,8 +325,8 @@ def generate_create_mutation(
 
 
 def generate_update_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for updating an existing model instance.
     Supports partial updates and nested updates for related objects.
@@ -360,7 +360,7 @@ def generate_update_mutation(
             root: Any,
             info: graphene.ResolveInfo,
             id: str,
-            input: Dict[str, Any],
+            input: dict[str, Any],
         ) -> "UpdateMutation":
             try:
                 input = cls._sanitize_input_data(input)
@@ -469,7 +469,7 @@ def generate_update_mutation(
                 return UpdateMutation(ok=False, object=None, errors=error_objects)
 
         @classmethod
-        def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        def _sanitize_input_data(cls, input_data: dict[str, Any]) -> dict[str, Any]:
             """
             Sanitize input data to handle double quotes and other special characters.
 
@@ -497,8 +497,8 @@ def generate_update_mutation(
 
         @classmethod
         def _normalize_enum_inputs(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
             """
             Purpose: Normalize GraphQL Enum inputs to their underlying Django field values for updates.
             Args:
@@ -513,7 +513,7 @@ def generate_update_mutation(
                 >>> isinstance(normalized['status'], str)
                 True
             """
-            normalized: Dict[str, Any] = input_data.copy()
+            normalized: dict[str, Any] = input_data.copy()
 
             # Build mapping of choice fields for the model
             choice_fields = {
@@ -542,8 +542,8 @@ def generate_update_mutation(
 
         @classmethod
         def _process_dual_fields(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
             """
             Process dual fields with automatic priority handling and validation.
 
@@ -638,7 +638,7 @@ def generate_update_mutation(
             return processed_data
 
         @classmethod
-        def _get_mandatory_fields(cls, model: Type[models.Model]) -> List[str]:
+        def _get_mandatory_fields(cls, model: type[models.Model]) -> list[str]:
             """
             Get list of mandatory fields for the given model.
             Override this method to customize mandatory field requirements.
@@ -674,8 +674,8 @@ def generate_update_mutation(
 
 
 def generate_delete_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for deleting a model instance.
     Supports cascade delete configuration.

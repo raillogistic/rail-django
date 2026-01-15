@@ -95,7 +95,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         )  # 5 minutes
 
         # In-memory per-process JWT user cache: {cache_key: (user_id, expires_ts)}
-        self._jwt_user_cache: Dict[str, Tuple[int, float]] = {}
+        self._jwt_user_cache: dict[str, tuple[int, float]] = {}
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         """
@@ -494,7 +494,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             json.dumps(payload), content_type="application/json", status=403
         )
 
-    def _send_to_audit_system(self, log_data: Dict[str, Any]) -> None:
+    def _send_to_audit_system(self, log_data: dict[str, Any]) -> None:
         """
         Envoie les données d'audit vers un système externe (optionnel).
 
@@ -598,7 +598,7 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
 
         # In-memory rate limiting state per-process
         # Structure: {key: {"window_start": int, "count": int}}
-        self._rate_state: Dict[str, Dict[str, int]] = {}
+        self._rate_state: dict[str, dict[str, int]] = {}
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         """

@@ -41,7 +41,7 @@ Open GraphiQL at `http://localhost:8000/graphql`.
 See the [quickstart](docs/getting-started/quickstart.md) for the basic workflow, the [GraphQL guide](docs/guides/graphql.md) for how to define types, queries, and mutations, and the [GraphQLMeta guide](docs/reference/meta.md) for per-model configuration.
 
 ## Supported versions
-- Python 3.8+
+- Python 3.11+
 - Django 4.2+
 - Graphene 3.3+
 - graphene-django 3.1.5+

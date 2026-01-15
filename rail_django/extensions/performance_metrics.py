@@ -106,7 +106,7 @@ class PerformanceMetricsCollector:
 
         # Stockage des métriques
         self.execution_history: deque = deque(maxlen=max_history_size)
-        self.query_frequency: Dict[str, QueryFrequencyStats] = {}
+        self.query_frequency: dict[str, QueryFrequencyStats] = {}
         self.slow_query_alerts: deque = deque(maxlen=1000)
 
         # Analyseur de complexité
@@ -220,7 +220,7 @@ class PerformanceMetricsCollector:
 
             return distribution
 
-    def get_most_frequent_queries(self, limit: int = 10) -> List[QueryFrequencyStats]:
+    def get_most_frequent_queries(self, limit: int = 10) -> list[QueryFrequencyStats]:
         """Obtient les requêtes les plus fréquentes."""
         with self._lock:
             sorted_queries = sorted(
@@ -230,7 +230,7 @@ class PerformanceMetricsCollector:
             )
             return sorted_queries[:limit]
 
-    def get_slowest_queries(self, limit: int = 10) -> List[QueryFrequencyStats]:
+    def get_slowest_queries(self, limit: int = 10) -> list[QueryFrequencyStats]:
         """Obtient les requêtes les plus lentes."""
         with self._lock:
             sorted_queries = sorted(
@@ -240,12 +240,12 @@ class PerformanceMetricsCollector:
             )
             return sorted_queries[:limit]
 
-    def get_recent_slow_queries(self, limit: int = 20) -> List[SlowQueryAlert]:
+    def get_recent_slow_queries(self, limit: int = 20) -> list[SlowQueryAlert]:
         """Obtient les alertes de requêtes lentes récentes."""
         with self._lock:
             return list(self.slow_query_alerts)[-limit:]
 
-    def get_complexity_stats(self) -> Dict[str, Any]:
+    def get_complexity_stats(self) -> dict[str, Any]:
         """Obtient les statistiques de complexité."""
         with self._lock:
             if not self.execution_history:
@@ -336,7 +336,7 @@ class PerformanceMetricsCollector:
             f"(threshold: {self.slow_query_threshold}s)"
         )
 
-    def _percentile(self, data: List[float], percentile: float) -> float:
+    def _percentile(self, data: list[float], percentile: float) -> float:
         """Calcule un percentile."""
         if not data:
             return 0.0

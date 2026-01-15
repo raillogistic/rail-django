@@ -495,7 +495,7 @@ class FieldPermissionMiddleware(BaseMiddleware):
 
     def _resolve_parent_model_class(
         self, info: Any, root: Any, result: Any
-    ) -> Optional[Type[models.Model]]:
+    ) -> Optional[type[models.Model]]:
         if isinstance(root, models.Model):
             return root.__class__
         parent_type = self._unwrap_graphql_type(getattr(info, "parent_type", None))
@@ -508,7 +508,7 @@ class FieldPermissionMiddleware(BaseMiddleware):
             return result.__class__
         return None
 
-    def _resolve_mutation_model_class(self, info: Any) -> Optional[Type[models.Model]]:
+    def _resolve_mutation_model_class(self, info: Any) -> Optional[type[models.Model]]:
         graphql_type = self._unwrap_graphql_type(getattr(info, "return_type", None))
         graphene_type = getattr(graphql_type, "graphene_type", None)
         if graphene_type is None:
@@ -550,7 +550,7 @@ class FieldPermissionMiddleware(BaseMiddleware):
         return "write"
 
     @staticmethod
-    def _normalize_payload(payload: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_payload(payload: Any) -> Optional[dict[str, Any]]:
         if payload is None:
             return None
         if isinstance(payload, dict):
@@ -570,7 +570,7 @@ class FieldPermissionMiddleware(BaseMiddleware):
 
     @staticmethod
     def _resolve_instance(
-        model_class: Type[models.Model], object_id: Any
+        model_class: type[models.Model], object_id: Any
     ) -> Optional[models.Model]:
         if object_id is None:
             return None
@@ -586,8 +586,8 @@ class FieldPermissionMiddleware(BaseMiddleware):
                 return None
 
     def _enforce_input_permissions(
-        self, user: Any, info: Any, kwargs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, user: Any, info: Any, kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
         model_class = self._resolve_mutation_model_class(info)
         if model_class is None:
             return kwargs
@@ -599,7 +599,7 @@ class FieldPermissionMiddleware(BaseMiddleware):
             operation = "update"
 
         request_context = {"request": getattr(info, "context", None)}
-        disallowed_fields: List[str] = []
+        disallowed_fields: list[str] = []
         updated_kwargs = dict(kwargs)
 
         def _check_payload(payload: Any, object_id: Any = None) -> Any:
@@ -852,7 +852,7 @@ class PluginMiddleware(BaseMiddleware):
         return result
 
     @staticmethod
-    def _get_plugin_context(info: Any) -> Dict[str, Any]:
+    def _get_plugin_context(info: Any) -> dict[str, Any]:
         context = getattr(info.context, "_rail_plugin_context", None)
         if context is None:
             context = {}
@@ -906,7 +906,7 @@ DEFAULT_MIDDLEWARE = [
 ]
 
 
-def get_middleware_stack(schema_name: Optional[str] = None) -> List[BaseMiddleware]:
+def get_middleware_stack(schema_name: Optional[str] = None) -> list[BaseMiddleware]:
     """
     Get the middleware stack for a schema.
 
@@ -925,7 +925,7 @@ def get_middleware_stack(schema_name: Optional[str] = None) -> List[BaseMiddlewa
     return middleware_stack
 
 
-def create_middleware_resolver(middleware_stack: List[BaseMiddleware]) -> Callable:
+def create_middleware_resolver(middleware_stack: list[BaseMiddleware]) -> Callable:
     """
     Create a resolver that applies middleware stack.
 

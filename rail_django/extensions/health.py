@@ -50,9 +50,9 @@ class HealthStatus:
     message: str
     response_time_ms: float
     timestamp: datetime
-    details: Dict[str, Any] = None
+    details: dict[str, Any] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         data = asdict(self)
         data["timestamp"] = self.timestamp.isoformat()
@@ -90,7 +90,7 @@ class HealthChecker:
     _cache_lock = threading.Lock()
     _system_metrics_cache: Optional[SystemMetrics] = None
     _system_metrics_cache_ts: float = 0.0
-    _health_report_cache: Optional[Dict[str, Any]] = None
+    _health_report_cache: Optional[dict[str, Any]] = None
     _health_report_cache_ts: float = 0.0
 
     def __init__(self):
@@ -125,7 +125,7 @@ class HealthChecker:
             cache_owner._system_metrics_cache = SystemMetrics(**asdict(metrics))
             cache_owner._system_metrics_cache_ts = time.monotonic()
 
-    def _get_cached_health_report(self, ttl_seconds: float) -> Optional[Dict[str, Any]]:
+    def _get_cached_health_report(self, ttl_seconds: float) -> Optional[dict[str, Any]]:
         if ttl_seconds <= 0:
             return None
         now = time.monotonic()
@@ -136,7 +136,7 @@ class HealthChecker:
                 return cached
         return None
 
-    def _set_cached_health_report(self, report: Dict[str, Any]) -> None:
+    def _set_cached_health_report(self, report: dict[str, Any]) -> None:
         cache_owner = type(self)
         with cache_owner._cache_lock:
             cache_owner._health_report_cache = copy.deepcopy(report)
@@ -223,7 +223,7 @@ class HealthChecker:
                 details={"error": str(e)},
             )
 
-    def check_database_health(self) -> List[HealthStatus]:
+    def check_database_health(self) -> list[HealthStatus]:
         """
         Check database connectivity and performance for all configured databases.
 
@@ -282,7 +282,7 @@ class HealthChecker:
 
         return health_statuses
 
-    def check_cache_health(self) -> List[HealthStatus]:
+    def check_cache_health(self) -> list[HealthStatus]:
         """
         Check cache system health for all configured caches.
 
@@ -369,7 +369,7 @@ class HealthChecker:
 
     def get_comprehensive_health_report(
         self, *, use_cache: bool = True, ttl_seconds: Optional[float] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate a comprehensive health report for all system components.
 
@@ -440,8 +440,8 @@ class HealthChecker:
         *,
         use_cache: bool = True,
         ttl_seconds: Optional[float] = None,
-        comprehensive_report: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        comprehensive_report: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
 
         Purpose: Provide a backward-compatible health report wrapper.
@@ -484,7 +484,7 @@ class HealthChecker:
                 ],
             }
 
-    def _summarize_report(self, comprehensive: Dict[str, Any]) -> Dict[str, Any]:
+    def _summarize_report(self, comprehensive: dict[str, Any]) -> dict[str, Any]:
         summary = comprehensive.get("summary", {})
         # Map summary counters to top-level keys expected by legacy callers
         return {
@@ -500,7 +500,7 @@ class HealthChecker:
             "recommendations": comprehensive.get("recommendations", []),
         }
 
-    def _get_database_info(self, conn, db_alias: str) -> Dict[str, Any]:
+    def _get_database_info(self, conn, db_alias: str) -> dict[str, Any]:
         """Get additional database information."""
         try:
             with conn.cursor() as cursor:
@@ -537,7 +537,7 @@ class HealthChecker:
         except Exception as e:
             return {"error": str(e)}
 
-    def _get_cache_info(self, cache_backend, cache_alias: str) -> Dict[str, Any]:
+    def _get_cache_info(self, cache_backend, cache_alias: str) -> dict[str, Any]:
         """Get cache backend information."""
         try:
             cache_info = {
@@ -568,8 +568,8 @@ class HealthChecker:
         return 0.0
 
     def _generate_recommendations(
-        self, statuses: List[HealthStatus], metrics: SystemMetrics
-    ) -> List[str]:
+        self, statuses: list[HealthStatus], metrics: SystemMetrics
+    ) -> list[str]:
         """Generate health recommendations based on current status."""
         recommendations = []
 
@@ -972,7 +972,7 @@ class RefreshSchemaMutation(graphene.Mutation):
 
             builder = get_schema_builder(schema_name)
 
-            apps_reloaded: List[str] = []
+            apps_reloaded: list[str] = []
             if app_label:
                 builder.reload_app_schema(app_label)
                 apps_reloaded = [app_label]

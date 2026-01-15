@@ -23,7 +23,7 @@ class BasePlugin(ABC):
     - Adding custom validation
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """
         Initialize the plugin.
 
@@ -47,7 +47,7 @@ class BasePlugin(ABC):
         """Check if plugin is enabled."""
         return self.enabled
 
-    def pre_registration_hook(self, registry, schema_name: str, **kwargs) -> Dict[str, Any]:
+    def pre_registration_hook(self, registry, schema_name: str, **kwargs) -> dict[str, Any]:
         """
         Hook called before schema registration.
 
@@ -80,7 +80,7 @@ class BasePlugin(ABC):
         """
         pass
 
-    def validate_schema(self, schema_info) -> List[str]:
+    def validate_schema(self, schema_info) -> list[str]:
         """
         Validate a schema and return list of errors.
 
@@ -92,11 +92,11 @@ class BasePlugin(ABC):
         """
         return []
 
-    def pre_schema_build(self, schema_name: str, builder: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+    def pre_schema_build(self, schema_name: str, builder: Any, context: dict[str, Any]) -> dict[str, Any]:
         """Hook called before schema build."""
         return {}
 
-    def post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: Dict[str, Any]) -> None:
+    def post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: dict[str, Any]) -> None:
         """Hook called after schema build."""
         return None
 
@@ -106,7 +106,7 @@ class BasePlugin(ABC):
         operation_type: str,
         operation_name: Optional[str],
         info: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> "ExecutionHookResult":
         """Hook called before a root operation."""
         return ExecutionHookResult()
@@ -119,7 +119,7 @@ class BasePlugin(ABC):
         info: Any,
         result: Any,
         error: Optional[BaseException],
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> "ExecutionHookResult":
         """Hook called after a root operation."""
         return ExecutionHookResult()
@@ -129,8 +129,8 @@ class BasePlugin(ABC):
         schema_name: str,
         info: Any,
         root: Any,
-        kwargs: Dict[str, Any],
-        context: Dict[str, Any],
+        kwargs: dict[str, Any],
+        context: dict[str, Any],
     ) -> "ExecutionHookResult":
         """Hook called before a resolver executes."""
         return ExecutionHookResult()
@@ -140,10 +140,10 @@ class BasePlugin(ABC):
         schema_name: str,
         info: Any,
         root: Any,
-        kwargs: Dict[str, Any],
+        kwargs: dict[str, Any],
         result: Any,
         error: Optional[BaseException],
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> "ExecutionHookResult":
         """Hook called after a resolver executes."""
         return ExecutionHookResult()
@@ -161,7 +161,7 @@ class PluginManager:
     """
 
     def __init__(self):
-        self._plugins: Dict[str, BasePlugin] = {}
+        self._plugins: dict[str, BasePlugin] = {}
         self._loaded = False
 
     def load_plugins(self) -> None:
@@ -180,7 +180,7 @@ class PluginManager:
         self._loaded = True
         logger.info(f"Loaded {len(self._plugins)} plugins")
 
-    def load_plugin(self, plugin_path: str, config: Dict[str, Any]) -> None:
+    def load_plugin(self, plugin_path: str, config: dict[str, Any]) -> None:
         """
         Load a single plugin.
 
@@ -220,15 +220,15 @@ class PluginManager:
         """
         return self._plugins.get(name)
 
-    def get_plugins(self) -> List[BasePlugin]:
+    def get_plugins(self) -> list[BasePlugin]:
         """Get all loaded plugins."""
         return list(self._plugins.values())
 
-    def get_loaded_plugins(self) -> List[BasePlugin]:
+    def get_loaded_plugins(self) -> list[BasePlugin]:
         """Alias for get_plugins (backward compatibility)."""
         return self.get_plugins()
 
-    def get_enabled_plugins(self) -> List[BasePlugin]:
+    def get_enabled_plugins(self) -> list[BasePlugin]:
         """Get all enabled plugins."""
         return [plugin for plugin in self._plugins.values() if plugin.is_enabled()]
 
@@ -254,7 +254,7 @@ class PluginManager:
         self._loaded = False
         self.load_plugins()
 
-    def run_pre_registration_hooks(self, registry, schema_name: str, **kwargs) -> Dict[str, Any]:
+    def run_pre_registration_hooks(self, registry, schema_name: str, **kwargs) -> dict[str, Any]:
         """
         Run pre-registration hooks for all enabled plugins.
 
@@ -310,7 +310,7 @@ class PluginManager:
             except Exception as e:
                 logger.error(f"Error in discovery hook for plugin {plugin.get_name()}: {e}")
 
-    def validate_schema(self, schema_info) -> List[str]:
+    def validate_schema(self, schema_info) -> list[str]:
         """
         Validate schema using all enabled plugins.
 
@@ -334,7 +334,7 @@ class PluginManager:
 
         return errors
 
-    def run_pre_schema_build(self, schema_name: str, builder: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run_pre_schema_build(self, schema_name: str, builder: Any, context: dict[str, Any]) -> dict[str, Any]:
         self.load_plugins()
         updated = context.copy()
         for plugin in self.get_enabled_plugins():
@@ -346,7 +346,7 @@ class PluginManager:
                 logger.error("Error in pre_schema_build for %s: %s", plugin.get_name(), exc)
         return updated
 
-    def run_post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: Dict[str, Any]) -> None:
+    def run_post_schema_build(self, schema_name: str, builder: Any, schema: Any, context: dict[str, Any]) -> None:
         self.load_plugins()
         for plugin in self.get_enabled_plugins():
             try:
@@ -360,7 +360,7 @@ class PluginManager:
         operation_type: str,
         operation_name: Optional[str],
         info: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> Optional[ExecutionHookResult]:
         self.load_plugins()
         for plugin in self.get_enabled_plugins():
@@ -382,7 +382,7 @@ class PluginManager:
         info: Any,
         result: Any,
         error: Optional[BaseException],
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> Optional[ExecutionHookResult]:
         self.load_plugins()
         handled_result: Optional[ExecutionHookResult] = None
@@ -403,8 +403,8 @@ class PluginManager:
         schema_name: str,
         info: Any,
         root: Any,
-        kwargs: Dict[str, Any],
-        context: Dict[str, Any],
+        kwargs: dict[str, Any],
+        context: dict[str, Any],
     ) -> Optional[ExecutionHookResult]:
         self.load_plugins()
         for plugin in self.get_enabled_plugins():
@@ -423,10 +423,10 @@ class PluginManager:
         schema_name: str,
         info: Any,
         root: Any,
-        kwargs: Dict[str, Any],
+        kwargs: dict[str, Any],
         result: Any,
         error: Optional[BaseException],
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> Optional[ExecutionHookResult]:
         self.load_plugins()
         handled_result: Optional[ExecutionHookResult] = None

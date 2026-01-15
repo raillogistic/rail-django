@@ -13,7 +13,7 @@ from .inheritance import inheritance_handler
 from .introspector import ModelIntrospector
 
 
-def generate_object_type(self, model: Type[models.Model]) -> Type[DjangoObjectType]:
+def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
     """
     Generates a GraphQL object type for a Django model.
     Handles relationships and custom field mappings.

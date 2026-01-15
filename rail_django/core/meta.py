@@ -21,10 +21,10 @@ from graphql import GraphQLError
 
 logger = logging.getLogger(__name__)
 
-_SECURITY_COMPONENTS: Optional[Dict[str, Any]] = None
+_SECURITY_COMPONENTS: Optional[dict[str, Any]] = None
 
 
-def _load_security_components() -> Dict[str, Any]:
+def _load_security_components() -> dict[str, Any]:
     global _SECURITY_COMPONENTS
     if _SECURITY_COMPONENTS is None:
         from rail_django.security import (
@@ -61,7 +61,7 @@ class FilterFieldConfig:
         help_text: Optional help text to describe the filter when generating docs.
     """
 
-    lookups: List[str] = field(default_factory=list)
+    lookups: list[str] = field(default_factory=list)
     choices: Optional[Sequence[Any]] = None
     help_text: Optional[str] = None
 
@@ -80,11 +80,11 @@ class FilteringConfig:
         custom: Mapping of custom filter names to callables or model method names.
     """
 
-    quick: List[str] = field(default_factory=list)
+    quick: list[str] = field(default_factory=list)
     quick_lookup: str = "icontains"
     auto_detect_quick: bool = True
-    fields: Dict[str, FilterFieldConfig] = field(default_factory=dict)
-    custom: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+    fields: dict[str, FilterFieldConfig] = field(default_factory=dict)
+    custom: dict[str, Union[str, Callable]] = field(default_factory=dict)
 
 
 @dataclass
@@ -99,10 +99,10 @@ class FieldExposureConfig:
         write_only: Fields only exposed on mutations (hidden from object types).
     """
 
-    include: Optional[List[str]] = None
-    exclude: List[str] = field(default_factory=list)
-    read_only: List[str] = field(default_factory=list)
-    write_only: List[str] = field(default_factory=list)
+    include: Optional[list[str]] = None
+    exclude: list[str] = field(default_factory=list)
+    read_only: list[str] = field(default_factory=list)
+    write_only: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -116,8 +116,8 @@ class OrderingConfig:
         allow_related: Whether related/path based ordering is permitted.
     """
 
-    allowed: List[str] = field(default_factory=list)
-    default: List[str] = field(default_factory=list)
+    allowed: list[str] = field(default_factory=list)
+    default: list[str] = field(default_factory=list)
     allow_related: bool = True
 
 
@@ -133,9 +133,9 @@ class ResolverConfig:
         fields: Mapping of field names to custom resolver callables.
     """
 
-    queries: Dict[str, Union[str, Callable]] = field(default_factory=dict)
-    mutations: Dict[str, Union[str, Callable]] = field(default_factory=dict)
-    fields: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+    queries: dict[str, Union[str, Callable]] = field(default_factory=dict)
+    mutations: dict[str, Union[str, Callable]] = field(default_factory=dict)
+    fields: dict[str, Union[str, Callable]] = field(default_factory=dict)
 
 
 @dataclass
@@ -145,8 +145,8 @@ class RoleConfig:
     name: str = ""
     description: str = ""
     role_type: str = "business"
-    permissions: List[str] = field(default_factory=list)
-    parent_roles: List[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    parent_roles: list[str] = field(default_factory=list)
     is_system_role: bool = False
     max_users: Optional[int] = None
 
@@ -158,8 +158,8 @@ class OperationGuardConfig:
     """
 
     name: str = ""
-    roles: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
     condition: Optional[Union[str, Callable]] = None
     require_authentication: bool = True
     allow_anonymous: bool = False
@@ -176,8 +176,8 @@ class FieldGuardConfig:
     field: str
     access: str = "read"
     visibility: str = "visible"
-    roles: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
     mask_value: Any = None
     condition: Optional[Union[str, Callable]] = None
 
@@ -188,9 +188,9 @@ class AccessControlConfig:
     Access control configuration bundle.
     """
 
-    roles: Dict[str, RoleConfig] = field(default_factory=dict)
-    operations: Dict[str, OperationGuardConfig] = field(default_factory=dict)
-    fields: List[FieldGuardConfig] = field(default_factory=list)
+    roles: dict[str, RoleConfig] = field(default_factory=dict)
+    operations: dict[str, OperationGuardConfig] = field(default_factory=dict)
+    fields: list[FieldGuardConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -199,8 +199,8 @@ class ClassificationConfig:
     Data classification tags for a model and its fields.
     """
 
-    model: List[str] = field(default_factory=list)
-    fields: Dict[str, List[str]] = field(default_factory=dict)
+    model: list[str] = field(default_factory=list)
+    fields: dict[str, list[str]] = field(default_factory=dict)
 
 
 class GraphQLMeta:
@@ -245,7 +245,7 @@ class GraphQLMeta:
     AccessControl = AccessControlConfig
     Classification = ClassificationConfig
 
-    def __init__(self, model_class: Type[models.Model]):
+    def __init__(self, model_class: type[models.Model]):
         """
         Initialize GraphQLMeta configuration for a model.
 
@@ -299,7 +299,7 @@ class GraphQLMeta:
 
         self._validate_configuration()
 
-    def _resolve_meta_class(self, model_class: Type[models.Model]) -> Any:
+    def _resolve_meta_class(self, model_class: type[models.Model]) -> Any:
         """Return the declared GraphQL meta configuration class if it exists."""
 
         return getattr(model_class, "GraphQLMeta", None) or getattr(
@@ -441,7 +441,7 @@ class GraphQLMeta:
         # Fallbacks when no explicit default ordering is provided
         if not config.default:
             model_meta = getattr(self.model_class, "_meta", None)
-            fallback_default: List[str] = []
+            fallback_default: list[str] = []
 
             try:
                 # 1) Use Django Meta.ordering if available
@@ -651,8 +651,8 @@ class GraphQLMeta:
                 return candidate
         return getattr(role_type_cls, "BUSINESS", list(role_type_cls)[0])
 
-    def _index_operation_guards(self) -> Dict[str, OperationGuardConfig]:
-        guards: Dict[str, OperationGuardConfig] = {}
+    def _index_operation_guards(self) -> dict[str, OperationGuardConfig]:
+        guards: dict[str, OperationGuardConfig] = {}
         for name, guard in self.access_config.operations.items():
             guards[name] = (
                 guard
@@ -736,7 +736,7 @@ class GraphQLMeta:
                 exc,
             )
 
-    def _coerce_access_level(self, value: str, components: Dict[str, Any]):
+    def _coerce_access_level(self, value: str, components: dict[str, Any]):
         FieldAccessLevel = components["FieldAccessLevel"]
         if isinstance(value, FieldAccessLevel):
             return value
@@ -748,7 +748,7 @@ class GraphQLMeta:
         }
         return mapping.get(str(value).lower(), FieldAccessLevel.READ)
 
-    def _coerce_visibility(self, value: str, components: Dict[str, Any]):
+    def _coerce_visibility(self, value: str, components: dict[str, Any]):
         FieldVisibility = components["FieldVisibility"]
         if isinstance(value, FieldVisibility):
             return value
@@ -799,7 +799,7 @@ class GraphQLMeta:
             if "lookups" in value:
                 lookups = value.get("lookups") or []
             else:
-                lookups: List[str] = []
+                lookups: list[str] = []
                 for lookup, definition in value.items():
                     if lookup in {"choices", "help_text"}:
                         continue
@@ -910,7 +910,7 @@ class GraphQLMeta:
                 or f"Authentication required to perform '{operation}' on {self.model_class.__name__}"
             )
 
-        criteria_results: List[bool] = []
+        criteria_results: list[bool] = []
 
         if guard.roles:
             try:
@@ -969,7 +969,7 @@ class GraphQLMeta:
         *,
         user: Optional[Any] = None,
         instance: Optional[models.Model] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Evaluate the configured access guard for a given operation without raising.
 
@@ -993,8 +993,8 @@ class GraphQLMeta:
                 or "Authentification requise pour accéder à cette opération.",
             }
 
-        criteria_results: List[bool] = []
-        failure_reasons: List[str] = []
+        criteria_results: list[bool] = []
+        failure_reasons: list[str] = []
 
         if guard.roles:
             try:
@@ -1120,7 +1120,7 @@ class GraphQLMeta:
 
         return filter_func
 
-    def get_custom_filters(self) -> Dict[str, Any]:
+    def get_custom_filters(self) -> dict[str, Any]:
         """
         Get all custom filters as django-filter Filter instances.
 
@@ -1130,7 +1130,7 @@ class GraphQLMeta:
 
         from django_filters import BooleanFilter, CharFilter, NumberFilter
 
-        filter_instances: Dict[str, Any] = {}
+        filter_instances: dict[str, Any] = {}
 
         for filter_name, filter_func in self.custom_filters.items():
             callable_fn = filter_func
@@ -1238,7 +1238,7 @@ class GraphQLMeta:
 
         return queryset
 
-    def get_filter_fields(self) -> Dict[str, List[str]]:
+    def get_filter_fields(self) -> dict[str, list[str]]:
         """
         Get the filter fields configuration.
 
@@ -1251,7 +1251,7 @@ class GraphQLMeta:
             for name, cfg in self.filtering.fields.items()
         }
 
-    def get_ordering_fields(self) -> List[str]:
+    def get_ordering_fields(self) -> list[str]:
         """
         Get the ordering fields configuration.
         """
@@ -1278,7 +1278,7 @@ class GraphQLMeta:
         return bool(self.quick_filter_fields)
 
 
-def get_model_graphql_meta(model_class: Type[models.Model]) -> GraphQLMeta:
+def get_model_graphql_meta(model_class: type[models.Model]) -> GraphQLMeta:
     """
     Get or create GraphQLMeta configuration for a model.
 

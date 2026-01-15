@@ -4,7 +4,7 @@
 `rail-django` is a specialized wrapper framework built on top of Django and Graphene-Django. It aims to accelerate the development of production-ready GraphQL APIs by providing pre-configured settings, automatic schema generation, and built-in enterprise features like audit logging, RBAC, and health monitoring.
 
 ## Tech Stack
-- **Language:** Python (3.8+)
+- **Language:** Python (3.11+)
 - **Core Framework:** Django (>=4.2)
 - **API Layer:** Graphene (GraphQL)
 - **Database:** Django ORM (supports all Django backends)
@@ -59,7 +59,7 @@ python manage.py startapp my_app
 - **Schema Registry:** All schemas are registered via `rail_django.core.registry`.
 
 ## Dependencies
-Defined in `setup.py` and `requirements.txt`. Key libs: `Django`, `graphene-django`, `django-filter`, `pyjwt`.
+Defined in `setup.py` and `rail_django/conf/project_template/requirements/base.txt-tpl` (requirements.txt is deprecated). Key libs: `Django`, `graphene-django`, `django-filter`, `pyjwt`.
 
 ## Gemini Added Memories
 - The rail_django framework's TypeGenerator automatically creates custom list fields for reverse relationships (e.g., user_set) to avoid Relay connections. It previously also added these to the exclude list, causing redundant configuration warnings in Graphene-Django. The fix was to stop excluding them since the custom field definition takes precedence.

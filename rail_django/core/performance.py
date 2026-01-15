@@ -95,12 +95,12 @@ class QueryOptimizer:
 
         return optimized_qs
 
-    def _get_only_fields(self, model: Type[models.Model], info: Any = None) -> List[str]:
+    def _get_only_fields(self, model: type[models.Model], info: Any = None) -> list[str]:
         """Get fields that should be included in only()."""
         # For now, return empty list - could be enhanced with GraphQL field analysis
         return []
 
-    def _get_defer_fields(self, model: Type[models.Model], info: Any = None) -> List[str]:
+    def _get_defer_fields(self, model: type[models.Model], info: Any = None) -> list[str]:
         """Get fields that should be deferred."""
         defer_fields = []
 
@@ -121,7 +121,7 @@ class QueryComplexityAnalyzer:
     def __init__(
         self,
         schema_name: Optional[str] = None,
-        complexity_weights: Optional[Dict[str, int]] = None,
+        complexity_weights: Optional[dict[str, int]] = None,
     ):
         self.schema_name = schema_name
         self.settings = PerformanceSettings.from_schema(schema_name)
@@ -133,14 +133,14 @@ class QueryComplexityAnalyzer:
             "fragment": 1,
         }
 
-    def analyze_query(self, query: str) -> Tuple[int, int]:
+    def analyze_query(self, query: str) -> tuple[int, int]:
         """Analyze query depth and complexity, preferring AST parsing."""
         ast_result = self._analyze_with_ast(query)
         if ast_result is not None:
             return ast_result
         return self.analyze_query_depth(query), self.analyze_query_complexity(query)
 
-    def _analyze_with_ast(self, query: str) -> Optional[Tuple[int, int]]:
+    def _analyze_with_ast(self, query: str) -> Optional[tuple[int, int]]:
         try:
             document = parse(query)
         except Exception:
@@ -184,9 +184,9 @@ class QueryComplexityAnalyzer:
         *,
         schema: Optional[Any] = None,
         document: Optional[Any] = None,
-    ) -> List[str]:
+    ) -> list[str]:
         """Validate query against performance limits."""
-        errors: List[str] = []
+        errors: list[str] = []
         enable_depth = bool(self.settings.enable_query_depth_limiting)
         enable_complexity = bool(self.settings.enable_query_cost_analysis)
 
@@ -237,7 +237,7 @@ class QueryComplexityAnalyzer:
 
 
 class _ComplexityVisitor(Visitor):
-    def __init__(self, complexity_weights: Dict[str, int]):
+    def __init__(self, complexity_weights: dict[str, int]):
         super().__init__()
         self.complexity_weights = complexity_weights
         self.current_depth = 0

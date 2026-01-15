@@ -22,7 +22,7 @@ class RuntimeSettings:
     rate_limit_requests_per_minute: int = 60
     rate_limit_requests_per_hour: int = 1000
     enable_query_depth_limiting: bool = True
-    allowed_origins: List[str] = field(default_factory=lambda: ["*"])
+    allowed_origins: list[str] = field(default_factory=lambda: ["*"])
     enable_csrf_protection: bool = True
     enable_cors: bool = True
     enable_field_permissions: bool = True
@@ -31,7 +31,7 @@ class RuntimeSettings:
     enable_sql_injection_protection: bool = True
     enable_xss_protection: bool = True
     input_allow_html: bool = False
-    input_allowed_html_tags: List[str] = field(
+    input_allowed_html_tags: list[str] = field(
         default_factory=lambda: [
             "p",
             "br",
@@ -50,7 +50,7 @@ class RuntimeSettings:
             "blockquote",
         ]
     )
-    input_allowed_html_attributes: Dict[str, List[str]] = field(
+    input_allowed_html_attributes: dict[str, list[str]] = field(
         default_factory=lambda: {
             "*": ["class"],
             "a": ["href", "title"],
@@ -63,7 +63,7 @@ class RuntimeSettings:
     input_pattern_scan_limit: int = 10000
     session_timeout_minutes: int = 30
     max_file_upload_size: int = 10 * 1024 * 1024
-    allowed_file_types: List[str] = field(
+    allowed_file_types: list[str] = field(
         default_factory=lambda: [".jpg", ".jpeg", ".png", ".pdf", ".txt"]
     )
 
@@ -87,7 +87,7 @@ class RuntimeSettings:
         security_settings = proxy.get("security_settings", {}) or {}
         performance_settings = proxy.get("performance_settings", {}) or {}
 
-        merged: Dict[str, Any] = {}
+        merged: dict[str, Any] = {}
         if isinstance(security_settings, dict):
             merged.update(security_settings)
         if isinstance(performance_settings, dict):

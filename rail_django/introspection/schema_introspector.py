@@ -44,11 +44,11 @@ class TypeInfo:
     name: str
     kind: str  # 'OBJECT', 'INTERFACE', 'UNION', 'ENUM', 'SCALAR', 'INPUT_OBJECT'
     description: Optional[str] = None
-    fields: List[Dict[str, Any]] = field(default_factory=list)
-    interfaces: List[str] = field(default_factory=list)
-    possible_types: List[str] = field(default_factory=list)  # For unions/interfaces
-    enum_values: List[Dict[str, Any]] = field(default_factory=list)
-    input_fields: List[Dict[str, Any]] = field(default_factory=list)
+    fields: list[dict[str, Any]] = field(default_factory=list)
+    interfaces: list[str] = field(default_factory=list)
+    possible_types: list[str] = field(default_factory=list)  # For unions/interfaces
+    enum_values: list[dict[str, Any]] = field(default_factory=list)
+    input_fields: list[dict[str, Any]] = field(default_factory=list)
     is_deprecated: bool = False
     deprecation_reason: Optional[str] = None
 
@@ -59,7 +59,7 @@ class FieldInfo:
     name: str
     type: str
     description: Optional[str] = None
-    args: List[Dict[str, Any]] = field(default_factory=list)
+    args: list[dict[str, Any]] = field(default_factory=list)
     is_deprecated: bool = False
     deprecation_reason: Optional[str] = None
     is_nullable: bool = True
@@ -71,8 +71,8 @@ class DirectiveInfo:
     """Information about a GraphQL directive."""
     name: str
     description: Optional[str] = None
-    locations: List[str] = field(default_factory=list)
-    args: List[Dict[str, Any]] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
+    args: list[dict[str, Any]] = field(default_factory=list)
     is_repeatable: bool = False
 
 
@@ -89,7 +89,7 @@ class SchemaComplexity:
     total_fields: int = 0
     total_arguments: int = 0
     max_depth: int = 0
-    circular_references: List[str] = field(default_factory=list)
+    circular_references: list[str] = field(default_factory=list)
     deprecated_fields: int = 0
 
 
@@ -102,18 +102,18 @@ class SchemaIntrospection:
     introspection_date: datetime = field(default_factory=datetime.now)
 
     # Schema structure
-    types: Dict[str, TypeInfo] = field(default_factory=dict)
-    queries: List[FieldInfo] = field(default_factory=list)
-    mutations: List[FieldInfo] = field(default_factory=list)
-    subscriptions: List[FieldInfo] = field(default_factory=list)
-    directives: Dict[str, DirectiveInfo] = field(default_factory=dict)
+    types: dict[str, TypeInfo] = field(default_factory=dict)
+    queries: list[FieldInfo] = field(default_factory=list)
+    mutations: list[FieldInfo] = field(default_factory=list)
+    subscriptions: list[FieldInfo] = field(default_factory=list)
+    directives: dict[str, DirectiveInfo] = field(default_factory=dict)
 
     # Metadata
     complexity: SchemaComplexity = field(default_factory=SchemaComplexity)
-    dependencies: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             'schema_name': self.schema_name,
@@ -146,7 +146,7 @@ class SchemaIntrospection:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SchemaIntrospection":
+    def from_dict(cls, data: dict[str, Any]) -> "SchemaIntrospection":
         """Rehydrate a SchemaIntrospection from a dictionary."""
         if not isinstance(data, dict):
             raise ValueError("SchemaIntrospection.from_dict expects a dict")
@@ -219,7 +219,7 @@ class SchemaIntrospection:
         introspection.tags = data.get("tags", []) or []
         return introspection
 
-    def _type_info_to_dict(self, type_info: TypeInfo) -> Dict[str, Any]:
+    def _type_info_to_dict(self, type_info: TypeInfo) -> dict[str, Any]:
         """Convert TypeInfo to dictionary."""
         return {
             'name': type_info.name,
@@ -234,7 +234,7 @@ class SchemaIntrospection:
             'deprecation_reason': type_info.deprecation_reason
         }
 
-    def _field_info_to_dict(self, field_info: FieldInfo) -> Dict[str, Any]:
+    def _field_info_to_dict(self, field_info: FieldInfo) -> dict[str, Any]:
         """Convert FieldInfo to dictionary."""
         return {
             'name': field_info.name,
@@ -247,7 +247,7 @@ class SchemaIntrospection:
             'is_list': field_info.is_list
         }
 
-    def _directive_info_to_dict(self, directive_info: DirectiveInfo) -> Dict[str, Any]:
+    def _directive_info_to_dict(self, directive_info: DirectiveInfo) -> dict[str, Any]:
         """Convert DirectiveInfo to dictionary."""
         return {
             'name': directive_info.name,
@@ -271,7 +271,7 @@ class SchemaIntrospector:
 
     def introspect_schema(self, schema: GraphQLSchema, schema_name: str,
                           version: str = None, description: str = None,
-                          additional_metadata: Dict[str, Any] = None) -> SchemaIntrospection:
+                          additional_metadata: dict[str, Any] = None) -> SchemaIntrospection:
         """
         Perform comprehensive schema introspection.
 
@@ -567,7 +567,7 @@ class SchemaIntrospector:
         # A full implementation would traverse the type graph
         return min(10, len(schema.type_map) // 5)  # Rough estimate
 
-    def _detect_circular_references(self, schema: GraphQLSchema) -> List[str]:
+    def _detect_circular_references(self, schema: GraphQLSchema) -> list[str]:
         """Detect circular references in schema (simplified)."""
         # This is a simplified implementation
         # A full implementation would perform graph traversal
@@ -587,7 +587,7 @@ class SchemaIntrospector:
         return circular_refs
 
     def _extract_dependencies(self, schema: GraphQLSchema, introspection: SchemaIntrospection,
-                              additional_metadata: Dict[str, Any] = None):
+                              additional_metadata: dict[str, Any] = None):
         """Extract schema dependencies and metadata."""
         if additional_metadata:
             # Extract dependencies from metadata

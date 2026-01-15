@@ -45,8 +45,8 @@ class NestedOperationHandler:
             mutation_settings: Mutation generator settings or None for defaults
             schema_name: Name of the schema for multi-schema support
         """
-        self._processed_objects: Set[str] = set()
-        self._validation_errors: List[str] = []
+        self._processed_objects: set[str] = set()
+        self._validation_errors: list[str] = []
         self.schema_name = schema_name
 
         # Use hierarchical settings if no explicit settings provided
@@ -103,8 +103,8 @@ class NestedOperationHandler:
 
     def handle_nested_create(
         self,
-        model: Type[models.Model],
-        input_data: Dict[str, Any],
+        model: type[models.Model],
+        input_data: dict[str, Any],
         parent_instance: Optional[models.Model] = None,
     ) -> models.Model:
         """
@@ -393,8 +393,8 @@ class NestedOperationHandler:
 
     def handle_nested_update(
         self,
-        model: Type[models.Model],
-        input_data: Dict[str, Any],
+        model: type[models.Model],
+        input_data: dict[str, Any],
         instance: models.Model,
     ) -> models.Model:
         """
@@ -907,8 +907,8 @@ class NestedOperationHandler:
             raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
 
     def _extract_unique_constraint_fields(
-        self, model: Type[models.Model], error: Exception
-    ) -> List[str]:
+        self, model: type[models.Model], error: Exception
+    ) -> list[str]:
         """
         Extract field names from database integrity error messages for unique constraints.
 
@@ -916,7 +916,7 @@ class NestedOperationHandler:
         when possible; otherwise returns the DB column names.
         """
         msg = str(error)
-        fields: List[str] = []
+        fields: list[str] = []
 
         # SQLite / generic pattern: UNIQUE constraint failed: app_model.field[, app_model.field]
         m = re.search(r"UNIQUE constraint failed: ([\w\., ]+)", msg)
@@ -939,7 +939,7 @@ class NestedOperationHandler:
         return fields
 
     def _map_column_to_field(
-        self, model: Type[models.Model], column: str
+        self, model: type[models.Model], column: str
     ) -> Optional[str]:
         """
         Map a DB column name to the Django model field name.
@@ -952,7 +952,7 @@ class NestedOperationHandler:
             pass
         return None
 
-    def _get_field_verbose_name(self, model: Type[models.Model], field_name: str) -> Optional[str]:
+    def _get_field_verbose_name(self, model: type[models.Model], field_name: str) -> Optional[str]:
         """
         Retrieve the user-facing verbose_name for a Django field when available.
 
@@ -975,8 +975,8 @@ class NestedOperationHandler:
         return None
 
     def handle_cascade_delete(
-        self, instance: models.Model, cascade_rules: Optional[Dict[str, str]] = None
-    ) -> List[str]:
+        self, instance: models.Model, cascade_rules: Optional[dict[str, str]] = None
+    ) -> list[str]:
         """
         Handles cascade delete operations with configurable cascade rules.
 
@@ -1048,10 +1048,10 @@ class NestedOperationHandler:
 
     def validate_nested_data(
         self,
-        model: Type[models.Model],
-        input_data: Dict[str, Any],
+        model: type[models.Model],
+        input_data: dict[str, Any],
         operation: str = "create",
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Validates nested input data before processing.
 
@@ -1107,9 +1107,9 @@ class NestedOperationHandler:
 
     def _has_circular_reference(
         self,
-        model: Type[models.Model],
-        input_data: Dict[str, Any],
-        visited_models: Optional[Set[Type[models.Model]]] = None,
+        model: type[models.Model],
+        input_data: dict[str, Any],
+        visited_models: Optional[set[type[models.Model]]] = None,
     ) -> bool:
         """
         Checks for circular references in nested data.
@@ -1136,7 +1136,7 @@ class NestedOperationHandler:
 
         return False
 
-    def _validate_field_value(self, field: models.Field, value: Any) -> List[str]:
+    def _validate_field_value(self, field: models.Field, value: Any) -> list[str]:
         """
         Validates a field value against field constraints.
         """
@@ -1185,7 +1185,7 @@ class NestedOperationHandler:
             return [f"Field validation error for '{field.name}': {str(e)}"]
 
     def _handle_reverse_relationships(
-        self, instance: models.Model, input_data: Dict[str, Any]
+        self, instance: models.Model, input_data: dict[str, Any]
     ) -> None:
         """
         Handle reverse relationships (e.g., creating comments for a post).
@@ -1253,7 +1253,7 @@ class NestedOperationHandler:
                             pk__in=connect_ids
                         ).update(**{related_field.field.name: instance})
 
-    def _get_reverse_relations(self, model: Type[models.Model]) -> Dict[str, Any]:
+    def _get_reverse_relations(self, model: type[models.Model]) -> dict[str, Any]:
         """
         Get reverse relationships for a model.
 
@@ -1338,7 +1338,7 @@ class NestedOperationHandler:
 
         return True
 
-    def _process_nested_fields(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_nested_fields(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         Process nested_ prefixed fields and extract them to their corresponding model fields.
 

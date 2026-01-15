@@ -12,7 +12,7 @@ from django.db import models
 from ..core.meta import GraphQLMeta, get_model_graphql_meta as _get_model_meta
 
 
-def get_model_graphql_meta(model: Type[models.Model]) -> GraphQLMeta:
+def get_model_graphql_meta(model: type[models.Model]) -> GraphQLMeta:
     """
     Return the ``GraphQLMeta`` helper for the provided model.
 
@@ -23,7 +23,7 @@ def get_model_graphql_meta(model: Type[models.Model]) -> GraphQLMeta:
     return _get_model_meta(model)
 
 
-def get_custom_filters(model: Type[models.Model]) -> Dict[str, Any]:
+def get_custom_filters(model: type[models.Model]) -> dict[str, Any]:
     """
     Shortcut to fetch custom filter definitions for a model.
     """
@@ -32,7 +32,7 @@ def get_custom_filters(model: Type[models.Model]) -> Dict[str, Any]:
     return dict(meta.custom_filters)
 
 
-def get_quick_filter_fields(model: Type[models.Model]) -> List[str]:
+def get_quick_filter_fields(model: type[models.Model]) -> list[str]:
     """
     Shortcut to fetch the quick filter field paths for a model.
     """
@@ -41,7 +41,7 @@ def get_quick_filter_fields(model: Type[models.Model]) -> List[str]:
     return list(meta.quick_filter_fields)
 
 
-def get_filter_fields(model: Type[models.Model]) -> Dict[str, List[str]]:
+def get_filter_fields(model: type[models.Model]) -> dict[str, list[str]]:
     """
     Shortcut to fetch the filterable field -> lookup mapping.
     """

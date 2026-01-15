@@ -36,7 +36,7 @@ class DebugEvent:
     timestamp: datetime
     level: DebugLevel
     message: str
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     duration_ms: Optional[float] = None
     error: Optional[Exception] = None
     stack_trace: Optional[str] = None
@@ -47,8 +47,8 @@ class DebugSession:
     """Represents a debug session."""
     session_id: str
     start_time: datetime
-    events: List[DebugEvent] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
+    events: list[DebugEvent] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
     is_active: bool = True
 
 
@@ -72,17 +72,17 @@ class DebugHooks:
         self.max_events_per_session = max_events_per_session
 
         # Event storage
-        self._sessions: Dict[str, DebugSession] = {}
-        self._global_events: List[DebugEvent] = []
+        self._sessions: dict[str, DebugSession] = {}
+        self._global_events: list[DebugEvent] = []
         self._lock = threading.RLock()
 
         # Hook callbacks
-        self._pre_hooks: Dict[str, List[Callable]] = {}
-        self._post_hooks: Dict[str, List[Callable]] = {}
-        self._error_hooks: Dict[str, List[Callable]] = {}
+        self._pre_hooks: dict[str, list[Callable]] = {}
+        self._post_hooks: dict[str, list[Callable]] = {}
+        self._error_hooks: dict[str, list[Callable]] = {}
 
         # Performance tracking
-        self._operation_timings: Dict[str, List[float]] = {}
+        self._operation_timings: dict[str, list[float]] = {}
 
         self.logger = logging.getLogger(__name__)
         self._setup_logging()
@@ -103,7 +103,7 @@ class DebugHooks:
 
         self.logger.setLevel(level_mapping.get(self.debug_level, logging.INFO))
 
-    def create_session(self, session_id: str, context: Dict[str, Any] = None) -> DebugSession:
+    def create_session(self, session_id: str, context: dict[str, Any] = None) -> DebugSession:
         """
         Create a new debug session.
 
@@ -176,7 +176,7 @@ class DebugHooks:
         self._error_hooks[event_type].append(callback)
 
     @contextmanager
-    def debug_operation(self, operation_name: str, context: Dict[str, Any] = None,
+    def debug_operation(self, operation_name: str, context: dict[str, Any] = None,
                         session_id: str = None):
         """
         Context manager for debugging operations.
@@ -243,7 +243,7 @@ class DebugHooks:
 
             raise
 
-    def log_schema_registration(self, schema_name: str, schema_config: Dict[str, Any],
+    def log_schema_registration(self, schema_name: str, schema_config: dict[str, Any],
                                 session_id: str = None):
         """Log schema registration event."""
         if self.debug_level.value < DebugLevel.INFO.value:
@@ -260,7 +260,7 @@ class DebugHooks:
             session_id=session_id
         )
 
-    def log_query_execution(self, query: str, variables: Dict[str, Any] = None,
+    def log_query_execution(self, query: str, variables: dict[str, Any] = None,
                             operation_name: str = None, session_id: str = None):
         """Log GraphQL query execution."""
         if not self.enable_query_logging or self.debug_level.value < DebugLevel.DEBUG.value:
@@ -282,7 +282,7 @@ class DebugHooks:
             session_id=session_id
         )
 
-    def log_mutation_execution(self, mutation: str, variables: Dict[str, Any] = None,
+    def log_mutation_execution(self, mutation: str, variables: dict[str, Any] = None,
                                operation_name: str = None, session_id: str = None):
         """Log GraphQL mutation execution."""
         if not self.enable_query_logging or self.debug_level.value < DebugLevel.DEBUG.value:
@@ -303,7 +303,7 @@ class DebugHooks:
             session_id=session_id
         )
 
-    def log_validation_error(self, error: Exception, context: Dict[str, Any] = None,
+    def log_validation_error(self, error: Exception, context: dict[str, Any] = None,
                              session_id: str = None):
         """Log validation error."""
         if not self.enable_error_tracking:
@@ -338,7 +338,7 @@ class DebugHooks:
             session_id=session_id
         )
 
-    def get_performance_stats(self, operation: str = None) -> Dict[str, Any]:
+    def get_performance_stats(self, operation: str = None) -> dict[str, Any]:
         """Get performance statistics."""
         with self._lock:
             if operation:
@@ -372,7 +372,7 @@ class DebugHooks:
                 return {"all_operations": all_stats}
 
     def get_events(self, session_id: str = None, event_type: str = None,
-                   level: DebugLevel = None, limit: int = None) -> List[DebugEvent]:
+                   level: DebugLevel = None, limit: int = None) -> list[DebugEvent]:
         """Get debug events with optional filtering."""
         with self._lock:
             if session_id:
@@ -419,7 +419,7 @@ class DebugHooks:
                 self._operation_timings.clear()
 
     def _log_event(self, event_type: str, level: DebugLevel, message: str,
-                   context: Dict[str, Any] = None, duration_ms: float = None,
+                   context: dict[str, Any] = None, duration_ms: float = None,
                    error: Exception = None, stack_trace: str = None,
                    session_id: str = None):
         """Log a debug event."""
@@ -470,7 +470,7 @@ class DebugHooks:
         else:
             self.logger.log(python_level, message)
 
-    def _execute_hooks(self, hooks: List[Callable], *args, **kwargs):
+    def _execute_hooks(self, hooks: list[Callable], *args, **kwargs):
         """Execute a list of hooks safely."""
         for hook in hooks:
             try:
@@ -497,7 +497,7 @@ class DebugHooks:
             return query[:1000] + "... (truncated)"
         return query
 
-    def _sanitize_variables(self, variables: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_variables(self, variables: dict[str, Any]) -> dict[str, Any]:
         """Sanitize variables for logging (remove sensitive data)."""
         sensitive_keys = {'password', 'token', 'secret', 'key', 'auth', 'credential'}
 
@@ -512,7 +512,7 @@ class DebugHooks:
 
         return sanitized
 
-    def _export_json(self, events: List[DebugEvent], session_id: str = None) -> str:
+    def _export_json(self, events: list[DebugEvent], session_id: str = None) -> str:
         """Export events as JSON."""
         export_data = {
             "session_id": session_id,
@@ -541,7 +541,7 @@ class DebugHooks:
 
         return json.dumps(export_data, indent=2, ensure_ascii=False)
 
-    def _export_csv(self, events: List[DebugEvent]) -> str:
+    def _export_csv(self, events: list[DebugEvent]) -> str:
         """Export events as CSV."""
         import csv
         import io

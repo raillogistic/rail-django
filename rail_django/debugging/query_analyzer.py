@@ -55,7 +55,7 @@ class QueryIssue:
     issue_type: QueryIssueType
     severity: QuerySeverity
     message: str
-    location: Optional[Dict[str, Any]] = None
+    location: Optional[dict[str, Any]] = None
     suggestion: Optional[str] = None
     field_path: Optional[str] = None
     complexity_score: Optional[int] = None
@@ -69,8 +69,8 @@ class QueryComplexity:
     field_count: int
     fragment_count: int
     operation_count: int
-    expensive_fields: List[str] = field(default_factory=list)
-    complexity_by_field: Dict[str, int] = field(default_factory=dict)
+    expensive_fields: list[str] = field(default_factory=list)
+    complexity_by_field: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -79,8 +79,8 @@ class QueryAnalysisResult:
     query: str
     is_valid: bool
     complexity: QueryComplexity
-    issues: List[QueryIssue] = field(default_factory=list)
-    suggestions: List[str] = field(default_factory=list)
+    issues: list[QueryIssue] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
     security_score: float = 0.0
     performance_score: float = 0.0
     estimated_execution_time_ms: Optional[float] = None
@@ -89,7 +89,7 @@ class QueryAnalysisResult:
 class ComplexityVisitor(Visitor):
     """Visitor for calculating query complexity."""
 
-    def __init__(self, field_complexity_map: Dict[str, int] = None,
+    def __init__(self, field_complexity_map: dict[str, int] = None,
                  max_depth: int = 15, introspection_cost: int = 1):
         # Initialize parent Visitor class to set up enter_leave_map
         super().__init__()
@@ -226,9 +226,9 @@ class QueryAnalyzer:
                  schema_string: str = None,
                  max_complexity: int = 1000,
                  max_depth: int = 15,
-                 field_complexity_map: Dict[str, int] = None,
-                 expensive_fields: Set[str] = None,
-                 deprecated_fields: Set[str] = None):
+                 field_complexity_map: dict[str, int] = None,
+                 expensive_fields: set[str] = None,
+                 deprecated_fields: set[str] = None):
 
         self.schema = None
         if schema_string:
@@ -260,7 +260,7 @@ class QueryAnalyzer:
 
         self.logger = logging.getLogger(__name__)
 
-    def analyze_query(self, query: str, variables: Dict[str, Any] = None,
+    def analyze_query(self, query: str, variables: dict[str, Any] = None,
                       operation_name: str = None) -> QueryAnalysisResult:
         """
         Perform comprehensive analysis of a GraphQL query.
@@ -346,7 +346,7 @@ class QueryAnalyzer:
             complexity_by_field=visitor.complexity_by_field
         )
 
-    def _check_complexity_issues(self, complexity: QueryComplexity) -> List[QueryIssue]:
+    def _check_complexity_issues(self, complexity: QueryComplexity) -> list[QueryIssue]:
         """Check for complexity-related issues."""
         issues = []
 
@@ -391,7 +391,7 @@ class QueryAnalyzer:
 
         return issues
 
-    def _check_security_issues(self, query: str) -> List[QueryIssue]:
+    def _check_security_issues(self, query: str) -> list[QueryIssue]:
         """Check for security-related issues."""
         issues = []
 
@@ -418,7 +418,7 @@ class QueryAnalyzer:
 
         return issues
 
-    def _check_performance_issues(self, query: str, document) -> List[QueryIssue]:
+    def _check_performance_issues(self, query: str, document) -> list[QueryIssue]:
         """Check for performance-related issues."""
         issues = []
 
@@ -456,12 +456,12 @@ class QueryAnalyzer:
 
         return issues
 
-    def _check_deprecated_fields(self, document) -> List[QueryIssue]:
+    def _check_deprecated_fields(self, document) -> list[QueryIssue]:
         """Check for usage of deprecated fields."""
         issues = []
 
         class DeprecatedFieldVisitor(Visitor):
-            def __init__(self, deprecated_fields: Set[str]):
+            def __init__(self, deprecated_fields: set[str]):
                 # Initialize parent Visitor class to set up enter_leave_map
                 super().__init__()
 
@@ -487,7 +487,7 @@ class QueryAnalyzer:
 
         return issues
 
-    def _generate_suggestions(self, result: QueryAnalysisResult) -> List[str]:
+    def _generate_suggestions(self, result: QueryAnalysisResult) -> list[str]:
         """Generate optimization suggestions based on analysis."""
         suggestions = []
 
@@ -517,7 +517,7 @@ class QueryAnalyzer:
 
         return suggestions
 
-    def _calculate_security_score(self, issues: List[QueryIssue]) -> float:
+    def _calculate_security_score(self, issues: list[QueryIssue]) -> float:
         """Calculate security score (0-100, higher is better)."""
         security_issues = [i for i in issues if i.issue_type == QueryIssueType.SECURITY_RISK]
 
@@ -586,12 +586,12 @@ class QueryAnalyzer:
         # Expensive field factor
         expensive_factor = len(result.complexity.expensive_fields) * 50
 
-        estimated_time = base_time + (complexity_factor * 5) + \
+        estimated_time = base_time + (complexity_factor * 5) +\
             (field_factor * 2) + depth_factor + expensive_factor
 
         return estimated_time
 
-    def _extract_location(self, error: GraphQLError) -> Optional[Dict[str, Any]]:
+    def _extract_location(self, error: GraphQLError) -> Optional[dict[str, Any]]:
         """Extract location information from GraphQL error."""
         if hasattr(error, 'locations') and error.locations:
             location = error.locations[0]

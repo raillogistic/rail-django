@@ -58,8 +58,8 @@ class RoleDefinition:
     name: str
     description: str
     role_type: RoleType
-    permissions: List[str]
-    parent_roles: List[str] = None
+    permissions: list[str]
+    parent_roles: list[str] = None
     is_system_role: bool = False
     max_users: Optional[int] = None
 
@@ -70,12 +70,12 @@ class PermissionContext:
     user: "AbstractUser"
     object_id: Optional[str] = None
     object_instance: Optional[models.Model] = None
-    model_class: Optional[Type[models.Model]] = None
+    model_class: Optional[type[models.Model]] = None
     operation: Optional[str] = None
     organization_id: Optional[str] = None
     department_id: Optional[str] = None
     project_id: Optional[str] = None
-    additional_context: Dict[str, Any] = None
+    additional_context: dict[str, Any] = None
 
 
 @dataclass
@@ -92,9 +92,9 @@ class PermissionExplanation:
     allowed: bool
     reason: Optional[str] = None
     policy_decision: Optional[PolicyDecisionDetail] = None
-    policy_matches: List[PolicyDecisionDetail] = field(default_factory=list)
-    user_roles: List[str] = field(default_factory=list)
-    effective_permissions: Set[str] = field(default_factory=set)
+    policy_matches: list[PolicyDecisionDetail] = field(default_factory=list)
+    user_roles: list[str] = field(default_factory=list)
+    effective_permissions: set[str] = field(default_factory=set)
     context_required: bool = False
     context_allowed: Optional[bool] = None
     context_reason: Optional[str] = None
@@ -110,9 +110,9 @@ class RoleManager:
         self._roles_cache = {}
         self._permissions_cache = {}
         self._role_hierarchy = {}
-        self._model_roles_registry: Set[str] = set()
-        self._owner_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
-        self._assignment_resolvers: Dict[str, Callable[[PermissionContext], bool]] = {}
+        self._model_roles_registry: set[str] = set()
+        self._owner_resolvers: dict[str, Callable[[PermissionContext], bool]] = {}
+        self._assignment_resolvers: dict[str, Callable[[PermissionContext], bool]] = {}
         self._context_resolver_version = 1
 
         self._permission_cache_enabled = bool(
@@ -208,7 +208,7 @@ class RoleManager:
 
         logger.info(f"Rôle '{role_definition.name}' enregistré")
 
-    def register_default_model_roles(self, model_class: Type[models.Model]):
+    def register_default_model_roles(self, model_class: type[models.Model]):
         """Crée des rôles CRUD par défaut pour un modèle installé."""
 
         if not model_class or model_class._meta.abstract or model_class._meta.auto_created:
@@ -262,7 +262,7 @@ class RoleManager:
 
     def register_owner_resolver(
         self,
-        model_class: Union[Type[models.Model], str],
+        model_class: Union[type[models.Model], str],
         resolver: Callable[[PermissionContext], bool],
     ) -> None:
         key = self._normalize_model_key(model_class)
@@ -273,7 +273,7 @@ class RoleManager:
 
     def register_assignment_resolver(
         self,
-        model_class: Union[Type[models.Model], str],
+        model_class: Union[type[models.Model], str],
         resolver: Callable[[PermissionContext], bool],
     ) -> None:
         key = self._normalize_model_key(model_class)
@@ -282,7 +282,7 @@ class RoleManager:
         self._assignment_resolvers[key] = resolver
         self._context_resolver_version += 1
 
-    def _normalize_model_key(self, model_class: Union[Type[models.Model], str, None]) -> str:
+    def _normalize_model_key(self, model_class: Union[type[models.Model], str, None]) -> str:
         if model_class is None:
             return ""
         if isinstance(model_class, str):
@@ -339,7 +339,7 @@ class RoleManager:
 
         return self._roles_cache.get(role_name)
 
-    def get_user_roles(self, user: "AbstractUser") -> List[str]:
+    def get_user_roles(self, user: "AbstractUser") -> list[str]:
         """
         Récupère les rôles d'un utilisateur.
 
@@ -366,7 +366,7 @@ class RoleManager:
         return roles
 
     def get_effective_permissions(self, user: "AbstractUser",
-                                  context: PermissionContext = None) -> Set[str]:
+                                  context: PermissionContext = None) -> set[str]:
         """
         Récupère les permissions effectives d'un utilisateur.
 
@@ -401,7 +401,7 @@ class RoleManager:
         return permissions
 
     def _get_inherited_permissions(self, role_name: str,
-                                   visited: Optional[Set[str]] = None) -> Set[str]:
+                                   visited: Optional[set[str]] = None) -> set[str]:
         """
         Récupère les permissions héritées des rôles parents.
 
@@ -432,7 +432,7 @@ class RoleManager:
         return permissions
 
     def _permission_in_effective_permissions(self, permission: str,
-                                             effective_permissions: Set[str]) -> bool:
+                                             effective_permissions: set[str]) -> bool:
         if permission in effective_permissions:
             return True
         if '*' in effective_permissions:
@@ -598,7 +598,7 @@ class RoleManager:
 
     def _check_contextual_permission_with_reason(
         self, permission: str, context: PermissionContext
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
         if permission.endswith("_own"):
             allowed = self._is_object_owner(context)
             return allowed, None if allowed else "not_owner"
@@ -614,7 +614,7 @@ class RoleManager:
         context: Optional[PermissionContext],
         *,
         include_explanation: bool = False,
-    ) -> Tuple[bool, Optional[PermissionExplanation]]:
+    ) -> tuple[bool, Optional[PermissionExplanation]]:
         explanation = None
         if include_explanation:
             explanation = PermissionExplanation(
@@ -948,7 +948,7 @@ class RoleManager:
             logger.warning(f"Groupe '{role_name}' non trouvé")
 
 
-def require_role(required_roles: Union[str, List[str]]):
+def require_role(required_roles: Union[str, list[str]]):
     """
     Décorateur pour exiger des rôles spécifiques.
 

@@ -31,8 +31,8 @@ class PersistedQuerySettings:
     ttl: int
     allow_unregistered: bool
     enforce_allowlist: bool
-    allowlist: Dict[str, str]
-    allowlist_hashes: Set[str]
+    allowlist: dict[str, str]
+    allowlist_hashes: set[str]
     hash_algorithm: str
     max_query_length: int
 
@@ -54,7 +54,7 @@ class PersistedQueryStore:
         self.cache_alias = cache_alias
         self.default_ttl = default_ttl
         self._cache = self._resolve_cache()
-        self._fallback_store: Dict[str, Dict[str, Any]] = {}
+        self._fallback_store: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
 
     def _resolve_cache(self):
@@ -88,11 +88,11 @@ class PersistedQueryStore:
             self._fallback_store[key] = {"value": value, "expires_at": expires_at}
 
 
-_STORE_BY_ALIAS: Dict[str, PersistedQueryStore] = {}
+_STORE_BY_ALIAS: dict[str, PersistedQueryStore] = {}
 
 
 def resolve_persisted_query(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     *,
     schema_name: Optional[str] = None,
 ) -> PersistedQueryResolution:
@@ -250,9 +250,9 @@ def _coerce_int(value: Any, default: int) -> int:
 
 def _load_allowlist(
     allowlist_raw: Any, allowlist_path: Any
-) -> Tuple[Dict[str, str], Set[str]]:
-    allowlist: Dict[str, str] = {}
-    allowlist_hashes: Set[str] = set()
+) -> tuple[dict[str, str], set[str]]:
+    allowlist: dict[str, str] = {}
+    allowlist_hashes: set[str] = set()
 
     def merge_from(value: Any) -> None:
         if isinstance(value, dict):

@@ -154,7 +154,7 @@ class BaseAPIView(View):
         """Handle preflight requests."""
         return JsonResponse({}, status=200)
 
-    def json_response(self, data: Dict[str, Any], status: int = 200) -> JsonResponse:
+    def json_response(self, data: dict[str, Any], status: int = 200) -> JsonResponse:
         """Create a JSON response with consistent formatting."""
         response_data = {
             'timestamp': datetime.now().isoformat(),
@@ -163,7 +163,7 @@ class BaseAPIView(View):
         }
         return JsonResponse(response_data, status=status)
 
-    def error_response(self, message: str, status: int = 400, details: Optional[Dict] = None) -> JsonResponse:
+    def error_response(self, message: str, status: int = 400, details: Optional[dict] = None) -> JsonResponse:
         """Create an error response."""
         error_data = {
             'message': message,
@@ -171,7 +171,7 @@ class BaseAPIView(View):
         }
         return self.json_response(error_data, status=status)
 
-    def parse_json_body(self, request: HttpRequest) -> Optional[Dict[str, Any]]:
+    def parse_json_body(self, request: HttpRequest) -> Optional[dict[str, Any]]:
         """Parse JSON body from request."""
         if getattr(request, self._json_body_cache_set_attr, False):
             return getattr(request, self._json_body_cache_attr, None)
@@ -192,8 +192,8 @@ class BaseAPIView(View):
         request: HttpRequest,
         response: JsonResponse,
         *,
-        path_params: Optional[Dict[str, Any]] = None,
-        extra_data: Optional[Dict[str, Any]] = None,
+        path_params: Optional[dict[str, Any]] = None,
+        extra_data: Optional[dict[str, Any]] = None,
     ) -> None:
         if request.method == "OPTIONS":
             return
@@ -209,7 +209,7 @@ class BaseAPIView(View):
 
         event_type = self._get_audit_event_type(request, body_data, AuditEventType)
 
-        additional_data: Dict[str, Any] = {
+        additional_data: dict[str, Any] = {
             "component": "schema_api",
             "view": self.__class__.__name__,
             "status_code": response.status_code,
@@ -237,7 +237,7 @@ class BaseAPIView(View):
     def _get_audit_event_type(
         self,
         request: HttpRequest,
-        body_data: Optional[Dict[str, Any]],
+        body_data: Optional[dict[str, Any]],
         audit_enum: Any,
     ) -> Any:
         method = request.method.upper()

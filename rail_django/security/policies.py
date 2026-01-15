@@ -28,13 +28,13 @@ class PolicyEffect(Enum):
 class PolicyContext:
     user: "AbstractUser"
     permission: Optional[str] = None
-    model_class: Optional[Type[models.Model]] = None
+    model_class: Optional[type[models.Model]] = None
     field_name: Optional[str] = None
     operation: Optional[str] = None
     object_instance: Optional[models.Model] = None
     object_id: Optional[str] = None
-    classifications: Optional[Set[str]] = None
-    additional_context: Optional[Dict[str, Any]] = None
+    classifications: Optional[set[str]] = None
+    additional_context: Optional[dict[str, Any]] = None
     request: Optional[Any] = None
 
 
@@ -43,12 +43,12 @@ class AccessPolicy:
     name: str
     effect: PolicyEffect
     priority: int = 0
-    roles: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
-    models: List[str] = field(default_factory=list)
-    fields: List[str] = field(default_factory=list)
-    operations: List[str] = field(default_factory=list)
-    classifications: List[str] = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    models: list[str] = field(default_factory=list)
+    fields: list[str] = field(default_factory=list)
+    operations: list[str] = field(default_factory=list)
+    classifications: list[str] = field(default_factory=list)
     condition: Optional[Callable[[PolicyContext], bool]] = None
     access_level: Optional[Any] = None
     visibility: Optional[Any] = None
@@ -67,12 +67,12 @@ class PolicyDecision:
 @dataclass
 class PolicyExplanation:
     decision: Optional[PolicyDecision]
-    matches: List[AccessPolicy] = field(default_factory=list)
+    matches: list[AccessPolicy] = field(default_factory=list)
 
 
 class PolicyManager:
     def __init__(self) -> None:
-        self._policies: List[AccessPolicy] = []
+        self._policies: list[AccessPolicy] = []
         self._version = 0
 
     def register_policy(self, policy: AccessPolicy) -> None:
@@ -91,7 +91,7 @@ class PolicyManager:
                 policy.classifications = [tag]
             self.register_policy(policy)
 
-    def list_policies(self) -> List[AccessPolicy]:
+    def list_policies(self) -> list[AccessPolicy]:
         return list(self._policies)
 
     def clear_policies(self) -> None:
@@ -183,7 +183,7 @@ class PolicyManager:
 
         return True
 
-    def _get_user_roles(self, context: PolicyContext) -> Set[str]:
+    def _get_user_roles(self, context: PolicyContext) -> set[str]:
         try:
             from .rbac import role_manager
 
@@ -191,11 +191,11 @@ class PolicyManager:
         except Exception:
             return set()
 
-    def _get_model_tokens(self, context: PolicyContext) -> List[str]:
+    def _get_model_tokens(self, context: PolicyContext) -> list[str]:
         model = context.model_class
         if model is None and context.object_instance is not None:
             model = context.object_instance.__class__
-        tokens: List[str] = ["*"]
+        tokens: list[str] = ["*"]
         if model is not None:
             tokens.append(model.__name__)
             tokens.append(model._meta.label_lower)

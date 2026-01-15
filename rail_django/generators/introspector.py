@@ -64,7 +64,7 @@ class RelationshipInfo:
 
     def __init__(
         self,
-        related_model: Type[models.Model],
+        related_model: type[models.Model],
         relationship_type: str,
         to_field: str,
         from_field: str,
@@ -92,7 +92,7 @@ class MethodInfo:
     def __init__(
         self,
         name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         return_type: Any,
         is_async: bool,
         is_mutation: bool = False,
@@ -136,9 +136,9 @@ class ManagerInfo:
     def __init__(
         self,
         name: str,
-        manager_class: Type,
+        manager_class: type,
         is_default: bool = False,
-        custom_methods: Dict[str, Any] = None,
+        custom_methods: dict[str, Any] = None,
     ):
         self.name = name
         self.manager_class = manager_class
@@ -155,7 +155,7 @@ class InheritanceInfo:
         is_abstract: Whether the model is abstract
     """
 
-    def __init__(self, base_classes: List[Type[models.Model]], is_abstract: bool):
+    def __init__(self, base_classes: list[type[models.Model]], is_abstract: bool):
         self.base_classes = base_classes
         self.is_abstract = is_abstract
 
@@ -189,13 +189,13 @@ class ModelIntrospector:
         >>> methods = introspector.methods
     """
 
-    def __init__(self, model: Type[models.Model], schema_name: Optional[str] = None):
+    def __init__(self, model: type[models.Model], schema_name: Optional[str] = None):
         self.model = model
         self.schema_name = schema_name or "default"
         self._meta = getattr(model, "_meta", None)
 
     @cached_property
-    def managers(self) -> Dict[str, ManagerInfo]:
+    def managers(self) -> dict[str, ManagerInfo]:
         """Discovers model managers and their metadata."""
         manager_info = {}
 
@@ -244,7 +244,7 @@ class ModelIntrospector:
         return manager_info
 
     @cached_property
-    def fields(self) -> Dict[str, FieldInfo]:
+    def fields(self) -> dict[str, FieldInfo]:
         """Extracts model fields with their types and constraints."""
         if not self._meta:
             return {}
@@ -282,7 +282,7 @@ class ModelIntrospector:
         return field_info
 
     @cached_property
-    def relationships(self) -> Dict[str, RelationshipInfo]:
+    def relationships(self) -> dict[str, RelationshipInfo]:
         """Identifies model relationships (ForeignKey, ManyToMany, OneToOne)."""
         if not self._meta:
             return {}
@@ -299,7 +299,7 @@ class ModelIntrospector:
         return relationship_info
 
     @cached_property
-    def methods(self) -> Dict[str, MethodInfo]:
+    def methods(self) -> dict[str, MethodInfo]:
         """Discovers model methods and their signatures."""
         method_info = {}
 
@@ -510,7 +510,7 @@ class ModelIntrospector:
         return False
 
     @cached_property
-    def properties(self) -> Dict[str, PropertyInfo]:
+    def properties(self) -> dict[str, PropertyInfo]:
         """Discovers model properties and their return types."""
         property_info = {}
         for name, member in inspect.getmembers(
@@ -546,25 +546,25 @@ class ModelIntrospector:
             is_abstract=self._meta.abstract,
         )
 
-    def get_model_fields(self) -> Dict[str, FieldInfo]:
+    def get_model_fields(self) -> dict[str, FieldInfo]:
         return self.fields
 
-    def get_model_relationships(self) -> Dict[str, RelationshipInfo]:
+    def get_model_relationships(self) -> dict[str, RelationshipInfo]:
         return self.relationships
 
-    def get_model_methods(self) -> Dict[str, MethodInfo]:
+    def get_model_methods(self) -> dict[str, MethodInfo]:
         return self.methods
 
-    def get_model_properties(self) -> Dict[str, PropertyInfo]:
+    def get_model_properties(self) -> dict[str, PropertyInfo]:
         return self.properties
 
-    def get_model_managers(self) -> Dict[str, ManagerInfo]:
+    def get_model_managers(self) -> dict[str, ManagerInfo]:
         return self.managers
 
     def analyze_inheritance(self) -> InheritanceInfo:
         return self.inheritance
 
-    def get_manytoone_relations(self) -> Dict[str, Type[models.Model]]:
+    def get_manytoone_relations(self) -> dict[str, type[models.Model]]:
         """
         Get reverse relationships for the model (e.g., comments for Post).
 
@@ -613,7 +613,7 @@ class ModelIntrospector:
 
         return reverse_relations
 
-    def get_reverse_relations(self) -> Dict[str, Type[models.Model]]:
+    def get_reverse_relations(self) -> dict[str, type[models.Model]]:
         """
         Get reverse relationships for the model (e.g., comments for Post).
 

@@ -19,8 +19,8 @@ class InMemoryQueryCacheBackend:
     def __init__(self, default_timeout: int = 300):
         self.default_timeout = default_timeout
         self._lock = threading.RLock()
-        self._store: Dict[str, Dict[str, Any]] = {}
-        self._versions: Dict[str, str] = {}
+        self._store: dict[str, dict[str, Any]] = {}
+        self._versions: dict[str, str] = {}
 
     def get(self, key: str) -> Any:
         with self._lock:

@@ -19,7 +19,7 @@ from .mutations_errors import (
 
 
 def _wrap_with_audit(
-    model: Type[models.Model], operation: str, func
+    model: type[models.Model], operation: str, func
 ):
     try:
         from ..security.audit_logging import audit_data_modification
@@ -47,11 +47,11 @@ def _infer_audit_operation(name: Optional[str]) -> str:
 
 def convert_method_to_mutation(
     self,
-    model: Type[models.Model],
+    model: type[models.Model],
     method_name: str,
-    custom_input_type: Optional[Type[graphene.InputObjectType]] = None,
-    custom_output_type: Optional[Type[graphene.ObjectType]] = None,
-) -> Optional[Type[graphene.Mutation]]:
+    custom_input_type: Optional[type[graphene.InputObjectType]] = None,
+    custom_output_type: Optional[type[graphene.ObjectType]] = None,
+) -> Optional[type[graphene.Mutation]]:
     """
     Converts a model method to a GraphQL mutation with enhanced capabilities.
 
@@ -240,8 +240,8 @@ def convert_method_to_mutation(
 
 
 def generate_method_mutation(
-    self, model: Type[models.Model], method_info: MethodInfo
-) -> Optional[Type[graphene.Mutation]]:
+    self, model: type[models.Model], method_info: MethodInfo
+) -> Optional[type[graphene.Mutation]]:
     """
     Generates a mutation from a model method.
     Analyzes method signature and return type to create appropriate mutation.
@@ -329,7 +329,7 @@ def generate_method_mutation(
             root: Any,
             info: graphene.ResolveInfo,
             id: str,
-            input: Dict[str, Any] = None,
+            input: dict[str, Any] = None,
         ):
             # Permission check if required
             if requires_permissions and hasattr(info.context, "user"):

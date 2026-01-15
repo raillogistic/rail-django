@@ -19,7 +19,7 @@ LIBRARY_NAME = "rail-django"
 # --------------------------------------------------------------------------- #
 # Library-wide defaults (grouped by feature area)
 # --------------------------------------------------------------------------- #
-LIBRARY_DEFAULTS: Dict[str, Any] = {
+LIBRARY_DEFAULTS: dict[str, Any] = {
     "schema_settings": {
         "excluded_apps": [],
         "excluded_models": [],
@@ -275,9 +275,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
 # --------------------------------------------------------------------------- #
 # Schema / environment overrides (kept minimal & optional)
 # --------------------------------------------------------------------------- #
-SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {}
+SCHEMA_DEFAULTS: dict[str, dict[str, Any]] = {}
 
-ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
+ENVIRONMENT_DEFAULTS: dict[str, dict[str, Any]] = {
     "development": {
         "schema_settings": {
             "enable_graphiql": True,
@@ -302,27 +302,27 @@ ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
 # --------------------------------------------------------------------------- #
 # Helper functions
 # --------------------------------------------------------------------------- #
-def get_default_settings() -> Dict[str, Any]:
+def get_default_settings() -> dict[str, Any]:
     """Return a shallow copy of the library defaults."""
     return LIBRARY_DEFAULTS.copy()
 
 
-def get_schema_defaults(schema_name: str) -> Dict[str, Any]:
+def get_schema_defaults(schema_name: str) -> dict[str, Any]:
     """Return schema-specific overrides if any were defined."""
     return SCHEMA_DEFAULTS.get(schema_name, {}).copy()
 
 
-def get_environment_defaults(environment: str) -> Dict[str, Any]:
+def get_environment_defaults(environment: str) -> dict[str, Any]:
     """Return environment-specific overrides."""
     return ENVIRONMENT_DEFAULTS.get(environment, {}).copy()
 
 
-def merge_settings(*settings_dicts: Dict[str, Any]) -> Dict[str, Any]:
+def merge_settings(*settings_dicts: dict[str, Any]) -> dict[str, Any]:
     """
     Merge multiple settings dictionaries with deep merging for nested dicts.
     Later dictionaries override earlier ones.
     """
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     for settings_dict in settings_dicts:
         for key, value in settings_dict.items():
             if (
@@ -339,8 +339,8 @@ def merge_settings(*settings_dicts: Dict[str, Any]) -> Dict[str, Any]:
 def get_merged_settings(
     schema_name: str | None = None,
     environment: str | None = None,
-    custom_settings: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    custom_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Merge defaults + environment overrides + schema overrides + custom settings.
     Priority (lowest to highest):
@@ -349,7 +349,7 @@ def get_merged_settings(
         3. schema defaults
         4. custom settings
     """
-    settings_to_merge: List[Dict[str, Any]] = [get_default_settings()]
+    settings_to_merge: list[dict[str, Any]] = [get_default_settings()]
 
     if environment:
         env_defaults = get_environment_defaults(environment)
@@ -367,11 +367,11 @@ def get_merged_settings(
     return merge_settings(*settings_to_merge)
 
 
-def validate_settings(settings: Dict[str, Any]) -> List[str]:
+def validate_settings(settings: dict[str, Any]) -> list[str]:
     """
     Validate a settings dictionary and return a list of validation errors.
     """
-    errors: List[str] = []
+    errors: list[str] = []
 
     required_sections = ["schema_settings", "query_settings", "mutation_settings"]
     for section in required_sections:

@@ -33,13 +33,13 @@ class HealthMonitor:
     - Automated recovery suggestions
     """
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: dict[str, Any] = None):
         self.config = config or self._get_default_config()
-        self.health_history: List[Dict[str, Any]] = []
-        self.alert_history: List[Dict[str, Any]] = []
-        self.last_alert_times: Dict[str, datetime] = {}
+        self.health_history: list[dict[str, Any]] = []
+        self.alert_history: list[dict[str, Any]] = []
+        self.last_alert_times: dict[str, datetime] = {}
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """Get default monitoring configuration."""
         return {
             "check_interval_seconds": 60,  # Check every minute
@@ -101,7 +101,7 @@ class HealthMonitor:
             logger.error(f"Health monitoring error: {e}")
             raise
 
-    def _perform_health_check(self) -> Dict[str, Any]:
+    def _perform_health_check(self) -> dict[str, Any]:
         """Perform comprehensive health check."""
         try:
             return health_checker.get_comprehensive_health_report()
@@ -117,7 +117,7 @@ class HealthMonitor:
                 "recommendations": [f"Health check system error: {str(e)}"],
             }
 
-    def _store_health_data(self, health_report: Dict[str, Any]):
+    def _store_health_data(self, health_report: dict[str, Any]):
         """Store health data in history."""
         self.health_history.append(
             {
@@ -136,8 +136,8 @@ class HealthMonitor:
             ]
 
     def _extract_response_times(
-        self, health_report: Dict[str, Any]
-    ) -> Dict[str, float]:
+        self, health_report: dict[str, Any]
+    ) -> dict[str, float]:
         """Extract response times from health report."""
         response_times = {}
 
@@ -159,7 +159,7 @@ class HealthMonitor:
 
         return response_times
 
-    def _check_and_send_alerts(self, health_report: Dict[str, Any]):
+    def _check_and_send_alerts(self, health_report: dict[str, Any]):
         """Check health status and send alerts if necessary."""
         current_time = datetime.now(timezone.utc)
 
@@ -193,7 +193,7 @@ class HealthMonitor:
         # Check performance thresholds
         self._check_performance_alerts(health_report)
 
-    def _check_component_alerts(self, health_report: Dict[str, Any]):
+    def _check_component_alerts(self, health_report: dict[str, Any]):
         """Check individual component health and send alerts."""
         components = health_report.get("components", {})
 
@@ -234,7 +234,7 @@ class HealthMonitor:
                     },
                 )
 
-    def _check_performance_alerts(self, health_report: Dict[str, Any]):
+    def _check_performance_alerts(self, health_report: dict[str, Any]):
         """Check performance metrics against thresholds."""
         metrics = health_report.get("system_metrics", {})
         thresholds = self.config["performance_thresholds"]
@@ -295,7 +295,7 @@ class HealthMonitor:
                 },
             )
 
-    def _send_alert(self, alert_key: str, alert_data: Dict[str, Any]):
+    def _send_alert(self, alert_key: str, alert_data: dict[str, Any]):
         """Send alert if not in cooldown period."""
         current_time = datetime.now(timezone.utc)
 
@@ -329,7 +329,7 @@ class HealthMonitor:
         # Update last alert time
         self.last_alert_times[alert_key] = current_time
 
-    def _send_email_alert(self, alert_message: Dict[str, Any]):
+    def _send_email_alert(self, alert_message: dict[str, Any]):
         """Send email alert."""
         try:
             subject = f"GraphQL System Alert - {alert_message['level']}: {alert_message['message']}"
@@ -362,7 +362,7 @@ This is an automated alert from the GraphQL health monitoring system.
         except Exception as e:
             logger.error(f"Failed to send email alert: {e}")
 
-    def _log_health_status(self, health_report: Dict[str, Any]):
+    def _log_health_status(self, health_report: dict[str, Any]):
         """Log current health status."""
         status = health_report["overall_status"]
         summary = health_report["summary"]
@@ -381,7 +381,7 @@ This is an automated alert from the GraphQL health monitoring system.
         else:
             logger.error(log_message)
 
-    def get_health_summary(self) -> Dict[str, Any]:
+    def get_health_summary(self) -> dict[str, Any]:
         """Get summary of recent health data."""
         if not self.health_history:
             return {"message": "No health data available"}
@@ -510,7 +510,7 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Health monitoring failed: {e}")
 
-    def _load_config(self, options: Dict[str, Any]) -> Dict[str, Any]:
+    def _load_config(self, options: dict[str, Any]) -> dict[str, Any]:
         """Load monitoring configuration."""
         config = HealthMonitor()._get_default_config()
 
@@ -535,7 +535,7 @@ class Command(BaseCommand):
 
         return config
 
-    def _display_health_report(self, health_report: Dict[str, Any]):
+    def _display_health_report(self, health_report: dict[str, Any]):
         """Display health report in a formatted way."""
         status = health_report["overall_status"]
 
@@ -580,7 +580,7 @@ class Command(BaseCommand):
             for rec in health_report["recommendations"]:
                 self.stdout.write(f"  • {rec}")
 
-    def _display_summary(self, summary: Dict[str, Any]):
+    def _display_summary(self, summary: dict[str, Any]):
         """Display monitoring summary."""
         self.stdout.write(self.style.SUCCESS("\n=== Monitoring Summary ==="))
         self.stdout.write(

@@ -10,7 +10,7 @@ class SchemaSerializer:
     """Serializer for schema data validation and serialization."""
 
     @staticmethod
-    def validate_create_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_create_data(data: dict[str, Any]) -> dict[str, Any]:
         """
         Validate data for schema creation.
 
@@ -55,7 +55,7 @@ class SchemaSerializer:
         return validated_data
 
     @staticmethod
-    def validate_update_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_update_data(data: dict[str, Any]) -> dict[str, Any]:
         """
         Validate data for schema update.
 
@@ -103,7 +103,7 @@ class SchemaSerializer:
         return validated_data
 
     @staticmethod
-    def _validate_list_field(value: Any, field_name: str) -> List[str]:
+    def _validate_list_field(value: Any, field_name: str) -> list[str]:
         """
         Validate list field.
 
@@ -134,7 +134,7 @@ class SchemaSerializer:
         return validated_list
 
     @staticmethod
-    def _validate_settings(value: Any) -> Dict[str, Any]:
+    def _validate_settings(value: Any) -> dict[str, Any]:
         """
         Validate settings field.
 
@@ -161,7 +161,7 @@ class SchemaSerializer:
         return validated_settings
 
     @staticmethod
-    def serialize_schema_summary(schema_info) -> Dict[str, Any]:
+    def serialize_schema_summary(schema_info) -> dict[str, Any]:
         """
         Serialize schema info for summary view.
 
@@ -185,7 +185,7 @@ class SchemaSerializer:
         }
 
     @staticmethod
-    def serialize_schema_detailed(schema_info) -> Dict[str, Any]:
+    def serialize_schema_detailed(schema_info) -> dict[str, Any]:
         """
         Serialize schema info for detailed view.
 
@@ -217,7 +217,7 @@ class ManagementActionSerializer:
     VALID_ACTIONS = ['enable', 'disable', 'clear_all']
 
     @staticmethod
-    def validate_action_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_action_data(data: dict[str, Any]) -> dict[str, Any]:
         """
         Validate management action data.
 
@@ -261,8 +261,8 @@ class HealthSerializer:
         enabled_schemas: int,
         disabled_schemas: int,
         registry_initialized: bool,
-        issues: List[str]
-    ) -> Dict[str, Any]:
+        issues: list[str]
+    ) -> dict[str, Any]:
         """
         Serialize health status data.
 
@@ -303,7 +303,7 @@ class MetricsSerializer:
     """Serializer for metrics data."""
 
     @staticmethod
-    def serialize_metrics(schemas: List, plugin_manager=None) -> Dict[str, Any]:
+    def serialize_metrics(schemas: list, plugin_manager=None) -> dict[str, Any]:
         """
         Serialize metrics data.
 
@@ -379,7 +379,7 @@ class DiscoverySerializer:
         total_schemas: int,
         auto_discover_schemas: int,
         discovery_enabled: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Serialize discovery status data.
 
@@ -401,7 +401,7 @@ class DiscoverySerializer:
         }
 
     @staticmethod
-    def serialize_discovery_result(discovered_count: int) -> Dict[str, Any]:
+    def serialize_discovery_result(discovered_count: int) -> dict[str, Any]:
         """
         Serialize discovery result data.
 

@@ -57,7 +57,7 @@ class SchemaLifecycleEvent:
     operation: SchemaOperation
     timestamp: datetime
     user_id: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     success: bool = True
     error_message: Optional[str] = None
     duration_ms: Optional[float] = None
@@ -74,8 +74,8 @@ class SchemaMetadata:
     updated_at: datetime
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
-    tags: Dict[str, str] = field(default_factory=dict)
-    dependencies: List[str] = field(default_factory=list)
+    tags: dict[str, str] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
     deprecation_date: Optional[datetime] = None
     migration_path: Optional[str] = None
     backup_enabled: bool = True
@@ -88,10 +88,10 @@ class SchemaHealth:
     schema_name: str
     status: str  # 'healthy', 'warning', 'critical'
     last_check: datetime
-    issues: List[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
     performance_score: float = 100.0
     error_rate: float = 0.0
-    usage_stats: Dict[str, Any] = field(default_factory=dict)
+    usage_stats: dict[str, Any] = field(default_factory=dict)
 
 
 class SchemaManager:
@@ -122,17 +122,17 @@ class SchemaManager:
         self.health_check_interval = health_check_interval
 
         # Schema storage
-        self._schemas: Dict[str, GraphQLSchema] = {}
+        self._schemas: dict[str, GraphQLSchema] = {}
         # In-memory per-process cache with TTL for quick schema access
         # Format: {name: (schema, expires_at_epoch_seconds)}
-        self._schema_cache: Dict[str, Tuple[GraphQLSchema, float]] = {}
-        self._metadata: Dict[str, SchemaMetadata] = {}
-        self._lifecycle_events: List[SchemaLifecycleEvent] = []
-        self._health_status: Dict[str, SchemaHealth] = {}
+        self._schema_cache: dict[str, tuple[GraphQLSchema, float]] = {}
+        self._metadata: dict[str, SchemaMetadata] = {}
+        self._lifecycle_events: list[SchemaLifecycleEvent] = []
+        self._health_status: dict[str, SchemaHealth] = {}
 
         # Lifecycle hooks
-        self._pre_operation_hooks: Dict[SchemaOperation, List[Callable]] = defaultdict(list)
-        self._post_operation_hooks: Dict[SchemaOperation, List[Callable]] = defaultdict(list)
+        self._pre_operation_hooks: dict[SchemaOperation, list[Callable]] = defaultdict(list)
+        self._post_operation_hooks: dict[SchemaOperation, list[Callable]] = defaultdict(list)
 
         # Thread safety
         self._lock = threading.RLock()
@@ -152,8 +152,8 @@ class SchemaManager:
                         version: str = "1.0.0",
                         description: str = "",
                         user_id: str = None,
-                        tags: Dict[str, str] = None,
-                        dependencies: List[str] = None,
+                        tags: dict[str, str] = None,
+                        dependencies: list[str] = None,
                         force: bool = False) -> bool:
         """
         Register a new GraphQL schema.
@@ -317,7 +317,7 @@ class SchemaManager:
                       version: str = None,
                       description: str = None,
                       user_id: str = None,
-                      tags: Dict[str, str] = None,
+                      tags: dict[str, str] = None,
                       force: bool = False) -> bool:
         """
         Update an existing schema.
@@ -596,8 +596,8 @@ class SchemaManager:
 
     def list_schemas(self,
                      status: SchemaStatus = None,
-                     tags: Dict[str, str] = None,
-                     include_deprecated: bool = True) -> List[SchemaMetadata]:
+                     tags: dict[str, str] = None,
+                     include_deprecated: bool = True) -> list[SchemaMetadata]:
         """
         List schemas with optional filtering.
 
@@ -731,7 +731,7 @@ class SchemaManager:
                              schema_name: str = None,
                              operation: SchemaOperation = None,
                              hours_back: int = 24,
-                             limit: int = 100) -> List[SchemaLifecycleEvent]:
+                             limit: int = 100) -> list[SchemaLifecycleEvent]:
         """Get lifecycle events with optional filtering."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -899,7 +899,7 @@ class SchemaManager:
             user_id=user_id
         )
 
-    def _execute_hooks(self, operation: SchemaOperation, when: str, context: Dict[str, Any]):
+    def _execute_hooks(self, operation: SchemaOperation, when: str, context: dict[str, Any]):
         """Execute lifecycle hooks."""
         hooks = (self._pre_operation_hooks[operation] if when == 'pre'
                  else self._post_operation_hooks[operation])

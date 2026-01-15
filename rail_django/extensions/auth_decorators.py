@@ -167,7 +167,7 @@ def jwt_optional(view_func: Callable) -> Callable:
     return wrapper
 
 
-def get_user_from_jwt(request: HttpRequest) -> Optional[Dict[str, Any]]:
+def get_user_from_jwt(request: HttpRequest) -> Optional[dict[str, Any]]:
     """
     Extract user information from JWT token in request.
 

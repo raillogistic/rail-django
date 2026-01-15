@@ -81,7 +81,7 @@ class RailGraphQLError(GraphQLError):
         message: str,
         code: Optional[str] = None,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-        extensions: Optional[Dict[str, Any]] = None,
+        extensions: Optional[dict[str, Any]] = None,
         **kwargs
     ):
         self.code = code
@@ -181,7 +181,7 @@ class ErrorHandler:
         self.schema_name = schema_name
         self.settings = ErrorHandlingSettings.from_schema(schema_name)
 
-    def handle_error(self, error: Exception, context: Optional[Dict[str, Any]] = None) -> RailGraphQLError:
+    def handle_error(self, error: Exception, context: Optional[dict[str, Any]] = None) -> RailGraphQLError:
         """
         Handle and convert exceptions to GraphQL errors.
 
@@ -210,7 +210,7 @@ class ErrorHandler:
 
         return formatted_error
 
-    def _convert_error(self, error: Exception, context: Dict[str, Any]) -> RailGraphQLError:
+    def _convert_error(self, error: Exception, context: dict[str, Any]) -> RailGraphQLError:
         """Convert exception to appropriate GraphQL error."""
 
         # Already a RailGraphQLError
@@ -248,7 +248,7 @@ class ErrorHandler:
 
         return InternalError(message)
 
-    def _format_error(self, error: RailGraphQLError, context: Dict[str, Any]) -> RailGraphQLError:
+    def _format_error(self, error: RailGraphQLError, context: dict[str, Any]) -> RailGraphQLError:
         """Format error for client response."""
 
         # Truncate message if too long
@@ -288,7 +288,7 @@ class ErrorHandler:
 
         return formatted_error
 
-    def _log_error(self, error: Exception, context: Dict[str, Any]) -> None:
+    def _log_error(self, error: Exception, context: dict[str, Any]) -> None:
         """Log error with appropriate level."""
 
         # Determine log level
@@ -310,7 +310,7 @@ class ErrorHandler:
 
         logger.log(log_level, log_message, exc_info=include_exc_info)
 
-    def _report_error(self, error: RailGraphQLError, context: Dict[str, Any]) -> None:
+    def _report_error(self, error: RailGraphQLError, context: dict[str, Any]) -> None:
         """Report error to external services."""
 
         # Only report high severity errors
@@ -347,7 +347,7 @@ class ErrorFormatter:
         self.settings = ErrorHandlingSettings.from_schema(schema_name)
         self.error_handler = ErrorHandler(schema_name)
 
-    def format_error(self, error: GraphQLError) -> Dict[str, Any]:
+    def format_error(self, error: GraphQLError) -> dict[str, Any]:
         """
         Format GraphQL error for response.
 
@@ -386,7 +386,7 @@ class ErrorFormatter:
 
         return error_dict
 
-    def format_execution_result(self, result: ExecutionResult) -> Dict[str, Any]:
+    def format_execution_result(self, result: ExecutionResult) -> dict[str, Any]:
         """
         Format execution result with proper error handling.
 

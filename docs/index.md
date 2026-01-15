@@ -5,7 +5,7 @@ organizes the documentation for API consumers and integrators.
 
 ## Supported versions
 
-- Python 3.8+
+- Python 3.11+
 - Django 4.2+
 - Graphene 3.3+
 - graphene-django 3.1.5+

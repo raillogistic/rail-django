@@ -88,7 +88,7 @@ class DjangoPermissionChecker(BasePermissionChecker):
     """Vérificateur basé sur les permissions Django."""
 
     def __init__(
-        self, permission_codename: str, model_class: Type[models.Model] = None
+        self, permission_codename: str, model_class: type[models.Model] = None
     ):
         self.permission_codename = permission_codename
         self.model_class = model_class
@@ -175,10 +175,10 @@ class PermissionManager:
     """Gestionnaire central des permissions."""
 
     def __init__(self):
-        self._field_permissions: Dict[str, Dict[str, List[BasePermissionChecker]]] = {}
-        self._object_permissions: Dict[str, List[BasePermissionChecker]] = {}
-        self._operation_permissions: Dict[
-            str, Dict[str, List[BasePermissionChecker]]
+        self._field_permissions: dict[str, dict[str, list[BasePermissionChecker]]] = {}
+        self._object_permissions: dict[str, list[BasePermissionChecker]] = {}
+        self._operation_permissions: dict[
+            str, dict[str, list[BasePermissionChecker]]
         ] = {}
 
     def register_field_permission(
@@ -329,7 +329,7 @@ class PermissionManager:
 permission_manager = PermissionManager()
 
 _PERMISSION_LOCK = Lock()
-_REGISTERED_PERMISSION_MODELS: Set[str] = set()
+_REGISTERED_PERMISSION_MODELS: set[str] = set()
 
 _OPERATION_PERMISSION_MAP = {
     OperationType.CREATE: "add",
@@ -528,13 +528,13 @@ def setup_default_permissions():
         )
 
 
-def _should_register_model(model: Type[models.Model]) -> bool:
+def _should_register_model(model: type[models.Model]) -> bool:
     if model._meta.abstract or model._meta.auto_created:
         return False
     return True
 
 
-def _get_graphql_meta(model: Type[models.Model]):
+def _get_graphql_meta(model: type[models.Model]):
     meta_decl = getattr(model, "GraphQLMeta", None) or getattr(
         model, "GraphqlMeta", None
     )
@@ -551,7 +551,7 @@ def _get_graphql_meta(model: Type[models.Model]):
         return None
 
 
-def _register_model_permissions(model: Type[models.Model], graphql_meta=None) -> None:
+def _register_model_permissions(model: type[models.Model], graphql_meta=None) -> None:
     model_label = model._meta.label_lower
     for operation, codename in _OPERATION_PERMISSION_MAP.items():
         permission_manager.register_operation_permission(

@@ -72,7 +72,7 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
 ## 2. Installation & Setup
 
 ### Prerequisites
-*   Python 3.8 or higher
+*   Python 3.11 or higher
 *   pip (Python Package Installer)
 *   (Optional) Docker & Docker Compose for containerized development
 

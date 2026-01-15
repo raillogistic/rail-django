@@ -24,7 +24,7 @@ class GroupingBucketType(graphene.ObjectType):
 
 
 def _resolve_group_by_field(
-    model: Type[models.Model], path: str
+    model: type[models.Model], path: str
 ) -> Optional[models.Field]:
     """
     Validate a group_by path against model fields and return the final field if valid.
@@ -50,7 +50,7 @@ def _resolve_group_by_field(
 
 
 def generate_grouping_query(
-    self, model: Type[models.Model], manager_name: str = "objects"
+    self, model: type[models.Model], manager_name: str = "objects"
 ) -> graphene.Field:
     """
     Generate a lightweight grouping query (counts per value) using the same filter inputs as list queries.

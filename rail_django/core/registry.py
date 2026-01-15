@@ -28,11 +28,11 @@ class SchemaInfo:
     name: str
     description: str = ""
     version: str = "1.0.0"
-    apps: List[str] = field(default_factory=list)
-    models: List[str] = field(default_factory=list)
-    exclude_models: List[str] = field(default_factory=list)
-    settings: Dict[str, Any] = field(default_factory=dict)
-    schema_class: Optional[Type] = None
+    apps: list[str] = field(default_factory=list)
+    models: list[str] = field(default_factory=list)
+    exclude_models: list[str] = field(default_factory=list)
+    settings: dict[str, Any] = field(default_factory=dict)
+    schema_class: Optional[type] = None
     builder: Optional[Any] = None
     auto_discover: bool = True
     enabled: bool = True
@@ -52,16 +52,16 @@ class SchemaRegistry:
     """
 
     def __init__(self):
-        self._schemas: Dict[str, SchemaInfo] = {}
-        self._schema_builders: Dict[str, Any] = {}
-        self._schema_instance_cache: Dict[str, Dict[str, Any]] = {}
-        self._discovery_hooks: List[Callable] = []
+        self._schemas: dict[str, SchemaInfo] = {}
+        self._schema_builders: dict[str, Any] = {}
+        self._schema_instance_cache: dict[str, dict[str, Any]] = {}
+        self._discovery_hooks: list[Callable] = []
         self._lock = threading.Lock()
         self._initialized = False
 
     def _apply_graphiql_defaults(
-        self, schema_name: str, settings_payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, schema_name: str, settings_payload: dict[str, Any]
+    ) -> dict[str, Any]:
         """Apply debug-gated defaults for the graphiql schema if not explicitly set."""
         if schema_name != "graphiql":
             return settings_payload
@@ -103,11 +103,11 @@ class SchemaRegistry:
         name: str,
         description: str = "",
         version: str = "1.0.0",
-        apps: Optional[List[str]] = None,
-        models: Optional[List[str]] = None,
-        exclude_models: Optional[List[str]] = None,
-        settings: Optional[Dict[str, Any]] = None,
-        schema_class: Optional[Type] = None,
+        apps: Optional[list[str]] = None,
+        models: Optional[list[str]] = None,
+        exclude_models: Optional[list[str]] = None,
+        settings: Optional[dict[str, Any]] = None,
+        schema_class: Optional[type] = None,
         auto_discover: bool = True,
         enabled: bool = True,
     ) -> SchemaInfo:
@@ -214,7 +214,7 @@ class SchemaRegistry:
         """
         return self._schemas.get(name)
 
-    def list_schemas(self, enabled_only: bool = False) -> List[SchemaInfo]:
+    def list_schemas(self, enabled_only: bool = False) -> list[SchemaInfo]:
         """
         List all registered schemas.
 
@@ -229,7 +229,7 @@ class SchemaRegistry:
             schemas = [s for s in schemas if s.enabled]
         return schemas
 
-    def get_schema_names(self, enabled_only: bool = False) -> List[str]:
+    def get_schema_names(self, enabled_only: bool = False) -> list[str]:
         """
         Get list of schema names.
 
@@ -570,7 +570,7 @@ class SchemaRegistry:
             except (ImportError, AttributeError):
                 continue
 
-    def _register_from_config(self, app_name: str, config: Dict[str, Any]) -> None:
+    def _register_from_config(self, app_name: str, config: dict[str, Any]) -> None:
         """
         Register schema from configuration dictionary.
 
@@ -649,11 +649,11 @@ class SchemaRegistry:
         if hasattr(self, "_post_registration_hooks"):
             self._post_registration_hooks.clear()
 
-    def get_discovery_hooks(self) -> List[Callable]:
+    def get_discovery_hooks(self) -> list[Callable]:
         """Get list of all discovery hooks."""
         return self._discovery_hooks.copy()
 
-    def _run_pre_registration_hooks(self, name: str, **kwargs) -> Dict[str, Any]:
+    def _run_pre_registration_hooks(self, name: str, **kwargs) -> dict[str, Any]:
         """
         Run pre-registration hooks and collect modifications.
 
@@ -710,7 +710,7 @@ class SchemaRegistry:
             self._initialized = False
             logger.info("Cleared all schemas")
 
-    def get_models_for_schema(self, name: str) -> List[Type[models.Model]]:
+    def get_models_for_schema(self, name: str) -> list[type[models.Model]]:
         """
         Get Django models for a specific schema.
 
@@ -770,7 +770,7 @@ class SchemaRegistry:
 
         return models_list
 
-    def validate_schema(self, name: str) -> Dict[str, Any]:
+    def validate_schema(self, name: str) -> dict[str, Any]:
         """
         Validate a schema configuration.
 
@@ -853,6 +853,6 @@ def get_schema_builder(name: str):
     return schema_registry.get_schema_builder(name)
 
 
-def list_schemas(enabled_only: bool = False) -> List[SchemaInfo]:
+def list_schemas(enabled_only: bool = False) -> list[SchemaInfo]:
     """List schemas using the global registry."""
     return schema_registry.list_schemas(enabled_only)

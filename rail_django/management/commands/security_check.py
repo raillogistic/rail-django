@@ -85,7 +85,7 @@ class Command(BaseCommand):
             )
             raise CommandError(str(e))
 
-    def _perform_security_checks(self) -> Dict[str, Any]:
+    def _perform_security_checks(self) -> dict[str, Any]:
         """
         Effectue toutes les vérifications de sécurité.
 
@@ -121,7 +121,7 @@ class Command(BaseCommand):
 
         return results
 
-    def _check_middleware_configuration(self) -> Dict[str, Any]:
+    def _check_middleware_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration des middlewares de sécurité.
 
@@ -183,7 +183,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_audit_configuration(self) -> Dict[str, Any]:
+    def _check_audit_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration d'audit.
 
@@ -229,7 +229,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_mfa_configuration(self) -> Dict[str, Any]:
+    def _check_mfa_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration MFA.
 
@@ -277,7 +277,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_rate_limiting_configuration(self) -> Dict[str, Any]:
+    def _check_rate_limiting_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration de limitation de débit.
 
@@ -316,7 +316,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_django_security_settings(self) -> Dict[str, Any]:
+    def _check_django_security_settings(self) -> dict[str, Any]:
         """
         Vérifie les paramètres de sécurité Django.
 
@@ -361,7 +361,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_database_configuration(self) -> Dict[str, Any]:
+    def _check_database_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration de la base de données.
 
@@ -413,7 +413,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _check_cache_configuration(self) -> Dict[str, Any]:
+    def _check_cache_configuration(self) -> dict[str, Any]:
         """
         Vérifie la configuration du cache (sans dépendance au cache Django).
 
@@ -470,7 +470,7 @@ class Command(BaseCommand):
 
         return result
 
-    def _output_text(self, security_status: Dict[str, Any]):
+    def _output_text(self, security_status: dict[str, Any]):
         """
         Affiche les résultats au format texte.
 
@@ -512,7 +512,7 @@ class Command(BaseCommand):
             for recommendation in set(security_status["recommendations"]):
                 self.stdout.write(f"💡 {recommendation}")
 
-    def _output_check_result(self, check_name: str, result: Dict[str, Any]):
+    def _output_check_result(self, check_name: str, result: dict[str, Any]):
         """
         Affiche le résultat d'une vérification.
 
@@ -546,7 +546,7 @@ class Command(BaseCommand):
 
         self.stdout.write("")
 
-    def _output_json(self, security_status: Dict[str, Any]):
+    def _output_json(self, security_status: dict[str, Any]):
         """
         Affiche les résultats au format JSON.
 

@@ -12,11 +12,11 @@ from .introspector import ModelIntrospector
 
 def generate_input_type(
     self,
-    model: Type[models.Model],
+    model: type[models.Model],
     mutation_type: str = "create",
     partial: bool = False,
     include_reverse_relations: bool = True,
-) -> Type[graphene.InputObjectType]:
+) -> type[graphene.InputObjectType]:
     """
     Generates a GraphQL input type for mutations.
     Handles nested inputs, validation, and reverse relationships.
@@ -224,10 +224,10 @@ def generate_input_type(
 
 def get_or_create_nested_input_type(
     self,
-    model: Type[models.Model],
+    model: type[models.Model],
     mutation_type: str = "create",
-    exclude_parent_field: Optional[Type[models.Model]] = None,
-) -> Type[graphene.InputObjectType]:
+    exclude_parent_field: Optional[type[models.Model]] = None,
+) -> type[graphene.InputObjectType]:
     """
     Get or create a nested input type for a model, avoiding circular references.
     """

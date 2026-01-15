@@ -30,7 +30,7 @@ def _is_root_field(info: Any) -> bool:
     return getattr(path, "prev", None) is None
 
 
-def _get_rate_limit_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
+def _get_rate_limit_settings(schema_name: Optional[str] = None) -> dict[str, Any]:
     """
     Purpose: Retrieve rate limiting settings from hierarchical settings proxy
     Args: None

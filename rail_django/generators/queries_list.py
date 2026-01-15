@@ -21,7 +21,7 @@ from .queries_ordering import get_default_ordering
 logger = logging.getLogger(__name__)
 
 def generate_single_query(
-    self, model: Type[models.Model], manager_name: str = "objects"
+    self, model: type[models.Model], manager_name: str = "objects"
 ) -> graphene.Field:
     """
     Generate a single object query for a model using the specified manager.
@@ -52,7 +52,7 @@ def generate_single_query(
 
 
 def generate_list_query(
-    self, model: Type[models.Model], manager_name: str = "objects"
+    self, model: type[models.Model], manager_name: str = "objects"
 ) -> Union[graphene.List, DjangoFilterConnectionField]:
     """
     Generates a query field for retrieving a list of model instances using the specified manager.
@@ -82,7 +82,7 @@ def generate_list_query(
     @optimize_query()
     def resolver(
         root: Any, info: graphene.ResolveInfo, **kwargs
-    ) -> List[models.Model]:
+    ) -> list[models.Model]:
         manager = getattr(model, manager_name)
         queryset = manager.all()
         graphql_meta.ensure_operation_access("list", info=info)
@@ -112,7 +112,7 @@ def generate_list_query(
                 return []
 
         # Apply ordering
-        items: Optional[List[Any]] = None
+        items: Optional[list[Any]] = None
         order_by = self._normalize_ordering_specs(
             kwargs.get("order_by"), ordering_config
         )

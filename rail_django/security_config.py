@@ -19,7 +19,7 @@ class SecurityConfig:
     """
 
     @staticmethod
-    def get_middleware_config() -> Dict[str, Any]:
+    def get_middleware_config() -> dict[str, Any]:
         """
         Retourne la configuration des middlewares de sécurité.
 
@@ -62,7 +62,7 @@ class SecurityConfig:
         }
 
     @staticmethod
-    def get_audit_config() -> Dict[str, Any]:
+    def get_audit_config() -> dict[str, Any]:
         """
         Retourne la configuration d'audit.
 
@@ -87,7 +87,7 @@ class SecurityConfig:
         }
 
     @staticmethod
-    def get_mfa_config() -> Dict[str, Any]:
+    def get_mfa_config() -> dict[str, Any]:
         """
         Retourne la configuration MFA.
 
@@ -112,7 +112,7 @@ class SecurityConfig:
         }
 
     @staticmethod
-    def get_security_headers() -> Dict[str, str]:
+    def get_security_headers() -> dict[str, str]:
         """
         Retourne les headers de sécurité recommandés.
 
@@ -129,7 +129,7 @@ class SecurityConfig:
         }
 
     @staticmethod
-    def validate_security_settings() -> List[str]:
+    def validate_security_settings() -> list[str]:
         """
         Valide les paramètres de sécurité et retourne les avertissements.
 
@@ -168,7 +168,7 @@ class SecurityConfig:
         return warnings
 
     @staticmethod
-    def get_recommended_django_settings() -> Dict[str, Any]:
+    def get_recommended_django_settings() -> dict[str, Any]:
         """
         Retourne les paramètres Django recommandés pour la sécurité.
 
@@ -243,7 +243,7 @@ class SecurityConfig:
         }
 
 
-def setup_security_middleware() -> List[str]:
+def setup_security_middleware() -> list[str]:
     """
     Retourne la liste des middlewares de sécurité à ajouter à MIDDLEWARE.
 
@@ -262,7 +262,7 @@ def setup_security_middleware() -> List[str]:
     return security_middleware
 
 
-def get_security_status() -> Dict[str, Any]:
+def get_security_status() -> dict[str, Any]:
     """
     Retourne le statut de sécurité actuel.
 

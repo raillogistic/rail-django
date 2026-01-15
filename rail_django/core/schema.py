@@ -43,7 +43,7 @@ class SchemaBuilder:
     - Integration with the schema registry
     """
 
-    _instances: Dict[str, "SchemaBuilder"] = {}
+    _instances: dict[str, "SchemaBuilder"] = {}
     _lock = threading.Lock()
 
     def __new__(
@@ -123,10 +123,10 @@ class SchemaBuilder:
 
         # Schema state
         self._schema = None
-        self._query_fields: Dict[str, Union[graphene.Field, graphene.List]] = {}
-        self._mutation_fields: Dict[str, Type[graphene.Mutation]] = {}
-        self._subscription_fields: Dict[str, graphene.Field] = {}
-        self._registered_models: Set[Type[models.Model]] = set()
+        self._query_fields: dict[str, Union[graphene.Field, graphene.List]] = {}
+        self._mutation_fields: dict[str, type[graphene.Mutation]] = {}
+        self._subscription_fields: dict[str, graphene.Field] = {}
+        self._registered_models: set[type[models.Model]] = set()
         self._schema_version = 0
 
         self._initialized = True
@@ -217,7 +217,7 @@ class SchemaBuilder:
         # Fallback to raw settings for backward compatibility
         return self._raw_settings.get(key, default)
 
-    def _get_list_alias(self, model: Type[models.Model]) -> Optional[str]:
+    def _get_list_alias(self, model: type[models.Model]) -> Optional[str]:
         plural = getattr(model._meta, "verbose_name_plural", None)
         if not plural:
             return None
@@ -260,7 +260,7 @@ class SchemaBuilder:
             )
             self.rebuild_schema()
 
-    def _is_valid_model(self, model: Type[models.Model]) -> bool:
+    def _is_valid_model(self, model: type[models.Model]) -> bool:
         """
         Checks if a model should be included in the schema.
 
@@ -332,7 +332,7 @@ class SchemaBuilder:
 
         return True
 
-    def _discover_models(self) -> List[Type[models.Model]]:
+    def _discover_models(self) -> list[type[models.Model]]:
         """
         Discovers all Django models that should be included in the schema.
 
@@ -382,7 +382,7 @@ class SchemaBuilder:
 
         return models
 
-    def _generate_query_fields(self, models: List[Type[models.Model]]) -> None:
+    def _generate_query_fields(self, models: list[type[models.Model]]) -> None:
         """
         Generates query fields for all discovered models.
         Now supports multiple managers per model with custom naming conventions.
@@ -504,7 +504,7 @@ class SchemaBuilder:
                             paginated_query
                         )
 
-    def _generate_mutation_fields(self, models: List[Type[models.Model]]) -> None:
+    def _generate_mutation_fields(self, models: list[type[models.Model]]) -> None:
         """
         Generates mutation fields for all discovered models.
 
@@ -525,7 +525,7 @@ class SchemaBuilder:
         )
         logger.debug(f"Mutation fields: {list(self._mutation_fields.keys())}")
 
-    def _generate_subscription_fields(self, models: List[Type[models.Model]]) -> None:
+    def _generate_subscription_fields(self, models: list[type[models.Model]]) -> None:
         """
         Generates subscription fields for all discovered models.
 
@@ -566,7 +566,7 @@ class SchemaBuilder:
                 "Subscription fields: %s", list(self._subscription_fields.keys())
             )
 
-    def _load_query_extensions(self) -> List[Type[graphene.ObjectType]]:
+    def _load_query_extensions(self) -> list[type[graphene.ObjectType]]:
         """
         Load custom query extensions defined in schema settings.
         """
@@ -593,7 +593,7 @@ class SchemaBuilder:
         return loaded
 
     def _attach_query_class_fields(
-        self, query_attrs: Dict[str, Any], query_class: Type[graphene.ObjectType]
+        self, query_attrs: dict[str, Any], query_class: type[graphene.ObjectType]
     ) -> None:
         """
         Merge fields from a custom query class into the root query attributes.
@@ -621,8 +621,8 @@ class SchemaBuilder:
                 query_attrs[field_name] = field
 
     def _apply_field_allowlist(
-        self, fields: Dict[str, Any], allowlist: Optional[List[str]]
-    ) -> Dict[str, Any]:
+        self, fields: dict[str, Any], allowlist: Optional[list[str]]
+    ) -> dict[str, Any]:
         """Filter root fields using an allowlist when configured."""
         if allowlist is None:
             return fields
@@ -701,7 +701,7 @@ class SchemaBuilder:
                 )
 
                 # Create Query type with security extensions
-                query_attrs: Dict[str, Any] = {}
+                query_attrs: dict[str, Any] = {}
                 if getattr(django_settings, "DEBUG", False):
                     query_attrs["debug"] = graphene.Field(
                         DjangoDebug, name="_debug"
@@ -937,7 +937,7 @@ class SchemaBuilder:
                     )
 
                 # Add health/maintenance mutations
-                extension_mutations: Dict[str, Any] = {}
+                extension_mutations: dict[str, Any] = {}
                 if self._get_schema_setting("enable_extension_mutations", True):
                     try:
                         from ..extensions.health import RefreshSchemaMutation
@@ -1163,7 +1163,7 @@ class SchemaBuilder:
                 raise
 
     def get_schema(
-        self, model_list: Optional[List[Type[models.Model]]] = None
+        self, model_list: Optional[list[type[models.Model]]] = None
     ) -> graphene.Schema:
         """
         Returns the current GraphQL schema, rebuilding if necessary.
@@ -1197,7 +1197,7 @@ class SchemaBuilder:
         """
         return self._schema_version
 
-    def get_middleware(self) -> List:
+    def get_middleware(self) -> list:
         """
         Returns the middleware list for this schema.
 
@@ -1246,7 +1246,7 @@ class SchemaBuilder:
                 f"App '{app_label}' unregistered from schema '{self.schema_name}' generation"
             )
 
-    def register_model(self, model: Union[Type[models.Model], str]) -> None:
+    def register_model(self, model: Union[type[models.Model], str]) -> None:
         """
         Registers a model for schema generation.
 
@@ -1261,7 +1261,7 @@ class SchemaBuilder:
                 f"Model '{model_identifier}' registered for schema '{self.schema_name}' generation"
             )
 
-    def unregister_model(self, model: Union[Type[models.Model], str]) -> None:
+    def unregister_model(self, model: Union[type[models.Model], str]) -> None:
         """
         Unregisters a model from schema generation.
 
@@ -1326,7 +1326,7 @@ class SchemaBuilder:
             )
             raise
 
-    def get_registered_models(self) -> Set[Type[models.Model]]:
+    def get_registered_models(self) -> set[type[models.Model]]:
         """
         Returns the set of registered models for this schema.
 
@@ -1335,7 +1335,7 @@ class SchemaBuilder:
         """
         return self._registered_models.copy()
 
-    def get_query_fields(self) -> Dict[str, Union[graphene.Field, graphene.List]]:
+    def get_query_fields(self) -> dict[str, Union[graphene.Field, graphene.List]]:
         """
         Returns the current query fields for this schema.
 
@@ -1344,7 +1344,7 @@ class SchemaBuilder:
         """
         return self._query_fields.copy()
 
-    def get_mutation_fields(self) -> Dict[str, Type[graphene.Mutation]]:
+    def get_mutation_fields(self) -> dict[str, type[graphene.Mutation]]:
         """
         Returns the current mutation fields for this schema.
 
@@ -1379,22 +1379,22 @@ class AutoSchemaGenerator:
         self._base_schema_name = schema_name
         self._settings = settings
         self._registry = registry
-        self._registered_models: Set[Type[models.Model]] = set()
-        self._query_extensions: List[Type[graphene.ObjectType]] = []
-        self._schema_cache: Dict[Tuple[str, ...], graphene.Schema] = {}
-        self._builders: Dict[Tuple[str, ...], SchemaBuilder] = {}
+        self._registered_models: set[type[models.Model]] = set()
+        self._query_extensions: list[type[graphene.ObjectType]] = []
+        self._schema_cache: dict[tuple[str, ...], graphene.Schema] = {}
+        self._builders: dict[tuple[str, ...], SchemaBuilder] = {}
         self._lock = threading.Lock()
 
-    def register_model(self, model: Type[models.Model]) -> None:
+    def register_model(self, model: type[models.Model]) -> None:
         self._registered_models.add(model)
         self._invalidate_cache()
 
-    def register_models(self, models_list: List[Type[models.Model]]) -> None:
+    def register_models(self, models_list: list[type[models.Model]]) -> None:
         for model in models_list:
             self._registered_models.add(model)
         self._invalidate_cache()
 
-    def add_query_extension(self, extension: Type[graphene.ObjectType]) -> None:
+    def add_query_extension(self, extension: type[graphene.ObjectType]) -> None:
         if extension not in self._query_extensions:
             self._query_extensions.append(extension)
             self._invalidate_cache()
@@ -1405,15 +1405,15 @@ class AutoSchemaGenerator:
             builder.clear_schema()
 
     def _cache_key(
-        self, models_list: Optional[List[Type[models.Model]]]
-    ) -> Tuple[str, ...]:
+        self, models_list: Optional[list[type[models.Model]]]
+    ) -> tuple[str, ...]:
         if models_list is None:
             return ("__all__",)
         if not models_list:
             return ("__none__",)
         return tuple(sorted({model._meta.label_lower for model in models_list}))
 
-    def _get_builder(self, cache_key: Tuple[str, ...]) -> SchemaBuilder:
+    def _get_builder(self, cache_key: tuple[str, ...]) -> SchemaBuilder:
         builder = self._builders.get(cache_key)
         if builder is None:
             schema_name = f"{self._base_schema_name}_{len(self._builders)}"
@@ -1426,7 +1426,7 @@ class AutoSchemaGenerator:
         return builder
 
     def get_schema(
-        self, model_list: Optional[List[Type[models.Model]]] = None
+        self, model_list: Optional[list[type[models.Model]]] = None
     ) -> graphene.Schema:
         if model_list is None and self._registered_models:
             models_list = list(self._registered_models)
@@ -1446,7 +1446,7 @@ class AutoSchemaGenerator:
                     model for model in models_list if builder._is_valid_model(model)
                 ]
 
-                def _discover_models_override() -> List[Type[models.Model]]:
+                def _discover_models_override() -> list[type[models.Model]]:
                     return valid_models
 
                 builder._discover_models = _discover_models_override
@@ -1459,7 +1459,7 @@ class AutoSchemaGenerator:
                     original_load = builder._load_query_extensions
                     builder._auto_schema_original_load_query_extensions = original_load
 
-                def _load_query_extensions_override() -> List[Type[graphene.ObjectType]]:
+                def _load_query_extensions_override() -> list[type[graphene.ObjectType]]:
                     loaded = list(original_load())
                     for extension in self._query_extensions:
                         if extension not in loaded:
@@ -1518,7 +1518,7 @@ def clear_all_schemas() -> None:
     logger.info("All schemas cleared")
 
 
-def get_all_schema_names() -> List[str]:
+def get_all_schema_names() -> list[str]:
     """
     Get all registered schema names.
 

@@ -3,7 +3,7 @@
 ###########
 
 # pull official base image
-FROM python:3.8-slim as builder
+FROM python:3.11-slim as builder
 
 # set work directory
 WORKDIR /app
@@ -50,7 +50,7 @@ RUN if [ -d requirements/wheels ] && [ "$(ls -A requirements/wheels)" ]; then \
 #########
 
 # pull official base image
-FROM python:3.8-slim
+FROM python:3.11-slim
 
 # create directory for the app user
 RUN mkdir -p /home/app

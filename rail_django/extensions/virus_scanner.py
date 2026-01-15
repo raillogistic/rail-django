@@ -397,7 +397,7 @@ class VirusScanner:
         except Exception as e:
             logger.error(f"Erreur lors de la mise en quarantaine de {file.name}: {e}")
 
-    def get_quarantine_files(self) -> List[Dict[str, str]]:
+    def get_quarantine_files(self) -> list[dict[str, str]]:
         """
         Récupère la liste des fichiers en quarantaine.
 

@@ -72,7 +72,7 @@ class GroupedFieldFilter:
     """
 
     def __init__(
-        self, field_name: str, field_type: str, operations: List[FilterOperation]
+        self, field_name: str, field_type: str, operations: list[FilterOperation]
     ):
         self.field_name = field_name
         self.field_type = field_type
@@ -113,9 +113,9 @@ class EnhancedFilterGenerator:
         self.schema_name = schema_name or "default"
         # Quick filter is disabled by default per project requirements
         self.enable_quick_filter = enable_quick_filter
-        self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
-        self._grouped_filter_cache: Dict[
-            Type[models.Model], List[GroupedFieldFilter]
+        self._filter_cache: dict[type[models.Model], type[FilterSet]] = {}
+        self._grouped_filter_cache: dict[
+            type[models.Model], list[GroupedFieldFilter]
         ] = {}
         self._visited_models: set = set()
 
@@ -126,8 +126,8 @@ class EnhancedFilterGenerator:
         )
 
     def get_grouped_filters(
-        self, model: Type[models.Model]
-    ) -> List[GroupedFieldFilter]:
+        self, model: type[models.Model]
+    ) -> list[GroupedFieldFilter]:
         """
         Get grouped filters for a model.
 
@@ -165,7 +165,7 @@ class EnhancedFilterGenerator:
         self._grouped_filter_cache[model] = grouped_filters
         return grouped_filters
 
-    def _generate_field_operations(self, field: models.Field) -> List[FilterOperation]:
+    def _generate_field_operations(self, field: models.Field) -> list[FilterOperation]:
         """
         Generate comprehensive filter operations for a specific field type.
 
@@ -204,7 +204,7 @@ class EnhancedFilterGenerator:
 
         return operations
 
-    def _get_text_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_text_operations(self, field_name: str) -> list[FilterOperation]:
         """Get comprehensive text field operations."""
         return [
             FilterOperation(
@@ -270,7 +270,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_numeric_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_numeric_operations(self, field_name: str) -> list[FilterOperation]:
         """Get comprehensive numeric field operations."""
         return [
             FilterOperation(
@@ -309,7 +309,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_date_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_date_operations(self, field_name: str) -> list[FilterOperation]:
         """Get comprehensive date field operations."""
         return [
             FilterOperation(
@@ -379,7 +379,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_boolean_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_boolean_operations(self, field_name: str) -> list[FilterOperation]:
         """Get boolean field operations."""
         return [
             FilterOperation(
@@ -390,7 +390,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_foreign_key_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_foreign_key_operations(self, field_name: str) -> list[FilterOperation]:
         """Get foreign key field operations."""
         return [
             FilterOperation(
@@ -408,7 +408,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_many_to_many_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_many_to_many_operations(self, field_name: str) -> list[FilterOperation]:
         """Get many-to-many field operations."""
         return [
             FilterOperation(
@@ -460,8 +460,8 @@ class EnhancedFilterGenerator:
         ]
 
     def _get_choice_operations(
-        self, field_name: str, choices: List
-    ) -> List[FilterOperation]:
+        self, field_name: str, choices: list
+    ) -> list[FilterOperation]:
         """Get choice field operations."""
         return [
             FilterOperation(
@@ -479,7 +479,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_file_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_file_operations(self, field_name: str) -> list[FilterOperation]:
         """Get file field operations."""
         return [
             FilterOperation(
@@ -490,7 +490,7 @@ class EnhancedFilterGenerator:
             ),
         ]
 
-    def _get_json_operations(self, field_name: str) -> List[FilterOperation]:
+    def _get_json_operations(self, field_name: str) -> list[FilterOperation]:
         """Get JSON field operations."""
         return [
             FilterOperation(
@@ -571,7 +571,7 @@ class AdvancedFilterGenerator:
             enable_nested_filters: Whether to enable nested field filtering (default: True)
             schema_name: Optional schema name for context (for future multi-schema support)
         """
-        self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
+        self._filter_cache: dict[type[models.Model], type[FilterSet]] = {}
         self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
         self.enable_nested_filters = enable_nested_filters
         self.schema_name = schema_name or "default"
@@ -586,7 +586,7 @@ class AdvancedFilterGenerator:
             f"enable_nested_filters={self.enable_nested_filters}"
         )
 
-    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+    def _is_historical_model(self, model: type[models.Model]) -> bool:
         """Return True when the model originates from django-simple-history."""
         try:
             name = getattr(model, "__name__", "")
@@ -598,10 +598,10 @@ class AdvancedFilterGenerator:
         return "simple_history" in module
 
     def _generate_historical_filters(
-        self, model: Type[models.Model]
-    ) -> Dict[str, django_filters.Filter]:
+        self, model: type[models.Model]
+    ) -> dict[str, django_filters.Filter]:
         """Expose friendly filters for simple-history specific fields."""
-        filters: Dict[str, django_filters.Filter] = {}
+        filters: dict[str, django_filters.Filter] = {}
 
         # Allow filtering revisions by the original instance primary keys.
         filters["instance__in"] = django_filters.BaseInFilter(
@@ -628,8 +628,8 @@ class AdvancedFilterGenerator:
         return filters
 
     def generate_filter_set(
-        self, model: Type[models.Model], current_depth: int = 0
-    ) -> Type[FilterSet]:
+        self, model: type[models.Model], current_depth: int = 0
+    ) -> type[FilterSet]:
         """
         Generate a FilterSet class for the given Django model with nested filtering support.
 
@@ -830,7 +830,7 @@ class AdvancedFilterGenerator:
             self._visited_models.discard(model)
 
     def _generate_quick_filter(
-        self, model: Type[models.Model], quick_filter_fields: List[str]
+        self, model: type[models.Model], quick_filter_fields: list[str]
     ) -> Optional[CharFilter]:
         """
         Generate a quick filter that searches across multiple fields.
@@ -889,7 +889,7 @@ class AdvancedFilterGenerator:
             help_text=f'Recherche rapide sur les champs : {", ".join(quick_filter_fields)}',
         )
 
-    def _get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
+    def _get_default_quick_filter_fields(self, model: type[models.Model]) -> list[str]:
         """
         Get default searchable fields for quick filter when no specific fields are defined.
 
@@ -943,7 +943,7 @@ class AdvancedFilterGenerator:
         return searchable_fields
 
     def _get_field_from_path(
-        self, model: Type[models.Model], field_path: str
+        self, model: type[models.Model], field_path: str
     ) -> Optional[models.Field]:
         """
         Get Django field from a field path (e.g., 'user__profile__name').
@@ -1088,7 +1088,7 @@ class AdvancedFilterGenerator:
             **{f"{field_name}__range": [past_year_start, past_year_end]}
         )
 
-    def _generate_basic_filter_set(self, model: Type[models.Model]) -> Type[FilterSet]:
+    def _generate_basic_filter_set(self, model: type[models.Model]) -> type[FilterSet]:
         """
         Create a basic FilterSet without nested relationships to prevent infinite recursion.
 
@@ -1138,7 +1138,7 @@ class AdvancedFilterGenerator:
 
     def _generate_field_filters(
         self, field: models.Field, current_depth: int = 0, allow_nested: bool = True
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Generates specific filters based on Django field type.
 
@@ -1210,9 +1210,9 @@ class AdvancedFilterGenerator:
     def _apply_field_config_overrides(
         self,
         field_name: str,
-        field_filters: Dict[str, django_filters.Filter],
+        field_filters: dict[str, django_filters.Filter],
         graphql_meta: GraphQLMeta,
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Restrict auto-generated filters based on GraphQLMeta.filtering.fields configuration.
         """
@@ -1251,8 +1251,8 @@ class AdvancedFilterGenerator:
         return field_filters
 
     def _generate_count_filter_methods(
-        self, model: Type[models.Model], filters: Dict[str, django_filters.Filter]
-    ) -> Dict[str, callable]:
+        self, model: type[models.Model], filters: dict[str, django_filters.Filter]
+    ) -> dict[str, callable]:
         """
         Generate dynamic filter methods for count-based filtering.
 
@@ -1391,8 +1391,8 @@ class AdvancedFilterGenerator:
         return filter_method
 
     def _generate_reverse_relationship_count_filters(
-        self, model: Type[models.Model]
-    ) -> Dict[str, django_filters.Filter]:
+        self, model: type[models.Model]
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate count filters for reverse ManyToOne relationships.
 
@@ -1556,7 +1556,7 @@ class AdvancedFilterGenerator:
 
     def _generate_nested_field_filters(
         self, field: models.Field, current_depth: int
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Generates nested field filters for related model fields.
 
@@ -1701,8 +1701,8 @@ class AdvancedFilterGenerator:
         return nested_filters
 
     def analyze_query_performance(
-        self, model: Type[models.Model], filters: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, model: type[models.Model], filters: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Analyze the performance implications of applied filters and suggest optimizations.
 
@@ -1815,7 +1815,7 @@ class AdvancedFilterGenerator:
         return analysis
 
     def get_optimized_queryset(
-        self, model: Type[models.Model], filters: Dict[str, Any], base_queryset=None
+        self, model: type[models.Model], filters: dict[str, Any], base_queryset=None
     ) -> models.QuerySet:
         """
         Get an optimized queryset based on the filters being applied.
@@ -1884,7 +1884,7 @@ class AdvancedFilterGenerator:
 
     def _generate_nested_text_filters(
         self, field_name: str, base_field_name: str
-    ) -> Dict[str, CharFilter]:
+    ) -> dict[str, CharFilter]:
         """
         Generate nested text-based filters for CharField and TextField.
 
@@ -1948,7 +1948,7 @@ class AdvancedFilterGenerator:
 
     def _generate_nested_numeric_filters(
         self, field_name: str, base_field_name: str
-    ) -> Dict[str, NumberFilter]:
+    ) -> dict[str, NumberFilter]:
         """Generate nested numeric filters for related fields."""
         return {
             f"{field_name}__exact": NumberFilter(
@@ -1990,7 +1990,7 @@ class AdvancedFilterGenerator:
 
     def _generate_nested_date_filters(
         self, field_name: str, base_field_name: str
-    ) -> Dict[str, DateFilter]:
+    ) -> dict[str, DateFilter]:
         """Generate nested date filters for related fields."""
         return {
             f"{field_name}__exact": DateFilter(
@@ -2042,7 +2042,7 @@ class AdvancedFilterGenerator:
 
     def _generate_nested_boolean_filters(
         self, field_name: str, base_field_name: str
-    ) -> Dict[str, BooleanFilter]:
+    ) -> dict[str, BooleanFilter]:
         """Generate nested boolean filters for related fields."""
         return {
             f"{field_name}__exact": BooleanFilter(
@@ -2061,7 +2061,7 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_text_filters(self, field_name: str) -> Dict[str, CharFilter]:
+    def _generate_text_filters(self, field_name: str) -> dict[str, CharFilter]:
         """Generate text-specific filters: contains, icontains, startswith, endswith."""
         return {
             f"{field_name}": CharFilter(
@@ -2095,7 +2095,7 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_numeric_filters(self, field_name: str) -> Dict[str, NumberFilter]:
+    def _generate_numeric_filters(self, field_name: str) -> dict[str, NumberFilter]:
         """Generate numeric filters: exact, gt, gte, lt, lte, in, range.
 
         Adds __range support for digit fields (integer, float, decimal) to allow
@@ -2137,7 +2137,7 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_date_filters(self, field_name: str) -> Dict[str, DateFilter]:
+    def _generate_date_filters(self, field_name: str) -> dict[str, DateFilter]:
         """Generate date filters: year, month, day, range, gt, lt, and time-based filters."""
         filters = {
             f"{field_name}__year": NumberFilter(
@@ -2270,7 +2270,7 @@ class AdvancedFilterGenerator:
         filters.update(time_filters)
         return filters
 
-    def _generate_boolean_filters(self, field_name: str) -> Dict[str, BooleanFilter]:
+    def _generate_boolean_filters(self, field_name: str) -> dict[str, BooleanFilter]:
         """Generate boolean filters: exact matching."""
         return {
             f"{field_name}": BooleanFilter(
@@ -2280,8 +2280,8 @@ class AdvancedFilterGenerator:
         }
 
     def _generate_choice_filters(
-        self, field_name: str, choices: List
-    ) -> Dict[str, ChoiceFilter]:
+        self, field_name: str, choices: list
+    ) -> dict[str, ChoiceFilter]:
         """Generate choice filters: exact, in, isnull."""
         choice_values = [choice[0] for choice in choices]
         return {
@@ -2301,7 +2301,7 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_file_filters(self, field_name: str) -> Dict[str, CharFilter]:
+    def _generate_file_filters(self, field_name: str) -> dict[str, CharFilter]:
         """Generate file-specific filters: isnull, exact."""
         return {
             f"{field_name}__isnull": BooleanFilter(
@@ -2314,7 +2314,7 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_json_filters(self, field_name: str) -> Dict[str, CharFilter]:
+    def _generate_json_filters(self, field_name: str) -> dict[str, CharFilter]:
         """Generate JSON-specific filters: exact match and null checks."""
         return {
             f"{field_name}": CharFilter(
@@ -2330,8 +2330,8 @@ class AdvancedFilterGenerator:
         }
 
     def _generate_foreign_key_filters(
-        self, field_name: str, related_model: Type[models.Model] = None
-    ) -> Dict[str, django_filters.Filter]:
+        self, field_name: str, related_model: type[models.Model] = None
+    ) -> dict[str, django_filters.Filter]:
         """Generate foreign key filters: exact, in, isnull."""
         filter_cls = NumberFilter
         if related_model and isinstance(related_model._meta.pk, models.UUIDField):
@@ -2362,8 +2362,8 @@ class AdvancedFilterGenerator:
         return filters
 
     def _generate_many_to_many_filters(
-        self, field_name: str, related_model: Type[models.Model]
-    ) -> Dict[str, django_filters.Filter]:
+        self, field_name: str, related_model: type[models.Model]
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate ManyToMany field filters including count filters.
 
@@ -2421,7 +2421,7 @@ class AdvancedFilterGenerator:
 
         return filters
 
-    def _get_basic_filter_lookups(self, field: models.Field) -> List[str]:
+    def _get_basic_filter_lookups(self, field: models.Field) -> list[str]:
         """
         Returns basic filter lookups for django-filter Meta.fields configuration.
 
@@ -2453,8 +2453,8 @@ class AdvancedFilterGenerator:
             return ["exact"]
 
     def generate_complex_filter_input(
-        self, model: Type[models.Model]
-    ) -> Type[graphene.InputObjectType]:
+        self, model: type[models.Model]
+    ) -> type[graphene.InputObjectType]:
         """
         Purpose: Build a typed GraphQL InputObjectType to express complex filters with AND/OR/NOT.
 
@@ -2550,7 +2550,7 @@ class AdvancedFilterGenerator:
         return complex_filter_class
 
     def apply_complex_filters(
-        self, queryset: models.QuerySet, filter_input: Dict[str, Any]
+        self, queryset: models.QuerySet, filter_input: dict[str, Any]
     ) -> models.QuerySet:
         """
         Purpose: Apply a nested AND/OR/NOT filter tree to a queryset using Django Q objects.
@@ -2604,7 +2604,7 @@ class AdvancedFilterGenerator:
 
         return queryset.filter(q_objects)
 
-    def _build_q_object(self, filter_dict: Dict[str, Any]) -> Q:
+    def _build_q_object(self, filter_dict: dict[str, Any]) -> Q:
         """
         Builds a Django Q object from a filter dictionary.
 
@@ -2627,8 +2627,8 @@ class AdvancedFilterGenerator:
         return q_object
 
     def _generate_property_filters(
-        self, model: Type[models.Model]
-    ) -> Dict[str, django_filters.Filter]:
+        self, model: type[models.Model]
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate filters for @property methods on the model.
 
@@ -2656,7 +2656,7 @@ class AdvancedFilterGenerator:
 
     def _generate_property_type_filters(
         self, property_name: str, return_type: Any
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate specific filters based on property return type.
 
@@ -2696,7 +2696,7 @@ class AdvancedFilterGenerator:
 
     def _generate_property_text_filters(
         self, property_name: str
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate text-specific filters for properties: contains, icontains, startswith, endswith."""
         return {
             f"{property_name}": CharFilter(
@@ -2727,7 +2727,7 @@ class AdvancedFilterGenerator:
 
     def _generate_property_numeric_filters(
         self, property_name: str
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate numeric filters for properties: gt, gte, lt, lte."""
         return {
             f"{property_name}": NumberFilter(
@@ -2754,7 +2754,7 @@ class AdvancedFilterGenerator:
 
     def _generate_property_boolean_filters(
         self, property_name: str
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate boolean filters for properties."""
         return {
             f"{property_name}": BooleanFilter(
@@ -2765,7 +2765,7 @@ class AdvancedFilterGenerator:
 
     def _generate_property_date_filters(
         self, property_name: str
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate date-specific filters for properties: exact, gt, gte, lt, lte, year, month, day."""
         return {
             f"{property_name}": DateFilter(
@@ -2808,7 +2808,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_relationship_field_filters(
         self, model
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate filters for actual fields of reverse-related models.
 
@@ -2872,7 +2872,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_nested_field_filters(
         self, relation_name: str, related_model, depth: int = 0, max_depth: int = 2
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """
         Generate nested filters for reverse relationship fields.
 
@@ -2950,7 +2950,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_text_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate text-based filters for reverse relationship text fields."""
         return {
             f"{field_name}": CharFilter(
@@ -2985,7 +2985,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_numeric_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate numeric filters for reverse relationship numeric fields."""
         return {
             f"{field_name}": NumberFilter(
@@ -3024,7 +3024,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_date_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate date filters for reverse relationship date fields."""
         filters = {
             f"{field_name}": DateFilter(
@@ -3076,7 +3076,7 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_boolean_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate boolean filters for reverse relationship boolean fields."""
         return {
             f"{field_name}": BooleanFilter(
@@ -3090,9 +3090,9 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_foreign_key_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship foreign key fields."""
-        filters: Dict[str, django_filters.Filter] = {
+        filters: dict[str, django_filters.Filter] = {
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
                 help_text=f"Filter by whether {field_name} is null",
@@ -3117,9 +3117,9 @@ class AdvancedFilterGenerator:
 
     def _generate_reverse_many_to_many_filters(
         self, field_name: str, field
-    ) -> Dict[str, django_filters.Filter]:
+    ) -> dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship many-to-many fields."""
-        filters: Dict[str, django_filters.Filter] = {
+        filters: dict[str, django_filters.Filter] = {
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
                 help_text=f"Filter by whether {field_name} has any related objects",

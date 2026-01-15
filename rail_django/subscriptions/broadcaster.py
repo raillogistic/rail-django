@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 _SIGNALS_CONNECTED = False
 
 
-def _snapshot_instance(instance) -> Dict[str, Any]:
-    data: Dict[str, Any] = {}
+def _snapshot_instance(instance) -> dict[str, Any]:
+    data: dict[str, Any] = {}
     for field in instance._meta.concrete_fields:
         key = getattr(field, "attname", field.name)
         try:

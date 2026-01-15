@@ -32,11 +32,11 @@ class PostgresDatasetExecutionEngine(DatasetExecutionEngine):
 
     def _build_annotations(
         self,
-        metrics: List[MetricSpec],
+        metrics: list[MetricSpec],
         *,
-        allowed_where_fields: Optional[Set[str]] = None,
-    ) -> Dict[str, Any]:
-        annotations: Dict[str, Any] = {}
+        allowed_where_fields: Optional[set[str]] = None,
+    ) -> dict[str, Any]:
+        annotations: dict[str, Any] = {}
         for metric in metrics:
             agg_name = (metric.aggregation or "sum").lower()
             
@@ -90,8 +90,8 @@ class PostgresDatasetExecutionEngine(DatasetExecutionEngine):
         *,
         where: Any,
         quick_search: str,
-        allowed_fields: Optional[Set[str]] = None,
-    ) -> Tuple[models.QuerySet, List[FilterSpec], List[str]]:
+        allowed_fields: Optional[set[str]] = None,
+    ) -> tuple[models.QuerySet, list[FilterSpec], list[str]]:
         """
         Override to use SearchVector for quick_search.
         """

@@ -42,8 +42,8 @@ def _normalize_scope(scope: str) -> str:
     return "user_or_ip"
 
 
-def _normalize_rules(context_name: str, raw_rules: Iterable[Dict[str, Any]]) -> List[RateLimitRule]:
-    normalized: List[RateLimitRule] = []
+def _normalize_rules(context_name: str, raw_rules: Iterable[dict[str, Any]]) -> list[RateLimitRule]:
+    normalized: list[RateLimitRule] = []
     for idx, rule in enumerate(raw_rules or []):
         if not isinstance(rule, dict):
             continue
@@ -64,10 +64,10 @@ def _normalize_rules(context_name: str, raw_rules: Iterable[Dict[str, Any]]) -> 
     return normalized
 
 
-def _normalize_config(raw_config: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_config(raw_config: dict[str, Any]) -> dict[str, Any]:
     enabled = bool(raw_config.get("enabled", True))
     contexts_raw = raw_config.get("contexts")
-    contexts: Dict[str, Dict[str, Any]] = {}
+    contexts: dict[str, dict[str, Any]] = {}
     if isinstance(contexts_raw, dict):
         for context_name, context_cfg in contexts_raw.items():
             if not isinstance(context_cfg, dict):
@@ -79,7 +79,7 @@ def _normalize_config(raw_config: Dict[str, Any]) -> Dict[str, Any]:
     return {"enabled": enabled, "contexts": contexts}
 
 
-def _merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = {"enabled": base.get("enabled", True), "contexts": dict(base.get("contexts", {}))}
     if "enabled" in override:
         merged["enabled"] = bool(override.get("enabled"))
@@ -90,12 +90,12 @@ def _merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, 
     return merged
 
 
-def _legacy_security_settings() -> Dict[str, Any]:
+def _legacy_security_settings() -> dict[str, Any]:
     config = getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
     return config.get("security_settings", {}) or {}
 
 
-def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[Dict[str, Any]]:
+def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[dict[str, Any]]:
     if not schema_name:
         return None
     schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {}) or {}
@@ -107,14 +107,14 @@ def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[D
     return None
 
 
-def _build_legacy_config(schema_name: Optional[str]) -> Dict[str, Any]:
-    contexts: Dict[str, Dict[str, Any]] = {}
+def _build_legacy_config(schema_name: Optional[str]) -> dict[str, Any]:
+    contexts: dict[str, dict[str, Any]] = {}
     enabled = False
 
     security_settings = _legacy_security_settings()
     security_rl_enabled = bool(security_settings.get("enable_rate_limiting", False))
 
-    graphql_rules: List[RateLimitRule] = []
+    graphql_rules: list[RateLimitRule] = []
     if security_rl_enabled:
         graphql_rules.extend(
             [
@@ -191,7 +191,7 @@ def _build_legacy_config(schema_name: Optional[str]) -> Dict[str, Any]:
     return {"enabled": enabled, "contexts": contexts}
 
 
-def _load_rate_limit_config(schema_name: Optional[str]) -> Dict[str, Any]:
+def _load_rate_limit_config(schema_name: Optional[str]) -> dict[str, Any]:
     raw_config = getattr(settings, "RAIL_DJANGO_RATE_LIMITING", None)
     if isinstance(raw_config, dict):
         base = _normalize_config(raw_config)
@@ -302,7 +302,7 @@ class RateLimiter:
         self.schema_name = schema_name
         self._config = _load_rate_limit_config(schema_name)
 
-    def _get_context(self, context: str) -> Optional[Dict[str, Any]]:
+    def _get_context(self, context: str) -> Optional[dict[str, Any]]:
         return self._config.get("contexts", {}).get(context)
 
     def _context_enabled(self, context: str) -> bool:
@@ -313,7 +313,7 @@ class RateLimiter:
             return False
         return bool(context_cfg.get("enabled", True))
 
-    def get_rules(self, context: str) -> List[RateLimitRule]:
+    def get_rules(self, context: str) -> list[RateLimitRule]:
         context_cfg = self._get_context(context)
         if not context_cfg:
             return []
@@ -363,7 +363,7 @@ class RateLimiter:
         return RateLimitResult(allowed=True, context=context)
 
 
-_rate_limiter_cache: Dict[Optional[str], RateLimiter] = {}
+_rate_limiter_cache: dict[Optional[str], RateLimiter] = {}
 
 
 def get_rate_limiter(schema_name: Optional[str] = None) -> RateLimiter:

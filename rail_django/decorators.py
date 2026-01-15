@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 def mutation(
-    input_type: Optional[Type[graphene.InputObjectType]] = None,
-    output_type: Optional[Type[graphene.ObjectType]] = None,
+    input_type: Optional[type[graphene.InputObjectType]] = None,
+    output_type: Optional[type[graphene.ObjectType]] = None,
     description: Optional[str] = None,
 ):
     """
@@ -59,7 +59,7 @@ def confirm_action(
     severity: str = "default",
     icon: Optional[str] = None,
     description: Optional[str] = None,
-    permissions: Optional[List[str]] = None,
+    permissions: Optional[list[str]] = None,
 ):
     """
     Decorator to expose a **confirmation-only** model method as a GraphQL mutation.
@@ -122,12 +122,12 @@ def action_form(
     cancel_label: str = "Annuler",
     icon: Optional[str] = None,
     severity: str = "default",
-    fields: Optional[Dict[str, Dict[str, Any]]] = None,
-    section: Optional[Dict[str, Any]] = None,
-    ordering: Optional[List[str]] = None,
+    fields: Optional[dict[str, dict[str, Any]]] = None,
+    section: Optional[dict[str, Any]] = None,
+    ordering: Optional[list[str]] = None,
     returns: Optional[str] = None,
     on_finish: Optional[str] = None,
-    permissions: Optional[List[str]] = None,
+    permissions: Optional[list[str]] = None,
 ):
     """
     Decorator to expose a **form-based** model method as a GraphQL mutation.
@@ -268,9 +268,9 @@ def register_schema(
     name: Optional[str] = None,
     description: str = "",
     version: str = "1.0.0",
-    apps: Optional[List[str]] = None,
-    models: Optional[List[str]] = None,
-    settings: Optional[Dict[str, Any]] = None,
+    apps: Optional[list[str]] = None,
+    models: Optional[list[str]] = None,
+    settings: Optional[dict[str, Any]] = None,
     auto_discovery: bool = True,
     enabled: bool = True,
 ):
@@ -358,7 +358,7 @@ def register_schema(
 
 
 def _register_schema_with_registry(
-    schema_class_or_function: Callable, registration_data: Dict[str, Any]
+    schema_class_or_function: Callable, registration_data: dict[str, Any]
 ):
     """
     Internal function to handle the actual schema registration with the registry.

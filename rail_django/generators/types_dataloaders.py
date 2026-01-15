@@ -21,7 +21,7 @@ if DataLoader:
 
         def __init__(
             self,
-            related_model: Type[models.Model],
+            related_model: type[models.Model],
             relation_field: str,
             db_alias: Optional[str] = None,
         ):

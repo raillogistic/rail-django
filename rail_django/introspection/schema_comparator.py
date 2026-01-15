@@ -57,10 +57,10 @@ class SchemaComparison:
     comparison_date: datetime = field(default_factory=datetime.now)
 
     # Changes by category
-    type_changes: List[SchemaChange] = field(default_factory=list)
-    field_changes: List[SchemaChange] = field(default_factory=list)
-    argument_changes: List[SchemaChange] = field(default_factory=list)
-    directive_changes: List[SchemaChange] = field(default_factory=list)
+    type_changes: list[SchemaChange] = field(default_factory=list)
+    field_changes: list[SchemaChange] = field(default_factory=list)
+    argument_changes: list[SchemaChange] = field(default_factory=list)
+    directive_changes: list[SchemaChange] = field(default_factory=list)
 
     # Summary statistics
     total_changes: int = 0
@@ -72,22 +72,22 @@ class SchemaComparison:
     migration_required: bool = False
     compatibility_score: float = 1.0  # 0.0 = completely incompatible, 1.0 = fully compatible
 
-    def get_all_changes(self) -> List[SchemaChange]:
+    def get_all_changes(self) -> list[SchemaChange]:
         """Get all changes as a single list."""
         return (self.type_changes + self.field_changes +
                 self.argument_changes + self.directive_changes)
 
-    def get_breaking_changes(self) -> List[SchemaChange]:
+    def get_breaking_changes(self) -> list[SchemaChange]:
         """Get only breaking changes."""
         return [change for change in self.get_all_changes()
                 if change.breaking_level != BreakingChangeLevel.NONE]
 
-    def get_changes_by_type(self, change_type: ChangeType) -> List[SchemaChange]:
+    def get_changes_by_type(self, change_type: ChangeType) -> list[SchemaChange]:
         """Get changes by type (ADDED, REMOVED, etc.)."""
         return [change for change in self.get_all_changes()
                 if change.change_type == change_type]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             'old_schema_name': self.old_schema_name,
@@ -111,7 +111,7 @@ class SchemaComparison:
             }
         }
 
-    def _change_to_dict(self, change: SchemaChange) -> Dict[str, Any]:
+    def _change_to_dict(self, change: SchemaChange) -> dict[str, Any]:
         """Convert SchemaChange to dictionary."""
         return {
             'change_type': change.change_type.value,
@@ -318,8 +318,8 @@ class SchemaComparator:
 
             self._compare_field_details(old_type.name, old_field, new_field, comparison)
 
-    def _compare_field_details(self, type_name: str, old_field: Dict[str, Any],
-                               new_field: Dict[str, Any], comparison: SchemaComparison):
+    def _compare_field_details(self, type_name: str, old_field: dict[str, Any],
+                               new_field: dict[str, Any], comparison: SchemaComparison):
         """Compare details of a specific field."""
         field_name = old_field['name']
         field_path = f"{type_name}.{field_name}"
@@ -398,8 +398,8 @@ class SchemaComparator:
         self._compare_arguments(field_path, old_field.get('args', []),
                                 new_field.get('args', []), comparison)
 
-    def _compare_arguments(self, field_path: str, old_args: List[Dict[str, Any]],
-                           new_args: List[Dict[str, Any]], comparison: SchemaComparison):
+    def _compare_arguments(self, field_path: str, old_args: list[dict[str, Any]],
+                           new_args: list[dict[str, Any]], comparison: SchemaComparison):
         """Compare arguments between two fields."""
         old_args_dict = {arg['name']: arg for arg in old_args}
         new_args_dict = {arg['name']: arg for arg in new_args}
@@ -605,8 +605,8 @@ class SchemaComparator:
         self._compare_root_field_list(
             "Subscription", old_schema.subscriptions, new_schema.subscriptions, comparison)
 
-    def _compare_root_field_list(self, root_type: str, old_fields: List[FieldInfo],
-                                 new_fields: List[FieldInfo], comparison: SchemaComparison):
+    def _compare_root_field_list(self, root_type: str, old_fields: list[FieldInfo],
+                                 new_fields: list[FieldInfo], comparison: SchemaComparison):
         """Compare a list of root fields."""
         old_fields_dict = {field.name: field for field in old_fields}
         new_fields_dict = {field.name: field for field in new_fields}

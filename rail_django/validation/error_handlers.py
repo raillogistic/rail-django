@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class SchemaRegistryError(Exception):
     """Base exception for schema registry operations."""
 
-    def __init__(self, message: str, error_code: str = None, details: Dict[str, Any] = None):
+    def __init__(self, message: str, error_code: str = None, details: dict[str, Any] = None):
         super().__init__(message)
         self.message = message
         self.error_code = error_code or 'SCHEMA_REGISTRY_ERROR'
@@ -25,7 +25,7 @@ class SchemaRegistryError(Exception):
 class SchemaValidationError(SchemaRegistryError):
     """Schema validation failed."""
 
-    def __init__(self, message: str, field: str = None, validation_errors: List[str] = None):
+    def __init__(self, message: str, field: str = None, validation_errors: list[str] = None):
         super().__init__(message, 'SCHEMA_VALIDATION_ERROR')
         self.field = field
         self.validation_errors = validation_errors or []
@@ -70,9 +70,9 @@ class ValidationErrorHandler:
     """Handles and formats validation errors."""
 
     def __init__(self):
-        self.errors: List[ValidationError] = []
-        self.warnings: List[ValidationError] = []
-        self.infos: List[ValidationError] = []
+        self.errors: list[ValidationError] = []
+        self.warnings: list[ValidationError] = []
+        self.infos: list[ValidationError] = []
 
     def add_error(self, field: str, message: str, code: str = 'VALIDATION_ERROR'):
         """Add a validation error."""
@@ -100,7 +100,7 @@ class ValidationErrorHandler:
         """Check if there are any validation warnings."""
         return len(self.warnings) > 0
 
-    def get_error_summary(self) -> Dict[str, Any]:
+    def get_error_summary(self) -> dict[str, Any]:
         """Get a summary of all validation issues."""
         return {
             'error_count': len(self.errors),

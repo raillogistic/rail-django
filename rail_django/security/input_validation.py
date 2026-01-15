@@ -107,10 +107,10 @@ class ValidationResult:
 
     is_valid: bool
     sanitized_value: Any
-    violations: List[str]
+    violations: list[str]
     severity: ValidationSeverity
     original_value: Any
-    issues: List[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list)
 
 
 @dataclass
@@ -119,18 +119,18 @@ class ValidationReport:
 
     is_valid: bool
     sanitized_data: Any
-    issues: List[ValidationIssue]
+    issues: list[ValidationIssue]
     failure_severity: ValidationSeverity
 
-    def error_messages(self) -> List[str]:
+    def error_messages(self) -> list[str]:
         return [
             issue.message
             for issue in self.issues
             if severity_meets_threshold(issue.severity, self.failure_severity)
         ]
 
-    def as_error_dict(self) -> Dict[str, List[str]]:
-        errors: Dict[str, List[str]] = {}
+    def as_error_dict(self) -> dict[str, list[str]]:
+        errors: dict[str, list[str]] = {}
         for issue in self.issues:
             if not severity_meets_threshold(issue.severity, self.failure_severity):
                 continue
@@ -153,8 +153,8 @@ class InputValidationSettings:
     enable_sql_injection_protection: bool = True
     enable_xss_protection: bool = True
     allow_html: bool = False
-    allowed_html_tags: List[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_HTML_TAGS))
-    allowed_html_attributes: Dict[str, List[str]] = field(
+    allowed_html_tags: list[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_HTML_TAGS))
+    allowed_html_attributes: dict[str, list[str]] = field(
         default_factory=lambda: dict(DEFAULT_ALLOWED_HTML_ATTRIBUTES)
     )
     max_string_length: Optional[int] = None
@@ -258,8 +258,8 @@ class InputSanitizer:
         allow_html: Optional[bool] = None,
         max_length: Optional[int] = None,
     ) -> ValidationResult:
-        issues: List[ValidationIssue] = []
-        violations: List[str] = []
+        issues: list[ValidationIssue] = []
+        violations: list[str] = []
         original_value = value
 
         if not isinstance(value, str):
@@ -333,13 +333,13 @@ class InputSanitizer:
             issues=issues,
         )
 
-    def _detect_threats(self, value: str, field: Optional[str]) -> List[ValidationIssue]:
+    def _detect_threats(self, value: str, field: Optional[str]) -> list[ValidationIssue]:
         if not self.settings.enable_validation:
             return []
 
         scan_limit = self.settings.pattern_scan_limit
         scan_value = value[:scan_limit] if scan_limit and len(value) > scan_limit else value
-        issues: List[ValidationIssue] = []
+        issues: list[ValidationIssue] = []
 
         if self.settings.enable_sql_injection_protection:
             for pattern in self._sql_patterns:
@@ -370,7 +370,7 @@ class InputSanitizer:
         return issues
 
 
-def _highest_severity(issues: List[ValidationIssue]) -> ValidationSeverity:
+def _highest_severity(issues: list[ValidationIssue]) -> ValidationSeverity:
     if not issues:
         return ValidationSeverity.LOW
     return max(issues, key=lambda issue: SEVERITY_ORDER[issue.severity]).severity
@@ -522,8 +522,8 @@ class InputValidator:
         self.schema_name = schema_name
         self.settings = InputValidationSettings.from_schema(schema_name)
         self.sanitizer = InputSanitizer(self.settings)
-        self.field_validators: Dict[str, Callable] = {}
-        self.model_validators: Dict[str, List[Callable]] = {}
+        self.field_validators: dict[str, Callable] = {}
+        self.model_validators: dict[str, list[Callable]] = {}
         self._register_default_validators()
 
     def register_field_validator(self, field_name: str, validator: Callable) -> None:
@@ -543,7 +543,7 @@ class InputValidator:
                 failure_severity=self.settings.failure_severity,
             )
 
-        issues: List[ValidationIssue] = []
+        issues: list[ValidationIssue] = []
         sanitized = self._sanitize_value(input_data, issues, None)
         is_valid = not any(
             severity_meets_threshold(issue.severity, self.settings.failure_severity)
@@ -557,8 +557,8 @@ class InputValidator:
         )
 
     def validate_input(
-        self, model_name: Optional[str], input_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, model_name: Optional[str], input_data: dict[str, Any]
+    ) -> dict[str, Any]:
         if not self.settings.enable_validation:
             return input_data
 
@@ -569,8 +569,8 @@ class InputValidator:
         if report.has_failures():
             _raise_validation_report(report)
 
-        validated_data: Dict[str, Any] = {}
-        errors: Dict[str, List[str]] = {}
+        validated_data: dict[str, Any] = {}
+        errors: dict[str, list[str]] = {}
 
         for field_name, value in report.sanitized_data.items():
             if field_name in self.field_validators:
@@ -663,9 +663,9 @@ class InputValidator:
             )
 
     def validate_graphql_input(
-        self, input_data: Dict[str, Any], schema_definition: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        results: Dict[str, Any] = {}
+        self, input_data: dict[str, Any], schema_definition: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
+        results: dict[str, Any] = {}
         for field_name, value in input_data.items():
             if isinstance(value, str):
                 results[field_name] = self.validate_string(value)
@@ -715,13 +715,13 @@ class InputValidator:
         return value
 
     def _sanitize_value(
-        self, value: Any, issues: List[ValidationIssue], path: Optional[str]
+        self, value: Any, issues: list[ValidationIssue], path: Optional[str]
     ) -> Any:
         if hasattr(value, "__dict__") and not isinstance(value, dict):
             return self._sanitize_value(dict(value.__dict__), issues, path)
 
         if isinstance(value, dict):
-            sanitized_map: Dict[str, Any] = {}
+            sanitized_map: dict[str, Any] = {}
             for key, nested_value in value.items():
                 field_path = _join_path(path, key)
                 sanitized_map[key] = self._sanitize_value(

@@ -5,6 +5,7 @@ __pycache__/
 # C extensions
 *.so
 .venv
+.venv311/
 dist/*
 dist/
 venv/*
@@ -202,4 +203,3 @@ celerybeat-schedule.db
 # Local configuration overrides
 local_config.py
 config_local.py
-

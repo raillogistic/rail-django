@@ -18,8 +18,8 @@ class HookRegistry:
     """
 
     def __init__(self):
-        self._hooks: Dict[str, List[Callable]] = defaultdict(list)
-        self._hook_metadata: Dict[str, Dict[str, Any]] = {}
+        self._hooks: dict[str, list[Callable]] = defaultdict(list)
+        self._hook_metadata: dict[str, dict[str, Any]] = {}
 
     def register_hook(self,
                       event: str,
@@ -107,7 +107,7 @@ class HookRegistry:
 
         return self.unregister_hook(event, hook)
 
-    def get_hooks(self, event: str) -> List[Dict[str, Any]]:
+    def get_hooks(self, event: str) -> list[dict[str, Any]]:
         """
         Get all hooks for a specific event.
 
@@ -119,7 +119,7 @@ class HookRegistry:
         """
         return self._hooks[event].copy()
 
-    def get_hook_functions(self, event: str) -> List[Callable]:
+    def get_hook_functions(self, event: str) -> list[Callable]:
         """
         Get hook functions for a specific event.
 
@@ -131,7 +131,7 @@ class HookRegistry:
         """
         return [hook_info['hook'] for hook_info in self._hooks[event]]
 
-    def execute_hooks(self, event: str, *args, **kwargs) -> List[Any]:
+    def execute_hooks(self, event: str, *args, **kwargs) -> list[Any]:
         """
         Execute all hooks for a specific event.
 
@@ -162,7 +162,7 @@ class HookRegistry:
 
         return results
 
-    def execute_hooks_with_modification(self, event: str, initial_data: Dict[str, Any], *args, **kwargs) -> Dict[str, Any]:
+    def execute_hooks_with_modification(self, event: str, initial_data: dict[str, Any], *args, **kwargs) -> dict[str, Any]:
         """
         Execute hooks that can modify data.
 
@@ -217,7 +217,7 @@ class HookRegistry:
             self._hook_metadata.clear()
             logger.debug("Cleared all hooks for all events")
 
-    def get_events(self) -> List[str]:
+    def get_events(self) -> list[str]:
         """Get list of all events that have registered hooks."""
         return list(self._hooks.keys())
 
@@ -236,7 +236,7 @@ class HookRegistry:
         else:
             return sum(len(hooks) for hooks in self._hooks.values())
 
-    def get_hook_info(self, hook_name: str) -> Optional[Dict[str, Any]]:
+    def get_hook_info(self, hook_name: str) -> Optional[dict[str, Any]]:
         """
         Get information about a specific hook.
 
@@ -248,7 +248,7 @@ class HookRegistry:
         """
         return self._hook_metadata.get(hook_name)
 
-    def list_hooks(self) -> Dict[str, List[Dict[str, Any]]]:
+    def list_hooks(self) -> dict[str, list[dict[str, Any]]]:
         """
         List all registered hooks organized by event.
 

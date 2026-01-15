@@ -19,8 +19,8 @@ from .mutations_methods import _wrap_with_audit
 
 
 def generate_bulk_create_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for creating multiple model instances in bulk.
     """
@@ -45,7 +45,7 @@ def generate_bulk_create_mutation(
         @classmethod
         @transaction.atomic
         def mutate(
-            cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]
+            cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkCreateMutation":
             try:
                 graphql_meta.ensure_operation_access("bulk_create", info=info)
@@ -88,8 +88,8 @@ def generate_bulk_create_mutation(
 
         @classmethod
         def _normalize_enum_inputs(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
             """
             Purpose: Normalize GraphQL Enum inputs to their underlying Django field values for bulk create.
             Args:
@@ -104,7 +104,7 @@ def generate_bulk_create_mutation(
                 >>> isinstance(normalized['status'], str)
                 True
             """
-            normalized: Dict[str, Any] = input_data.copy()
+            normalized: dict[str, Any] = input_data.copy()
 
             choice_fields = {
                 f.name: f
@@ -138,8 +138,8 @@ def generate_bulk_create_mutation(
 
 
 def generate_bulk_update_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for updating multiple model instances in bulk.
     """
@@ -168,7 +168,7 @@ def generate_bulk_update_mutation(
         @classmethod
         @transaction.atomic
         def mutate(
-            cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]
+            cls, root: Any, info: graphene.ResolveInfo, inputs: list[dict[str, Any]]
         ) -> "BulkUpdateMutation":
             try:
                 graphql_meta.ensure_operation_access("bulk_update", info=info)
@@ -231,9 +231,9 @@ def generate_bulk_update_mutation(
 
         @classmethod
         def _normalize_enum_inputs(
-            cls, input_data: Dict[str, Any], model: Type[models.Model]
-        ) -> Dict[str, Any]:
-            normalized: Dict[str, Any] = input_data.copy()
+            cls, input_data: dict[str, Any], model: type[models.Model]
+        ) -> dict[str, Any]:
+            normalized: dict[str, Any] = input_data.copy()
 
             choice_fields = {
                 f.name: f
@@ -267,8 +267,8 @@ def generate_bulk_update_mutation(
 
 
 def generate_bulk_delete_mutation(
-    self, model: Type[models.Model]
-) -> Type[graphene.Mutation]:
+    self, model: type[models.Model]
+) -> type[graphene.Mutation]:
     """
     Generates a mutation for deleting multiple model instances in bulk.
     """
@@ -290,7 +290,7 @@ def generate_bulk_delete_mutation(
         @classmethod
         @transaction.atomic
         def mutate(
-            cls, root: Any, info: graphene.ResolveInfo, ids: List[str]
+            cls, root: Any, info: graphene.ResolveInfo, ids: list[str]
         ) -> "BulkDeleteMutation":
             try:
                 graphql_meta.ensure_operation_access("bulk_delete", info=info)

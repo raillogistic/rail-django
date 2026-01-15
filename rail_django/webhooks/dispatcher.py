@@ -112,13 +112,13 @@ def _build_payload(
     event: str,
     settings: WebhookSettings,
     update_fields: Optional[Iterable[str]] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     model = instance.__class__
     timestamp = timezone.now()
     model_label = model._meta.label
     model_label_lower = model._meta.label_lower
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "event_id": uuid.uuid4().hex,
         "event_type": event,
         "event_source": "model",
@@ -141,7 +141,7 @@ def _serialize_instance(
     instance: Any,
     settings: WebhookSettings,
     model_label_lower: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     model = instance.__class__
     fields = list(getattr(model._meta, "concrete_fields", []))
     include_fields = set(settings.include_fields.get(model_label_lower, []))
@@ -150,7 +150,7 @@ def _serialize_instance(
     redact_fields.update(settings.redact_fields_by_model.get(model_label_lower, []))
     redaction_mask = settings.redaction_mask
 
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
     for field in fields:
         field_names = {field.name, getattr(field, "attname", field.name)}
         field_names_lower = {name.lower() for name in field_names}
@@ -204,7 +204,7 @@ def _coerce_value(value: Any) -> Any:
 
 
 def _enqueue_delivery(
-    endpoint: WebhookEndpoint, payload: Dict[str, Any], settings: WebhookSettings
+    endpoint: WebhookEndpoint, payload: dict[str, Any], settings: WebhookSettings
 ) -> None:
     backend = (settings.async_backend or "thread").lower()
     if backend == "sync":
@@ -263,7 +263,7 @@ def _get_executor(settings: WebhookSettings):
 
 
 def _deliver_payload(
-    endpoint: WebhookEndpoint, payload: Dict[str, Any], settings: WebhookSettings
+    endpoint: WebhookEndpoint, payload: dict[str, Any], settings: WebhookSettings
 ) -> None:
     if requests is None:
         logger.warning("requests is unavailable; skipping webhook delivery")
@@ -310,7 +310,7 @@ def _deliver_payload(
             )
 
 
-def _encode_payload(payload: Dict[str, Any]) -> str:
+def _encode_payload(payload: dict[str, Any]) -> str:
     try:
         return json.dumps(payload, cls=DjangoJSONEncoder)
     except TypeError:
@@ -331,8 +331,8 @@ def _stringify_payload(value: Any) -> Any:
 
 
 def _build_headers(
-    endpoint: WebhookEndpoint, payload: Dict[str, Any], payload_json: str
-) -> Dict[str, str]:
+    endpoint: WebhookEndpoint, payload: dict[str, Any], payload_json: str
+) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
     headers.update(endpoint.headers)
 
@@ -367,7 +367,7 @@ def _sign_payload(secret: str, payload_json: str, prefix: str) -> str:
 
 
 def _get_auth_token(
-    endpoint: WebhookEndpoint, payload: Dict[str, Any], payload_json: str
+    endpoint: WebhookEndpoint, payload: dict[str, Any], payload_json: str
 ) -> Optional[str]:
     if not endpoint.auth_token_path:
         return None

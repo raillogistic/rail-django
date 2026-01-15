@@ -87,34 +87,34 @@ class MutationGenerator:
 
         # Pass mutation settings to type generator for nested relations configuration
         self.type_generator.mutation_settings = self.settings
-        self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}
+        self._mutation_classes: dict[str, type[graphene.Mutation]] = {}
         self.nested_handler = NestedOperationHandler(self.settings)
 
-    def generate_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_create_mutation(self, model)
 
-    def generate_update_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_update_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_update_mutation(self, model)
 
-    def generate_delete_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_delete_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_delete_mutation(self, model)
 
-    def generate_bulk_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_bulk_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_bulk_create_mutation(self, model)
 
-    def generate_bulk_update_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_bulk_update_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_bulk_update_mutation(self, model)
 
-    def generate_bulk_delete_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+    def generate_bulk_delete_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_bulk_delete_mutation(self, model)
 
     def convert_method_to_mutation(
         self,
-        model: Type[models.Model],
+        model: type[models.Model],
         method_name: str,
-        custom_input_type: Optional[Type[graphene.InputObjectType]] = None,
-        custom_output_type: Optional[Type[graphene.ObjectType]] = None,
-    ) -> Optional[Type[graphene.Mutation]]:
+        custom_input_type: Optional[type[graphene.InputObjectType]] = None,
+        custom_output_type: Optional[type[graphene.ObjectType]] = None,
+    ) -> Optional[type[graphene.Mutation]]:
         return _convert_method_to_mutation(
             self,
             model,
@@ -125,7 +125,7 @@ class MutationGenerator:
 
     def _convert_python_type_to_graphql(
         self, python_type: Any
-    ) -> Type[graphene.Scalar]:
+    ) -> type[graphene.Scalar]:
         """
         Converts Python types to GraphQL types with enhanced mapping.
 
@@ -191,13 +191,13 @@ class MutationGenerator:
         return type_mapping.get(python_type, graphene.String)
 
     def generate_method_mutation(
-        self, model: Type[models.Model], method_info: MethodInfo
-    ) -> Optional[Type[graphene.Mutation]]:
+        self, model: type[models.Model], method_info: MethodInfo
+    ) -> Optional[type[graphene.Mutation]]:
         return _generate_method_mutation(self, model, method_info)
 
     def generate_all_mutations(
-        self, model: Type[models.Model]
-    ) -> Dict[str, graphene.Field]:
+        self, model: type[models.Model]
+    ) -> dict[str, graphene.Field]:
         """
         Generates all mutations for a model, including CRUD operations and method mutations.
         """

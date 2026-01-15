@@ -50,8 +50,8 @@ def _join_nested_path(path: Optional[str], segment: str) -> str:
 
 def _validate_nested_limits(
     input_data: Any, limits: NestedValidationLimits
-) -> List[MutationError]:
-    errors: List[MutationError] = []
+) -> list[MutationError]:
+    errors: list[MutationError] = []
     stats = {"nodes": 0}
 
     def add_error(message: str, path: Optional[str]):

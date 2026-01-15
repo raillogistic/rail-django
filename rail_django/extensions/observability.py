@@ -20,7 +20,7 @@ class SentryIntegrationPlugin(BasePlugin):
 
     VERSION = "1.0.0"
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         super().__init__(config)
         self._sdk = None
         if not self.enabled:
@@ -62,7 +62,7 @@ class OpenTelemetryIntegrationPlugin(BasePlugin):
 
     VERSION = "1.0.0"
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         super().__init__(config)
         self._tracer = None
         if not self.enabled:

@@ -185,7 +185,7 @@ class MultiSchemaGraphQLView(GraphQLView):
 
         return context
 
-    def _get_schema_info(self, schema_name: str) -> Optional[Dict[str, Any]]:
+    def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
         """
         Get schema information from the registry.
 
@@ -209,7 +209,7 @@ class MultiSchemaGraphQLView(GraphQLView):
                 raise SchemaRegistryUnavailable(str(e))
             return None
 
-    def _get_schema_instance(self, schema_name: str, schema_info: Dict[str, Any]):
+    def _get_schema_instance(self, schema_name: str, schema_info: dict[str, Any]):
         """
         Get or create a schema instance for the given schema name.
 
@@ -265,7 +265,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             logger.warning(f"Failed to configure middleware for '{schema_name}': {e}")
             self.middleware = []
 
-    def _configure_for_schema(self, schema_info: Dict[str, Any]):
+    def _configure_for_schema(self, schema_info: dict[str, Any]):
         """
         Configure the view for the specific schema.
 
@@ -285,7 +285,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             self.batch = schema_settings["batch"]
 
     def _check_authentication(
-        self, request: HttpRequest, schema_info: Dict[str, Any]
+        self, request: HttpRequest, schema_info: dict[str, Any]
     ) -> bool:
         """
         Check if the request meets authentication requirements for the schema.
@@ -315,7 +315,7 @@ class MultiSchemaGraphQLView(GraphQLView):
 
         return False
 
-    def check_schema_permissions(self, request: HttpRequest, schema_info: Dict[str, Any]) -> bool:
+    def check_schema_permissions(self, request: HttpRequest, schema_info: dict[str, Any]) -> bool:
         return self._check_authentication(request, schema_info)
 
     def _extract_query_text(self, request: HttpRequest) -> str:
@@ -379,7 +379,7 @@ class MultiSchemaGraphQLView(GraphQLView):
     def _validate_token(
         self,
         auth_header: str,
-        schema_settings: Dict[str, Any],
+        schema_settings: dict[str, Any],
         request: Optional[HttpRequest] = None,
     ) -> bool:
         """
@@ -432,7 +432,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             logger.warning(f"Token validation failed: {str(e)}")
             return False
 
-    def _get_effective_schema_settings(self, schema_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_effective_schema_settings(self, schema_info: dict[str, Any]) -> dict[str, Any]:
         """Resolve schema settings using defaults plus schema overrides."""
         schema_settings = getattr(schema_info, "settings", {}) or {}
         try:
@@ -445,7 +445,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             return schema_settings
 
     def _allow_introspection(
-        self, request: HttpRequest, schema_info: Dict[str, Any]
+        self, request: HttpRequest, schema_info: dict[str, Any]
     ) -> bool:
         """Return False when introspection is disabled and query uses it."""
         schema_settings = self._get_effective_schema_settings(schema_info)
@@ -473,7 +473,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         return True
 
     def _audit_introspection_attempt(
-        self, request: HttpRequest, schema_info: Dict[str, Any], query_text: str
+        self, request: HttpRequest, schema_info: dict[str, Any], query_text: str
     ) -> None:
         try:
             from ..security.audit_logging import (
@@ -628,7 +628,7 @@ class SchemaListView(View):
 
             return JsonResponse({"error": "Failed to list schemas"}, status=500)
 
-    def _serialize_schemas(self, schema_list) -> List[Dict[str, Any]]:
+    def _serialize_schemas(self, schema_list) -> list[dict[str, Any]]:
         schemas = []
         for schema_info in schema_list:
             if not schema_info:
@@ -660,7 +660,7 @@ class SchemaListView(View):
             schemas.append(public_info)
         return schemas
 
-    def _build_context(self, schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_context(self, schemas: list[dict[str, Any]]) -> dict[str, Any]:
         total = len(schemas)
         enabled = sum(1 for schema in schemas if schema.get("enabled"))
         graphiql_enabled = sum(

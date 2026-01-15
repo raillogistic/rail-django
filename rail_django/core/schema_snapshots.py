@@ -80,7 +80,7 @@ def record_schema_snapshot(
 
 def list_schema_snapshots(
     schema_name: str, limit: int = 10
-) -> List[Any]:
+) -> list[Any]:
     model = _get_snapshot_model()
     if model is None:
         return []
@@ -106,7 +106,7 @@ def get_schema_snapshot(
 
 def get_schema_diff(
     from_snapshot: Any, to_snapshot: Any
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     if not from_snapshot or not to_snapshot:
         return None
     try:

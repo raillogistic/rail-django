@@ -31,7 +31,7 @@ class DocumentationConfig:
     group_by_category: bool = True
     generate_toc: bool = True
     custom_css: Optional[str] = None
-    custom_templates: Optional[Dict[str, str]] = None
+    custom_templates: Optional[dict[str, str]] = None
 
 
 class DocumentationGenerator:
@@ -600,7 +600,7 @@ class DocumentationGenerator:
 
         return scalar_examples.get(base_type, f'"{base_type.lower()}_value"')
 
-    def _group_types_by_category(self, types: Dict[str, TypeInfo]) -> Dict[str, Dict[str, TypeInfo]]:
+    def _group_types_by_category(self, types: dict[str, TypeInfo]) -> dict[str, dict[str, TypeInfo]]:
         """Group types by category for better organization."""
         categories = {
             'Object Types': {},

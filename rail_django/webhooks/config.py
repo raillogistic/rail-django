@@ -19,21 +19,21 @@ class WebhookEndpoint:
     name: str
     url: str
     enabled: bool = True
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: int = 5
     signing_secret: Optional[str] = None
     signing_header: str = "X-Rail-Signature"
     signature_prefix: str = "sha256="
     event_header: str = "X-Rail-Event"
     id_header: str = "X-Rail-Event-Id"
-    include_models: List[str] = field(default_factory=list)
-    exclude_models: List[str] = field(default_factory=list)
+    include_models: list[str] = field(default_factory=list)
+    exclude_models: list[str] = field(default_factory=list)
     auth_token_path: Optional[str] = None
     auth_header: str = "Authorization"
     auth_scheme: str = "Bearer"
     auth_url: Optional[str] = None
-    auth_payload: Dict[str, Any] = field(default_factory=dict)
-    auth_headers: Dict[str, str] = field(default_factory=dict)
+    auth_payload: dict[str, Any] = field(default_factory=dict)
+    auth_headers: dict[str, str] = field(default_factory=dict)
     auth_timeout_seconds: int = 5
     auth_token_field: str = "access_token"
 
@@ -41,16 +41,16 @@ class WebhookEndpoint:
 @dataclass(frozen=True)
 class WebhookSettings:
     enabled: bool = False
-    endpoints: List[WebhookEndpoint] = field(default_factory=list)
-    events: Dict[str, bool] = field(default_factory=dict)
-    include_models: List[str] = field(default_factory=list)
-    exclude_models: List[str] = field(default_factory=list)
-    include_fields: Dict[str, List[str]] = field(default_factory=dict)
-    exclude_fields: Dict[str, List[str]] = field(default_factory=dict)
-    redact_fields: List[str] = field(default_factory=list)
-    redact_fields_by_model: Dict[str, List[str]] = field(default_factory=dict)
+    endpoints: list[WebhookEndpoint] = field(default_factory=list)
+    events: dict[str, bool] = field(default_factory=dict)
+    include_models: list[str] = field(default_factory=list)
+    exclude_models: list[str] = field(default_factory=list)
+    include_fields: dict[str, list[str]] = field(default_factory=dict)
+    exclude_fields: dict[str, list[str]] = field(default_factory=dict)
+    redact_fields: list[str] = field(default_factory=list)
+    redact_fields_by_model: dict[str, list[str]] = field(default_factory=dict)
     redaction_mask: str = "***REDACTED***"
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: int = 5
     signing_secret: Optional[str] = None
     signing_header: str = "X-Rail-Signature"
@@ -64,7 +64,7 @@ class WebhookSettings:
     retry_backoff_seconds: float = 2.0
     retry_backoff_factor: float = 2.0
     retry_jitter_seconds: float = 0.5
-    retry_statuses: List[int] = field(
+    retry_statuses: list[int] = field(
         default_factory=lambda: [429, 500, 502, 503, 504]
     )
 
@@ -86,7 +86,7 @@ def get_webhook_settings() -> WebhookSettings:
     return _build_settings(merged)
 
 
-def _build_settings(config: Dict[str, Any]) -> WebhookSettings:
+def _build_settings(config: dict[str, Any]) -> WebhookSettings:
     events = _normalize_events(
         config.get("events"),
         LIBRARY_DEFAULTS.get("webhook_settings", {}).get("events", {}),
@@ -130,7 +130,7 @@ def _build_settings(config: Dict[str, Any]) -> WebhookSettings:
     )
 
 
-def _normalize_events(raw_events: Any, default_events: Dict[str, Any]) -> Dict[str, bool]:
+def _normalize_events(raw_events: Any, default_events: dict[str, Any]) -> dict[str, bool]:
     if not isinstance(default_events, dict) or not default_events:
         default_events = {"created": True, "updated": True, "deleted": True}
     normalized = {str(key).lower(): bool(value) for key, value in default_events.items()}
@@ -153,14 +153,14 @@ def _normalize_events(raw_events: Any, default_events: Dict[str, Any]) -> Dict[s
     return normalized
 
 
-def _normalize_list(value: Any) -> List[str]:
+def _normalize_list(value: Any) -> list[str]:
     if not value:
         return []
     if isinstance(value, (list, tuple, set)):
         items = value
     else:
         items = [value]
-    normalized: List[str] = []
+    normalized: list[str] = []
     for item in items:
         if item is None:
             continue
@@ -171,10 +171,10 @@ def _normalize_list(value: Any) -> List[str]:
     return normalized
 
 
-def _normalize_field_map(value: Any) -> Dict[str, List[str]]:
+def _normalize_field_map(value: Any) -> dict[str, list[str]]:
     if not isinstance(value, dict):
         return {}
-    normalized: Dict[str, List[str]] = {}
+    normalized: dict[str, list[str]] = {}
     for key, fields in value.items():
         if not key:
             continue
@@ -185,7 +185,7 @@ def _normalize_field_map(value: Any) -> Dict[str, List[str]]:
     return normalized
 
 
-def _normalize_redact_fields(value: Any) -> tuple[List[str], Dict[str, List[str]]]:
+def _normalize_redact_fields(value: Any) -> tuple[list[str], dict[str, list[str]]]:
     if isinstance(value, dict):
         global_fields = _normalize_list(value.get("*"))
         per_model = {
@@ -197,10 +197,10 @@ def _normalize_redact_fields(value: Any) -> tuple[List[str], Dict[str, List[str]
     return _normalize_list(value), {}
 
 
-def _normalize_headers(value: Any) -> Dict[str, str]:
+def _normalize_headers(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
-    headers: Dict[str, str] = {}
+    headers: dict[str, str] = {}
     for key, val in value.items():
         if not key:
             continue
@@ -208,20 +208,20 @@ def _normalize_headers(value: Any) -> Dict[str, str]:
     return headers
 
 
-def _normalize_payload(value: Any) -> Dict[str, Any]:
+def _normalize_payload(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     return dict(value)
 
 
-def _normalize_int_list(value: Any) -> List[int]:
+def _normalize_int_list(value: Any) -> list[int]:
     if not value:
         return []
     if isinstance(value, (list, tuple, set)):
         items = value
     else:
         items = [value]
-    normalized: List[int] = []
+    normalized: list[int] = []
     for item in items:
         try:
             normalized.append(int(item))
@@ -237,9 +237,9 @@ def _coerce_optional_str(value: Any) -> Optional[str]:
     return text or None
 
 
-def _normalize_endpoints(config: Dict[str, Any]) -> List[WebhookEndpoint]:
+def _normalize_endpoints(config: dict[str, Any]) -> list[WebhookEndpoint]:
     raw_endpoints = config.get("endpoints") or []
-    endpoints: List[WebhookEndpoint] = []
+    endpoints: list[WebhookEndpoint] = []
 
     items: Iterable
     if isinstance(raw_endpoints, dict):
@@ -271,7 +271,7 @@ def _normalize_endpoints(config: Dict[str, Any]) -> List[WebhookEndpoint]:
 
     for idx, entry in items:
         name = None
-        data: Dict[str, Any]
+        data: dict[str, Any]
 
         if isinstance(entry, dict):
             data = dict(entry)

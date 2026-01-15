@@ -110,7 +110,7 @@ class MetricSpec:
     help_text: str = ""
     format: Optional[str] = None
     filter: Optional[Any] = None
-    options: Optional[Dict[str, Any]] = None
+    options: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -270,7 +270,7 @@ def _safe_query_expression(formula: str, *, allowed_names: set[str]) -> Any:
     return build(tree)
 
 
-def _safe_formula_eval(formula: str, context: Dict[str, Any]) -> Any:
+def _safe_formula_eval(formula: str, context: dict[str, Any]) -> Any:
     """Evaluate simple arithmetic/boolean expressions without builtins."""
 
     try:
@@ -291,12 +291,12 @@ def _safe_formula_eval(formula: str, context: Dict[str, Any]) -> Any:
 
 
 def _to_filter_list(
-    raw_filters: Optional[Iterable[Dict[str, Any]]],
-) -> List[FilterSpec]:
+    raw_filters: Optional[Iterable[dict[str, Any]]],
+) -> list[FilterSpec]:
     if not raw_filters:
         return []
 
-    normalized: List[FilterSpec] = []
+    normalized: list[FilterSpec] = []
     for item in raw_filters:
         if not isinstance(item, dict):
             continue
@@ -319,7 +319,7 @@ def _to_filter_list(
     return normalized
 
 
-def _to_ordering(ordering: Optional[Iterable[str]]) -> List[str]:
+def _to_ordering(ordering: Optional[Iterable[str]]) -> list[str]:
     if ordering is None:
         return []
     if isinstance(ordering, str):
@@ -567,11 +567,11 @@ class DatasetExecutionEngine:
         self,
         fields: Iterable[Any],
         *,
-        warnings: List[str],
+        warnings: list[str],
         allowlist: Optional[set[str]] = None,
         label: str = "Champ",
-    ) -> List[str]:
-        normalized: List[str] = []
+    ) -> list[str]:
+        normalized: list[str] = []
         for value in fields:
             if not value:
                 continue
@@ -626,9 +626,9 @@ class DatasetExecutionEngine:
             return {"op": "and", "items": [default_filters_raw, where]}
         return default_filters_raw
 
-    def _load_dimensions(self) -> List[DimensionSpec]:
+    def _load_dimensions(self) -> list[DimensionSpec]:
         entries = self.dataset.dimensions or []
-        parsed: List[DimensionSpec] = []
+        parsed: list[DimensionSpec] = []
         for item in entries:
             try:
                 field_path = item.get("field")
@@ -659,9 +659,9 @@ class DatasetExecutionEngine:
                 continue
         return parsed
 
-    def _load_metrics(self) -> List[MetricSpec]:
+    def _load_metrics(self) -> list[MetricSpec]:
         entries = self.dataset.metrics or []
-        parsed: List[MetricSpec] = []
+        parsed: list[MetricSpec] = []
         for item in entries:
             try:
                 field_path = item.get("field")
@@ -686,9 +686,9 @@ class DatasetExecutionEngine:
                 continue
         return parsed
 
-    def _load_computed_fields(self) -> List[ComputedFieldSpec]:
+    def _load_computed_fields(self) -> list[ComputedFieldSpec]:
         entries = self.dataset.computed_fields or []
-        parsed: List[ComputedFieldSpec] = []
+        parsed: list[ComputedFieldSpec] = []
         for item in entries:
             name = item.get("name")
             formula = item.get("formula")
@@ -709,8 +709,8 @@ class DatasetExecutionEngine:
         return parsed
 
     def _build_dimension_values(
-        self, dimensions: List[DimensionSpec]
-    ) -> Tuple[dict, List[str]]:
+        self, dimensions: list[DimensionSpec]
+    ) -> tuple[dict, list[str]]:
         """
         Build `values()` kwargs for dimensions.
 
@@ -719,7 +719,7 @@ class DatasetExecutionEngine:
         """
 
         values_kwargs: dict = {}
-        ordering_aliases: List[str] = []
+        ordering_aliases: list[str] = []
         for dim in dimensions:
             if not dim.field:
                 continue
@@ -790,7 +790,7 @@ class DatasetExecutionEngine:
         ordering = _to_ordering(
             options.get("ordering") or options.get("order_by") or options.get("order")
         )
-        extra: Dict[str, Any] = {}
+        extra: dict[str, Any] = {}
         if filter_q is not None:
             extra["filter"] = filter_q
         if options.get("distinct"):
@@ -822,11 +822,11 @@ class DatasetExecutionEngine:
 
     def _build_annotations(
         self,
-        metrics: List[MetricSpec],
+        metrics: list[MetricSpec],
         *,
         allowed_where_fields: Optional[set[str]] = None,
-    ) -> Dict[str, Any]:
-        annotations: Dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        annotations: dict[str, Any] = {}
         for metric in metrics:
             agg_name = (metric.aggregation or "sum").lower()
             expr_field = metric.field
@@ -864,7 +864,7 @@ class DatasetExecutionEngine:
             annotations[metric.name] = agg_factory(expr_field, filter_q=filter_q)
         return annotations
 
-    def _get_quick_fields(self) -> List[str]:
+    def _get_quick_fields(self) -> list[str]:
         meta_quick = (self.dataset.metadata or {}).get("quick_fields") or []
         if meta_quick:
             return [str(field) for field in meta_quick]
@@ -876,7 +876,7 @@ class DatasetExecutionEngine:
         self,
         specs: Sequence[FilterSpec],
         *,
-        warnings: List[str],
+        warnings: list[str],
         allowed_fields: set[str],
         allowed_lookups: set[str],
     ) -> Optional[Q]:
@@ -913,13 +913,13 @@ class DatasetExecutionEngine:
                 )
         return combined
 
-    def _flatten_filter_tree(self, raw: Any) -> List[FilterSpec]:
+    def _flatten_filter_tree(self, raw: Any) -> list[FilterSpec]:
         if raw is None:
             return []
         if isinstance(raw, FilterSpec):
             return [raw]
         if isinstance(raw, list):
-            flattened: List[FilterSpec] = []
+            flattened: list[FilterSpec] = []
             for item in raw:
                 flattened.extend(self._flatten_filter_tree(item))
             return flattened
@@ -937,8 +937,8 @@ class DatasetExecutionEngine:
         quick_search: str,
         allowed_fields: Optional[set[str]] = None,
         allowed_lookups: Optional[set[str]] = None,
-    ) -> Tuple[Optional[Q], List[FilterSpec], List[str]]:
-        warnings: List[str] = []
+    ) -> tuple[Optional[Q], list[FilterSpec], list[str]]:
+        warnings: list[str] = []
         allowed_fields = allowed_fields or self._allowed_where_fields()
         allowed_lookups = allowed_lookups or self._allowed_lookups()
 
@@ -962,7 +962,7 @@ class DatasetExecutionEngine:
         self,
         node: Any,
         *,
-        warnings: List[str],
+        warnings: list[str],
         allowed_fields: set[str],
         allowed_lookups: set[str],
     ) -> Optional[Q]:
@@ -1040,7 +1040,7 @@ class DatasetExecutionEngine:
         where: Any,
         quick_search: str,
         allowed_fields: Optional[set[str]] = None,
-    ) -> Tuple[models.QuerySet, List[FilterSpec], List[str]]:
+    ) -> tuple[models.QuerySet, list[FilterSpec], list[str]]:
         q, flat, warnings = self._compile_filter_tree(
             where,
             quick_search=quick_search,
@@ -1050,7 +1050,7 @@ class DatasetExecutionEngine:
             return queryset, flat, warnings
         return queryset.filter(q), flat, warnings
 
-    def _apply_computed_fields(self, rows: List[Dict[str, Any]]) -> None:
+    def _apply_computed_fields(self, rows: list[dict[str, Any]]) -> None:
         computed_post = [
             computed for computed in self.computed_fields if computed.stage != "query"
         ]
@@ -1070,11 +1070,11 @@ class DatasetExecutionEngine:
 
     def describe_columns_for(
         self,
-        dimensions: List[DimensionSpec],
-        metrics: List[MetricSpec],
-        computed_fields: List[ComputedFieldSpec],
-    ) -> List[Dict[str, Any]]:
-        columns: List[Dict[str, Any]] = []
+        dimensions: list[DimensionSpec],
+        metrics: list[MetricSpec],
+        computed_fields: list[ComputedFieldSpec],
+    ) -> list[dict[str, Any]]:
+        columns: list[dict[str, Any]] = []
         for dim in dimensions:
             columns.append(
                 {
@@ -1111,7 +1111,7 @@ class DatasetExecutionEngine:
             )
         return columns
 
-    def describe_columns(self) -> List[Dict[str, Any]]:
+    def describe_columns(self) -> list[dict[str, Any]]:
         return self.describe_columns_for(
             self.dimensions, self.metrics, self.computed_fields
         )
@@ -1121,9 +1121,9 @@ class DatasetExecutionEngine:
         *,
         runtime_filters: Optional[Any] = None,
         limit: Optional[int] = None,
-        ordering: Optional[List[str]] = None,
+        ordering: Optional[list[str]] = None,
         quick_search: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         queryset = self.model.objects.all()
         default_filters_raw: Any = self.dataset.default_filters or []
         runtime_filters_raw: Any = runtime_filters or []
@@ -1183,7 +1183,7 @@ class DatasetExecutionEngine:
                 | set(alias_exprs.keys())
                 | set(annotations.keys())
             )
-            computed_annotations: Dict[str, Any] = {}
+            computed_annotations: dict[str, Any] = {}
             for computed in computed_query:
                 try:
                     computed_annotations[computed.name] = _safe_query_expression(
@@ -1195,7 +1195,7 @@ class DatasetExecutionEngine:
                 queryset = queryset.annotate(**computed_annotations)
 
         applied_ordering = _to_ordering(ordering) or _to_ordering(self.dataset.ordering)
-        resolved_ordering: List[str] = []
+        resolved_ordering: list[str] = []
         for token in applied_ordering:
             desc = token.startswith("-")
             name = token[1:] if desc else token
@@ -1233,8 +1233,8 @@ class DatasetExecutionEngine:
         }
         return _json_sanitize(payload)
 
-    def _resolve_dimensions(self, raw: Any) -> Tuple[List[DimensionSpec], List[str]]:
-        warnings: List[str] = []
+    def _resolve_dimensions(self, raw: Any) -> tuple[list[DimensionSpec], list[str]]:
+        warnings: list[str] = []
         if raw is None:
             return list(self.dimensions), warnings
 
@@ -1244,7 +1244,7 @@ class DatasetExecutionEngine:
 
         by_name = {dim.name: dim for dim in self.dimensions}
         by_field = {dim.field: dim for dim in self.dimensions if dim.field}
-        resolved: List[DimensionSpec] = []
+        resolved: list[DimensionSpec] = []
 
         for entry in raw:
             if isinstance(entry, str):
@@ -1287,8 +1287,8 @@ class DatasetExecutionEngine:
 
         return resolved, warnings
 
-    def _resolve_metrics(self, raw: Any) -> Tuple[List[MetricSpec], List[str]]:
-        warnings: List[str] = []
+    def _resolve_metrics(self, raw: Any) -> tuple[list[MetricSpec], list[str]]:
+        warnings: list[str] = []
         if raw is None:
             return list(self.metrics), warnings
 
@@ -1297,7 +1297,7 @@ class DatasetExecutionEngine:
             return list(self.metrics), warnings
 
         by_name = {metric.name: metric for metric in self.metrics}
-        resolved: List[MetricSpec] = []
+        resolved: list[MetricSpec] = []
         for entry in raw:
             if isinstance(entry, str):
                 metric = by_name.get(entry)
@@ -1343,8 +1343,8 @@ class DatasetExecutionEngine:
 
     def _resolve_computed_fields(
         self, raw: Any
-    ) -> Tuple[List[ComputedFieldSpec], List[str]]:
-        warnings: List[str] = []
+    ) -> tuple[list[ComputedFieldSpec], list[str]]:
+        warnings: list[str] = []
         if raw is None:
             return list(self.computed_fields), warnings
 
@@ -1353,7 +1353,7 @@ class DatasetExecutionEngine:
             return list(self.computed_fields), warnings
 
         by_name = {computed.name: computed for computed in self.computed_fields}
-        resolved: List[ComputedFieldSpec] = []
+        resolved: list[ComputedFieldSpec] = []
         for entry in raw:
             if isinstance(entry, str):
                 computed = by_name.get(entry)
@@ -1391,7 +1391,7 @@ class DatasetExecutionEngine:
         self,
         specs: Sequence[FilterSpec],
         *,
-        warnings: List[str],
+        warnings: list[str],
         allowed_names: set[str],
         allowed_lookups: set[str],
     ) -> Optional[Q]:
@@ -1432,8 +1432,8 @@ class DatasetExecutionEngine:
         *,
         allowed_names: set[str],
         allowed_lookups: Optional[set[str]] = None,
-    ) -> Tuple[Optional[Q], List[str]]:
-        warnings: List[str] = []
+    ) -> tuple[Optional[Q], list[str]]:
+        warnings: list[str] = []
         allowed_lookups = allowed_lookups or self._allowed_lookups()
 
         if raw_filters is None:
@@ -1455,7 +1455,7 @@ class DatasetExecutionEngine:
                 raw_filters.get("op") or raw_filters.get("connector") or "and"
             ).lower()
             negate = bool(raw_filters.get("negate") or raw_filters.get("not"))
-            compiled_children: List[Q] = []
+            compiled_children: list[Q] = []
             for item in raw_filters.get("items") or []:
                 child_q, child_warnings = self._compile_annotation_filter_tree(
                     item,
@@ -1481,7 +1481,7 @@ class DatasetExecutionEngine:
         return None, warnings
 
     def _apply_computed_fields_runtime(
-        self, rows: List[Dict[str, Any]], computed_fields: List[ComputedFieldSpec]
+        self, rows: list[dict[str, Any]], computed_fields: list[ComputedFieldSpec]
     ) -> None:
         computed_post = [
             computed for computed in computed_fields if computed.stage != "query"
@@ -1500,7 +1500,7 @@ class DatasetExecutionEngine:
                     row[computed.name] = None
                     row.setdefault("_warnings", []).append(str(exc))
 
-    def run_query(self, spec: Optional[dict] = None) -> Dict[str, Any]:
+    def run_query(self, spec: Optional[dict] = None) -> dict[str, Any]:
         """
         Execute a dynamic query (semantic layer) for dashboards.
 
@@ -1541,7 +1541,7 @@ class DatasetExecutionEngine:
                 payload["cache"] = {"hit": True, "key": cache_key, "ttl_seconds": ttl}
                 return payload
 
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         if mode == "records":
             queryset = self.model.objects.all()
@@ -1594,7 +1594,7 @@ class DatasetExecutionEngine:
                         "Aucun champ autorise pour le mode records."
                     )
 
-            resolved_ordering: List[str] = []
+            resolved_ordering: list[str] = []
             for token in ordering:
                 name = token.lstrip("-")
                 if not self._validate_field_path(name):
@@ -1676,7 +1676,7 @@ class DatasetExecutionEngine:
             metrics, allowed_where_fields=allowed_where_fields
         )
 
-        fallback_fields: List[str] = []
+        fallback_fields: list[str] = []
         if simple_dimension_fields or alias_exprs:
             queryset = queryset.values(*simple_dimension_fields, **alias_exprs)
         elif not annotations:
@@ -1703,7 +1703,7 @@ class DatasetExecutionEngine:
                 | set(annotations.keys())
                 | set(fallback_fields)
             )
-            computed_annotations: Dict[str, Any] = {}
+            computed_annotations: dict[str, Any] = {}
             for computed in computed_query:
                 try:
                     computed_annotations[computed.name] = _safe_query_expression(
@@ -1724,7 +1724,7 @@ class DatasetExecutionEngine:
         if having_q is not None:
             queryset = queryset.filter(having_q)
 
-        resolved_ordering: List[str] = []
+        resolved_ordering: list[str] = []
         allowed_ordering_names = (
             set(simple_dimension_fields)
             | set(alias_exprs.keys())
@@ -1752,7 +1752,7 @@ class DatasetExecutionEngine:
         rows = list(queryset)
         self._apply_computed_fields_runtime(rows, computed_fields)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "mode": "aggregate",
             "rows": rows,
             "columns": self.describe_columns_for(dimensions, metrics, computed_fields),
@@ -1805,7 +1805,7 @@ class DatasetExecutionEngine:
         self,
         *,
         include_model_fields: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Return a description payload used by dashboard builders.
 
@@ -1814,7 +1814,7 @@ class DatasetExecutionEngine:
         """
 
         meta = self._meta()
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "dataset": {
                 "id": getattr(self.dataset, "id", None),
                 "code": self.dataset.code,
@@ -1844,7 +1844,7 @@ class DatasetExecutionEngine:
         if not include_model_fields:
             return _json_sanitize(payload)
 
-        fields: List[Dict[str, Any]] = []
+        fields: list[dict[str, Any]] = []
         for field in self.model._meta.get_fields():
             if getattr(field, "auto_created", False) and not getattr(
                 field, "concrete", False
@@ -1855,7 +1855,7 @@ class DatasetExecutionEngine:
             ):
                 continue
             related_model = getattr(field, "related_model", None)
-            info: Dict[str, Any] = {
+            info: dict[str, Any] = {
                 "name": getattr(field, "name", None),
                 "verbose_name": str(getattr(field, "verbose_name", "")),
                 "type": field.__class__.__name__,
@@ -1884,12 +1884,12 @@ class DatasetExecutionEngine:
 
     def _pivot_rows(
         self,
-        rows: List[Dict[str, Any]],
+        rows: list[dict[str, Any]],
         *,
         index: str,
         columns: str,
-        values: List[str],
-    ) -> Dict[str, Any]:
+        values: list[str],
+    ) -> dict[str, Any]:
         """
         Pivot an aggregated result into a matrix-like payload.
 
@@ -1898,11 +1898,11 @@ class DatasetExecutionEngine:
         - `rows`: list of row dicts with dynamic value keys
         """
 
-        index_values: List[Any] = []
-        column_values: List[Any] = []
-        table: Dict[Any, Dict[str, Any]] = {}
+        index_values: list[Any] = []
+        column_values: list[Any] = []
+        table: dict[Any, dict[str, Any]] = {}
 
-        def ensure_list_add(target: List[Any], value: Any) -> None:
+        def ensure_list_add(target: list[Any], value: Any) -> None:
             if value not in target:
                 target.append(value)
 
@@ -1927,7 +1927,7 @@ class DatasetExecutionEngine:
         )
 
 
-def _reporting_roles() -> Dict[str, GraphQLMetaBase.Role]:
+def _reporting_roles() -> dict[str, GraphQLMetaBase.Role]:
     return {
         "reporting_admin": GraphQLMetaBase.Role(
             name="reporting_admin",
@@ -1966,7 +1966,7 @@ def _reporting_roles() -> Dict[str, GraphQLMetaBase.Role]:
     }
 
 
-def _reporting_operations() -> Dict[str, GraphQLMetaBase.OperationGuard]:
+def _reporting_operations() -> dict[str, GraphQLMetaBase.OperationGuard]:
     return {
         "list": GraphQLMetaBase.OperationGuard(
             name="list",
@@ -2120,7 +2120,7 @@ class ReportingDataset(models.Model):
                 pass
         return DatasetExecutionEngine(self)
 
-    def _runtime_filters(self, filters: Optional[dict]) -> List[FilterSpec]:
+    def _runtime_filters(self, filters: Optional[dict]) -> list[FilterSpec]:
         if not filters:
             return []
         if isinstance(filters, dict):
@@ -2295,7 +2295,7 @@ class ReportingVisualization(models.Model):
     def __str__(self) -> str:
         return f"{self.title} ({self.kind})"
 
-    def _merge_filters(self, runtime_filters: Optional[dict]) -> List[FilterSpec]:
+    def _merge_filters(self, runtime_filters: Optional[dict]) -> list[FilterSpec]:
         base = _to_filter_list(self.default_filters)
         merged = base + _to_filter_list(
             runtime_filters.get("filters", runtime_filters) if runtime_filters else []
@@ -2415,15 +2415,15 @@ class ReportingReport(models.Model):
     def __str__(self) -> str:
         return f"{self.title} ({self.code})"
 
-    def _resolved_blocks(self) -> List["ReportingReportBlock"]:
+    def _resolved_blocks(self) -> list["ReportingReportBlock"]:
         return list(
             self.blocks.select_related("visualization", "visualization__dataset")
         )
 
     def _render_visualizations(
         self, quick: str, limit: int, filters: Optional[dict]
-    ) -> List[dict]:
-        rendered: List[dict] = []
+    ) -> list[dict]:
+        rendered: list[dict] = []
         for block in self._resolved_blocks():
             payload = block.visualization.render(
                 quick=quick,

@@ -70,9 +70,9 @@ class QueryOptimizationConfig:
 class QueryAnalysisResult:
     """Result of query analysis for optimization."""
 
-    requested_fields: Set[str] = field(default_factory=set)
-    select_related_fields: List[str] = field(default_factory=list)
-    prefetch_related_fields: List[str] = field(default_factory=list)
+    requested_fields: set[str] = field(default_factory=set)
+    select_related_fields: list[str] = field(default_factory=list)
+    prefetch_related_fields: list[str] = field(default_factory=list)
     complexity_score: int = 0
     depth: int = 0
     estimated_queries: int = 1
@@ -97,7 +97,7 @@ class QueryAnalyzer:
         self.config = config
 
     def analyze_query(
-        self, info: GraphQLResolveInfo, model: Type[models.Model]
+        self, info: GraphQLResolveInfo, model: type[models.Model]
     ) -> QueryAnalysisResult:
         """
         Analyze a GraphQL query to determine optimization strategies.
@@ -133,9 +133,9 @@ class QueryAnalyzer:
 
         return result
 
-    def _extract_requested_fields(self, info: GraphQLResolveInfo) -> Set[str]:
+    def _extract_requested_fields(self, info: GraphQLResolveInfo) -> set[str]:
         """Extract requested fields from GraphQL query including nested fields."""
-        requested_fields: Set[str] = set()
+        requested_fields: set[str] = set()
         fragments = getattr(info, "fragments", {}) or {}
 
         def collect(selection_set, parent_path=""):
@@ -172,7 +172,7 @@ class QueryAnalyzer:
     def _walk_selection_set(
         self,
         selection_set,
-        fragments: Dict[str, Any],
+        fragments: dict[str, Any],
         depth: int,
         on_field: Callable[[FieldNode, int], None],
     ) -> None:
@@ -196,8 +196,8 @@ class QueryAnalyzer:
                     self._walk_selection_set(fragment.selection_set, fragments, depth, on_field)
 
     def _get_select_related_fields(
-        self, model: Type[models.Model], requested_fields: Set[str]
-    ) -> List[str]:
+        self, model: type[models.Model], requested_fields: set[str]
+    ) -> list[str]:
         """Determine which fields should use select_related, including nested ones."""
         select_related = []
 
@@ -229,8 +229,8 @@ class QueryAnalyzer:
         return select_related
 
     def _get_prefetch_related_fields(
-        self, model: Type[models.Model], requested_fields: Set[str]
-    ) -> List[str]:
+        self, model: type[models.Model], requested_fields: set[str]
+    ) -> list[str]:
         """Determine which fields should use prefetch_related."""
         prefetch_related = []
         
@@ -327,7 +327,7 @@ class QueryAnalyzer:
             return 1
 
     def _estimate_query_count(
-        self, model: Type[models.Model], requested_fields: Set[str]
+        self, model: type[models.Model], requested_fields: set[str]
     ) -> int:
         """Estimate number of database queries without optimization."""
         query_count = 1  # Base query
@@ -379,7 +379,7 @@ class QueryOptimizer:
         self.analyzer = QueryAnalyzer(config)
 
     def optimize_queryset(
-        self, queryset: QuerySet, info: GraphQLResolveInfo, model: Type[models.Model]
+        self, queryset: QuerySet, info: GraphQLResolveInfo, model: type[models.Model]
     ) -> QuerySet:
         """
         Optimize a Django queryset based on GraphQL query analysis.
@@ -415,8 +415,8 @@ class QueryOptimizer:
         return queryset
 
     def _build_prefetch_objects(
-        self, model: Type[models.Model], fields: List[str]
-    ) -> List[Union[str, Prefetch]]:
+        self, model: type[models.Model], fields: list[str]
+    ) -> list[Union[str, Prefetch]]:
         """Build Prefetch objects for complex prefetch_related optimization."""
         prefetch_objects = []
 
@@ -447,9 +447,9 @@ class PerformanceMonitor:
 
     def __init__(self, config: QueryOptimizationConfig):
         self.config = config
-        self.metrics: Dict[str, List[PerformanceMetrics]] = defaultdict(list)
+        self.metrics: dict[str, list[PerformanceMetrics]] = defaultdict(list)
 
-    def start_monitoring(self, query_name: str) -> Dict[str, Any]:
+    def start_monitoring(self, query_name: str) -> dict[str, Any]:
         """Start monitoring a query execution."""
         if not self.config.enable_performance_monitoring:
             return {}
@@ -460,7 +460,7 @@ class PerformanceMonitor:
             "query_name": query_name,
         }
 
-    def end_monitoring(self, context: Dict[str, Any]) -> PerformanceMetrics:
+    def end_monitoring(self, context: dict[str, Any]) -> PerformanceMetrics:
         """End monitoring and record metrics."""
         if not self.config.enable_performance_monitoring or not context:
             return PerformanceMetrics()
@@ -527,7 +527,7 @@ class PerformanceMonitor:
         if error:
             logger.error(f"xQuery error in {query_name}: {error}", exc_info=True)
 
-    def get_performance_stats(self, query_name: str = None) -> Dict[str, Any]:
+    def get_performance_stats(self, query_name: str = None) -> dict[str, Any]:
         """Get performance statistics."""
         if query_name:
             query_metrics = self.metrics.get(query_name, [])
@@ -575,10 +575,10 @@ class PerformanceMonitor:
 def _resolve_cache_scopes(
     scope_setting: Any,
     schema_name: Optional[str],
-    extra_scopes: Optional[List[str]] = None,
-) -> List[str]:
-    scopes: List[str] = []
-    raw_scopes: List[str] = []
+    extra_scopes: Optional[list[str]] = None,
+) -> list[str]:
+    scopes: list[str] = []
+    raw_scopes: list[str] = []
     if isinstance(scope_setting, (list, tuple, set)):
         raw_scopes = [str(scope) for scope in scope_setting if scope]
     elif scope_setting:
@@ -605,7 +605,7 @@ def _build_query_cache_key(
     info: GraphQLResolveInfo,
     *,
     schema_name: Optional[str],
-    versions: List[str],
+    versions: list[str],
     user_id: Optional[str],
     cache_buster: Optional[str],
 ) -> str:
@@ -638,7 +638,7 @@ def optimize_query(
     cache_timeout: Optional[int] = None,
     user_specific_cache: bool = False,
     complexity_limit: Optional[int] = None,
-    cache_scopes: Optional[List[str]] = None,
+    cache_scopes: Optional[list[str]] = None,
 ):
     """
     Decorator for optimizing GraphQL queries.
@@ -801,8 +801,8 @@ def optimize_query(
 
 
 def invalidate_query_cache(
-    schema_name: Optional[str] = None, scopes: Optional[Union[str, List[str]]] = None
-) -> List[str]:
+    schema_name: Optional[str] = None, scopes: Optional[Union[str, list[str]]] = None
+) -> list[str]:
     """Bump cache versions for the provided scopes to invalidate cached entries."""
     from ..core.services import get_query_cache_backend
 
@@ -824,8 +824,8 @@ def invalidate_query_cache(
 _optimization_config = QueryOptimizationConfig()
 _query_optimizer = QueryOptimizer(_optimization_config)
 _performance_monitor = PerformanceMonitor(_optimization_config)
-_optimizer_by_schema: Dict[str, QueryOptimizer] = {}
-_monitor_by_schema: Dict[str, PerformanceMonitor] = {}
+_optimizer_by_schema: dict[str, QueryOptimizer] = {}
+_monitor_by_schema: dict[str, PerformanceMonitor] = {}
 
 
 def _build_optimizer_config(schema_name: Optional[str]) -> QueryOptimizationConfig:

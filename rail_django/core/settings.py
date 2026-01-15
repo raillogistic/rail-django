@@ -13,7 +13,7 @@ from django.conf import settings as django_settings
 from django.db.models import Field
 
 
-def _merge_settings_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_settings_dicts(*dicts: dict[str, Any]) -> dict[str, Any]:
     """
     Merge multiple settings dictionaries with later ones taking precedence.
 
@@ -30,7 +30,7 @@ def _merge_settings_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _normalize_legacy_settings(config: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_legacy_settings(config: dict[str, Any]) -> dict[str, Any]:
     """Map legacy section names to current settings keys."""
     if not isinstance(config, dict):
         return config
@@ -49,7 +49,7 @@ def _normalize_legacy_settings(config: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
+def _get_schema_registry_settings(schema_name: str) -> dict[str, Any]:
     """
     Get settings from schema registry for a specific schema.
 
@@ -71,7 +71,7 @@ def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
         return {}
 
 
-def _get_global_settings(schema_name: str) -> Dict[str, Any]:
+def _get_global_settings(schema_name: str) -> dict[str, Any]:
     """
     Get global settings from Django settings for a specific schema.
 
@@ -119,7 +119,7 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
     return {}
 
 
-def _get_library_defaults() -> Dict[str, Any]:
+def _get_library_defaults() -> dict[str, Any]:
     """
     Get library default settings.
 
@@ -146,16 +146,16 @@ class TypeGeneratorSettings:
     """Settings for controlling GraphQL type generation."""
 
     # Fields to exclude from types, per model
-    exclude_fields: Dict[str, List[str]] = field(default_factory=dict)
-    excluded_fields: Dict[str, List[str]] = field(
+    exclude_fields: dict[str, list[str]] = field(default_factory=dict)
+    excluded_fields: dict[str, list[str]] = field(
         default_factory=dict
     )  # Alias for exclude_fields
 
     # Fields to include in types, per model (if None, include all non-excluded fields)
-    include_fields: Optional[Dict[str, List[str]]] = None
+    include_fields: Optional[dict[str, list[str]]] = None
 
     # Custom field type mappings
-    custom_field_mappings: Dict[Type[Field], Type[graphene.Scalar]] = field(
+    custom_field_mappings: dict[type[Field], type[graphene.Scalar]] = field(
         default_factory=dict
     )
 
@@ -246,7 +246,7 @@ class QueryGeneratorSettings:
     property_ordering_warn_on_cap: bool = True
 
     # Additional fields to use for lookups (e.g., slug, uuid)
-    additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)
+    additional_lookup_fields: dict[str, list[str]] = field(default_factory=dict)
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "QueryGeneratorSettings":
@@ -320,16 +320,16 @@ class MutationGeneratorSettings:
     bulk_batch_size: int = 100
 
     # Fields required for update operations
-    required_update_fields: Dict[str, List[str]] = field(default_factory=dict)
+    required_update_fields: dict[str, list[str]] = field(default_factory=dict)
 
     # NEW: Enable/disable nested relationship fields in mutations
     enable_nested_relations: bool = True
 
     # NEW: Per-model configuration for nested relations
-    nested_relations_config: Dict[str, bool] = field(default_factory=dict)
+    nested_relations_config: dict[str, bool] = field(default_factory=dict)
 
     # NEW: Per-field configuration for nested relations (model.field -> bool)
-    nested_field_config: Dict[str, Dict[str, bool]] = field(default_factory=dict)
+    nested_field_config: dict[str, dict[str, bool]] = field(default_factory=dict)
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "MutationGeneratorSettings":
@@ -377,8 +377,8 @@ class SubscriptionGeneratorSettings:
     enable_update: bool = True
     enable_delete: bool = True
     enable_filters: bool = True
-    include_models: List[str] = field(default_factory=list)
-    exclude_models: List[str] = field(default_factory=list)
+    include_models: list[str] = field(default_factory=list)
+    exclude_models: list[str] = field(default_factory=list)
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "SubscriptionGeneratorSettings":
@@ -419,10 +419,10 @@ class SchemaSettings:
     """Settings for controlling overall schema behavior."""
 
     # Apps to exclude from schema generation
-    excluded_apps: List[str] = field(default_factory=list)
+    excluded_apps: list[str] = field(default_factory=list)
 
     # Models to exclude from schema generation
-    excluded_models: List[str] = field(default_factory=list)
+    excluded_models: list[str] = field(default_factory=list)
 
     # Enable schema introspection
     enable_introspection: bool = True
@@ -458,19 +458,19 @@ class SchemaSettings:
     show_metadata: bool = False
 
     # Custom GraphQL query extensions loaded by path
-    query_extensions: List[str] = field(default_factory=list)
+    query_extensions: list[str] = field(default_factory=list)
 
     # Custom GraphQL mutation extensions loaded by path
-    mutation_extensions: List[str] = field(default_factory=list)
+    mutation_extensions: list[str] = field(default_factory=list)
 
     # Allowlist root query fields (None = no filtering)
-    query_field_allowlist: Optional[List[str]] = None
+    query_field_allowlist: Optional[list[str]] = None
 
     # Allowlist root mutation fields (None = no filtering)
-    mutation_field_allowlist: Optional[List[str]] = None
+    mutation_field_allowlist: Optional[list[str]] = None
 
     # Allowlist root subscription fields (None = no filtering)
-    subscription_field_allowlist: Optional[List[str]] = None
+    subscription_field_allowlist: Optional[list[str]] = None
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
@@ -573,7 +573,7 @@ class GraphQLAutoConfig:
 
         return True
 
-    def get_additional_lookup_fields(self, model_name: str) -> List[str]:
+    def get_additional_lookup_fields(self, model_name: str) -> list[str]:
         """
         Get additional lookup fields for a model.
 

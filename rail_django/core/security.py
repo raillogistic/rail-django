@@ -219,18 +219,18 @@ class InputValidator:
         self.schema_name = schema_name
         self._validator = UnifiedInputValidator(schema_name)
 
-    def validate_input(self, input_data: Dict[str, Any]) -> List[str]:
+    def validate_input(self, input_data: dict[str, Any]) -> list[str]:
         report = self._validator.validate_payload(input_data)
         return report.error_messages()
 
     def validate_payload(self, input_data: Any) -> Any:
         return self._validator.validate_payload(input_data)
 
-    def validate_and_sanitize(self, model_name: Optional[str], input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_and_sanitize(self, model_name: Optional[str], input_data: dict[str, Any]) -> dict[str, Any]:
         return self._validator.validate_input(model_name, input_data)
 
 
-def get_introspection_roles(schema_name: Optional[str] = None) -> List[str]:
+def get_introspection_roles(schema_name: Optional[str] = None) -> list[str]:
     roles = get_setting("security_settings.introspection_roles", None, schema_name)
     if isinstance(roles, str):
         roles = [r.strip() for r in roles.split(",") if r.strip()]

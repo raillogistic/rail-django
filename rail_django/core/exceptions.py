@@ -76,9 +76,9 @@ class GraphQLAutoError(GraphQLError):
         message: str,
         code: ErrorCode = ErrorCode.UNKNOWN_ERROR,
         field: str = None,
-        details: Dict[str, Any] = None,
-        path: List[Union[str, int]] = None,
-        locations: List[Dict[str, int]] = None,
+        details: dict[str, Any] = None,
+        path: list[Union[str, int]] = None,
+        locations: list[dict[str, int]] = None,
         original_error: Exception = None,
     ):
         """
@@ -93,7 +93,7 @@ class GraphQLAutoError(GraphQLError):
             locations: Emplacements dans la requête GraphQL
             original_error: Exception originale qui a causé cette erreur
         """
-        error_kwargs: Dict[str, Any] = {}
+        error_kwargs: dict[str, Any] = {}
         if path is not None:
             error_kwargs["path"] = path
         if original_error is not None:
@@ -127,7 +127,7 @@ class ValidationError(GraphQLAutoError):
         self,
         message: str = "Erreur de validation",
         field: str = None,
-        validation_errors: Dict[str, List[str]] = None,
+        validation_errors: dict[str, list[str]] = None,
         **kwargs,
     ):
         details = kwargs.get("details", {})

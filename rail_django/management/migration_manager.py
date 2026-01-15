@@ -50,10 +50,10 @@ class MigrationStep:
     description: str
     operation: str  # 'add_type', 'remove_field', 'modify_field', etc.
     target: str     # Target element (type, field, etc.)
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     is_breaking: bool = False
     rollback_operation: Optional[str] = None
-    rollback_details: Optional[Dict[str, Any]] = None
+    rollback_details: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -70,11 +70,11 @@ class SchemaMigration:
     created_by: Optional[str] = None
     executed_by: Optional[str] = None
     description: str = ""
-    steps: List[MigrationStep] = field(default_factory=list)
-    breaking_changes: List[str] = field(default_factory=list)
+    steps: list[MigrationStep] = field(default_factory=list)
+    breaking_changes: list[str] = field(default_factory=list)
     rollback_migration_id: Optional[str] = None
     error_message: Optional[str] = None
-    execution_log: List[str] = field(default_factory=list)
+    execution_log: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -82,15 +82,15 @@ class MigrationPlan:
     """Migration execution plan."""
     plan_id: str
     schema_name: str
-    migrations: List[SchemaMigration] = field(default_factory=list)
+    migrations: list[SchemaMigration] = field(default_factory=list)
     total_steps: int = 0
     breaking_changes_count: int = 0
     estimated_duration_minutes: float = 0.0
     requires_downtime: bool = False
     rollback_plan: Optional['MigrationPlan'] = None
-    dependencies: List[str] = field(default_factory=list)
-    pre_migration_checks: List[str] = field(default_factory=list)
-    post_migration_checks: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
+    pre_migration_checks: list[str] = field(default_factory=list)
+    post_migration_checks: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -130,14 +130,14 @@ class MigrationManager:
         self.enable_dry_run = enable_dry_run
 
         # Migration storage
-        self._migrations: Dict[str, SchemaMigration] = {}
-        self._migration_plans: Dict[str, MigrationPlan] = {}
-        self._execution_history: List[MigrationResult] = []
+        self._migrations: dict[str, SchemaMigration] = {}
+        self._migration_plans: dict[str, MigrationPlan] = {}
+        self._execution_history: list[MigrationResult] = []
 
         # Migration hooks
-        self._pre_migration_hooks: List[Callable] = []
-        self._post_migration_hooks: List[Callable] = []
-        self._step_hooks: Dict[str, List[Callable]] = defaultdict(list)
+        self._pre_migration_hooks: list[Callable] = []
+        self._post_migration_hooks: list[Callable] = []
+        self._step_hooks: dict[str, list[Callable]] = defaultdict(list)
 
         # Thread safety
         self._lock = threading.RLock()
@@ -229,7 +229,7 @@ class MigrationManager:
 
     def create_migration_plan(self,
                               schema_name: str,
-                              target_migrations: List[str],
+                              target_migrations: list[str],
                               description: str = "") -> MigrationPlan:
         """
         Create a migration execution plan.
@@ -465,7 +465,7 @@ class MigrationManager:
     def execute_migration_plan(self,
                                plan_id: str,
                                user_id: str = None,
-                               dry_run: bool = False) -> List[MigrationResult]:
+                               dry_run: bool = False) -> list[MigrationResult]:
         """
         Execute a migration plan.
 
@@ -609,7 +609,7 @@ class MigrationManager:
     def list_migrations(self,
                         schema_name: str = None,
                         status: MigrationStatus = None,
-                        migration_type: MigrationType = None) -> List[SchemaMigration]:
+                        migration_type: MigrationType = None) -> list[SchemaMigration]:
         """List migrations with optional filtering."""
         migrations = []
 
@@ -634,7 +634,7 @@ class MigrationManager:
 
     def get_execution_history(self,
                               migration_id: str = None,
-                              hours_back: int = 24) -> List[MigrationResult]:
+                              hours_back: int = 24) -> list[MigrationResult]:
         """Get migration execution history."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -739,7 +739,7 @@ class MigrationManager:
         hash_suffix = hashlib.md5(hash_input.encode()).hexdigest()[:8]
         return f"migration_{schema_name}_{from_version}_to_{to_version}_{hash_suffix}"
 
-    def _create_migration_steps(self, comparison: SchemaComparison) -> List[MigrationStep]:
+    def _create_migration_steps(self, comparison: SchemaComparison) -> list[MigrationStep]:
         """Create migration steps from schema comparison."""
         steps = []
 
@@ -794,14 +794,14 @@ class MigrationManager:
         }
         return mapping.get(change_type)
 
-    def _sort_migrations_by_dependency(self, migrations: List[SchemaMigration]) -> List[SchemaMigration]:
+    def _sort_migrations_by_dependency(self, migrations: list[SchemaMigration]) -> list[SchemaMigration]:
         """Sort migrations by dependency order."""
         # Simple sort by creation date for now
         # In a real implementation, you'd analyze dependencies
         return sorted(migrations, key=lambda m: m.created_at)
 
     def _create_rollback_plan(self, schema_name: str,
-                              migrations: List[SchemaMigration]) -> Optional[MigrationPlan]:
+                              migrations: list[SchemaMigration]) -> Optional[MigrationPlan]:
         """Create rollback plan for migrations."""
         # Create rollback migrations for each migration
         rollback_migrations = []
@@ -845,7 +845,7 @@ class MigrationManager:
 
         return None
 
-    def _generate_pre_migration_checks(self, migrations: List[SchemaMigration]) -> List[str]:
+    def _generate_pre_migration_checks(self, migrations: list[SchemaMigration]) -> list[str]:
         """Generate pre-migration checks."""
         checks = [
             "Verify schema registry is accessible",
@@ -868,7 +868,7 @@ class MigrationManager:
 
         return checks
 
-    def _generate_post_migration_checks(self, migrations: List[SchemaMigration]) -> List[str]:
+    def _generate_post_migration_checks(self, migrations: list[SchemaMigration]) -> list[str]:
         """Generate post-migration checks."""
         return [
             "Verify schema is valid",

@@ -50,7 +50,7 @@ class ConfigLoader:
     """
 
     @staticmethod
-    def _normalize_legacy_sections(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_legacy_sections(config: dict[str, Any]) -> dict[str, Any]:
         """Normalize legacy section names to current settings keys."""
         if not isinstance(config, dict):
             return config
@@ -69,7 +69,7 @@ class ConfigLoader:
         return normalized
 
     @staticmethod
-    def get_rail_django_settings() -> Dict[str, Any]:
+    def get_rail_django_settings() -> dict[str, Any]:
         """
         Get rail_django settings from Django settings with defaults.
 
@@ -92,7 +92,7 @@ class ConfigLoader:
     @staticmethod
     def get_schema_specific_settings(
         schema_name: str, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get schema-specific settings for a given schema.
 
@@ -118,7 +118,7 @@ class ConfigLoader:
         )
 
     @staticmethod
-    def get_global_settings(environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_global_settings(environment: Optional[str] = None) -> dict[str, Any]:
         """
         Get global rail_django settings (non-schema-specific).
 
@@ -142,7 +142,7 @@ class ConfigLoader:
     @staticmethod
     def get_core_schema_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get core schema settings.
 
@@ -163,7 +163,7 @@ class ConfigLoader:
     @staticmethod
     def get_query_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get query settings.
 
@@ -184,7 +184,7 @@ class ConfigLoader:
     @staticmethod
     def get_mutation_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get mutation settings.
 
@@ -205,7 +205,7 @@ class ConfigLoader:
     @staticmethod
     def get_type_generation_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get type generation settings.
 
@@ -226,7 +226,7 @@ class ConfigLoader:
     @staticmethod
     def get_performance_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get performance settings.
 
@@ -247,7 +247,7 @@ class ConfigLoader:
     @staticmethod
     def get_security_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get security settings.
 
@@ -268,7 +268,7 @@ class ConfigLoader:
     @staticmethod
     def get_error_handling_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get error handling settings.
 
@@ -289,7 +289,7 @@ class ConfigLoader:
     @staticmethod
     def get_caching_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get caching settings.
 
@@ -310,7 +310,7 @@ class ConfigLoader:
     @staticmethod
     def get_file_upload_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get file upload settings.
 
@@ -331,7 +331,7 @@ class ConfigLoader:
     @staticmethod
     def get_monitoring_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get monitoring settings.
 
@@ -352,7 +352,7 @@ class ConfigLoader:
     @staticmethod
     def get_development_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get development settings.
 
@@ -373,7 +373,7 @@ class ConfigLoader:
     @staticmethod
     def get_schema_registry_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get schema registry settings.
 
@@ -394,7 +394,7 @@ class ConfigLoader:
     @staticmethod
     def get_middleware_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get middleware settings.
 
@@ -415,7 +415,7 @@ class ConfigLoader:
     @staticmethod
     def get_extension_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get extension settings.
 
@@ -436,7 +436,7 @@ class ConfigLoader:
     @staticmethod
     def get_internationalization_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get internationalization settings.
 
@@ -457,7 +457,7 @@ class ConfigLoader:
     @staticmethod
     def get_testing_settings(
         schema_name: Optional[str] = None, environment: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get testing settings.
 
@@ -477,7 +477,7 @@ class ConfigLoader:
 
     @staticmethod
     def validate_configuration(
-        config: Optional[Dict[str, Any]] = None,
+        config: Optional[dict[str, Any]] = None,
         schema_name: Optional[str] = None,
         environment: Optional[str] = None,
     ) -> bool:
@@ -564,7 +564,7 @@ class ConfigLoader:
 
 
 # Legacy support functions for backward compatibility
-def get_rail_django_settings_legacy() -> Dict[str, Any]:
+def get_rail_django_settings_legacy() -> dict[str, Any]:
     """
     Legacy function to get rail_django settings.
     Maintained for backward compatibility.
@@ -577,7 +577,7 @@ def get_rail_django_settings_legacy() -> Dict[str, Any]:
 
 # Helper functions for loading specific settings types
 def load_mutation_settings_from_config(
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> "MutationGeneratorSettings":
     """
     Load MutationGeneratorSettings from configuration dictionary.
@@ -598,7 +598,7 @@ def load_mutation_settings_from_config(
         return None
 
 
-def load_type_settings_from_config(config: Dict[str, Any]) -> "TypeGeneratorSettings":
+def load_type_settings_from_config(config: dict[str, Any]) -> "TypeGeneratorSettings":
     """
     Load TypeGeneratorSettings from configuration dictionary.
 
@@ -618,7 +618,7 @@ def load_type_settings_from_config(config: Dict[str, Any]) -> "TypeGeneratorSett
         return None
 
 
-def load_schema_settings_from_config(config: Dict[str, Any]) -> "SchemaSettings":
+def load_schema_settings_from_config(config: dict[str, Any]) -> "SchemaSettings":
     """
     Load SchemaSettings from configuration dictionary.
 

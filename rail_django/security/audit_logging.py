@@ -62,8 +62,8 @@ def _resolve_user(context: Any, request: Any) -> Optional[Any]:
     return None
 
 
-def _snapshot_instance_fields(instance: models.Model) -> Dict[str, Any]:
-    snapshot: Dict[str, Any] = {}
+def _snapshot_instance_fields(instance: models.Model) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {}
     for field in getattr(instance._meta, "concrete_fields", []):
         try:
             if field.is_relation and (field.many_to_one or field.one_to_one):
@@ -155,7 +155,7 @@ class AuditEvent:
     operation_name: Optional[str] = None
     operation_type: Optional[str] = None
     query_hash: Optional[str] = None
-    variables: Optional[Dict[str, Any]] = None
+    variables: Optional[dict[str, Any]] = None
 
     # DonnÃƒÂ©es affectÃƒÂ©es
     model_name: Optional[str] = None
@@ -166,12 +166,12 @@ class AuditEvent:
 
     # MÃƒÂ©tadonnÃƒÂ©es
     message: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
-    tags: Optional[List[str]] = None
+    details: Optional[dict[str, Any]] = None
+    tags: Optional[list[str]] = None
 
     # SÃƒÂ©curitÃƒÂ©
     risk_score: Optional[int] = None
-    threat_indicators: Optional[List[str]] = None
+    threat_indicators: Optional[list[str]] = None
 
     def __post_init__(self):
         """Initialise les valeurs par dÃƒÂ©faut."""
@@ -313,7 +313,7 @@ class AuditLogger:
 
         return sanitized
 
-    def _mask_sensitive_variables(self, variables: Dict[str, Any]) -> Dict[str, Any]:
+    def _mask_sensitive_variables(self, variables: dict[str, Any]) -> dict[str, Any]:
         """
         Masque les variables sensibles.
 
@@ -340,7 +340,7 @@ class AuditLogger:
                 masked[key] = value
         return masked
 
-    def _mask_sensitive_details(self, details: Dict[str, Any]) -> Dict[str, Any]:
+    def _mask_sensitive_details(self, details: dict[str, Any]) -> dict[str, Any]:
         """
         Masque les dÃƒÂ©tails sensibles.
 

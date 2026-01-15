@@ -7,7 +7,8 @@
 - `docs/`: contributor reference (`docs/architecture.md`, `docs/modules.md`, `docs/security.md`, `docs/testing.md`).
 
 ## Build, Test, and Development Commands
-- `python -m pip install -r requirements.txt` Install runtime and dev tooling (includes `black`).
+- `python -m pip install -r rail_django/conf/project_template/requirements/base.txt-tpl` Install runtime dependencies (single source of truth).
+- `python -m pip install black` Install formatter for local development.
 - `python -m pip install -e .` Editable install of the package for local development.
 - `rail-admin startproject my_api` Scaffold a sample project from `rail_django/conf/project_template`.
 - `python manage.py runserver` Run a generated project locally.

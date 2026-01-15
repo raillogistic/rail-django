@@ -42,7 +42,7 @@ _DATE_SUFFIXES = (
 )
 
 
-def _get_subscription_base() -> Type:
+def _get_subscription_base() -> type:
     try:
         import channels_graphql_ws  # type: ignore
     except Exception as exc:
@@ -68,7 +68,7 @@ def _build_group_name(schema_name: str, model_label: str, event: str) -> str:
     return _sanitize_group_name(base)
 
 
-def _copy_filter_payload(filters: Any) -> Optional[Dict[str, Any]]:
+def _copy_filter_payload(filters: Any) -> Optional[dict[str, Any]]:
     if not filters:
         return None
     if isinstance(filters, dict):
@@ -126,7 +126,7 @@ def _coerce_expected(value: Any) -> Any:
 
 
 def _build_instance_from_snapshot(
-    model: Type[models.Model], snapshot: Dict[str, Any]
+    model: type[models.Model], snapshot: dict[str, Any]
 ) -> Optional[models.Model]:
     if not snapshot:
         return None
@@ -143,7 +143,7 @@ def _build_instance_from_snapshot(
 
 
 def _build_instance_from_payload(
-    model: Type[models.Model], payload: Any
+    model: type[models.Model], payload: Any
 ) -> Optional[models.Model]:
     if not isinstance(payload, dict):
         return None
@@ -165,7 +165,7 @@ def _build_instance_from_payload(
 
 
 def _apply_field_masks(
-    instance: models.Model, info: graphene.ResolveInfo, model: Type[models.Model]
+    instance: models.Model, info: graphene.ResolveInfo, model: type[models.Model]
 ) -> models.Model:
     masked_instance = copy.copy(instance)
     context_user = _get_context_user(info)
@@ -175,7 +175,7 @@ def _apply_field_masks(
         return masked_instance
 
     field_defs = list(masked_instance._meta.concrete_fields)
-    snapshot: Dict[str, Any] = {}
+    snapshot: dict[str, Any] = {}
 
     for field in field_defs:
         if field.is_relation and (field.many_to_one or field.one_to_one):
@@ -388,7 +388,7 @@ def _compare_value(value: Any, lookup: str, expected: Any) -> bool:
     return False
 
 
-def _evaluate_filter_dict(instance: Any, filter_dict: Dict[str, Any]) -> bool:
+def _evaluate_filter_dict(instance: Any, filter_dict: dict[str, Any]) -> bool:
     if not filter_dict:
         return True
 
@@ -491,8 +491,8 @@ def _evaluate_filter_dict(instance: Any, filter_dict: Dict[str, Any]) -> bool:
 
 def _matches_filters(
     instance: models.Model,
-    model: Type[models.Model],
-    filters: Optional[Dict[str, Any]],
+    model: type[models.Model],
+    filters: Optional[dict[str, Any]],
     filter_generator: AdvancedFilterGenerator,
     *,
     use_db: bool,
@@ -567,7 +567,7 @@ class SubscriptionGenerator:
         if not user or not user.is_authenticated:
             raise GraphQLError("Authentication required")
 
-    def _normalize_model_filters(self) -> Tuple[set, set]:
+    def _normalize_model_filters(self) -> tuple[set, set]:
         include_models = self.settings.include_models or []
         exclude_models = self.settings.exclude_models or []
 
@@ -583,7 +583,7 @@ class SubscriptionGenerator:
 
         return _normalize(include_models), _normalize(exclude_models)
 
-    def _model_tokens(self, model: Type[models.Model]) -> set:
+    def _model_tokens(self, model: type[models.Model]) -> set:
         app_label = getattr(model._meta, "app_label", "")
         model_name = model.__name__
         label = getattr(model._meta, "label", f"{app_label}.{model_name}")
@@ -599,7 +599,7 @@ class SubscriptionGenerator:
         }
         return {token.lower() for token in tokens if token}
 
-    def _model_is_allowed(self, model: Type[models.Model]) -> bool:
+    def _model_is_allowed(self, model: type[models.Model]) -> bool:
         include_set, exclude_set = self._normalize_model_filters()
         tokens = self._model_tokens(model)
 
@@ -611,11 +611,11 @@ class SubscriptionGenerator:
 
     def _build_subscription_class(
         self,
-        model: Type[models.Model],
-        model_type: Type[graphene.ObjectType],
+        model: type[models.Model],
+        model_type: type[graphene.ObjectType],
         event: str,
-        filter_input: Optional[Type[graphene.InputObjectType]],
-    ) -> Type:
+        filter_input: Optional[type[graphene.InputObjectType]],
+    ) -> type:
         base_class = _get_subscription_base()
         group_name = _build_group_name(
             self.schema_name, model._meta.label_lower, event
@@ -638,13 +638,13 @@ class SubscriptionGenerator:
         def _skip():
             return skip_marker
 
-        def subscribe(root, info, filters: Optional[Dict[str, Any]] = None, **kwargs):
+        def subscribe(root, info, filters: Optional[dict[str, Any]] = None, **kwargs):
             self._ensure_authentication(info)
             graphql_meta.ensure_operation_access("list", info=info)
             graphql_meta.ensure_operation_access("subscribe", info=info)
             return [group_name]
 
-        def publish(payload, info, filters: Optional[Dict[str, Any]] = None, **kwargs):
+        def publish(payload, info, filters: Optional[dict[str, Any]] = None, **kwargs):
             instance = _build_instance_from_payload(model, payload)
             if instance is None:
                 return _skip()
@@ -697,8 +697,8 @@ class SubscriptionGenerator:
         return type(class_name, (base_class,), attrs)
 
     def generate_model_subscriptions(
-        self, model: Type[models.Model]
-    ) -> Dict[str, graphene.Field]:
+        self, model: type[models.Model]
+    ) -> dict[str, graphene.Field]:
         # Check global enabled flag
         if not self.settings.enable_subscriptions:
             return {}
@@ -760,7 +760,7 @@ class SubscriptionGenerator:
 
         model_type = self.type_generator.generate_object_type(model)
         filter_input = self.filter_generator.generate_complex_filter_input(model)
-        subscriptions: Dict[str, graphene.Field] = {}
+        subscriptions: dict[str, graphene.Field] = {}
 
         for event, enabled in event_config.items():
             if not enabled:
@@ -777,9 +777,9 @@ class SubscriptionGenerator:
         return subscriptions
 
     def generate_all_subscriptions(
-        self, models_list: Iterable[Type[models.Model]]
-    ) -> Dict[str, graphene.Field]:
-        subscriptions: Dict[str, graphene.Field] = {}
+        self, models_list: Iterable[type[models.Model]]
+    ) -> dict[str, graphene.Field]:
+        subscriptions: dict[str, graphene.Field] = {}
         if not self.settings.enable_subscriptions:
             return subscriptions
         for model in models_list:

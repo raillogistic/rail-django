@@ -21,11 +21,11 @@ class InheritanceHandler:
     """
 
     def __init__(self):
-        self._inheritance_cache: Dict[Type[models.Model], Dict[str, Any]] = {}
-        self._abstract_fields_cache: Dict[Type[models.Model], List[str]] = {}
-        self._mixin_fields_cache: Dict[Type, List[str]] = {}
+        self._inheritance_cache: dict[type[models.Model], dict[str, Any]] = {}
+        self._abstract_fields_cache: dict[type[models.Model], list[str]] = {}
+        self._mixin_fields_cache: dict[type, list[str]] = {}
 
-    def analyze_model_inheritance(self, model: Type[models.Model]) -> Dict[str, Any]:
+    def analyze_model_inheritance(self, model: type[models.Model]) -> dict[str, Any]:
         """
         Analyze a model's inheritance structure and return comprehensive information.
 
@@ -95,7 +95,7 @@ class InheritanceHandler:
         self._inheritance_cache[model] = analysis
         return analysis
 
-    def _find_child_models(self, model: Type[models.Model]) -> List[Type[models.Model]]:
+    def _find_child_models(self, model: type[models.Model]) -> list[type[models.Model]]:
         """Find all child models that inherit from the given model."""
         child_models = []
 
@@ -110,7 +110,7 @@ class InheritanceHandler:
 
         return child_models
 
-    def get_abstract_fields(self, abstract_model: Type[models.Model]) -> List[str]:
+    def get_abstract_fields(self, abstract_model: type[models.Model]) -> list[str]:
         """
         Get all fields defined in an abstract model.
 
@@ -134,7 +134,7 @@ class InheritanceHandler:
         self._abstract_fields_cache[abstract_model] = fields
         return fields
 
-    def get_mixin_fields(self, mixin_class: Type) -> List[str]:
+    def get_mixin_fields(self, mixin_class: type) -> list[str]:
         """
         Get all fields and methods defined in a mixin class.
 
@@ -159,9 +159,9 @@ class InheritanceHandler:
 
     def create_interface_for_abstract_model(
         self,
-        abstract_model: Type[models.Model],
+        abstract_model: type[models.Model],
         type_generator: Any
-    ) -> Optional[Type[graphene.Interface]]:
+    ) -> Optional[type[graphene.Interface]]:
         """
         Create a GraphQL interface for an abstract Django model.
 
@@ -218,9 +218,9 @@ class InheritanceHandler:
 
     def create_union_for_inheritance_tree(
         self,
-        base_model: Type[models.Model],
+        base_model: type[models.Model],
         type_generator: Any
-    ) -> Optional[Type[graphene.Union]]:
+    ) -> Optional[type[graphene.Union]]:
         """
         Create a GraphQL union type for a model inheritance tree.
 
@@ -289,10 +289,10 @@ class InheritanceHandler:
 
     def enhance_type_with_inheritance(
         self,
-        model: Type[models.Model],
-        graphql_type: Type[DjangoObjectType],
+        model: type[models.Model],
+        graphql_type: type[DjangoObjectType],
         type_generator: Any
-    ) -> Type[DjangoObjectType]:
+    ) -> type[DjangoObjectType]:
         """
         Enhance a GraphQL type with inheritance-related features.
 
@@ -358,7 +358,7 @@ class InheritanceHandler:
 
     def get_polymorphic_resolver(
         self,
-        base_model: Type[models.Model],
+        base_model: type[models.Model],
         type_generator: Any
     ) -> Optional[callable]:
         """
@@ -417,9 +417,9 @@ class InheritanceHandler:
 
     def create_inheritance_aware_queries(
         self,
-        model: Type[models.Model],
+        model: type[models.Model],
         query_generator: Any
-    ) -> Dict[str, graphene.Field]:
+    ) -> dict[str, graphene.Field]:
         """
         Create inheritance-aware queries for a model.
 

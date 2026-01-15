@@ -79,9 +79,9 @@ class QueryGenerator:
         self.query_optimizer = get_query_optimizer(schema_name)
         self.authorization_manager = get_authz_manager(schema_name)
 
-        self._query_registry: Dict[Type[models.Model], Dict[str, Any]] = {}
+        self._query_registry: dict[type[models.Model], dict[str, Any]] = {}
         self._filter_generator = AdvancedFilterGenerator()
-        self._query_fields: Dict[str, graphene.Field] = {}
+        self._query_fields: dict[str, graphene.Field] = {}
 
         # Initialize performance optimization
         self.optimizer = get_optimizer(schema_name)
@@ -92,7 +92,7 @@ class QueryGenerator:
         """Access to the filter generator instance."""
         return self._filter_generator
 
-    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+    def _is_historical_model(self, model: type[models.Model]) -> bool:
         """Return True if the model corresponds to a django-simple-history model."""
         try:
             name = getattr(model, "__name__", "")
@@ -106,8 +106,8 @@ class QueryGenerator:
         return False
 
     def get_manager_queryset_model(
-        self, model: Type[models.Model], manager_name: str
-    ) -> Optional[Type[models.Model]]:
+        self, model: type[models.Model], manager_name: str
+    ) -> Optional[type[models.Model]]:
         """Return the model class produced by the given manager's queryset."""
         try:
             manager = getattr(model, manager_name)
@@ -117,7 +117,7 @@ class QueryGenerator:
         if manager is None:
             return None
 
-        queryset_model: Optional[Type[models.Model]] = None
+        queryset_model: Optional[type[models.Model]] = None
         try:
             queryset = manager.get_queryset()
             queryset_model = getattr(queryset, "model", None)
@@ -134,7 +134,7 @@ class QueryGenerator:
         return queryset_model
 
     def is_history_related_manager(
-        self, model: Type[models.Model], manager_name: str
+        self, model: type[models.Model], manager_name: str
     ) -> bool:
         """Return True when the given manager is the HistoricalRecords manager."""
         manager = None
@@ -163,9 +163,9 @@ class QueryGenerator:
 
     def _apply_field_masks(
         self,
-        data: Union[models.Model, List[models.Model]],
+        data: Union[models.Model, list[models.Model]],
         info: graphene.ResolveInfo,
-        model: Type[models.Model],
+        model: type[models.Model],
     ):
         """Hide or mask fields based on field-level permissions."""
         context_user = getattr(getattr(info, "context", None), "user", None)
@@ -209,44 +209,44 @@ class QueryGenerator:
     def _apply_count_annotations_for_ordering(
         self,
         queryset: models.QuerySet,
-        model: Type[models.Model],
-        order_by: List[str],
-    ) -> Tuple[models.QuerySet, List[str]]:
+        model: type[models.Model],
+        order_by: list[str],
+    ) -> tuple[models.QuerySet, list[str]]:
         return _apply_count_annotations_for_ordering(queryset, model, order_by)
 
     def _normalize_ordering_specs(
-        self, order_by: Optional[List[str]], ordering_config
-    ) -> List[str]:
+        self, order_by: Optional[list[str]], ordering_config
+    ) -> list[str]:
         return _normalize_ordering_specs(order_by, ordering_config, self.schema_name)
 
     def _split_order_specs(
-        self, model: Type[models.Model], order_by: List[str]
-    ) -> Tuple[List[str], List[str]]:
+        self, model: type[models.Model], order_by: list[str]
+    ) -> tuple[list[str], list[str]]:
         return _split_order_specs(model, order_by)
 
     def _safe_prop_value(self, obj: Any, prop_name: str):
         return _safe_prop_value(obj, prop_name)
 
     def _apply_property_ordering(
-        self, items: List[Any], prop_specs: List[str]
-    ) -> List[Any]:
+        self, items: list[Any], prop_specs: list[str]
+    ) -> list[Any]:
         return _apply_property_ordering(items, prop_specs)
 
     def generate_single_query(
-        self, model: Type[models.Model], manager_name: str = "objects"
+        self, model: type[models.Model], manager_name: str = "objects"
     ) -> graphene.Field:
         return _generate_single_query(self, model, manager_name)
 
     def generate_list_query(
-        self, model: Type[models.Model], manager_name: str = "objects"
+        self, model: type[models.Model], manager_name: str = "objects"
     ) -> Any:
         return _generate_list_query(self, model, manager_name)
 
     def generate_paginated_query(
         self,
-        model: Type[models.Model],
+        model: type[models.Model],
         manager_name: str = "objects",
-        result_model: Optional[Type[models.Model]] = None,
+        result_model: Optional[type[models.Model]] = None,
         operation_name: str = "paginated",
     ) -> graphene.Field:
         return _generate_paginated_query(
@@ -258,7 +258,7 @@ class QueryGenerator:
         )
 
     def add_filtering_support(
-        self, query: graphene.Field, model: Type[models.Model]
+        self, query: graphene.Field, model: type[models.Model]
     ) -> graphene.Field:
         """
         Adds filtering capabilities to an existing query field.
@@ -287,6 +287,6 @@ class QueryGenerator:
         return query
 
     def generate_grouping_query(
-        self, model: Type[models.Model], manager_name: str = "objects"
+        self, model: type[models.Model], manager_name: str = "objects"
     ) -> graphene.Field:
         return _generate_grouping_query(self, model, manager_name)

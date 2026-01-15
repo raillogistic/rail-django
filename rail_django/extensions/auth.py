@@ -50,7 +50,7 @@ class RefreshTokenStore:
         )
         self.cache_alias = getattr(settings, "JWT_REFRESH_TOKEN_CACHE", "default")
         self._cache = self._resolve_cache()
-        self._fallback_store: Dict[str, Dict[str, Any]] = {}
+        self._fallback_store: dict[str, dict[str, Any]] = {}
         self._fallback_lock = threading.RLock()
 
     def _resolve_cache(self):
@@ -109,7 +109,7 @@ def get_refresh_token_store() -> RefreshTokenStore:
     return RefreshTokenStore()
 
 
-def _get_effective_permissions(user: "AbstractUser") -> List[str]:
+def _get_effective_permissions(user: "AbstractUser") -> list[str]:
     """Return a sorted list of effective permissions for a user."""
     if not user:
         return []
@@ -122,12 +122,12 @@ def _get_effective_permissions(user: "AbstractUser") -> List[str]:
         return []
 
 
-def _build_model_permission_snapshot(user: "AbstractUser") -> List[PermissionInfo]:
+def _build_model_permission_snapshot(user: "AbstractUser") -> list[PermissionInfo]:
     """Return model-level CRUD permissions for a user."""
     if not user or not getattr(user, "is_authenticated", False):
         return []
 
-    permissions: List[PermissionInfo] = []
+    permissions: list[PermissionInfo] = []
     for model in apps.get_models():
         model_label = model._meta.label_lower
         permissions.append(
@@ -406,7 +406,7 @@ class JWTManager:
         *,
         refresh_family: Optional[str] = None,
         include_refresh: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         GÇ¸nÇ¹re un token JWT pour l'utilisateur.
 
@@ -472,7 +472,7 @@ class JWTManager:
     @classmethod
     def verify_token(
         cls, token: str, expected_type: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Vérifie et décode un token JWT.
 
@@ -500,7 +500,7 @@ class JWTManager:
             return None
 
     @classmethod
-    def refresh_token(cls, refresh_token: str) -> Optional[Dict[str, Any]]:
+    def refresh_token(cls, refresh_token: str) -> Optional[dict[str, Any]]:
         """
         Refresh an access token from a refresh token.
 
@@ -551,7 +551,7 @@ class JWTManager:
             return None
 
 
-def _resolve_cookie_policy(kind: str) -> Dict[str, Any]:
+def _resolve_cookie_policy(kind: str) -> dict[str, Any]:
     kind_upper = kind.upper()
     secure = getattr(settings, f"JWT_{kind_upper}_COOKIE_SECURE", None)
     if secure is None:

@@ -29,7 +29,7 @@ class SchemaBackup:
     version: Optional[str]
     created_at: datetime = field(default_factory=datetime.now)
     file_path: Optional[Path] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class BackupManager:
@@ -47,7 +47,7 @@ class BackupManager:
 
     def create_backup(self, schema_name: str, version: Optional[str] = None,
                       strategy: BackupStrategy = BackupStrategy.FULL,
-                      metadata: Optional[Dict[str, Any]] = None) -> SchemaBackup:
+                      metadata: Optional[dict[str, Any]] = None) -> SchemaBackup:
         """
         Create a schema backup artifact (stubbed: writes no data).
         """

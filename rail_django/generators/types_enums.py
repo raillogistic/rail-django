@@ -10,7 +10,7 @@ from django.db.models.fields import Field
 from django.db import models
 
 
-def build_enum_name(self, model: Type[models.Model], field_name: str) -> str:
+def build_enum_name(self, model: type[models.Model], field_name: str) -> str:
     """
     Purpose: Build a stable GraphQL Enum name for a model field.
     """
@@ -18,8 +18,8 @@ def build_enum_name(self, model: Type[models.Model], field_name: str) -> str:
 
 
 def get_or_create_enum_for_field(
-    self, model: Type[models.Model], django_field: Field
-) -> Optional[Type[graphene.Enum]]:
+    self, model: type[models.Model], django_field: Field
+) -> Optional[type[graphene.Enum]]:
     """
     Purpose: Create or retrieve a GraphQL Enum type for a Django field with choices.
     """
@@ -47,7 +47,7 @@ def get_or_create_enum_for_field(
         return f"{candidate}_{index}" if candidate in member_names else candidate
 
     member_names: set = set()
-    enum_members: Dict[str, Any] = {}
+    enum_members: dict[str, Any] = {}
     for idx, choice in enumerate(choices):
         try:
             value, label = choice

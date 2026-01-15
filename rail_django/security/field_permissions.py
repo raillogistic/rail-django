@@ -68,8 +68,8 @@ class FieldPermissionRule:
     visibility: FieldVisibility
     condition: Optional[Callable] = None
     mask_value: Any = None
-    roles: List[str] = None
-    permissions: List[str] = None
+    roles: list[str] = None
+    permissions: list[str] = None
     context_required: bool = False
 
 
@@ -82,9 +82,9 @@ class FieldContext:
     parent_instance: Optional[models.Model] = None
     field_name: str = None
     operation_type: str = "read"  # read, write, create, update, delete
-    request_context: Dict[str, Any] = None
-    model_class: Optional[Type[models.Model]] = None
-    classifications: Optional[Set[str]] = None
+    request_context: dict[str, Any] = None
+    model_class: Optional[type[models.Model]] = None
+    classifications: Optional[set[str]] = None
 
 
 class FieldPermissionManager:
@@ -94,12 +94,12 @@ class FieldPermissionManager:
 
     def __init__(self):
         """Initialise le gestionnaire de permissions de champs."""
-        self._field_rules: Dict[str, List[FieldPermissionRule]] = {}
-        self._pattern_rules: Dict[str, List[FieldPermissionRule]] = {}
-        self._global_rules: List[FieldPermissionRule] = []
-        self._graphql_configs: Set[str] = set()
-        self._model_classifications: Dict[str, Set[str]] = {}
-        self._field_classifications: Dict[str, Dict[str, Set[str]]] = {}
+        self._field_rules: dict[str, list[FieldPermissionRule]] = {}
+        self._pattern_rules: dict[str, list[FieldPermissionRule]] = {}
+        self._global_rules: list[FieldPermissionRule] = []
+        self._graphql_configs: set[str] = set()
+        self._model_classifications: dict[str, set[str]] = {}
+        self._field_classifications: dict[str, dict[str, set[str]]] = {}
         self._policy_engine_enabled = bool(
             get_setting("security_settings.enable_policy_engine", True)
         )
@@ -238,14 +238,14 @@ class FieldPermissionManager:
             self._pattern_rules[pattern_key].append(rule)
         logger.info(f"Règle de permission enregistrée pour {key}")
 
-    def _iter_field_rules(self, context: FieldContext) -> List[FieldPermissionRule]:
+    def _iter_field_rules(self, context: FieldContext) -> list[FieldPermissionRule]:
         field_name = context.field_name
         lookup_tokens = self._get_model_lookup_tokens(
             context.instance, context.model_class
         )
 
-        yielded: List[FieldPermissionRule] = []
-        seen_keys: Set[str] = set()
+        yielded: list[FieldPermissionRule] = []
+        seen_keys: set[str] = set()
         for token in lookup_tokens:
             exact_key = f"{token}.{field_name}"
             if exact_key in self._field_rules and exact_key not in seen_keys:
@@ -274,7 +274,7 @@ class FieldPermissionManager:
         logger.info(f"Règle globale enregistrée pour {rule.field_name}")
 
     def register_graphql_field_config(
-        self, model_class: Type[models.Model], graphql_meta: Any
+        self, model_class: type[models.Model], graphql_meta: Any
     ) -> None:
         """Crée des règles basées sur la configuration GraphQL d'un modèle."""
 
@@ -324,11 +324,11 @@ class FieldPermissionManager:
         self._graphql_configs.add(model_label)
 
     def _get_model_lookup_tokens(
-        self, instance: Optional[models.Model], model_class: Optional[Type[models.Model]]
-    ) -> List[str]:
+        self, instance: Optional[models.Model], model_class: Optional[type[models.Model]]
+    ) -> list[str]:
         """Retourne les identifiants possibles (label + nom) pour un modèle."""
 
-        tokens: List[str] = []
+        tokens: list[str] = []
         target_class = None
         if instance is not None:
             target_class = instance.__class__
@@ -343,7 +343,7 @@ class FieldPermissionManager:
 
         tokens.append("*")
 
-        seen_tokens: List[str] = []
+        seen_tokens: list[str] = []
         for token in tokens:
             if token and token not in seen_tokens:
                 seen_tokens.append(token)
@@ -352,10 +352,10 @@ class FieldPermissionManager:
 
     def register_classification_tags(
         self,
-        model_class: Union[Type[models.Model], str],
+        model_class: Union[type[models.Model], str],
         *,
-        model_tags: Optional[List[str]] = None,
-        field_tags: Optional[Dict[str, List[str]]] = None,
+        model_tags: Optional[list[str]] = None,
+        field_tags: Optional[dict[str, list[str]]] = None,
     ) -> None:
         if not model_class:
             return
@@ -416,8 +416,8 @@ class FieldPermissionManager:
         }
         return mapping.get(str(value).lower())
 
-    def _get_classifications(self, context: FieldContext) -> Set[str]:
-        tags: Set[str] = set(context.classifications or [])
+    def _get_classifications(self, context: FieldContext) -> set[str]:
+        tags: set[str] = set(context.classifications or [])
         model_key = None
         if context.model_class is not None:
             model_key = context.model_class._meta.label_lower
@@ -472,7 +472,7 @@ class FieldPermissionManager:
 
     def _get_policy_override(
         self, context: FieldContext
-    ) -> Optional[Tuple[FieldAccessLevel, FieldVisibility, Any]]:
+    ) -> Optional[tuple[FieldAccessLevel, FieldVisibility, Any]]:
         if not self._policy_engine_enabled:
             return None
         policy_context = self._build_policy_context(context)
@@ -551,7 +551,7 @@ class FieldPermissionManager:
 
     def get_field_visibility(
         self, context: FieldContext
-    ) -> Tuple[FieldVisibility, Any]:
+    ) -> tuple[FieldVisibility, Any]:
         """
         Détermine la visibilité d'un champ et sa valeur masquée si applicable.
 
@@ -686,7 +686,7 @@ class FieldPermissionManager:
 
     def filter_fields_for_user(
         self, user: "AbstractUser", model_class: type, instance: models.Model = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Filtre les champs visibles pour un utilisateur.
 
@@ -854,11 +854,11 @@ def field_permission_required(
 
 
 def mask_sensitive_fields(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     user: "AbstractUser",
     model_class: type,
     instance: models.Model = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Masque les champs sensibles dans un dictionnaire de données.
 

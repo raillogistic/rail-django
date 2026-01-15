@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from django.db import models
 
-HistoryChangeList = List[Dict[str, Any]]
+HistoryChangeList = list[dict[str, Any]]
 
 
 def _to_primitive(value: Any) -> Any:
@@ -44,9 +44,9 @@ def _to_primitive(value: Any) -> Any:
     return str(value)
 
 
-def _build_field_labels(instances: Iterable[Optional[models.Model]]) -> Dict[str, str]:
+def _build_field_labels(instances: Iterable[Optional[models.Model]]) -> dict[str, str]:
     """Collect verbose_name for a set of Django model instances."""
-    labels: Dict[str, str] = {}
+    labels: dict[str, str] = {}
     for instance in instances:
         if instance is None:
             continue

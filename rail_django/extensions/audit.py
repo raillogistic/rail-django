@@ -91,12 +91,12 @@ class AuditEvent:
     request_method: str
     user_id: Optional[int] = None
     username: Optional[str] = None
-    additional_data: Optional[Dict[str, Any]] = None
+    additional_data: Optional[dict[str, Any]] = None
     session_id: Optional[str] = None
     success: bool = True
     error_message: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convertit l'événement en dictionnaire."""
         data = asdict(self)
         data["event_type"] = self.event_type.value
@@ -186,10 +186,10 @@ class AuditLogger:
 
         # In-memory counters for failed login tracking (per-process)
         # Structure: {key: [count, window_start_ts]}
-        self._failed_login_ip_state: Dict[str, List[float]] = {}
-        self._failed_login_user_state: Dict[str, List[float]] = {}
+        self._failed_login_ip_state: dict[str, list[float]] = {}
+        self._failed_login_user_state: dict[str, list[float]] = {}
 
-    def _load_redaction_fields(self) -> List[str]:
+    def _load_redaction_fields(self) -> list[str]:
         default_fields = [
             "password",
             "token",
@@ -267,7 +267,7 @@ class AuditLogger:
 
     def _redact_payload(self, payload: Any) -> Any:
         if isinstance(payload, dict):
-            redacted: Dict[str, Any] = {}
+            redacted: dict[str, Any] = {}
             for key, value in payload.items():
                 if str(key).lower() in self.redaction_fields:
                     redacted[key] = self.redaction_mask
@@ -402,7 +402,7 @@ class AuditLogger:
         self,
         request: HttpRequest,
         activity_type: str,
-        details: Dict[str, Any],
+        details: dict[str, Any],
         user: Optional["AbstractUser"] = None,
     ) -> None:
         """
@@ -451,7 +451,7 @@ class AuditLogger:
 
         self.log_event(event)
 
-    def get_security_report(self, hours: int = 24) -> Dict[str, Any]:
+    def get_security_report(self, hours: int = 24) -> dict[str, Any]:
         """
         Génère un rapport de sécurité pour les dernières heures.
 
@@ -739,7 +739,7 @@ def log_audit_event(
     user: Optional["AbstractUser"] = None,
     success: bool = True,
     error_message: Optional[str] = None,
-    additional_data: Optional[Dict[str, Any]] = None,
+    additional_data: Optional[dict[str, Any]] = None,
     request_path: Optional[str] = None,
     request_method: Optional[str] = None,
 ) -> None:
@@ -925,7 +925,7 @@ def log_authentication_event(
         )
 
 
-def get_security_dashboard_data(hours: int = 24) -> Dict[str, Any]:
+def get_security_dashboard_data(hours: int = 24) -> dict[str, Any]:
     """
     Récupère les données pour le tableau de bord de sécurité.
 

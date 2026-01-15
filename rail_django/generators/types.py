@@ -131,18 +131,18 @@ class TypeGenerator:
         self._update_field_type_map()
 
         # Type registries for caching generated types
-        self._type_registry: Dict[Type[models.Model], Type[DjangoObjectType]] = {}
-        self._input_type_registry: Dict[
-            Type[models.Model], Type[graphene.InputObjectType]
+        self._type_registry: dict[type[models.Model], type[DjangoObjectType]] = {}
+        self._input_type_registry: dict[
+            type[models.Model], type[graphene.InputObjectType]
         ] = {}
-        self._filter_type_registry: Dict[Type[models.Model], Type] = {}
-        self._union_registry: Dict[str, Type[graphene.Union]] = {}
-        self._interface_registry: Dict[
-            Type[models.Model], Type[graphene.Interface]
+        self._filter_type_registry: dict[type[models.Model], type] = {}
+        self._union_registry: dict[str, type[graphene.Union]] = {}
+        self._interface_registry: dict[
+            type[models.Model], type[graphene.Interface]
         ] = {}
         # Registry for generated GraphQL Enums for choice fields
-        self._enum_registry: Dict[str, Type[graphene.Enum]] = {}
-        self._meta_cache: Dict[Type[models.Model], Any] = {}
+        self._enum_registry: dict[str, type[graphene.Enum]] = {}
+        self._meta_cache: dict[type[models.Model], Any] = {}
 
     def _update_field_type_map(self) -> None:
         """Update field type map with custom scalars based on settings."""
@@ -191,7 +191,7 @@ class TypeGenerator:
         if "Binary" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.BinaryField] = self.custom_scalars["Binary"]
 
-    def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
+    def _get_excluded_fields(self, model: type[models.Model]) -> list[str]:
         """Get excluded fields for a specific model.
 
         Filters out names that are not real Django model fields to avoid Graphene warnings
@@ -244,7 +244,7 @@ class TypeGenerator:
             )
         return list(sorted(excluded))
 
-    def _get_included_fields(self, model: Type[models.Model]) -> Optional[List[str]]:
+    def _get_included_fields(self, model: type[models.Model]) -> Optional[list[str]]:
         """Get included fields for a specific model."""
         meta = self._get_model_meta(model)
         if meta and meta.include_fields is not None:
@@ -259,7 +259,7 @@ class TypeGenerator:
             return None
         return list(include_list)
 
-    def _get_model_meta(self, model: Type[models.Model]) -> Any:
+    def _get_model_meta(self, model: type[models.Model]) -> Any:
         """
         Retrieve (and cache) the GraphQL meta helper for a model.
         """
@@ -270,7 +270,7 @@ class TypeGenerator:
                 self._meta_cache[model] = None
         return self._meta_cache[model]
 
-    def _get_maskable_fields(self, model: Type[models.Model]) -> set:
+    def _get_maskable_fields(self, model: type[models.Model]) -> set:
         meta = self._get_model_meta(model)
         if not meta or not getattr(meta, "access_config", None):
             return set()
@@ -288,7 +288,7 @@ class TypeGenerator:
         self,
         field_info: "FieldInfo",
         field_name: str = None,
-        model: Type[models.Model] = None,
+        model: type[models.Model] = None,
     ) -> bool:
         """
         Determine if a field should be required for create mutations based on:
@@ -325,7 +325,7 @@ class TypeGenerator:
         return True
 
     def _should_field_be_required_for_update(
-        self, field_name: str, field_info: Any, model: Type[models.Model] = None
+        self, field_name: str, field_info: Any, model: type[models.Model] = None
     ) -> bool:
         """
         Determine if a field should be required for update mutations.
@@ -340,7 +340,7 @@ class TypeGenerator:
 
         return field_name == "id"
 
-    def _get_mandatory_fields(self, model: Type[models.Model]) -> List[str]:
+    def _get_mandatory_fields(self, model: type[models.Model]) -> list[str]:
         """
         Get list of mandatory fields for a specific model.
         These fields are always required in input types regardless of Django field settings.
@@ -356,7 +356,7 @@ class TypeGenerator:
         return []
 
     def _should_include_field(
-        self, model: Type[models.Model], field_name: str, *, for_input: bool = False
+        self, model: type[models.Model], field_name: str, *, for_input: bool = False
     ) -> bool:
         # Exclude polymorphic model internal fields
         # These fields are automatically managed by django-polymorphic and should not be exposed in mutations
@@ -404,7 +404,7 @@ class TypeGenerator:
         # Handle typing generics like List[str], Optional[int], etc.
         origin = getattr(return_type, "__origin__", None)
         if origin is not None:
-            if origin is list or origin is List:
+            if origin is list or origin is list:
                 # Handle List[SomeType]
                 args = getattr(return_type, "__args__", ())
                 if args:
@@ -425,16 +425,16 @@ class TypeGenerator:
         # Default to String for unknown types
         return graphene.String()
 
-    def generate_object_type(self, model: Type[models.Model]) -> Type[DjangoObjectType]:
+    def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
         return _generate_object_type(self, model)
 
     def generate_input_type(
         self,
-        model: Type[models.Model],
+        model: type[models.Model],
         mutation_type: str = "create",
         partial: bool = False,
         include_reverse_relations: bool = True,
-    ) -> Type[graphene.InputObjectType]:
+    ) -> type[graphene.InputObjectType]:
         return _generate_input_type(
             self,
             model,
@@ -443,15 +443,15 @@ class TypeGenerator:
             include_reverse_relations=include_reverse_relations,
         )
 
-    def _build_enum_name(self, model: Type[models.Model], field_name: str) -> str:
+    def _build_enum_name(self, model: type[models.Model], field_name: str) -> str:
         return _build_enum_name(self, model, field_name)
 
     def _get_or_create_enum_for_field(
-        self, model: Type[models.Model], django_field: Field
-    ) -> Optional[Type[graphene.Enum]]:
+        self, model: type[models.Model], django_field: Field
+    ) -> Optional[type[graphene.Enum]]:
         return _get_or_create_enum_for_field(self, model, django_field)
 
-    def generate_filter_type(self, model: Type[models.Model]) -> Type:
+    def generate_filter_type(self, model: type[models.Model]) -> type:
         """
         Generates a filter type for the model if Django-filter is installed.
         Configures available filter operations based on field types.
@@ -537,12 +537,12 @@ class TypeGenerator:
         return filter_class
 
     def _get_input_field_type(
-        self, django_field_type: Type[Field]
-    ) -> Optional[Type[graphene.Scalar]]:
+        self, django_field_type: type[Field]
+    ) -> Optional[type[graphene.Scalar]]:
         """Maps Django field types to GraphQL input field types."""
         return self.FIELD_TYPE_MAP.get(django_field_type)
 
-    def _get_filter_field_type(self, django_field_type: Type[Field]) -> List[str]:
+    def _get_filter_field_type(self, django_field_type: type[Field]) -> list[str]:
         """Determines available filter operations for a field type."""
         base_filters = ["exact", "in", "isnull"]
         text_filters = [
@@ -567,7 +567,7 @@ class TypeGenerator:
         else:
             return base_filters
 
-    def _get_filterable_fields(self, model: Type[models.Model]) -> Dict[str, List[str]]:
+    def _get_filterable_fields(self, model: type[models.Model]) -> dict[str, list[str]]:
         """
         Determines which fields should be filterable and what operations are available.
         """
@@ -583,7 +583,7 @@ class TypeGenerator:
 
         return filterable_fields
 
-    def handle_custom_fields(self, field: Field) -> Type[graphene.Scalar]:
+    def handle_custom_fields(self, field: Field) -> type[graphene.Scalar]:
         """
         Handles custom field types by attempting to map them to appropriate GraphQL types.
         Falls back to String if no specific mapping is found.
@@ -597,7 +597,7 @@ class TypeGenerator:
         # Default to String for unknown field types
         return graphene.String
 
-    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+    def _is_historical_model(self, model: type[models.Model]) -> bool:
         """Return True if the model is generated by django-simple-history."""
         try:
             name = getattr(model, "__name__", "")
@@ -611,15 +611,15 @@ class TypeGenerator:
         return False
 
     def _get_reverse_relations(
-        self, model: Type[models.Model]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, model: type[models.Model]
+    ) -> dict[str, dict[str, Any]]:
         """
         Get reverse relationships for a model (e.g., comments for Post).
 
         Returns:
             Dict mapping field names to related models
         """
-        reverse_relations: Dict[str, Dict[str, Any]] = {}
+        reverse_relations: dict[str, dict[str, Any]] = {}
 
         # For modern Django versions, use related_objects
         if hasattr(model._meta, "related_objects"):
@@ -695,7 +695,7 @@ class TypeGenerator:
     def _get_relation_dataloader(
         self,
         context: Any,
-        related_model: Type[models.Model],
+        related_model: type[models.Model],
         relation: Any,
         state: Any,
     ):
@@ -730,10 +730,10 @@ class TypeGenerator:
 
     def _get_or_create_nested_input_type(
         self,
-        model: Type[models.Model],
+        model: type[models.Model],
         mutation_type: str = "create",
-        exclude_parent_field: Optional[Type[models.Model]] = None,
-    ) -> Type[graphene.InputObjectType]:
+        exclude_parent_field: Optional[type[models.Model]] = None,
+    ) -> type[graphene.InputObjectType]:
         return _get_or_create_nested_input_type(
             self,
             model,
@@ -741,7 +741,7 @@ class TypeGenerator:
             exclude_parent_field=exclude_parent_field,
         )
 
-    def _should_include_nested_relations(self, model: Type[models.Model]) -> bool:
+    def _should_include_nested_relations(self, model: type[models.Model]) -> bool:
         """
         Check if nested relations should be included for this model.
 
@@ -765,7 +765,7 @@ class TypeGenerator:
         return True
 
     def _should_include_nested_field(
-        self, model: Type[models.Model], field_name: str
+        self, model: type[models.Model], field_name: str
     ) -> bool:
         """
         Check if a specific nested field should be included for this model.

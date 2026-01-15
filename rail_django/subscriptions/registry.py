@@ -8,14 +8,14 @@ from typing import Dict, Iterator, Optional, Tuple, Type
 
 from django.db import models
 
-_SUBSCRIPTION_REGISTRY: Dict[str, Dict[str, Dict[str, Type]]] = {}
+_SUBSCRIPTION_REGISTRY: dict[str, dict[str, dict[str, type]]] = {}
 
 
 def register_subscription(
     schema_name: str,
     model_label: str,
     event: str,
-    subscription_class: Type,
+    subscription_class: type,
 ) -> None:
     schema_entry = _SUBSCRIPTION_REGISTRY.setdefault(schema_name, {})
     model_entry = schema_entry.setdefault(model_label, {})
@@ -27,9 +27,9 @@ def register_subscription(
 
 
 def iter_subscriptions_for_model(
-    model_class: Type[models.Model],
+    model_class: type[models.Model],
     event: Optional[str] = None,
-) -> Iterator[Tuple[str, Type]]:
+) -> Iterator[tuple[str, type]]:
     model_label = model_class._meta.label_lower
     for schema_name, models_map in _SUBSCRIPTION_REGISTRY.items():
         events = models_map.get(model_label)

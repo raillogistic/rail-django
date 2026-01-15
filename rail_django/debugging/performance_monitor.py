@@ -38,8 +38,8 @@ class PerformanceMetric:
     value: float
     timestamp: datetime
     operation: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    tags: Dict[str, str] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,7 +60,7 @@ class PerformanceAlert:
     severity: str  # 'warning' or 'critical'
     operation: str
     timestamp: datetime
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 class PerformanceStats(NamedTuple):
@@ -88,7 +88,7 @@ class PerformanceMonitor:
                  enable_cpu_tracking: bool = True,
                  enable_system_monitoring: bool = True,
                  metric_retention_hours: int = 24,
-                 alert_callbacks: List[Callable[[PerformanceAlert], None]] = None):
+                 alert_callbacks: list[Callable[[PerformanceAlert], None]] = None):
 
         self.enable_memory_tracking = enable_memory_tracking
         self.enable_cpu_tracking = enable_cpu_tracking
@@ -97,13 +97,13 @@ class PerformanceMonitor:
         self.alert_callbacks = alert_callbacks or []
 
         # Metric storage
-        self._metrics: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
-        self._operation_metrics: Dict[str, Dict[MetricType, deque]] = defaultdict(
+        self._metrics: dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
+        self._operation_metrics: dict[str, dict[MetricType, deque]] = defaultdict(
             lambda: defaultdict(lambda: deque(maxlen=1000))
         )
 
         # Performance thresholds
-        self._thresholds: Dict[MetricType, PerformanceThreshold] = {
+        self._thresholds: dict[MetricType, PerformanceThreshold] = {
             MetricType.EXECUTION_TIME: PerformanceThreshold(
                 MetricType.EXECUTION_TIME, 1000.0, 5000.0  # ms
             ),
@@ -119,7 +119,7 @@ class PerformanceMonitor:
         }
 
         # Tracking state
-        self._active_operations: Dict[str, Dict[str, Any]] = {}
+        self._active_operations: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
 
         # System monitoring
@@ -169,7 +169,7 @@ class PerformanceMonitor:
         self.alert_callbacks.append(callback)
 
     def start_operation(self, operation_id: str, operation_name: str,
-                        context: Dict[str, Any] = None) -> str:
+                        context: dict[str, Any] = None) -> str:
         """
         Start monitoring a GraphQL operation.
 
@@ -212,7 +212,7 @@ class PerformanceMonitor:
         return operation_id
 
     def end_operation(self, operation_id: str, success: bool = True,
-                      error: Exception = None) -> Optional[Dict[str, Any]]:
+                      error: Exception = None) -> Optional[dict[str, Any]]:
         """
         End monitoring a GraphQL operation.
 
@@ -298,8 +298,8 @@ class PerformanceMonitor:
         return metrics
 
     def record_custom_metric(self, metric_type: MetricType, value: float,
-                             operation: str, context: Dict[str, Any] = None,
-                             tags: Dict[str, str] = None):
+                             operation: str, context: dict[str, Any] = None,
+                             tags: dict[str, str] = None):
         """Record a custom performance metric."""
         self._record_metric(metric_type, value, operation, context, tags)
 
@@ -349,7 +349,7 @@ class PerformanceMonitor:
             std_dev=statistics.stdev(recent_values) if count > 1 else 0
         )
 
-    def get_system_stats(self, hours_back: int = 1) -> Dict[str, Any]:
+    def get_system_stats(self, hours_back: int = 1) -> dict[str, Any]:
         """Get system-wide performance statistics."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -375,7 +375,7 @@ class PerformanceMonitor:
         return stats
 
     def get_top_operations(self, metric_type: MetricType = MetricType.EXECUTION_TIME,
-                           limit: int = 10, hours_back: int = 1) -> List[Dict[str, Any]]:
+                           limit: int = 10, hours_back: int = 1) -> list[dict[str, Any]]:
         """Get top operations by performance metric."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -489,7 +489,7 @@ class PerformanceMonitor:
                 self._operation_metrics.clear()
 
     def _record_metric(self, metric_type: MetricType, value: float, operation: str,
-                       context: Dict[str, Any] = None, tags: Dict[str, str] = None):
+                       context: dict[str, Any] = None, tags: dict[str, str] = None):
         """Record a performance metric."""
         metric = PerformanceMetric(
             metric_type=metric_type,
@@ -512,7 +512,7 @@ class PerformanceMonitor:
         # Clean up old metrics
         self._cleanup_old_metrics()
 
-    def _check_thresholds(self, operation_name: str, metrics: Dict[str, Any]):
+    def _check_thresholds(self, operation_name: str, metrics: dict[str, Any]):
         """Check if metrics exceed thresholds and generate alerts."""
         for metric_name, value in metrics.items():
             if not isinstance(value, (int, float)):

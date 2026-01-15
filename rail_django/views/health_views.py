@@ -367,7 +367,7 @@ class HealthHistoryView(View):
 
     def _generate_sample_history(
         self, hours: int, interval_minutes: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Génère des données d'historique d'exemple.
 

@@ -63,6 +63,17 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+ensure_dir() {
+  local path="$1"
+  if [ -d "$path" ]; then
+    return 0
+  fi
+  if [ -e "$path" ]; then
+    die "Path exists but is not a directory: $path"
+  fi
+  mkdir -p "$path"
+}
+
 is_truthy() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     1|true|yes|y|on) return 0 ;;
@@ -118,7 +129,7 @@ fi
 
 if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then
   require_cmd openssl
-  mkdir -p "$CERTS_DIR"
+  ensure_dir "$CERTS_DIR"
 
   allowed_hosts="$(read_env DJANGO_ALLOWED_HOSTS)"
   allowed_hosts="${allowed_hosts// /}"
@@ -141,16 +152,16 @@ if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then
   chmod 600 "$CERT_KEY"
 fi
 
-mkdir -p "$PROJECT_ROOT/media"
+ensure_dir "$PROJECT_ROOT/media"
 
 backup_path="$(read_env BACKUP_PATH)"
 if [ -z "$backup_path" ]; then
   backup_path="../../backups"
 fi
 if [[ "$backup_path" = /* ]]; then
-  mkdir -p "$backup_path"
+  ensure_dir "$backup_path"
 else
-  mkdir -p "$SCRIPT_DIR/docker/$backup_path"
+  ensure_dir "$SCRIPT_DIR/docker/$backup_path"
 fi
 
 note "Building and starting containers..."

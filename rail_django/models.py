@@ -25,73 +25,73 @@ from rail_django.extensions.reporting import (
 from rail_django.validation.schema_validator import SchemaValidator
 
 
-def _default_section(section: str) -> Dict[str, Any]:
+def _default_section(section: str) -> dict[str, Any]:
     return copy.deepcopy(LIBRARY_DEFAULTS.get(section, {}))
 
 
-def _default_schema_settings() -> Dict[str, Any]:
+def _default_schema_settings() -> dict[str, Any]:
     return _default_section("schema_settings")
 
 
-def _default_type_generation_settings() -> Dict[str, Any]:
+def _default_type_generation_settings() -> dict[str, Any]:
     return _default_section("type_generation_settings")
 
 
-def _default_query_settings() -> Dict[str, Any]:
+def _default_query_settings() -> dict[str, Any]:
     return _default_section("query_settings")
 
 
-def _default_mutation_settings() -> Dict[str, Any]:
+def _default_mutation_settings() -> dict[str, Any]:
     return _default_section("mutation_settings")
 
 
-def _default_subscription_settings() -> Dict[str, Any]:
+def _default_subscription_settings() -> dict[str, Any]:
     return _default_section("subscription_settings")
 
 
-def _default_performance_settings() -> Dict[str, Any]:
+def _default_performance_settings() -> dict[str, Any]:
     return _default_section("performance_settings")
 
 
-def _default_persisted_query_settings() -> Dict[str, Any]:
+def _default_persisted_query_settings() -> dict[str, Any]:
     return _default_section("persisted_query_settings")
 
 
-def _default_security_settings() -> Dict[str, Any]:
+def _default_security_settings() -> dict[str, Any]:
     return _default_section("security_settings")
 
 
-def _default_plugin_settings() -> Dict[str, Any]:
+def _default_plugin_settings() -> dict[str, Any]:
     return _default_section("plugin_settings")
 
 
-def _default_middleware_settings() -> Dict[str, Any]:
+def _default_middleware_settings() -> dict[str, Any]:
     return _default_section("middleware_settings")
 
 
-def _default_error_handling() -> Dict[str, Any]:
+def _default_error_handling() -> dict[str, Any]:
     return _default_section("error_handling")
 
 
-def _default_custom_scalars() -> Dict[str, Any]:
+def _default_custom_scalars() -> dict[str, Any]:
     return _default_section("custom_scalars")
 
 
-def _default_monitoring_settings() -> Dict[str, Any]:
+def _default_monitoring_settings() -> dict[str, Any]:
     return _default_section("monitoring_settings")
 
 
-def _default_schema_registry_settings() -> Dict[str, Any]:
+def _default_schema_registry_settings() -> dict[str, Any]:
     return _default_section("schema_registry")
 
 
-def _ensure_dict(value: Any, default_value: Dict[str, Any]) -> Dict[str, Any]:
+def _ensure_dict(value: Any, default_value: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
     return copy.deepcopy(default_value)
 
 
-def _ensure_list(value: Any) -> List[str]:
+def _ensure_list(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, list):
@@ -167,7 +167,7 @@ class SchemaRegistryModel(django_models.Model):
                 {"name": f"Schema name '{name}' is reserved and cannot be used."}
             )
 
-    def get_settings_payload(self) -> Dict[str, Any]:
+    def get_settings_payload(self) -> dict[str, Any]:
         """Return the combined settings payload for registry registration."""
         return {
             "schema_settings": _ensure_dict(
@@ -214,7 +214,7 @@ class SchemaRegistryModel(django_models.Model):
             ),
         }
 
-    def to_registry_kwargs(self) -> Dict[str, Any]:
+    def to_registry_kwargs(self) -> dict[str, Any]:
         """Build kwargs for schema_registry.register_schema."""
         return {
             "name": self.name,

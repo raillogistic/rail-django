@@ -13,7 +13,7 @@ from .introspector import ModelIntrospector
 DEFAULT_ORDERING_FALLBACK = ["-id"]
 
 
-def get_default_ordering(ordering_config) -> List[str]:
+def get_default_ordering(ordering_config) -> list[str]:
     if ordering_config and getattr(ordering_config, "default", None):
         return list(ordering_config.default)
     return list(DEFAULT_ORDERING_FALLBACK)
@@ -22,8 +22,8 @@ def get_default_ordering(ordering_config) -> List[str]:
 def apply_count_annotations_for_ordering(
     queryset: models.QuerySet,
     model: type,
-    order_by: List[str],
-) -> Tuple[models.QuerySet, List[str]]:
+    order_by: list[str],
+) -> tuple[models.QuerySet, list[str]]:
     """
     Annotate queryset for any order_by fields that request <relation>_count or <relation>__count.
     Supports forward ManyToMany and reverse relations using accessor names.
@@ -32,7 +32,7 @@ def apply_count_annotations_for_ordering(
     if not order_by:
         return queryset, order_by
 
-    new_order_by: List[str] = []
+    new_order_by: list[str] = []
     annotated_aliases: set = set()
 
     for spec in order_by:
@@ -110,10 +110,10 @@ def apply_count_annotations_for_ordering(
 
 
 def normalize_ordering_specs(
-    order_by: Optional[List[str]],
+    order_by: Optional[list[str]],
     ordering_config,
     schema_name: Optional[str] = None,
-) -> List[str]:
+) -> list[str]:
     """
     Apply default ordering and validate specs against GraphQLMeta configuration.
     """
@@ -133,8 +133,8 @@ def normalize_ordering_specs(
 
 
 def split_order_specs(
-    model: Type[models.Model], order_by: List[str]
-) -> Tuple[List[str], List[str]]:
+    model: type[models.Model], order_by: list[str]
+) -> tuple[list[str], list[str]]:
     """Split order_by specs into DB fields and property-based fields."""
     if not order_by:
         return [], []
@@ -143,8 +143,8 @@ def split_order_specs(
         prop_names = set(introspector.properties.keys())
     except Exception:
         prop_names = set()
-    db_specs: List[str] = []
-    prop_specs: List[str] = []
+    db_specs: list[str] = []
+    prop_specs: list[str] = []
     for spec in order_by:
         name = spec[1:] if spec.startswith("-") else spec
         if name in prop_names:
@@ -171,8 +171,8 @@ def safe_prop_value(obj: Any, prop_name: str):
 
 
 def apply_property_ordering(
-    items: List[Any], prop_specs: List[str]
-) -> List[Any]:
+    items: list[Any], prop_specs: list[str]
+) -> list[Any]:
     """Apply stable multi-key sort on a Python list based on property specs."""
     if not prop_specs:
         return items

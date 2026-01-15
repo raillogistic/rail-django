@@ -57,8 +57,8 @@ class QueryAnalysisResult:
     has_mutations: bool
     execution_time_estimate: float
     threat_level: SecurityThreatLevel
-    warnings: List[str]
-    blocked_reasons: List[str]
+    warnings: list[str]
+    blocked_reasons: list[str]
 
 
 @dataclass
@@ -69,13 +69,13 @@ class SecurityConfig:
     max_field_count: int = 100
     max_operation_count: int = 10
     enable_introspection: bool = False
-    introspection_roles: List[str] = None
+    introspection_roles: list[str] = None
     query_timeout: int = 30  # secondes
     enable_query_cost_analysis: bool = True
     enable_depth_limiting: bool = True
     enable_field_suggestions: bool = False
     rate_limit_per_minute: int = 60
-    complexity_multipliers: Dict[str, float] = None
+    complexity_multipliers: dict[str, float] = None
 
     def __post_init__(self):
         """Initialise les valeurs par défaut."""
@@ -121,7 +121,7 @@ class GraphQLSecurityAnalyzer:
         }
 
     def analyze_query(self, document: DocumentNode, schema: GraphQLSchema,
-                      user=None, variables: Dict = None) -> QueryAnalysisResult:
+                      user=None, variables: dict = None) -> QueryAnalysisResult:
         """
         Analyse une requête GraphQL pour détecter les problèmes de sécurité.
 
@@ -188,7 +188,7 @@ class GraphQLSecurityAnalyzer:
 
     def _analyze_selection_set(self, selection_set, schema: GraphQLSchema,
                                result: QueryAnalysisResult, depth: int,
-                               parent_type=None, fragments: Optional[Dict[str, Any]] = None):
+                               parent_type=None, fragments: Optional[dict[str, Any]] = None):
         """
         Analyse un ensemble de sélections GraphQL.
 

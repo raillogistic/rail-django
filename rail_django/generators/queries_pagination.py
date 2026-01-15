@@ -36,9 +36,9 @@ class PaginatedResult:
 
 def generate_paginated_query(
     self,
-    model: Type[models.Model],
+    model: type[models.Model],
     manager_name: str = "objects",
-    result_model: Optional[Type[models.Model]] = None,
+    result_model: Optional[type[models.Model]] = None,
     operation_name: str = "paginated",
 ) -> graphene.Field:
     """
@@ -133,7 +133,7 @@ def generate_paginated_query(
                 return EmptyPaginatedResult()
 
         # Apply ordering (same as list queries)
-        items: Optional[List[Any]] = None
+        items: Optional[list[Any]] = None
         order_by = self._normalize_ordering_specs(
             kwargs.get("order_by"), ordering_config
         )

@@ -31,7 +31,7 @@ class SettingsProxy:
             schema_name: Name of the schema for schema-specific settings
         """
         self.schema_name = schema_name
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -122,7 +122,7 @@ class SettingsProxy:
         """
         return self._get_nested_value(LIBRARY_DEFAULTS, key)
 
-    def _get_nested_value(self, data: Dict[str, Any], key: str) -> Any:
+    def _get_nested_value(self, data: dict[str, Any], key: str) -> Any:
         """
         Get nested value from dictionary using dot notation.
 
@@ -146,7 +146,7 @@ class SettingsProxy:
 
         return current
 
-    def _normalize_legacy_sections(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_legacy_sections(self, data: dict[str, Any]) -> dict[str, Any]:
         """Normalize legacy settings keys to current names."""
         if not isinstance(data, dict):
             return data
@@ -183,7 +183,7 @@ class SettingsProxy:
 
         self._set_nested_value(settings.RAIL_DJANGO_GRAPHQL, key, value)
 
-    def _set_nested_value(self, data: Dict[str, Any], key: str, value: Any) -> None:
+    def _set_nested_value(self, data: dict[str, Any], key: str, value: Any) -> None:
         """
         Set nested value in dictionary using dot notation.
 
@@ -208,7 +208,7 @@ class SettingsProxy:
         """Clear the settings cache."""
         self._cache.clear()
 
-    def validate(self) -> Dict[str, Any]:
+    def validate(self) -> dict[str, Any]:
         """
         Validate current settings configuration.
 
@@ -394,7 +394,7 @@ def get_subscription_generator_settings(schema_name: Optional[str] = None):
     return SubscriptionGeneratorSettings.from_schema(schema_name)
 
 
-def get_core_schema_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
+def get_core_schema_settings(schema_name: Optional[str] = None) -> dict[str, Any]:
     """
     Get core schema settings for the specified schema using hierarchical loading.
 

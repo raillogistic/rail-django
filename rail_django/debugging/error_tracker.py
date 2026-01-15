@@ -47,11 +47,11 @@ class ErrorContext:
     """Context information for an error."""
     operation_name: Optional[str] = None
     query: Optional[str] = None
-    variables: Optional[Dict[str, Any]] = None
+    variables: Optional[dict[str, Any]] = None
     user_id: Optional[str] = None
     session_id: Optional[str] = None
     request_id: Optional[str] = None
-    client_info: Optional[Dict[str, Any]] = None
+    client_info: Optional[dict[str, Any]] = None
     schema_name: Optional[str] = None
     field_path: Optional[str] = None
 
@@ -68,7 +68,7 @@ class ErrorOccurrence:
     stack_trace: Optional[str] = None
     resolved: bool = False
     resolution_notes: Optional[str] = None
-    tags: Dict[str, str] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -77,12 +77,12 @@ class ErrorPattern:
     pattern_id: str
     category: ErrorCategory
     message_pattern: str
-    occurrences: List[ErrorOccurrence] = field(default_factory=list)
+    occurrences: list[ErrorOccurrence] = field(default_factory=list)
     first_seen: Optional[datetime] = None
     last_seen: Optional[datetime] = None
     frequency: int = 0
-    affected_operations: Set[str] = field(default_factory=set)
-    affected_users: Set[str] = field(default_factory=set)
+    affected_operations: set[str] = field(default_factory=set)
+    affected_users: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -94,7 +94,7 @@ class ErrorTrend:
     unique_errors: int
     trend_direction: str  # 'increasing', 'decreasing', 'stable'
     change_percentage: float
-    top_errors: List[str] = field(default_factory=list)
+    top_errors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -109,8 +109,8 @@ class ErrorAlert:
     threshold_value: float
     time_window: str
     timestamp: datetime
-    affected_operations: List[str] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
+    affected_operations: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 class ErrorTracker:
@@ -126,7 +126,7 @@ class ErrorTracker:
                  error_retention_hours: int = 168,  # 1 week
                  enable_pattern_detection: bool = True,
                  enable_trend_analysis: bool = True,
-                 alert_callbacks: List[Callable[[ErrorAlert], None]] = None):
+                 alert_callbacks: list[Callable[[ErrorAlert], None]] = None):
 
         self.max_errors_per_pattern = max_errors_per_pattern
         self.error_retention_hours = error_retention_hours
@@ -136,8 +136,8 @@ class ErrorTracker:
 
         # Error storage
         self._errors: deque = deque(maxlen=10000)
-        self._error_patterns: Dict[str, ErrorPattern] = {}
-        self._error_counts: Dict[ErrorCategory, deque] = defaultdict(
+        self._error_patterns: dict[str, ErrorPattern] = {}
+        self._error_counts: dict[ErrorCategory, deque] = defaultdict(
             lambda: deque(maxlen=1000)
         )
 
@@ -167,7 +167,7 @@ class ErrorTracker:
         self.logger = logging.getLogger(__name__)
 
     def track_error(self, error: Exception, context: ErrorContext = None,
-                    severity: ErrorSeverity = None, tags: Dict[str, str] = None) -> str:
+                    severity: ErrorSeverity = None, tags: dict[str, str] = None) -> str:
         """
         Track a new error occurrence.
 
@@ -249,7 +249,7 @@ class ErrorTracker:
                    severity: ErrorSeverity = None,
                    operation_name: str = None,
                    hours_back: int = 24,
-                   limit: int = 100) -> List[ErrorOccurrence]:
+                   limit: int = 100) -> list[ErrorOccurrence]:
         """
         Get errors with optional filtering.
 
@@ -292,7 +292,7 @@ class ErrorTracker:
     def get_error_patterns(self,
                            category: ErrorCategory = None,
                            min_occurrences: int = 2,
-                           hours_back: int = 24) -> List[ErrorPattern]:
+                           hours_back: int = 24) -> list[ErrorPattern]:
         """Get error patterns with optional filtering."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -315,7 +315,7 @@ class ErrorTracker:
         patterns.sort(key=lambda p: p.frequency, reverse=True)
         return patterns
 
-    def get_error_stats(self, hours_back: int = 24) -> Dict[str, Any]:
+    def get_error_stats(self, hours_back: int = 24) -> dict[str, Any]:
         """Get comprehensive error statistics."""
         cutoff_time = datetime.now() - timedelta(hours=hours_back)
 
@@ -380,7 +380,7 @@ class ErrorTracker:
         return stats
 
     def get_error_trends(self, hours_back: int = 24,
-                         time_buckets: int = 12) -> List[ErrorTrend]:
+                         time_buckets: int = 12) -> list[ErrorTrend]:
         """Analyze error trends over time."""
         if not self.enable_trend_analysis:
             return []
@@ -574,7 +574,7 @@ class ErrorTracker:
         # Default to low severity
         return ErrorSeverity.LOW
 
-    def _setup_categorization_rules(self) -> Dict[ErrorCategory, List[Dict]]:
+    def _setup_categorization_rules(self) -> dict[ErrorCategory, list[dict]]:
         """Setup error categorization rules."""
         return {
             ErrorCategory.VALIDATION_ERROR: [
@@ -762,7 +762,7 @@ class ErrorTracker:
         }
         return mapping.get(severity, logging.ERROR)
 
-    def _export_json(self, errors: List[ErrorOccurrence]) -> str:
+    def _export_json(self, errors: list[ErrorOccurrence]) -> str:
         """Export errors as JSON."""
         export_data = {
             'export_timestamp': datetime.now().isoformat(),
@@ -795,7 +795,7 @@ class ErrorTracker:
 
         return json.dumps(export_data, indent=2, ensure_ascii=False)
 
-    def _export_csv(self, errors: List[ErrorOccurrence]) -> str:
+    def _export_csv(self, errors: list[ErrorOccurrence]) -> str:
         """Export errors as CSV."""
         import csv
         import io

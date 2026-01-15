@@ -44,7 +44,7 @@ def _normalize_field_path(field: Any, prefix: Optional[str] = None) -> Optional[
 
 
 def _flatten_validation_error(
-    detail: Any, path: Optional[str], accumulator: List[MutationError]
+    detail: Any, path: Optional[str], accumulator: list[MutationError]
 ) -> None:
     """
     Recursively flatten Django ValidationError payloads (dict/list/ValidationError)
@@ -89,9 +89,9 @@ def _flatten_validation_error(
 
 def build_validation_errors(
     error: ValidationError, prefix: Optional[str] = None
-) -> List[MutationError]:
+) -> list[MutationError]:
     """Convert a ValidationError into a flat list of MutationError objects."""
-    collected: List[MutationError] = []
+    collected: list[MutationError] = []
     _flatten_validation_error(error, prefix, collected)
     return collected
 
@@ -114,16 +114,16 @@ def _extract_field_from_message(message: str) -> Optional[str]:
     return None
 
 
-def build_error_list(messages: List[str]) -> List[MutationError]:
+def build_error_list(messages: list[str]) -> list[MutationError]:
     """Convert plain error messages into MutationError objects."""
-    errors: List[MutationError] = []
+    errors: list[MutationError] = []
     for message in messages:
         field = _extract_field_from_message(str(message))
         errors.append(build_mutation_error(message=str(message), field=field))
     return errors
 
 
-def _map_column_to_field(model: Type[models.Model], column: str) -> Optional[str]:
+def _map_column_to_field(model: type[models.Model], column: str) -> Optional[str]:
     for field in model._meta.get_fields():
         if hasattr(field, "column") and field.column == column:
             return field.name
@@ -132,7 +132,7 @@ def _map_column_to_field(model: Type[models.Model], column: str) -> Optional[str
     return None
 
 
-def _get_field_label(model: Type[models.Model], field_name: str) -> str:
+def _get_field_label(model: type[models.Model], field_name: str) -> str:
     try:
         field = model._meta.get_field(field_name)
         label = getattr(field, "verbose_name", None)
@@ -144,9 +144,9 @@ def _get_field_label(model: Type[models.Model], field_name: str) -> str:
 
 
 def _extract_unique_constraint_fields(
-    model: Type[models.Model], error_msg: str
-) -> List[str]:
-    fields: List[str] = []
+    model: type[models.Model], error_msg: str
+) -> list[str]:
+    fields: list[str] = []
 
     match = re.search(r"UNIQUE constraint failed: ([\\w\\., ]+)", error_msg)
     if match:
@@ -186,8 +186,8 @@ def _extract_not_null_field(error_msg: str) -> Optional[str]:
 
 
 def build_integrity_errors(
-    model: Type[models.Model], exc: IntegrityError
-) -> List[MutationError]:
+    model: type[models.Model], exc: IntegrityError
+) -> list[MutationError]:
     """Create friendly errors for database integrity failures."""
     error_msg = str(exc)
     field = _extract_not_null_field(error_msg)
@@ -198,7 +198,7 @@ def build_integrity_errors(
 
     unique_fields = _extract_unique_constraint_fields(model, error_msg)
     if unique_fields:
-        errors: List[MutationError] = []
+        errors: list[MutationError] = []
         for field_name in unique_fields:
             label = _get_field_label(model, field_name)
             errors.append(build_mutation_error(f"{label} must be unique.", field_name))
