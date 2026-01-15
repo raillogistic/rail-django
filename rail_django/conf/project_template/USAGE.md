@@ -1275,10 +1275,9 @@ nano .env
 **Key variables to set:**
 - `DJANGO_DEBUG=False`
 - `DJANGO_SECRET_KEY`: A long, random string.
-- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`).
+- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
-- `PGHOST`, `PGUSER`, `PGPASSWORD`: Required for the automatic backup service.
 
 ### 2. Deployment Steps
 

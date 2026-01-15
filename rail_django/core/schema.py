@@ -1117,7 +1117,7 @@ class SchemaBuilder:
                     enabled = existing.enabled if existing else True
 
                     models = None
-                    if existing is not None:
+                    if existing is not None and existing.models:
                         raw_models = existing.models or []
                         normalized_models = []
                         for model in raw_models:
@@ -1125,8 +1125,9 @@ class SchemaBuilder:
                                 normalized_models.append(model._meta.label)
                             else:
                                 normalized_models.append(str(model))
-                        models = normalized_models
-                    else:
+                        if normalized_models:
+                            models = normalized_models
+                    if models is None:
                         models = [model._meta.label for model in self._registered_models]
 
                     register_schema(

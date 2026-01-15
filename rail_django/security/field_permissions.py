@@ -98,6 +98,7 @@ class FieldPermissionManager:
         self._pattern_rules: dict[str, list[FieldPermissionRule]] = {}
         self._global_rules: list[FieldPermissionRule] = []
         self._graphql_configs: set[str] = set()
+        self._rule_signatures: set[tuple] = set()
         self._model_classifications: dict[str, set[str]] = {}
         self._field_classifications: dict[str, dict[str, set[str]]] = {}
         self._policy_engine_enabled = bool(
@@ -218,6 +219,28 @@ class FieldPermissionManager:
                 )
             )
 
+    def _safe_signature_value(self, value: Any) -> Any:
+        try:
+            hash(value)
+        except TypeError:
+            return repr(value)
+        return value
+
+    def _rule_signature(self, rule: FieldPermissionRule) -> tuple:
+        roles = tuple(sorted(rule.roles or []))
+        permissions = tuple(sorted(rule.permissions or []))
+        return (
+            rule.model_name,
+            rule.field_name,
+            rule.access_level,
+            rule.visibility,
+            self._safe_signature_value(rule.mask_value),
+            roles,
+            permissions,
+            bool(rule.context_required),
+            self._safe_signature_value(rule.condition),
+        )
+
     def register_field_rule(self, rule: FieldPermissionRule):
         """
         Enregistre une règle de permission pour un champ.
@@ -226,6 +249,11 @@ class FieldPermissionManager:
             rule: Règle de permission à enregistrer
         """
         key = f"{rule.model_name}.{rule.field_name}"
+        signature = self._rule_signature(rule)
+        if signature in self._rule_signatures:
+            logger.debug("Field permission rule already registered for %s", key)
+            return
+        self._rule_signatures.add(signature)
 
         if key not in self._field_rules:
             self._field_rules[key] = []
@@ -236,7 +264,18 @@ class FieldPermissionManager:
             if pattern_key not in self._pattern_rules:
                 self._pattern_rules[pattern_key] = []
             self._pattern_rules[pattern_key].append(rule)
-        logger.info(f"Règle de permission enregistrée pour {key}")
+        access_label = rule.access_level.value if rule.access_level else None
+        visibility_label = rule.visibility.value if rule.visibility else None
+        roles = sorted(rule.roles) if rule.roles else None
+        permissions = sorted(rule.permissions) if rule.permissions else None
+        logger.info(
+            "Field permission rule registered for %s (access=%s visibility=%s roles=%s permissions=%s)",
+            key,
+            access_label,
+            visibility_label,
+            roles,
+            permissions,
+        )
 
     def _iter_field_rules(self, context: FieldContext) -> list[FieldPermissionRule]:
         field_name = context.field_name

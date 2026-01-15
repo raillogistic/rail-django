@@ -12,6 +12,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+if "GRAPHENE" in globals():
+    GRAPHENE.setdefault("MIDDLEWARE", [])
+    if "graphene_django.debug.DjangoDebugMiddleware" not in GRAPHENE["MIDDLEWARE"]:
+        GRAPHENE["MIDDLEWARE"].append("graphene_django.debug.DjangoDebugMiddleware")
+
 # Allow GraphiQL introspection depth during development.
 if "RAIL_DJANGO_GRAPHQL" in globals():
     RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[

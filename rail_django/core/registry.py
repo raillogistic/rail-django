@@ -150,7 +150,7 @@ class SchemaRegistry:
 
         with self._lock:
             if name in self._schemas:
-                logger.warning(f"Schema '{name}' already registered, updating...")
+                logger.info("Schema '%s' already registered, updating...", name)
 
             schema_info = SchemaInfo(
                 name=name,

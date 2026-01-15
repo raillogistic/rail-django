@@ -86,8 +86,14 @@ WSGI_APPLICATION = 'root.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases /
 
 DATABASES = {
-    'default': env.db('DATABASE_URL', default='postgres://mkhaled:KhaledRM250@localhost:5432/test_lib')
+    'default': env.db(
+        'DATABASE_URL',
+        default=f"sqlite:///{(BASE_DIR / 'db.sqlite3').as_posix()}",
+    )
 }
+
+# Example Postgres DATABASE_URL (uncomment to use):
+# DATABASE_URL=postgres://user:password@localhost:5432/app_db
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -136,9 +142,7 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
 GRAPHENE = {
     'SCHEMA_OUTPUT': 'schema.graphql',
     'SCHEMA_INDENT': 2,
-    'MIDDLEWARE': [
-        'graphene_django.debug.DjangoDebugMiddleware',
-    ],
+    'MIDDLEWARE': [],
     'CAMELCASE_ERRORS': False,
     'ATOMIC_MUTATIONS': True,
 }

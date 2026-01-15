@@ -3,6 +3,7 @@ Base settings for projects using rail-django framework.
 Users import * from this file in their project's settings.py.
 """
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -140,10 +141,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # GraphQL settings
 GRAPHENE = {
-    "MIDDLEWARE": [
-        "graphene_django.debug.DjangoDebugMiddleware",
-    ],
+    "MIDDLEWARE": [],
 }
+if DEBUG:
+    GRAPHENE["MIDDLEWARE"].append("graphene_django.debug.DjangoDebugMiddleware")
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = (
@@ -156,7 +157,7 @@ CORS_ALLOWED_ORIGINS = (
 )
 
 # Load library defaults into Django settings
-RAIL_DJANGO_GRAPHQL = LIBRARY_DEFAULTS
+RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)
 if DEBUG:
     RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[
         "enable_query_depth_limiting"

@@ -52,7 +52,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 3600  # 1 heure
 
 # CSRF
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = env.bool('CSRF_COOKIE_HTTPONLY', default=False)
 CSRF_COOKIE_SAMESITE = 'Strict'
 
 # =============================================================================

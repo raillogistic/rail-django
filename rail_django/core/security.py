@@ -262,7 +262,9 @@ def is_introspection_allowed(
 auth_manager = AuthenticationManager()
 authz_manager = AuthorizationManager()
 rate_limiter = RateLimiter()
+_input_validator_cache: dict[str, InputValidator] = {}
 input_validator = InputValidator()
+_input_validator_cache[""] = input_validator
 
 
 def get_auth_manager(schema_name: Optional[str] = None) -> AuthenticationManager:
@@ -282,4 +284,9 @@ def get_rate_limiter(schema_name: Optional[str] = None) -> RateLimiter:
 
 def get_input_validator(schema_name: Optional[str] = None) -> InputValidator:
     """Get input validator instance for schema."""
-    return InputValidator(schema_name)
+    key = schema_name or ""
+    cached = _input_validator_cache.get(key)
+    if cached is None:
+        cached = InputValidator(schema_name)
+        _input_validator_cache[key] = cached
+    return cached

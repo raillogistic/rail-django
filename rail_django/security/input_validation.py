@@ -526,13 +526,55 @@ class InputValidator:
         self.model_validators: dict[str, list[Callable]] = {}
         self._register_default_validators()
 
-    def register_field_validator(self, field_name: str, validator: Callable) -> None:
+    def register_field_validator(
+        self, field_name: str, validator: Callable, *, replace: bool = True
+    ) -> None:
+        existing = self.field_validators.get(field_name)
+        schema_label = self.schema_name or "default"
+        if existing is not None:
+            if existing is validator:
+                logger.debug(
+                    "Field validator already registered: %s (schema=%s)",
+                    field_name,
+                    schema_label,
+                )
+                return
+            if not replace:
+                logger.debug(
+                    "Field validator already registered: %s (schema=%s)",
+                    field_name,
+                    schema_label,
+                )
+                return
+            logger.info(
+                "Field validator updated: %s (schema=%s)",
+                field_name,
+                schema_label,
+            )
+        else:
+            logger.info(
+                "Field validator registered: %s (schema=%s)",
+                field_name,
+                schema_label,
+            )
         self.field_validators[field_name] = validator
-        logger.info("Field validator registered: %s", field_name)
 
     def register_model_validator(self, model_name: str, validator: Callable) -> None:
-        self.model_validators.setdefault(model_name, []).append(validator)
-        logger.info("Model validator registered: %s", model_name)
+        validators = self.model_validators.setdefault(model_name, [])
+        schema_label = self.schema_name or "default"
+        if validator in validators:
+            logger.debug(
+                "Model validator already registered: %s (schema=%s)",
+                model_name,
+                schema_label,
+            )
+            return
+        validators.append(validator)
+        logger.info(
+            "Model validator registered: %s (schema=%s)",
+            model_name,
+            schema_label,
+        )
 
     def validate_payload(self, input_data: Any) -> ValidationReport:
         if not self.settings.enable_validation:
@@ -743,24 +785,27 @@ class InputValidator:
 
         return value
 
-    def _register_default_validators(self) -> None:
+    def _register_default_validators(self, *, force: bool = False) -> None:
         self.register_field_validator(
             "email",
             lambda value: FieldValidator.validate_email_field(
                 value, sanitizer=self.sanitizer
             ),
+            replace=force,
         )
         self.register_field_validator(
             "url",
             lambda value: FieldValidator.validate_url_field(
                 value, sanitizer=self.sanitizer
             ),
+            replace=force,
         )
         self.register_field_validator(
             "website",
             lambda value: FieldValidator.validate_url_field(
                 value, sanitizer=self.sanitizer
             ),
+            replace=force,
         )
 
         def validate_password(value: str) -> str:
@@ -782,14 +827,19 @@ class InputValidator:
                 )
             return value
 
-        self.register_field_validator("password", validate_password)
+        self.register_field_validator("password", validate_password, replace=force)
 
 
 class GraphQLInputSanitizer:
     """Sanitize and validate GraphQL mutation inputs."""
 
     def __init__(self, schema_name: Optional[str] = None, validator: InputValidator = None):
-        self.validator = validator or InputValidator(schema_name)
+        if validator is not None:
+            self.validator = validator
+        elif schema_name is None:
+            self.validator = input_validator
+        else:
+            self.validator = InputValidator(schema_name)
 
     def sanitize_mutation_input(self, input_data: Any) -> Any:
         if hasattr(input_data, "__dict__") and not isinstance(input_data, dict):
@@ -842,10 +892,10 @@ input_validator = InputValidator()
 graphql_sanitizer = GraphQLInputSanitizer(validator=input_validator)
 
 
-def setup_default_validators() -> None:
-    """Register default field validators."""
+def setup_default_validators(force: bool = False) -> None:
+    """Register default field validators (set force=True to overwrite existing)."""
 
-    input_validator._register_default_validators()
+    input_validator._register_default_validators(force=force)
 
 
 def _coerce_input_data(input_data: Any) -> Any:

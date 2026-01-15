@@ -227,9 +227,9 @@ class SettingsProxy:
 
         # Validate critical settings
         critical_settings = [
-            "disable_security_mutations",
-            "max_query_depth",
-            "max_query_complexity",
+            "schema_settings.disable_security_mutations",
+            "performance_settings.max_query_depth",
+            "performance_settings.max_query_complexity",
         ]
         for setting in critical_settings:
             value = self.get(setting)
