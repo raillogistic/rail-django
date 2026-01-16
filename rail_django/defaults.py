@@ -128,6 +128,18 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "hash_algorithm": "sha256",
         "max_query_length": 0,
     },
+    "multitenancy_settings": {
+        "enabled": False,
+        "isolation_mode": "row",
+        "tenant_header": "X-Tenant-ID",
+        "tenant_claim": "tenant_id",
+        "default_tenant_field": "tenant",
+        "allow_cross_tenant_superuser": True,
+        "require_tenant": True,
+        "tenant_subdomain": False,
+        "reject_mismatched_tenant_input": True,
+        "tenant_model": None,
+    },
     "security_settings": {
         "enable_authentication": True,
         "enable_authorization": True,

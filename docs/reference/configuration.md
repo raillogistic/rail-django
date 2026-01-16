@@ -135,6 +135,46 @@ the mapping with `mutation_settings.model_permission_codenames`, or disable the
 default check with `mutation_settings.require_model_permissions`. GraphQLMeta
 access guards for the operation override the default model permission check.
 
+## Multi-tenancy settings
+
+Multi-tenancy is opt-in and scopes GraphQL queries, mutations, and nested
+relations to the current tenant. Tenant context can be resolved from a JWT
+claim, a header, or the request subdomain. Missing tenant context raises
+`Tenant context required` when `require_tenant` is true.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "multitenancy_settings": {
+        "enabled": True,
+        "isolation_mode": "row",
+        "tenant_header": "X-Tenant-ID",
+        "tenant_claim": "tenant_id",
+        "tenant_subdomain": False,
+        "default_tenant_field": "tenant",
+        "allow_cross_tenant_superuser": True,
+        "require_tenant": True,
+        "reject_mismatched_tenant_input": True,
+        "tenant_model": "accounts.Organization",
+    }
+}
+```
+
+Key options:
+
+- `enabled`: master toggle.
+- `isolation_mode`: `row` is supported; `schema` is reserved for future use.
+- `tenant_header`: request header name used to resolve the tenant.
+- `tenant_claim`: JWT claim name used when `request.jwt_payload` is available.
+- `tenant_subdomain`: enable subdomain-based tenant resolution.
+- `default_tenant_field`: model field path used when GraphQLMeta does not set `tenant_field`.
+- `allow_cross_tenant_superuser`: allow superusers to bypass tenant filters.
+- `require_tenant`: reject requests when no tenant could be resolved.
+- `reject_mismatched_tenant_input`: reject create/update payloads that specify a different tenant.
+- `tenant_model`: optional model path used by `TenantMixin` for the tenant FK.
+
+To disable tenant scoping for a specific model, set `tenant_field = None` in
+its GraphQLMeta definition.
+
 ## Schema-specific overrides
 
 ```python

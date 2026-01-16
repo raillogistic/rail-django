@@ -82,6 +82,9 @@ def generate_paginated_query(
         graphql_meta.ensure_operation_access(operation_name, info=info)
         manager = getattr(model, manager_name)
         queryset = manager.all()
+        queryset = self._apply_tenant_scope(
+            queryset, info, model, operation=operation_name
+        )
 
         try:
             page = int(kwargs.get("page", 1))

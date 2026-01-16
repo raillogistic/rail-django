@@ -75,6 +75,10 @@ def generate_create_mutation(
                         if key not in read_only_fields
                     }
 
+                input = self._apply_tenant_input(
+                    input, info, model, operation="create"
+                )
+
                 input = self.input_validator.validate_and_sanitize(
                     model.__name__, input
                 )
@@ -408,24 +412,36 @@ def generate_update_mutation(
                         if key not in read_only_fields
                     }
 
+                update_data = self._apply_tenant_input(
+                    update_data, info, model, operation="update"
+                )
+
                 update_data = self.input_validator.validate_and_sanitize(
                     model.__name__, update_data
                 )
 
                 # Decode GraphQL ID to database ID if needed
                 try:
-                    # Try to use the ID as-is first (for integer IDs)
-                    instance = model.objects.get(pk=record_id)
+                    scoped = self._apply_tenant_scope(
+                        model.objects.all(), info, model, operation="update"
+                    )
+                    instance = scoped.get(pk=record_id)
                 except (ValueError, model.DoesNotExist):
                     # If that fails, try to decode as GraphQL global ID
                     from graphql_relay import from_global_id
 
                     try:
                         decoded_type, decoded_id = from_global_id(record_id)
-                        instance = model.objects.get(pk=decoded_id)
+                        scoped = self._apply_tenant_scope(
+                            model.objects.all(), info, model, operation="update"
+                        )
+                        instance = scoped.get(pk=decoded_id)
                     except Exception:
                         # If all else fails, raise the original error
-                        instance = model.objects.get(pk=record_id)
+                        scoped = self._apply_tenant_scope(
+                            model.objects.all(), info, model, operation="update"
+                        )
+                        instance = scoped.get(pk=record_id)
 
                 graphql_meta.ensure_operation_access(
                     "update", info=info, instance=instance
@@ -725,7 +741,10 @@ def generate_delete_mutation(
         ) -> "DeleteMutation":
             try:
                 self._enforce_model_permission(info, model, "delete", graphql_meta)
-                instance = model.objects.get(pk=id)
+                scoped = self._apply_tenant_scope(
+                    model.objects.all(), info, model, operation="delete"
+                )
+                instance = scoped.get(pk=id)
                 graphql_meta.ensure_operation_access(
                     "delete", info=info, instance=instance
                 )

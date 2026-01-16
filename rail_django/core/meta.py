@@ -258,6 +258,11 @@ class GraphQLMeta:
             model_class._meta, "label_lower", model_class.__name__.lower()
         )
         self._meta_config = self._resolve_meta_class(model_class)
+        self.tenant_field = (
+            getattr(self._meta_config, "tenant_field", None)
+            if self._meta_config is not None
+            else None
+        )
 
         self.filtering: FilteringConfig = self._build_filtering_config()
         self.field_config: FieldExposureConfig = self._build_field_config()
@@ -302,9 +307,22 @@ class GraphQLMeta:
     def _resolve_meta_class(self, model_class: type[models.Model]) -> Any:
         """Return the declared GraphQL meta configuration class if it exists."""
 
-        return getattr(model_class, "GraphQLMeta", None) or getattr(
+        meta_decl = getattr(model_class, "GraphQLMeta", None) or getattr(
             model_class, "GraphqlMeta", None
         )
+        if meta_decl is not None:
+            return meta_decl
+        try:
+            from .meta_json import get_model_meta_config
+
+            return get_model_meta_config(model_class)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Could not load JSON GraphQLMeta for %s: %s",
+                model_class.__name__,
+                exc,
+            )
+            return None
 
     def _build_filtering_config(self) -> FilteringConfig:
         """Construct filtering configuration with legacy fallbacks."""

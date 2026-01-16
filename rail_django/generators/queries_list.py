@@ -36,7 +36,13 @@ def generate_single_query(
         try:
             self._enforce_model_permission(info, model, "retrieve", graphql_meta)
             manager = getattr(model, manager_name)
-            instance = manager.get(pk=id)
+            queryset = self._apply_tenant_scope(
+                manager.all(), info, model, operation="retrieve"
+            )
+            instance = queryset.get(pk=id)
+            self._enforce_tenant_access(
+                instance, info, model, operation="retrieve"
+            )
             graphql_meta.ensure_operation_access(
                 "retrieve", info=info, instance=instance
             )
@@ -80,6 +86,9 @@ def generate_list_query(
             graphql_meta.ensure_operation_access("list", info=info)
             manager = getattr(model, manager_name)
             queryset = manager.all()
+            queryset = self._apply_tenant_scope(
+                queryset, info, model, operation="list"
+            )
             queryset = self.optimizer.optimize_queryset(queryset, info, model)
             return queryset
 
@@ -98,6 +107,9 @@ def generate_list_query(
         graphql_meta.ensure_operation_access("list", info=info)
         manager = getattr(model, manager_name)
         queryset = manager.all()
+        queryset = self._apply_tenant_scope(
+            queryset, info, model, operation="list"
+        )
 
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)

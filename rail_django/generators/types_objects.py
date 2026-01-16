@@ -25,6 +25,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
     fields = introspector.get_model_fields()
     relationships = introspector.get_model_relationships()
     maskable_fields = self._get_maskable_fields(model)
+    apply_tenant_scope = self._apply_tenant_scope
 
     # Get excluded fields for this model
     exclude_fields = self._get_excluded_fields(model)
@@ -203,6 +204,9 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                         return related_obj
                     # For ForeignKey and ManyToMany, return queryset with optional filtering
                     queryset = related_obj.all()
+                    queryset = apply_tenant_scope(
+                        queryset, info, related_model, operation="read"
+                    )
 
                     # Apply filters if provided
                     if filters:
@@ -220,10 +224,14 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                 return resolver
 
             # Add count resolver for ManyToMany relation
-            def make_count_resolver(field_name):
+            def make_count_resolver(field_name, related_model):
                 def count_resolver(self, info):
                     related_obj = getattr(self, field_name)
-                    return related_obj.count()
+                    queryset = related_obj.all()
+                    queryset = apply_tenant_scope(
+                        queryset, info, related_model, operation="read"
+                    )
+                    return queryset.count()
 
                 return count_resolver
 
@@ -232,7 +240,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                 field_name, rel_info, related_model
             )
             type_attrs[f"resolve_{count_field_name}"] = make_count_resolver(
-                field_name
+                field_name, related_model
             )
 
     # Add custom resolvers for ALL reverse relationships to return direct model lists
@@ -296,6 +304,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
             relation,
             query_optimizer,
             get_relation_dataloader,
+            apply_tenant_scope,
         ):
             def resolver(self, info, filters=None):
                 # Optimization: Use prefetch cache if available and no filters (for lists)
@@ -317,6 +326,9 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                 # For other relationships, return queryset with optional filtering
                 related_obj = getattr(self, accessor_name)
                 queryset = related_obj.all()
+                queryset = apply_tenant_scope(
+                    queryset, info, related_model, operation="read"
+                )
 
                 if relation is not None and query_optimizer.settings.enable_dataloader:
                     loader = get_relation_dataloader(
@@ -347,7 +359,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
             return resolver
 
         # Add count resolver for reverse ManyToOne relations
-        def make_count_resolver(accessor_name, is_one_to_one):
+        def make_count_resolver(accessor_name, is_one_to_one, related_model):
             def count_resolver(self, info):
                 if is_one_to_one:
                     # For OneToOne, return 1 if exists, 0 if not
@@ -355,7 +367,11 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                     return 1 if related_obj else 0
                 # For ManyToOne reverse relations, count the related objects
                 related_obj = getattr(self, accessor_name)
-                return related_obj.count()
+                queryset = related_obj.all()
+                queryset = apply_tenant_scope(
+                    queryset, info, related_model, operation="read"
+                )
+                return queryset.count()
 
             return count_resolver
 
@@ -366,13 +382,14 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
             relation,
             query_optimizer,
             get_relation_dataloader,
+            apply_tenant_scope,
         )
 
         # Add count resolver only for non-OneToOne relationships
         if not is_one_to_one_reverse:
             count_field_name = f"{accessor_name}_count"
             type_attrs[f"resolve_{count_field_name}"] = make_count_resolver(
-                accessor_name, is_one_to_one_reverse
+                accessor_name, is_one_to_one_reverse, related_model
             )
 
     # Add @property methods as GraphQL fields

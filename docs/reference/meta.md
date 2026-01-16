@@ -34,6 +34,191 @@ Notes:
 - This is not Django's `class Meta`.
 - The config is cached per process. Restart the server after changes.
 
+## Tenant field
+
+Multi-tenancy can use GraphQLMeta to declare which field identifies the tenant
+for a model. Set `tenant_field` to the field name (or a Django path such as
+`organization__tenant`). Set it to `None` or an empty value to opt the model out
+of tenant scoping.
+
+```python
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+
+
+class Project(models.Model):
+    name = models.CharField(max_length=200)
+    organization = models.ForeignKey("org.Organization", on_delete=models.CASCADE)
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        tenant_field = "organization"
+```
+
+## JSON meta files
+
+You can declare the same GraphQLMeta configuration in `meta.json` at the root
+of any app. The loader scans installed apps at startup and applies the JSON
+configuration to models that do not define a `GraphQLMeta` inner class.
+
+The JSON accepts the same config sections you would define in code:
+`filtering`, `fields`, `ordering`, `resolvers`, `access`, and
+`classifications` (plus legacy keys like `include_fields`, `custom_filters`,
+`custom_resolvers`, `filter_fields`, and `quick_filter_fields`).
+
+Full example (`apps/store/meta.json`):
+
+```json
+{
+  "roles": {
+    "catalog_viewer": {
+      "description": "Read-only access",
+      "role_type": "functional",
+      "permissions": ["store.view_product"]
+    },
+    "catalog_editor": {
+      "description": "Create and update catalog entries",
+      "role_type": "business",
+      "permissions": ["store.add_product", "store.change_product"],
+      "parent_roles": ["catalog_viewer"]
+    },
+    "catalog_admin": {
+      "description": "Full control over catalog data",
+      "role_type": "system",
+      "permissions": ["store.*"],
+      "parent_roles": ["catalog_editor"],
+      "is_system_role": true,
+      "max_users": 5
+    }
+  },
+  "models": {
+    "store.Product": {
+      "fields": {
+        "include": ["id", "name", "sku", "price", "status", "created_at", "updated_at"],
+        "exclude": ["internal_notes"],
+        "read_only": ["created_at", "updated_at"],
+        "write_only": ["internal_token"]
+      },
+      "filtering": {
+        "quick": ["name", "category__name"],
+        "quick_lookup": "icontains",
+        "auto_detect_quick": false,
+        "fields": {
+          "status": {
+            "lookups": ["exact", "in"],
+            "choices": ["draft", "active"],
+            "help_text": "Product status"
+          },
+          "created_at": ["gte", "lte"]
+        },
+        "custom": {
+          "has_discount": "store.graphql_filters.filter_has_discount"
+        }
+      },
+      "ordering": {
+        "allowed": ["name", "created_at", "price"],
+        "default": ["-created_at"],
+        "allow_related": true
+      },
+      "resolvers": {
+        "queries": {
+          "featured": "store.graphql_resolvers.resolve_featured_products"
+        },
+        "mutations": {
+          "apply_discount": "store.graphql_resolvers.mutate_apply_discount"
+        },
+        "fields": {
+          "display_name": "store.graphql_resolvers.resolve_display_name"
+        }
+      },
+      "access": {
+        "operations": {
+          "list": {
+            "roles": ["catalog_viewer"],
+            "require_authentication": true
+          },
+          "retrieve": {
+            "permissions": ["store.view_product"],
+            "condition": "store.graphql_guards.can_access_product",
+            "match": "all",
+            "deny_message": "You cannot view this product."
+          },
+          "create": {
+            "roles": ["catalog_editor"],
+            "permissions": ["store.add_product"],
+            "match": "all"
+          },
+          "update": {
+            "roles": ["catalog_editor"],
+            "condition": "store.graphql_guards.can_update_product"
+          },
+          "delete": {
+            "roles": ["catalog_admin"],
+            "deny_message": "Only admins can delete products."
+          },
+          "bulk_update": {
+            "roles": ["catalog_admin"]
+          },
+          "*": {
+            "roles": ["staff"]
+          }
+        },
+        "fields": [
+          {
+            "field": "cost_price",
+            "access": "read",
+            "visibility": "masked",
+            "mask_value": "***",
+            "roles": ["catalog_admin"]
+          },
+          {
+            "field": "supplier_email",
+            "access": "read",
+            "visibility": "hidden",
+            "permissions": ["store.view_supplier_pii"],
+            "condition": "store.graphql_guards.can_view_supplier_email"
+          }
+        ]
+      },
+      "classifications": {
+        "model": ["inventory"],
+        "fields": {
+          "cost_price": ["financial"],
+          "supplier_email": ["pii"]
+        }
+      }
+    },
+    "store.Category": {
+      "include_fields": ["id", "name", "slug"],
+      "exclude_fields": ["internal_notes"],
+      "quick_filter_fields": ["name"],
+      "filters": {
+        "quick": ["name"]
+      },
+      "filter_fields": {
+        "name": ["exact", "icontains"],
+        "created_at": ["gte", "lte"]
+      },
+      "custom_filters": {
+        "starts_with": "store.graphql_filters.filter_category_starts_with"
+      },
+      "custom_resolvers": {
+        "list": "store.graphql_resolvers.resolve_category_list"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Use `models` to map model names (or `app_label.Model`) to GraphQLMeta configs.
+- Dotted paths in `custom`, `resolvers`, guard `condition`, or legacy `custom_*`
+  values are imported as callables. Non-dotted strings are treated as model methods.
+- Legacy keys (`include_fields`, `custom_filters`, `custom_resolvers`,
+  `filter_fields`, `quick_filter_fields`, `filters`) are supported for backward
+  compatibility and can be used instead of the structured sections.
+- When `roles` is present at the top level, the file must use `models` for
+  model configs (top-level model entries are not parsed).
+- If a model defines `GraphQLMeta` in code, it takes precedence over JSON.
+
 ## Field exposure
 
 Use `GraphQLMetaConfig.Fields` to control which model fields are visible.

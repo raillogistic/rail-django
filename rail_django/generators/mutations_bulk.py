@@ -67,6 +67,9 @@ def generate_bulk_create_mutation(
                 for input_data in inputs:
                     # Normalize enum inputs (GraphQL Enum -> underlying Django values)
                     input_data = cls._normalize_enum_inputs(input_data, model)
+                    input_data = self._apply_tenant_input(
+                        input_data, info, model, operation="create"
+                    )
                     input_data = self.input_validator.validate_and_sanitize(
                         model.__name__, input_data
                     )
@@ -202,7 +205,10 @@ def generate_bulk_update_mutation(
                 audited_update = _wrap_with_audit(model, "update", _perform_update)
                 instances = []
                 for input_data in inputs:
-                    instance = model.objects.get(pk=input_data["id"])
+                    scoped = self._apply_tenant_scope(
+                        model.objects.all(), info, model, operation="update"
+                    )
+                    instance = scoped.get(pk=input_data["id"])
                     graphql_meta.ensure_operation_access(
                         "bulk_update", info=info, instance=instance
                     )
@@ -212,6 +218,9 @@ def generate_bulk_update_mutation(
                     # Normalize enum inputs for update payload
                     update_data = cls._normalize_enum_inputs(
                         input_data["data"], model
+                    )
+                    update_data = self._apply_tenant_input(
+                        update_data, info, model, operation="update"
                     )
                     update_data = self.input_validator.validate_and_sanitize(
                         model.__name__, update_data
@@ -327,7 +336,10 @@ def generate_bulk_delete_mutation(
                 self._enforce_model_permission(
                     info, model, "bulk_delete", graphql_meta
                 )
-                instances = model.objects.filter(pk__in=ids)
+                scoped = self._apply_tenant_scope(
+                    model.objects.all(), info, model, operation="delete"
+                )
+                instances = scoped.filter(pk__in=ids)
                 if len(instances) != len(ids):
                     found_ids = set(str(instance.pk) for instance in instances)
                     missing_ids = set(ids) - found_ids

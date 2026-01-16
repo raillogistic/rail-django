@@ -33,8 +33,8 @@ class AppConfig(BaseAppConfig):
             # Setup Django signals
             self._setup_signals()
 
-            # Load RBAC role files from installed apps
-            self._load_role_files()
+            # Load GraphQLMeta JSON configs from installed apps
+            self._load_meta_files()
 
             # Validate library configuration
             self._validate_configuration()
@@ -117,19 +117,19 @@ class AppConfig(BaseAppConfig):
             if self._is_debug_mode():
                 raise
 
-    def _load_role_files(self):
-        """Load roles.json definitions from installed apps."""
+    def _load_meta_files(self):
+        """Load meta.json GraphQLMeta definitions from installed apps."""
         try:
-            from .security.role_loader import load_app_role_definitions
+            from .core.meta_json import load_app_meta_configs
 
-            registered_count = load_app_role_definitions()
+            registered_count = load_app_meta_configs()
             if registered_count:
                 logger.info(
-                    "Registered %s role definitions from roles.json files",
+                    "Registered %s GraphQLMeta definitions from meta.json files",
                     registered_count,
                 )
         except Exception as exc:
-            logger.warning("Could not load role definitions: %s", exc)
+            logger.warning("Could not load GraphQLMeta definitions: %s", exc)
 
     def _initialize_schema_registry(self):
         """Initialize the schema registry."""

@@ -823,22 +823,20 @@ context = PermissionContext(user=request.user, object_instance=project)
 role_manager.has_permission(request.user, "project.update_own", context)
 ```
 
-You can also define role definitions per app in `roles.json` (created by
+You can also define role definitions per app in `meta.json` (created by
 `startapp`). The loader scans installed apps at startup and registers roles
 alongside code-defined RBAC.
 
-**Detailed example (`apps/store/roles.json`):**
+**Detailed example (`apps/store/meta.json`):**
 ```json
 {
-  "roles": [
-    {
-      "name": "catalog_viewer",
+  "roles": {
+    "catalog_viewer": {
       "description": "Read-only access to the catalog.",
       "role_type": "functional",
       "permissions": ["store.view_product", "store.view_category"]
     },
-    {
-      "name": "catalog_editor",
+    "catalog_editor": {
       "description": "Create and update catalog entries.",
       "role_type": "business",
       "permissions": [
@@ -848,8 +846,7 @@ alongside code-defined RBAC.
       ],
       "parent_roles": ["catalog_viewer"]
     },
-    {
-      "name": "catalog_admin",
+    "catalog_admin": {
       "description": "Full control over catalog data.",
       "role_type": "system",
       "permissions": ["store.*"],
@@ -857,14 +854,63 @@ alongside code-defined RBAC.
       "is_system_role": true,
       "max_users": 5
     }
-  ]
+  },
+  "models": {}
 }
 ```
 
 Notes:
-- Place the file at the app root (for example `apps/store/roles.json`).
+- Place the file at the app root (for example `apps/store/meta.json`).
 - The loader runs on startup; restart the server to pick up changes.
 - Roles are additive and do not override built-in system roles or GraphQLMeta roles with the same name.
+
+You can also declare full GraphQLMeta configuration in `meta.json` per app.
+This mirrors the code-based GraphQLMeta API, including filtering, field
+exposure, ordering, resolvers, access guards, and classifications.
+
+Example (`apps/store/meta.json`):
+```json
+{
+  "models": {
+    "Product": {
+      "fields": {
+        "exclude": ["internal_notes"],
+        "read_only": ["created_at"]
+      },
+      "filtering": {
+        "quick": ["name", "category__name"],
+        "fields": {
+          "status": {"lookups": ["exact", "in"], "choices": ["draft", "active"]},
+          "created_at": ["gte", "lte"]
+        }
+      },
+      "ordering": {
+        "allowed": ["name", "created_at"],
+        "default": ["-created_at"]
+      },
+      "access": {
+        "operations": {
+          "list": {"roles": ["catalog_viewer"]},
+          "update": {"roles": ["catalog_admin"]}
+        },
+        "fields": [
+          {
+            "field": "cost_price",
+            "access": "read",
+            "visibility": "hidden",
+            "roles": ["catalog_admin"]
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Use `models` to map model names (or `app_label.Model`) to configs.
+- Dotted paths in resolver or guard condition values are imported as callables.
+- If a model defines `GraphQLMeta` in code, it takes precedence over JSON.
 
 ### Field-Level Security
 You can hide fields dynamically based on who is asking.

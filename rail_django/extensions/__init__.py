@@ -67,6 +67,7 @@ from .templating import (
 
 # Multi-factor authentication
 from .mfa import MFAManager
+from .multitenancy import TenantContextMiddleware, TenantManager, TenantMixin, TenantQuerySet
 
 __all__ = [
     # Authentication
@@ -115,4 +116,9 @@ __all__ = [
     "template_urlpatterns",
     # Multi-factor authentication
     "MFAManager",
+    # Multi-tenancy
+    "TenantContextMiddleware",
+    "TenantManager",
+    "TenantMixin",
+    "TenantQuerySet",
 ]

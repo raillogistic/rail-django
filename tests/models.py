@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
+
 User = get_user_model()
 
 
@@ -129,3 +131,29 @@ class TestAccount(models.Model):
         destination.solde_compte += montant
         self.save()
         destination.save()
+
+
+class TenantOrganization(models.Model):
+    __test__ = False
+    name = models.CharField(max_length=120)
+
+    class Meta:
+        app_label = "tests"
+        verbose_name_plural = "tenant organizations"
+
+
+class TenantProject(models.Model):
+    __test__ = False
+    name = models.CharField(max_length=120)
+    organization = models.ForeignKey(
+        TenantOrganization,
+        on_delete=models.CASCADE,
+        related_name="projects",
+    )
+
+    class GraphQLMeta(RailGraphQLMeta):
+        tenant_field = "organization"
+
+    class Meta:
+        app_label = "tests"
+        verbose_name_plural = "tenant projects"

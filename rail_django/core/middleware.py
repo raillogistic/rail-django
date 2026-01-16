@@ -30,6 +30,11 @@ from ..plugins.base import plugin_manager
 
 logger = logging.getLogger(__name__)
 
+try:
+    from ..extensions.multitenancy import TenantContextMiddleware
+except Exception:
+    TenantContextMiddleware = None
+
 
 @dataclass
 class MiddlewareSettings:
@@ -977,6 +982,7 @@ class CORSMiddleware(BaseMiddleware):
 # Default middleware stack
 DEFAULT_MIDDLEWARE = [
     AuthenticationMiddleware,
+    TenantContextMiddleware,
     GraphQLAuditMiddleware,
     RateLimitingMiddleware,
     AccessGuardMiddleware,
@@ -989,6 +995,8 @@ DEFAULT_MIDDLEWARE = [
     ErrorHandlingMiddleware,
     CORSMiddleware,
 ]
+
+DEFAULT_MIDDLEWARE = [mw for mw in DEFAULT_MIDDLEWARE if mw is not None]
 
 
 def get_middleware_stack(schema_name: Optional[str] = None) -> list[BaseMiddleware]:

@@ -87,6 +87,9 @@ def generate_grouping_query(
 
         manager = getattr(model, manager_name)
         queryset = manager.all()
+        queryset = self._apply_tenant_scope(
+            queryset, info, model, operation="list"
+        )
 
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)

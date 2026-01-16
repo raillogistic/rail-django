@@ -89,7 +89,9 @@ class MutationGenerator:
         # Pass mutation settings to type generator for nested relations configuration
         self.type_generator.mutation_settings = self.settings
         self._mutation_classes: dict[str, type[graphene.Mutation]] = {}
-        self.nested_handler = NestedOperationHandler(self.settings)
+        self.nested_handler = NestedOperationHandler(
+            self.settings, schema_name=self.schema_name
+        )
 
     def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
         guards = getattr(graphql_meta, "_operation_guards", None) or {}
@@ -152,6 +154,62 @@ class MutationGenerator:
         has_perm = getattr(user, "has_perm", None)
         if not callable(has_perm) or not has_perm(permission_name):
             raise GraphQLError(f"Permission required: {permission_name}")
+
+    def _apply_tenant_scope(
+        self,
+        queryset: models.QuerySet,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> models.QuerySet:
+        try:
+            from ..extensions.multitenancy import apply_tenant_queryset
+        except Exception:
+            return queryset
+        return apply_tenant_queryset(
+            queryset,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
+
+    def _enforce_tenant_access(
+        self,
+        instance: models.Model,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> None:
+        try:
+            from ..extensions.multitenancy import ensure_tenant_access
+        except Exception:
+            return
+        ensure_tenant_access(
+            instance, info, model, schema_name=self.schema_name, operation=operation
+        )
+
+    def _apply_tenant_input(
+        self,
+        input_data: dict[str, Any],
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        *,
+        operation: str = "create",
+    ) -> dict[str, Any]:
+        try:
+            from ..extensions.multitenancy import apply_tenant_to_input
+        except Exception:
+            return input_data
+        return apply_tenant_to_input(
+            input_data,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
 
     def generate_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         return _generate_create_mutation(self, model)

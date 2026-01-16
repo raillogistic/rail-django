@@ -716,17 +716,85 @@ class TypeGenerator:
             return None
 
         db_alias = getattr(state, "db", None)
-        loader_key = f"reverse:{related_model._meta.label_lower}:{relation_field}:{db_alias or 'default'}"
+        tenant_field, tenant_id, tenant_settings = self._get_tenant_filter_for_model(
+            context, related_model
+        )
+        if (
+            tenant_settings
+            and tenant_settings.require_tenant
+            and tenant_field
+            and tenant_id is None
+        ):
+            return None
+        tenant_key = "none" if tenant_id is None else str(tenant_id)
+        loader_key = (
+            f"reverse:{related_model._meta.label_lower}:{relation_field}:"
+            f"{db_alias or 'default'}:{tenant_key}"
+        )
 
         if not hasattr(context, "_rail_dataloaders"):
             context._rail_dataloaders = {}
 
         if loader_key not in context._rail_dataloaders:
             context._rail_dataloaders[loader_key] = RelatedObjectsLoader(
-                related_model, relation_field, db_alias
+                related_model,
+                relation_field,
+                db_alias,
+                tenant_field=tenant_field,
+                tenant_id=tenant_id,
             )
 
         return context._rail_dataloaders[loader_key]
+
+    def _apply_tenant_scope(
+        self,
+        queryset: models.QuerySet,
+        info: Any,
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> models.QuerySet:
+        try:
+            from ..extensions.multitenancy import apply_tenant_queryset
+        except Exception:
+            return queryset
+        return apply_tenant_queryset(
+            queryset,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
+
+    def _get_tenant_filter_for_model(
+        self,
+        context: Any,
+        model: type[models.Model],
+    ) -> tuple[Optional[str], Optional[Any], Optional[Any]]:
+        try:
+            from ..extensions.multitenancy import (
+                get_multitenancy_settings,
+                get_tenant_field_config,
+                resolve_tenant_id,
+            )
+        except Exception:
+            return None, None, None
+
+        schema_name = self.schema_name
+        settings = get_multitenancy_settings(schema_name)
+        if not settings.enabled or settings.isolation_mode != "row":
+            return None, None, settings
+
+        tenant_field = get_tenant_field_config(model, schema_name=schema_name)
+        if tenant_field is None:
+            return None, None, settings
+
+        user = getattr(context, "user", None)
+        if settings.allow_cross_tenant_superuser and user and user.is_superuser:
+            return None, None, settings
+
+        tenant_id = resolve_tenant_id(context, schema_name=schema_name)
+        return tenant_field.path, tenant_id, settings
 
     def _get_or_create_nested_input_type(
         self,

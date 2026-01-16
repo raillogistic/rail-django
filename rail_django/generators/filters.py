@@ -768,6 +768,19 @@ class AdvancedFilterGenerator:
                     combined_qs = model_cls.objects.filter(
                         Q(pk__in=sanitized_ids) | Q(pk__in=queryset.values("pk"))
                     ).distinct()
+                    tenant_filter = getattr(queryset, "_rail_tenant_filter", None)
+                    if tenant_filter:
+                        tenant_path = None
+                        tenant_id = None
+                        try:
+                            tenant_path, tenant_id = tenant_filter
+                        except Exception:
+                            tenant_path = None
+                            tenant_id = None
+                        if tenant_path and tenant_id is not None:
+                            combined_qs = combined_qs.filter(
+                                **{tenant_path: tenant_id}
+                            )
 
                     # Deterministic ordering:
                     # 1) Included IDs first (priority = 0)

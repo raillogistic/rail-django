@@ -40,8 +40,8 @@ Authorization uses a hybrid RBAC system:
 - Role definitions live in code (`rail_django.security.rbac.RoleManager`).
 - Assignments use Django `Group` records.
 - The permission manager also checks GraphQLMeta guards (per model).
-- Installed apps can ship a `roles.json` file that registers role definitions
-  at startup (additive with code-defined roles).
+- Installed apps can define role definitions in `meta.json` under a top-level
+  `roles` key (additive with code-defined roles).
 
 Auto-generated model queries enforce Django model permissions by default. The
 required permission is built as `<app_label>.<codename>_<model>` with the
@@ -53,26 +53,24 @@ GraphQLMeta access guards per model.
 Use GraphQLMeta to guard operations per model and to hide fields. See the
 [GraphQLMeta guide](meta.md) for configuration examples and field-level rules.
 
-### Role files (`roles.json`)
+### Role definitions in `meta.json`
 
-Place a `roles.json` file in the root of a Django app to register RBAC roles
-when the app loads. The loader scans installed apps at startup and registers
-each role with `role_manager`. It does not override existing role definitions
-(for example, system roles or GraphQLMeta roles with the same name).
+Place a `meta.json` file in the root of a Django app and define roles under
+`roles`. The loader scans installed apps at startup and registers each role
+with `role_manager`. It does not override existing role definitions (for
+example, system roles or GraphQLMeta roles with the same name).
 
-Example:
+Example (`apps/store/meta.json`):
 
 ```json
 {
-  "roles": [
-    {
-      "name": "catalog_viewer",
+  "roles": {
+    "catalog_viewer": {
       "description": "Read-only access to the catalog.",
       "role_type": "functional",
       "permissions": ["store.view_product", "store.view_category"]
     },
-    {
-      "name": "catalog_editor",
+    "catalog_editor": {
       "description": "Create and update catalog entries.",
       "role_type": "business",
       "permissions": [
@@ -82,8 +80,7 @@ Example:
       ],
       "parent_roles": ["catalog_viewer"]
     },
-    {
-      "name": "catalog_admin",
+    "catalog_admin": {
       "description": "Full control over catalog data.",
       "role_type": "system",
       "permissions": ["store.*"],
@@ -91,13 +88,14 @@ Example:
       "is_system_role": true,
       "max_users": 5
     }
-  ]
+  },
+  "models": {}
 }
 ```
 
 Notes:
 - `role_type` supports `system`, `business`, and `functional` (default: `business`).
-- Omit or leave `roles.json` empty if the app does not define roles.
+- Omit or leave `roles` empty if the app does not define roles.
 
 ## Policy engine
 

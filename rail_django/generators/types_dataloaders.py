@@ -2,7 +2,7 @@
 DataLoader helpers for reverse relations.
 """
 
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 from django.db import models
 
@@ -24,11 +24,15 @@ if DataLoader:
             related_model: type[models.Model],
             relation_field: str,
             db_alias: Optional[str] = None,
+            tenant_field: Optional[str] = None,
+            tenant_id: Optional[Any] = None,
         ):
             super().__init__()
             self.related_model = related_model
             self.relation_field = relation_field
             self.db_alias = db_alias
+            self.tenant_field = tenant_field
+            self.tenant_id = tenant_id
 
         def batch_load_fn(self, keys):
             if Promise is None:
@@ -42,6 +46,8 @@ if DataLoader:
             queryset = self.related_model._default_manager.using(self.db_alias).filter(
                 **filter_kwargs
             )
+            if self.tenant_field and self.tenant_id is not None:
+                queryset = queryset.filter(**{self.tenant_field: self.tenant_id})
 
             for obj in queryset:
                 key = getattr(obj, f"{self.relation_field}_id", None)

@@ -165,7 +165,13 @@ def convert_method_to_mutation(
                             ],
                         )
 
-                instance = model.objects.get(pk=id)
+                scoped = self._apply_tenant_scope(
+                    model.objects.all(),
+                    info,
+                    model,
+                    operation=guard_operation,
+                )
+                instance = scoped.get(pk=id)
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )
@@ -398,7 +404,13 @@ def generate_method_mutation(
         @classmethod
         def _execute_method(cls, model, method_name, id, input, info):
             try:
-                instance = model.objects.get(pk=id)
+                scoped = self._apply_tenant_scope(
+                    model.objects.all(),
+                    info,
+                    model,
+                    operation=guard_operation,
+                )
+                instance = scoped.get(pk=id)
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )

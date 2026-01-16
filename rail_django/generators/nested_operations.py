@@ -184,6 +184,73 @@ class NestedOperationHandler:
         instance.full_clean()
         instance.save()
 
+    def _apply_tenant_scope(
+        self,
+        queryset: models.QuerySet,
+        info: Optional[graphene.ResolveInfo],
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> models.QuerySet:
+        try:
+            from ..extensions.multitenancy import apply_tenant_queryset
+        except Exception:
+            return queryset
+        return apply_tenant_queryset(
+            queryset,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
+
+    def _apply_tenant_input(
+        self,
+        input_data: dict[str, Any],
+        info: Optional[graphene.ResolveInfo],
+        model: type[models.Model],
+        *,
+        operation: str = "create",
+    ) -> dict[str, Any]:
+        try:
+            from ..extensions.multitenancy import apply_tenant_to_input
+        except Exception:
+            return input_data
+        return apply_tenant_to_input(
+            input_data,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
+
+    def _enforce_tenant_access(
+        self,
+        instance: models.Model,
+        info: Optional[graphene.ResolveInfo],
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> None:
+        try:
+            from ..extensions.multitenancy import ensure_tenant_access
+        except Exception:
+            return
+        ensure_tenant_access(
+            instance, info, model, schema_name=self.schema_name, operation=operation
+        )
+
+    def _get_tenant_queryset(
+        self,
+        model: type[models.Model],
+        info: Optional[graphene.ResolveInfo],
+        *,
+        operation: str = "read",
+    ) -> models.QuerySet:
+        return self._apply_tenant_scope(
+            model.objects.all(), info, model, operation=operation
+        )
+
     def _has_nested_payload(self, value: Any) -> bool:
         if isinstance(value, dict):
             if "create" in value or "update" in value:
@@ -229,6 +296,9 @@ class NestedOperationHandler:
             self._ensure_operation_access(model, "create", info)
             # First, process nested_ prefixed fields and extract them
             processed_input = self._process_nested_fields(input_data)
+            processed_input = self._apply_tenant_input(
+                processed_input, info, model, operation="create"
+            )
 
             # Separate regular fields from nested relationship fields
             regular_fields = {}
@@ -282,9 +352,10 @@ class NestedOperationHandler:
                     # Nested create
                     if "id" in value:
                         # Update existing object
-                        related_instance = field.related_model.objects.get(
-                            pk=value["id"]
+                        related_queryset = self._get_tenant_queryset(
+                            field.related_model, info, operation="retrieve"
                         )
+                        related_instance = related_queryset.get(pk=value["id"])
                         regular_fields[field_name] = self.handle_nested_update(
                             field.related_model, value, related_instance, info=info
                         )
@@ -304,7 +375,10 @@ class NestedOperationHandler:
                             pass
 
                     try:
-                        related_instance = field.related_model.objects.get(pk=pk_value)
+                        related_queryset = self._get_tenant_queryset(
+                            field.related_model, info, operation="retrieve"
+                        )
+                        related_instance = related_queryset.get(pk=pk_value)
                         self._ensure_operation_access(
                             field.related_model,
                             "retrieve",
@@ -368,9 +442,12 @@ class NestedOperationHandler:
                                     pass
 
                             try:
-                                related_obj = related_field.related_model.objects.get(
-                                    pk=pk_value
+                                related_queryset = self._get_tenant_queryset(
+                                    related_field.related_model,
+                                    info,
+                                    operation="update",
                                 )
+                                related_obj = related_queryset.get(pk=pk_value)
                                 self._ensure_operation_access(
                                     related_field.related_model,
                                     "update",
@@ -416,7 +493,12 @@ class NestedOperationHandler:
                         # Connect existing objects to this instance
                         connect_ids = value["connect"]
                         if isinstance(connect_ids, list):
-                            related_objects = related_field.related_model.objects.filter(
+                            related_queryset = self._get_tenant_queryset(
+                                related_field.related_model,
+                                info,
+                                operation="update",
+                            )
+                            related_objects = related_queryset.filter(
                                 pk__in=connect_ids
                             )
                             for related_obj in related_objects:
@@ -449,9 +531,10 @@ class NestedOperationHandler:
                         if isinstance(item, dict) and use_nested:
                             if "id" in item:
                                 # Reference existing object
-                                related_obj = field.related_model.objects.get(
-                                    pk=item["id"]
+                                related_queryset = self._get_tenant_queryset(
+                                    field.related_model, info, operation="retrieve"
                                 )
+                                related_obj = related_queryset.get(pk=item["id"])
                                 self._ensure_operation_access(
                                     field.related_model,
                                     "retrieve",
@@ -466,7 +549,10 @@ class NestedOperationHandler:
                             related_objects.append(related_obj)
                         elif isinstance(item, (str, int, uuid.UUID)):
                             # Direct ID reference - always allowed
-                            related_obj = field.related_model.objects.get(pk=item)
+                            related_queryset = self._get_tenant_queryset(
+                                field.related_model, info, operation="retrieve"
+                            )
+                            related_obj = related_queryset.get(pk=item)
                             self._ensure_operation_access(
                                 field.related_model,
                                 "retrieve",
@@ -497,7 +583,10 @@ class NestedOperationHandler:
                     if "connect" in value:
                         connect_ids = value["connect"]
                         if isinstance(connect_ids, list):
-                            existing_objects = field.related_model.objects.filter(
+                            related_queryset = self._get_tenant_queryset(
+                                field.related_model, info, operation="retrieve"
+                            )
+                            existing_objects = related_queryset.filter(
                                 pk__in=connect_ids
                             )
                             for related_obj in existing_objects:
@@ -523,7 +612,10 @@ class NestedOperationHandler:
                     if "disconnect" in value:
                         disconnect_ids = value["disconnect"]
                         if isinstance(disconnect_ids, list):
-                            objects_to_remove = field.related_model.objects.filter(
+                            related_queryset = self._get_tenant_queryset(
+                                field.related_model, info, operation="retrieve"
+                            )
+                            objects_to_remove = related_queryset.filter(
                                 pk__in=disconnect_ids
                             )
                             for related_obj in objects_to_remove:
@@ -594,8 +686,14 @@ class NestedOperationHandler:
         """
         try:
             self._ensure_operation_access(model, "update", info, instance=instance)
+            self._enforce_tenant_access(
+                instance, info, model, operation="update"
+            )
             # First, process nested_ prefixed fields and extract them
             processed_input = self._process_nested_fields(input_data)
+            processed_input = self._apply_tenant_input(
+                processed_input, info, model, operation="update"
+            )
 
             # Separate regular fields from nested relationship fields
             regular_fields = {}
@@ -651,9 +749,10 @@ class NestedOperationHandler:
                         )
                     if "id" in value:
                         # Update existing related object
-                        related_instance = field.related_model.objects.get(
-                            pk=value["id"]
+                        related_queryset = self._get_tenant_queryset(
+                            field.related_model, info, operation="retrieve"
                         )
+                        related_instance = related_queryset.get(pk=value["id"])
                         updated_instance = self.handle_nested_update(
                             field.related_model, value, related_instance, info=info
                         )
@@ -674,7 +773,10 @@ class NestedOperationHandler:
                             pass
 
                     try:
-                        related_instance = field.related_model.objects.get(pk=pk_value)
+                        related_queryset = self._get_tenant_queryset(
+                            field.related_model, info, operation="retrieve"
+                        )
+                        related_instance = related_queryset.get(pk=pk_value)
                         self._ensure_operation_access(
                             field.related_model,
                             "retrieve",
@@ -712,8 +814,13 @@ class NestedOperationHandler:
                 # Handle different types of reverse relationship data
                 if isinstance(value, list):
                     # Get all existing related objects for this instance
+                    related_queryset = self._get_tenant_queryset(
+                        related_field.related_model,
+                        info,
+                        operation="retrieve",
+                    )
                     existing_objects = list(
-                        related_field.related_model.objects.filter(
+                        related_queryset.filter(
                             **{related_field.field.name: instance.pk}
                         )
                     )
@@ -727,10 +834,13 @@ class NestedOperationHandler:
                             if "id" in item:
                                 # Update existing object
                                 try:
-                                    existing_obj = (
-                                        related_field.related_model.objects.get(
-                                            pk=item["id"]
-                                        )
+                                    related_queryset = self._get_tenant_queryset(
+                                        related_field.related_model,
+                                        info,
+                                        operation="retrieve",
+                                    )
+                                    existing_obj = related_queryset.get(
+                                        pk=item["id"]
                                     )
                                     self._ensure_operation_access(
                                         related_field.related_model,
@@ -773,7 +883,12 @@ class NestedOperationHandler:
                                                             except (TypeError, ValueError):
                                                                 pass
                                                         
-                                                        related_obj = field.related_model.objects.get(
+                                                        related_queryset = self._get_tenant_queryset(
+                                                            field.related_model,
+                                                            info,
+                                                            operation="retrieve",
+                                                        )
+                                                        related_obj = related_queryset.get(
                                                             pk=pk_val
                                                         )
                                                         self._ensure_operation_access(
@@ -790,7 +905,12 @@ class NestedOperationHandler:
                                                     elif isinstance(val, dict):
                                                         # Handle nested object creation/update
                                                         if "id" in val:
-                                                            related_obj = field.related_model.objects.get(
+                                                            related_queryset = self._get_tenant_queryset(
+                                                                field.related_model,
+                                                                info,
+                                                                operation="retrieve",
+                                                            )
+                                                            related_obj = related_queryset.get(
                                                                 pk=val["id"]
                                                             )
                                                             updated_related = self.handle_nested_update(
@@ -855,10 +975,13 @@ class NestedOperationHandler:
                                                     except (TypeError, ValueError):
                                                         pass
 
-                                                related_obj = (
-                                                    field.related_model.objects.get(
-                                                        pk=pk_val
-                                                    )
+                                                related_queryset = self._get_tenant_queryset(
+                                                    field.related_model,
+                                                    info,
+                                                    operation="retrieve",
+                                                )
+                                                related_obj = related_queryset.get(
+                                                    pk=pk_val
                                                 )
                                                 self._ensure_operation_access(
                                                     field.related_model,
@@ -870,10 +993,13 @@ class NestedOperationHandler:
                                             elif isinstance(val, dict):
                                                 # Handle nested object creation/update
                                                 if "id" in val:
-                                                    related_obj = (
-                                                        field.related_model.objects.get(
-                                                            pk=val["id"]
-                                                        )
+                                                    related_queryset = self._get_tenant_queryset(
+                                                        field.related_model,
+                                                        info,
+                                                        operation="retrieve",
+                                                    )
+                                                    related_obj = related_queryset.get(
+                                                        pk=val["id"]
                                                     )
                                                     updated_related = (
                                                         self.handle_nested_update(
@@ -923,9 +1049,12 @@ class NestedOperationHandler:
                                     pass
 
                             try:
-                                related_obj = related_field.related_model.objects.get(
-                                    pk=pk_val
+                                related_queryset = self._get_tenant_queryset(
+                                    related_field.related_model,
+                                    info,
+                                    operation="update",
                                 )
+                                related_obj = related_queryset.get(pk=pk_val)
                                 self._ensure_operation_access(
                                     related_field.related_model,
                                     "update",
@@ -977,7 +1106,12 @@ class NestedOperationHandler:
                             for item in set_data:
                                 if isinstance(item, dict):
                                     if "id" in item:
-                                        related_obj = field.related_model.objects.get(
+                                        related_queryset = self._get_tenant_queryset(
+                                            field.related_model,
+                                            info,
+                                            operation="retrieve",
+                                        )
+                                        related_obj = related_queryset.get(
                                             pk=item["id"]
                                         )
                                         self._ensure_operation_access(
@@ -998,9 +1132,12 @@ class NestedOperationHandler:
                                             pk_val = int(item)
                                         except (TypeError, ValueError):
                                             pass
-                                    related_obj = field.related_model.objects.get(
-                                        pk=pk_val
+                                    related_queryset = self._get_tenant_queryset(
+                                        field.related_model,
+                                        info,
+                                        operation="retrieve",
                                     )
+                                    related_obj = related_queryset.get(pk=pk_val)
                                     self._ensure_operation_access(
                                         field.related_model,
                                         "retrieve",
@@ -1022,9 +1159,12 @@ class NestedOperationHandler:
                                             pk_val = int(item)
                                         except (TypeError, ValueError):
                                             pass
-                                    related_obj = field.related_model.objects.get(
-                                        pk=pk_val
+                                    related_queryset = self._get_tenant_queryset(
+                                        field.related_model,
+                                        info,
+                                        operation="retrieve",
                                     )
+                                    related_obj = related_queryset.get(pk=pk_val)
                                     self._ensure_operation_access(
                                         field.related_model,
                                         "retrieve",
@@ -1057,9 +1197,12 @@ class NestedOperationHandler:
                                             pk_val = int(item)
                                         except (TypeError, ValueError):
                                             pass
-                                    related_obj = field.related_model.objects.get(
-                                        pk=pk_val
+                                    related_queryset = self._get_tenant_queryset(
+                                        field.related_model,
+                                        info,
+                                        operation="retrieve",
                                     )
+                                    related_obj = related_queryset.get(pk=pk_val)
                                     self._ensure_operation_access(
                                         field.related_model,
                                         "retrieve",
@@ -1074,7 +1217,12 @@ class NestedOperationHandler:
                         if isinstance(update_data, list):
                             for item in update_data:
                                 if "id" in item:
-                                    related_instance = field.related_model.objects.get(
+                                    related_queryset = self._get_tenant_queryset(
+                                        field.related_model,
+                                        info,
+                                        operation="retrieve",
+                                    )
+                                    related_instance = related_queryset.get(
                                         pk=item["id"]
                                     )
                                     self.handle_nested_update(
@@ -1098,9 +1246,12 @@ class NestedOperationHandler:
                                 # Get existing object by ID - handle both regular and GraphQL IDs
                                 try:
                                     # Try to use the ID as-is first (for integer IDs)
-                                    related_obj = field.related_model.objects.get(
-                                        pk=item["id"]
+                                    related_queryset = self._get_tenant_queryset(
+                                        field.related_model,
+                                        info,
+                                        operation="retrieve",
                                     )
+                                    related_obj = related_queryset.get(pk=item["id"])
                                 except (ValueError, field.related_model.DoesNotExist):
                                     # If that fails, try to decode as GraphQL global ID
                                     from graphql_relay import from_global_id
@@ -1109,12 +1260,22 @@ class NestedOperationHandler:
                                         decoded_type, decoded_id = from_global_id(
                                             item["id"]
                                         )
-                                        related_obj = field.related_model.objects.get(
+                                        related_queryset = self._get_tenant_queryset(
+                                            field.related_model,
+                                            info,
+                                            operation="retrieve",
+                                        )
+                                        related_obj = related_queryset.get(
                                             pk=decoded_id
                                         )
                                     except Exception:
                                         # If all else fails, raise the original error
-                                        related_obj = field.related_model.objects.get(
+                                        related_queryset = self._get_tenant_queryset(
+                                            field.related_model,
+                                            info,
+                                            operation="retrieve",
+                                        )
+                                        related_obj = related_queryset.get(
                                             pk=item["id"]
                                         )
 
@@ -1156,7 +1317,12 @@ class NestedOperationHandler:
                             related_objects.append(related_obj)
                         elif isinstance(item, (int, uuid.UUID)):
                             # Get existing object by ID
-                            related_obj = field.related_model.objects.get(pk=item)
+                            related_queryset = self._get_tenant_queryset(
+                                field.related_model,
+                                info,
+                                operation="retrieve",
+                            )
+                            related_obj = related_queryset.get(pk=item)
                             self._ensure_operation_access(
                                 field.related_model,
                                 "retrieve",
@@ -1514,7 +1680,12 @@ class NestedOperationHandler:
                     elif isinstance(item, (str, int)):
                         # Connect existing object to this instance
                         try:
-                            related_field.related_model.objects.filter(pk=item).update(
+                            related_queryset = self._get_tenant_queryset(
+                                related_field.related_model,
+                                None,
+                                operation="update",
+                            )
+                            related_queryset.filter(pk=item).update(
                                 **{related_field.field.name: instance}
                             )
                         except Exception as e:
@@ -1545,9 +1716,14 @@ class NestedOperationHandler:
                     # Connect existing objects to this instance
                     connect_ids = value["connect"]
                     if isinstance(connect_ids, list):
-                        related_field.related_model.objects.filter(
-                            pk__in=connect_ids
-                        ).update(**{related_field.field.name: instance})
+                        related_queryset = self._get_tenant_queryset(
+                            related_field.related_model,
+                            None,
+                            operation="update",
+                        )
+                        related_queryset.filter(pk__in=connect_ids).update(
+                            **{related_field.field.name: instance}
+                        )
 
     def _get_reverse_relations(self, model: type[models.Model]) -> dict[str, Any]:
         """

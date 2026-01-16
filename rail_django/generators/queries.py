@@ -233,6 +233,42 @@ class QueryGenerator:
     ) -> list[Any]:
         return _apply_property_ordering(items, prop_specs)
 
+    def _apply_tenant_scope(
+        self,
+        queryset: models.QuerySet,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> models.QuerySet:
+        try:
+            from ..extensions.multitenancy import apply_tenant_queryset
+        except Exception:
+            return queryset
+        return apply_tenant_queryset(
+            queryset,
+            info,
+            model,
+            schema_name=self.schema_name,
+            operation=operation,
+        )
+
+    def _enforce_tenant_access(
+        self,
+        instance: models.Model,
+        info: graphene.ResolveInfo,
+        model: type[models.Model],
+        *,
+        operation: str = "read",
+    ) -> None:
+        try:
+            from ..extensions.multitenancy import ensure_tenant_access
+        except Exception:
+            return
+        ensure_tenant_access(
+            instance, info, model, schema_name=self.schema_name, operation=operation
+        )
+
     def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
         guards = getattr(graphql_meta, "_operation_guards", None) or {}
         return operation in guards or "*" in guards
@@ -323,6 +359,9 @@ class QueryGenerator:
         def filtered_resolver(root: Any, info: graphene.ResolveInfo, **kwargs):
             result = original_resolver(root, info, **kwargs)
             if isinstance(result, models.QuerySet):
+                result = self._apply_tenant_scope(
+                    result, info, model, operation="list"
+                )
                 filterset = filter_class(kwargs, result)
                 return filterset.qs
             return result
