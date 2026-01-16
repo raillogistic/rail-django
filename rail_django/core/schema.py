@@ -144,7 +144,9 @@ class SchemaBuilder:
             return
 
         if settings_dict != (self._raw_settings or {}):
-            self.settings = SchemaSettings(**settings_dict) if settings_dict else SchemaSettings()
+            self.settings = (
+                SchemaSettings(**settings_dict) if settings_dict else SchemaSettings()
+            )
             self._raw_settings = settings_dict or {}
             self._schema = None
 
@@ -191,7 +193,9 @@ class SchemaBuilder:
             from ..config_proxy import get_subscription_generator_settings
             from ..generators.subscriptions import SubscriptionGenerator
 
-            subscription_settings = get_subscription_generator_settings(self.schema_name)
+            subscription_settings = get_subscription_generator_settings(
+                self.schema_name
+            )
             self._subscription_generator = SubscriptionGenerator(
                 self.type_generator,
                 settings=subscription_settings,
@@ -347,7 +351,9 @@ class SchemaBuilder:
                 registry_models = self.registry.get_models_for_schema(self.schema_name)
                 if registry_models:
                     registry_models = [
-                        model for model in registry_models if self._is_valid_model(model)
+                        model
+                        for model in registry_models
+                        if self._is_valid_model(model)
                     ]
                     logger.debug(
                         f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}"
@@ -703,9 +709,7 @@ class SchemaBuilder:
                 # Create Query type with security extensions
                 query_attrs: dict[str, Any] = {}
                 if getattr(django_settings, "DEBUG", False):
-                    query_attrs["debug"] = graphene.Field(
-                        DjangoDebug, name="_debug"
-                    )
+                    query_attrs["debug"] = graphene.Field(DjangoDebug, name="_debug")
                 query_attrs.update(self._query_fields)
 
                 custom_query_classes = self._load_query_extensions()
@@ -875,6 +879,50 @@ class SchemaBuilder:
                     except ImportError as e:
                         logger.warning(
                             f"Could not import metadata queries for schema '{self.schema_name}': {e}"
+                        )
+
+                # Add Model Schema V2 queries (Metadata V2)
+                if self.settings.show_metadata:
+                    try:
+                        from ..extensions.metadata_v2 import ModelSchemaQueryV2
+
+                        # Create an instance of ModelSchemaQueryV2 to get bound methods
+                        schema_query_v2_instance = ModelSchemaQueryV2()
+                        # Merge metadata v2 queries with proper resolver binding
+                        for (
+                            field_name,
+                            field,
+                        ) in ModelSchemaQueryV2._meta.fields.items():
+                            # Get the resolver method from the instance
+                            resolver_method_name = f"resolve_{field_name}"
+                            if hasattr(schema_query_v2_instance, resolver_method_name):
+                                resolver_method = getattr(
+                                    schema_query_v2_instance, resolver_method_name
+                                )
+
+                                # Create a wrapper that handles the root parameter
+                                def create_resolver_wrapper(method):
+                                    def wrapper(root, info, **kwargs):
+                                        return method(info, **kwargs)
+
+                                    return wrapper
+
+                                # Create a new field with the wrapped resolver
+                                query_attrs[field_name] = graphene.Field(
+                                    field.type,
+                                    description=field.description,
+                                    resolver=create_resolver_wrapper(resolver_method),
+                                    args=getattr(field, "args", None),
+                                )
+                            else:
+                                query_attrs[field_name] = field
+
+                        logger.info(
+                            f"Model schema V2 queries integrated into schema '{self.schema_name}'"
+                        )
+                    except ImportError as e:
+                        logger.warning(
+                            f"Could not import metadata v2 queries for schema '{self.schema_name}': {e}"
                         )
 
                 query_allowlist = self._get_schema_setting(
@@ -1128,7 +1176,9 @@ class SchemaBuilder:
                         if normalized_models:
                             models = normalized_models
                     if models is None:
-                        models = [model._meta.label for model in self._registered_models]
+                        models = [
+                            model._meta.label for model in self._registered_models
+                        ]
 
                     register_schema(
                         name=self.schema_name,
@@ -1460,7 +1510,9 @@ class AutoSchemaGenerator:
                     original_load = builder._load_query_extensions
                     builder._auto_schema_original_load_query_extensions = original_load
 
-                def _load_query_extensions_override() -> list[type[graphene.ObjectType]]:
+                def _load_query_extensions_override() -> (
+                    list[type[graphene.ObjectType]]
+                ):
                     loaded = list(original_load())
                     for extension in self._query_extensions:
                         if extension not in loaded:

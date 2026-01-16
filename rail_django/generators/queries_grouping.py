@@ -202,11 +202,13 @@ def generate_grouping_query(
         )
     if filter_class:
         for name, field in filter_class.base_filters.items():
-            arguments[name] = graphene.Argument(
-                self.type_generator.FIELD_TYPE_MAP.get(
+            if name == "include":
+                field_type = graphene.List(graphene.ID)
+            else:
+                field_type = self.type_generator.FIELD_TYPE_MAP.get(
                     type(field), graphene.String
                 )
-            )
+            arguments[name] = graphene.Argument(field_type)
 
     return graphene.Field(
         graphene.List(GroupingBucketType),

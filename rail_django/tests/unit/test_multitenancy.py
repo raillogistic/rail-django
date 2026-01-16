@@ -3,6 +3,8 @@ Unit tests for multi-tenancy query and mutation scoping.
 """
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
@@ -29,8 +31,17 @@ class TestMultiTenancy(TestCase):
                 "tenant_header": "X-Tenant-ID",
                 "default_tenant_field": "organization",
                 "require_tenant": True,
-            }
+            },
         }
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="tenant_user",
+            password="password",
+        )
+        perms = Permission.objects.filter(
+            codename__in=["view_tenantproject", "change_tenantproject"]
+        )
+        self.user.user_permissions.add(*perms)
         harness = build_schema(
             schema_name="tenant_test",
             models=[TenantOrganization, TenantProject],
@@ -38,11 +49,12 @@ class TestMultiTenancy(TestCase):
         )
         self.schema = harness.schema
 
-    def _client(self, tenant_id=None):
+    def _client(self, tenant_id=None, user=None):
         headers = {"X-Tenant-ID": str(tenant_id)} if tenant_id else None
         return RailGraphQLTestClient(
             self.schema,
             schema_name="tenant_test",
+            user=user or self.user,
             headers=headers,
         )
 
@@ -93,7 +105,7 @@ class TestMultiTenancy(TestCase):
         client = self._client(self.org1.id)
         mutation = f"""
         mutation {{
-            update_tenantproject(id: "{self.p2.id}", input: {{ name: "New Name" }}) {{
+            updateTenantproject(id: "{self.p2.id}", input: {{ name: "New Name" }}) {{
                 ok
                 errors {{
                     message
@@ -102,6 +114,6 @@ class TestMultiTenancy(TestCase):
         }}
         """
         result = client.execute(mutation)
-        data = result["data"]["update_tenantproject"]
+        data = result["data"]["updateTenantproject"]
         self.assertFalse(data["ok"])
         self.assertTrue(data["errors"])

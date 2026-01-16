@@ -36,7 +36,12 @@ from .auth import (  # ChangePasswordMutation,
 )
 
 # Authentication decorators for Django views
-from .auth_decorators import get_user_from_jwt, jwt_optional, jwt_required, require_permissions
+from .auth_decorators import (
+    get_user_from_jwt,
+    jwt_optional,
+    jwt_required,
+    require_permissions,
+)
 
 # Model export functionality (JWT protected)
 from .exporting import (
@@ -57,6 +62,15 @@ from .metadata import (
     RelationshipMetadataType,
 )
 
+# Model schema V2 for rich frontend interfaces
+from .metadata_v2 import (
+    FieldSchemaType,
+    ModelSchemaExtractor,
+    ModelSchemaQueryV2,
+    ModelSchemaType,
+    RelationshipSchemaType,
+)
+
 # PDF templating helpers
 from .templating import (
     PdfTemplateView,
@@ -67,7 +81,12 @@ from .templating import (
 
 # Multi-factor authentication
 from .mfa import MFAManager
-from .multitenancy import TenantContextMiddleware, TenantManager, TenantMixin, TenantQuerySet
+from .multitenancy import (
+    TenantContextMiddleware,
+    TenantManager,
+    TenantMixin,
+    TenantQuerySet,
+)
 
 __all__ = [
     # Authentication
@@ -109,6 +128,12 @@ __all__ = [
     "FieldMetadataType",
     "RelationshipMetadataType",
     "ModelMetadataExtractor",
+    # Model schema V2
+    "ModelSchemaQueryV2",
+    "ModelSchemaType",
+    "FieldSchemaType",
+    "RelationshipSchemaType",
+    "ModelSchemaExtractor",
     # PDF templating
     "PdfTemplateView",
     "model_pdf_template",

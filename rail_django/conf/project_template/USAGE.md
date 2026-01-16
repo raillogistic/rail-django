@@ -10,50 +10,51 @@ This guide is designed to take you from a fresh installation to deploying a comp
 
 1.  [Introduction & Philosophy](#1-introduction--philosophy)
 2.  [Installation & Setup](#2-installation--setup)
-    *   [Prerequisites](#prerequisites)
-    *   [Quick Start](#quick-start)
-    *   [Project Structure](#project-structure)
+    - [Prerequisites](#prerequisites)
+    - [Quick Start](#quick-start)
+    - [Project Structure](#project-structure)
 3.  [Core Architecture](#3-core-architecture)
-    *   [Auto-Schema Generation](#auto-schema-generation)
-    *   [The Registry System](#the-registry-system)
-    *   [Resolvers & Mutations](#resolvers--mutations)
+    - [Auto-Schema Generation](#auto-schema-generation)
+    - [The Registry System](#the-registry-system)
+    - [Resolvers & Mutations](#resolvers--mutations)
 4.  [Configuration Guide](#4-configuration-guide)
-    *   [Global Settings](#global-settings)
-    *   [Multi-Schema Configuration](#multi-schema-configuration)
-    *   [Environment Variables](#environment-variables)
+    - [Global Settings](#global-settings)
+    - [Multi-Schema Configuration](#multi-schema-configuration)
+    - [Environment Variables](#environment-variables)
 5.  [Data Modeling & API Design](#5-data-modeling--api-design)
-    *   [Defining Models](#defining-models)
-    *   [Customizing GraphQL Types](#customizing-graphql-types)
-    *   [The `graphql_meta` Class](#the-graphql_meta-class)
+    - [Defining Models](#defining-models)
+    - [Customizing GraphQL Types](#customizing-graphql-types)
+    - [The `graphql_meta` Class](#the-graphql_meta-class)
 6.  [Querying & Filtering](#6-querying--filtering)
-    *   [Advanced Filtering](#advanced-filtering)
-    *   [Pagination Strategies](#pagination-strategies)
-    *   [Ordering & Sorting](#ordering--sorting)
+    - [Advanced Filtering](#advanced-filtering)
+    - [Pagination Strategies](#pagination-strategies)
+    - [Ordering & Sorting](#ordering--sorting)
 7.  [Mutations & Operations](#7-mutations--operations)
-    *   [Auto-CRUD Mutations](#auto-crud-mutations)
-    *   [Custom Mutations](#custom-mutations)
-    *   [Bulk Operations](#bulk-operations)
+    - [Auto-CRUD Mutations](#auto-crud-mutations)
+    - [Custom Mutations](#custom-mutations)
+    - [Bulk Operations](#bulk-operations)
 8.  [Security & Permissions](#8-security--permissions)
-    *   [Authentication Flow (JWT)](#authentication-flow-jwt)
-    *   [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
-    *   [Field-Level Security](#field-level-security)
-    *   [Input Sanitization](#input-sanitization)
+    - [Authentication Flow (JWT)](#authentication-flow-jwt)
+    - [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
+    - [Field-Level Security](#field-level-security)
+    - [Input Sanitization](#input-sanitization)
 9.  [Extensions System](#9-extensions-system)
-    *   [Audit Logging](#audit-logging)
-    *   [Webhooks](#webhooks)
-    *   [Data Exporting (Excel/CSV)](#data-exporting-excelcsv)
-    *   [Health Monitoring](#health-monitoring)
-    *   [Subscriptions (Real-time)](#subscriptions-real-time)
-    *   [Multi-Factor Authentication (MFA)](#multi-factor-authentication-mfa)
-    *   [PDF Templating Engine](#pdf-templating-engine)
+    - [Audit Logging](#audit-logging)
+    - [Webhooks](#webhooks)
+    - [Data Exporting (Excel/CSV)](#data-exporting-excelcsv)
+    - [Health Monitoring](#health-monitoring)
+    - [Subscriptions (Real-time)](#subscriptions-real-time)
+    - [Multi-Factor Authentication (MFA)](#multi-factor-authentication-mfa)
+    - [PDF Templating Engine](#pdf-templating-engine)
+    - [Model Schema Introspection (Metadata V2)](#model-schema-introspection-metadata-v2)
 10. [Performance Tuning](#10-performance-tuning)
-    *   [Query Optimization](#query-optimization)
-    *   [DataLoader & N+1 Problem](#dataloader--n1-problem)
-    *   [Complexity Limiting](#complexity-limiting)
+    - [Query Optimization](#query-optimization)
+    - [DataLoader & N+1 Problem](#dataloader--n1-problem)
+    - [Complexity Limiting](#complexity-limiting)
 11. [Deployment & DevOps](#11-deployment--devops)
-    *   [Docker Configuration](#docker-configuration)
-    *   [Production Checklist](#production-checklist)
-    *   [Troubleshooting](#troubleshooting)
+    - [Docker Configuration](#docker-configuration)
+    - [Production Checklist](#production-checklist)
+    - [Troubleshooting](#troubleshooting)
 12. [Manual Deployment Guide](#12-manual-deployment-guide)
 
 ---
@@ -63,6 +64,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
 Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-Django. While Graphene is powerful, building a standard CRUD API often requires writing hundreds of lines of repetitive `ObjectType`, `DjangoFilterConnectionField`, and `Mutation` classes.
 
 **Our Philosophy:**
+
 1.  **Convention over Configuration:** If you define a Django model, you should get a working API immediately.
 2.  **Security by Design:** Permissions, depths limits, and input validation should be on by default.
 3.  **Battery Included:** Audit logs, exports, and health checks are requirements, not "nice-to-haves".
@@ -72,13 +74,15 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
 ## 2. Installation & Setup
 
 ### Prerequisites
-*   Python 3.11 or higher
-*   pip (Python Package Installer)
-*   (Optional) Docker & Docker Compose for containerized development
+
+- Python 3.11 or higher
+- pip (Python Package Installer)
+- (Optional) Docker & Docker Compose for containerized development
 
 ### Quick Start
 
 1.  **Install the library:**
+
     ```bash
     pip install rail-django
     # OR directly from source
@@ -87,17 +91,20 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
 
 2.  **Bootstrap your project:**
     The `rail-admin` CLI tool sets up the perfect directory structure.
+
     ```bash
     rail-admin startproject my_platform
     cd my_platform
     ```
 
 3.  **Initialize the Database:**
+
     ```bash
     python manage.py migrate
     ```
 
 4.  **Create an Admin User:**
+
     ```bash
     python manage.py createsuperuser
     ```
@@ -109,18 +116,21 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     Access the GraphiQL playground at: `http://localhost:8000/graphql/graphiql/`
 
 ### Dependency Management
+
 Rail Django uses a split requirements system to separate development and production dependencies.
 
-*   `requirements/base.txt`: Core dependencies required for the application to run.
-*   `requirements/dev.txt`: Extends `base.txt` with development tools (e.g., `black`) and installs `rail-django` from PyPI or locally.
-*   `requirements/prod.txt`: Extends `base.txt` with production-specific settings and installs `rail-django` directly from the official GitHub repository.
+- `requirements/base.txt`: Core dependencies required for the application to run.
+- `requirements/dev.txt`: Extends `base.txt` with development tools (e.g., `black`) and installs `rail-django` from PyPI or locally.
+- `requirements/prod.txt`: Extends `base.txt` with production-specific settings and installs `rail-django` directly from the official GitHub repository.
 
 To install dependencies for development:
+
 ```bash
 pip install -r requirements/dev.txt
 ```
 
 ### Project Structure
+
 Rail Django enforces a clean architecture to keep your codebase scalable.
 
 ```
@@ -141,18 +151,22 @@ my_platform/
 ## 3. Core Architecture
 
 ### Auto-Schema Generation
+
 At startup, Rail Django scans your `INSTALLED_APPS`. For every `models.Model` it finds, it:
+
 1.  Creates a `DjangoObjectType`.
 2.  Generates a `FilterSet` for advanced querying.
 3.  Registers `list` and `retrieve` queries.
 4.  Generates `create`, `update`, and `delete` mutations (if enabled).
 
 ### The Registry System
+
 The `SchemaRegistry` is the brain of the framework. It holds references to all generated types and resolvers. You rarely interact with it directly, but it ensures that circular dependencies between models (e.g., User <-> Group) are resolved gracefully.
 
 ### Resolvers & Mutations
-*   **Queries** use standard Django QuerySets. The framework automatically injects `select_related` and `prefetch_related` based on the requested fields to optimize performance.
-*   **Mutations** wrap the Django Model `save()` method, ensuring signals (`pre_save`, `post_save`) are fired correctly. They also automatically handle input validation.
+
+- **Queries** use standard Django QuerySets. The framework automatically injects `select_related` and `prefetch_related` based on the requested fields to optimize performance.
+- **Mutations** wrap the Django Model `save()` method, ensuring signals (`pre_save`, `post_save`) are fired correctly. They also automatically handle input validation.
 
 ---
 
@@ -492,6 +506,7 @@ RAIL_DJANGO_GRAPHQL = {
 ```
 
 ### Schema Management API
+
 The REST endpoints under `/api/v1/` require a JWT access token and admin
 permissions.
 
@@ -505,6 +520,7 @@ GRAPHQL_SCHEMA_API_RATE_LIMIT = {
 ```
 
 ### Multi-Schema Configuration
+
 For complex apps, you often need different APIs for different consumers (e.g., Public Auth, Mobile App, Admin Panel).
 
 ```python
@@ -515,7 +531,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
         # Public endpoint for login/register
         "schema_settings": {
             "authentication_required": False,
-            "enable_graphiql": False, 
+            "enable_graphiql": False,
             "query_field_allowlist": ["me"],
             "mutation_field_allowlist": ["login", "register"],
         },
@@ -545,12 +561,15 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 ```
 
 This creates distinct endpoints (configured in `urls.py` automatically):
-*   `/graphql/auth/`
-*   `/graphql/gql/`
-*   `/graphql/admin/`
+
+- `/graphql/auth/`
+- `/graphql/gql/`
+- `/graphql/admin/`
 
 #### How schemas are registered
+
 Rail Django registers schemas from two sources, in this order:
+
 1.  App discovery: each installed app is scanned for `schemas.py`,
     `graphql_schema.py`, `schema.py`, or `graphql/schema.py`. If a module exposes
     `register_schema(registry)`, it is called.
@@ -564,9 +583,10 @@ still appear even if `register_schema(...)` is empty, as long as they exist in
 `RAIL_DJANGO_GRAPHQL_SCHEMAS`.
 
 To disable a schema:
-*   Remove the schema key from `RAIL_DJANGO_GRAPHQL_SCHEMAS`, or set
-    `"enabled": False`.
-*   If you also register it in `schemas.py`, remove it there too.
+
+- Remove the schema key from `RAIL_DJANGO_GRAPHQL_SCHEMAS`, or set
+  `"enabled": False`.
+- If you also register it in `schemas.py`, remove it there too.
 
 The registry is cached once per process. Restart the server (or call
 `schema_registry.clear()` in a Django shell) to pick up changes.
@@ -576,6 +596,7 @@ The registry is cached once per process. Restart the server (or call
 ## 5. Data Modeling & API Design
 
 ### Defining Models
+
 Write standard Django models. Rail Django does the rest.
 
 ```python
@@ -587,12 +608,13 @@ class Product(models.Model):
     sku = models.CharField(max_length=50, unique=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     is_active = models.BooleanField(default=True)
-    
+
     def __str__(self):
         return self.name
 ```
 
 ### The `graphql_meta` Class
+
 To customize how a specific model appears in the API, define an inner
 `GraphQLMeta` (or legacy `GraphqlMeta`) class on the model. This is the most
 direct way to control field exposure, filtering, ordering, and access guards.
@@ -643,9 +665,11 @@ class Customer(models.Model):
 ## 6. Querying & Filtering
 
 ### Standard Queries
+
 Rail Django generates plural (list) and singular (retrieve) fields.
 
 **Request:**
+
 ```graphql
 query {
   products(first: 10) {
@@ -660,6 +684,7 @@ query {
 ```
 
 ### Advanced Filtering
+
 The library includes a powerful filtering engine derived from `django-filter`.
 
 **Exact Match:**
@@ -675,9 +700,11 @@ The library includes a powerful filtering engine derived from `django-filter`.
 `products(category_Name_Icontains: "Electronics")`
 
 ### Pagination Strategies
+
 By default, Rail Django uses Offset Pagination (limit/offset) which is simpler for most frontend frameworks.
 
 **Request:**
+
 ```graphql
 query {
   products(offset: 0, limit: 20) {
@@ -687,7 +714,8 @@ query {
 }
 ```
 
-*To enable Relay-style (Cursor) pagination, update `query_settings` in `settings.py`:*
+_To enable Relay-style (Cursor) pagination, update `query_settings` in `settings.py`:_
+
 ```python
 "query_settings": {
     "use_relay": True,
@@ -695,6 +723,7 @@ query {
 ```
 
 ### Ordering
+
 Sort results by any field.
 `products(ordering: ["-price", "name"])` (High to low price, then A-Z)
 
@@ -703,12 +732,14 @@ Sort results by any field.
 ## 7. Mutations & Operations
 
 ### Auto-CRUD Mutations
+
 Enabled by default.
 
 **Create:**
+
 ```graphql
 mutation {
-  createProduct(input: {name: "New Item", price: 99.99}) {
+  createProduct(input: { name: "New Item", price: 99.99 }) {
     ok
     product {
       id
@@ -720,11 +751,14 @@ mutation {
 ```
 
 **Update:**
+
 ```graphql
 mutation {
-  updateProduct(id: "123", input: {price: 89.99}) {
+  updateProduct(id: "123", input: { price: 89.99 }) {
     ok
-    product { price }
+    product {
+      price
+    }
   }
 }
 ```
@@ -733,6 +767,7 @@ Note: `id` is required as the top-level mutation argument. `input.id` is optiona
 and kept for backwards compatibility.
 
 **Delete:**
+
 ```graphql
 mutation {
   deleteProduct(id: "123") {
@@ -742,9 +777,11 @@ mutation {
 ```
 
 ### Custom Mutations
+
 When you need logic beyond CRUD, define a method on your model and expose it.
 
 **Model:**
+
 ```python
 class Product(models.Model):
     # ...
@@ -758,6 +795,7 @@ class Product(models.Model):
 (Currently, custom mutation logic usually requires writing a manual Graphene mutation or using specific Rail Django decorators if available in your version. Check `rail_django.generators.mutations` for advanced method mapping).
 
 ### Bulk Operations
+
 Enable `generate_bulk: True` in `mutation_settings`.
 
 ```graphql
@@ -773,16 +811,20 @@ mutation {
 ## 8. Security & Permissions
 
 ### Authentication Flow (JWT)
+
 Rail Django includes a full JWT implementation.
 
 1.  **Login:**
     POST to `/api/auth/` (if configured) or your main endpoint:
+
     ```graphql
     mutation {
       login(username: "user", password: "pwd") {
         token
         refreshToken
-        user { username }
+        user {
+          username
+        }
       }
     }
     ```
@@ -803,9 +845,11 @@ Rail Django includes a full JWT implementation.
     ```
 
 ### Role-Based Access Control (RBAC)
+
 Define roles and assign them to users.
 
 **Usage in Code:**
+
 ```python
 from rail_django.security import require_role
 
@@ -828,6 +872,7 @@ You can also define role definitions per app in `meta.json` (created by
 alongside code-defined RBAC.
 
 **Detailed example (`apps/store/meta.json`):**
+
 ```json
 {
   "roles": {
@@ -860,6 +905,7 @@ alongside code-defined RBAC.
 ```
 
 Notes:
+
 - Place the file at the app root (for example `apps/store/meta.json`).
 - The loader runs on startup; restart the server to pick up changes.
 - Roles are additive and do not override built-in system roles or GraphQLMeta roles with the same name.
@@ -869,6 +915,7 @@ This mirrors the code-based GraphQLMeta API, including filtering, field
 exposure, ordering, resolvers, access guards, and classifications.
 
 Example (`apps/store/meta.json`):
+
 ```json
 {
   "models": {
@@ -880,7 +927,10 @@ Example (`apps/store/meta.json`):
       "filtering": {
         "quick": ["name", "category__name"],
         "fields": {
-          "status": {"lookups": ["exact", "in"], "choices": ["draft", "active"]},
+          "status": {
+            "lookups": ["exact", "in"],
+            "choices": ["draft", "active"]
+          },
           "created_at": ["gte", "lte"]
         }
       },
@@ -890,8 +940,8 @@ Example (`apps/store/meta.json`):
       },
       "access": {
         "operations": {
-          "list": {"roles": ["catalog_viewer"]},
-          "update": {"roles": ["catalog_admin"]}
+          "list": { "roles": ["catalog_viewer"] },
+          "update": { "roles": ["catalog_admin"] }
         },
         "fields": [
           {
@@ -908,15 +958,18 @@ Example (`apps/store/meta.json`):
 ```
 
 Notes:
+
 - Use `models` to map model names (or `app_label.Model`) to configs.
 - Dotted paths in resolver or guard condition values are imported as callables.
 - If a model defines `GraphQLMeta` in code, it takes precedence over JSON.
 
 ### Field-Level Security
+
 You can hide fields dynamically based on who is asking.
 
 **Example: Masking Emails**
 In `graphql_meta`:
+
 ```python
 field_permissions={
     "email": {
@@ -926,6 +979,7 @@ field_permissions={
     }
 }
 ```
+
 A generic user will see `null` or receive a permission error. A support user sees the masked value. An admin sees the full value.
 
 Field permission enforcement runs in Graphene middleware. Enable it and decide how to handle disallowed inputs:
@@ -942,6 +996,7 @@ RAIL_DJANGO_GRAPHQL = {
 ```
 
 ### Policy Engine and Explain API
+
 The policy engine lets you define explicit allow/deny rules with precedence. Deny wins when priorities tie.
 
 ```python
@@ -963,15 +1018,25 @@ Use the explain query to debug decisions (and wire audit logging if needed):
 
 ```graphql
 query {
-  explainPermission(permission: "project.update_own", modelName: "store.Product", objectId: "123") {
+  explainPermission(
+    permission: "project.update_own"
+    modelName: "store.Product"
+    objectId: "123"
+  ) {
     allowed
     reason
-    policyDecision { name effect priority reason }
+    policyDecision {
+      name
+      effect
+      priority
+      reason
+    }
   }
 }
 ```
 
 ### Input Sanitization
+
 The library automatically sanitizes inputs to prevent XSS. It strips dangerous tags (`<script>`, `<iframe>`) from string inputs before they reach your resolvers.
 
 ---
@@ -979,22 +1044,26 @@ The library automatically sanitizes inputs to prevent XSS. It strips dangerous t
 ## 9. Extensions System
 
 ### Audit Logging
+
 Tracks who did what.
 
 **Events Logged:**
-*   Login/Logout
-*   Failed Login (Brute force detection)
-*   Password Changes
-*   Permission Denials
+
+- Login/Logout
+- Failed Login (Brute force detection)
+- Password Changes
+- Permission Denials
 
 **Querying Logs:**
 The logs are stored in `AuditEventModel`. You can build an admin dashboard using the built-in helper:
+
 ```python
 from rail_django.extensions.audit import audit_logger
 dashboard_data = audit_logger.get_security_report(hours=24)
 ```
 
 ### Webhooks
+
 Send model create/update/delete events to external systems.
 
 Configuration lives in `root/webhooks.py` and is wired into
@@ -1025,24 +1094,27 @@ RAIL_DJANGO_WEBHOOKS = {
 Use `include_models`/`exclude_models` on each endpoint to route specific models.
 
 ### Data Exporting (Excel/CSV)
+
 Don't write CSV writers manually. Use the export endpoint.
 
 **Endpoint:** `POST /api/v1/export/`
 **Payload:**
+
 ```json
 {
-    "app_name": "store",
-    "model_name": "Product",
-    "file_extension": "xlsx",
-    "fields": [
-        "name", 
-        "category.name", 
-        {"accessor": "price", "title": "Unit Price"}
-    ],
-    "max_rows": 10000,
-    "variables": {"is_active": true}
+  "app_name": "store",
+  "model_name": "Product",
+  "file_extension": "xlsx",
+  "fields": [
+    "name",
+    "category.name",
+    { "accessor": "price", "title": "Unit Price" }
+  ],
+  "max_rows": 10000,
+  "variables": { "is_active": true }
 }
 ```
+
 This returns a binary stream of the generated Excel file.
 
 Guardrails (default-deny allowlists, row caps, filter/order limits, rate limiting)
@@ -1050,10 +1122,12 @@ are configured via `RAIL_DJANGO_EXPORT` in settings. Async jobs and export templ
 are also configured there. Use a shared cache backend when async exports are enabled.
 
 ### BI Reporting & Dashboards
+
 Turn your Django models into analytical datasets without writing SQL or Graphene resolvers.
 
 1.  **Define a Dataset:**
     Create a `ReportingDataset` via the Django Admin or code.
+
     ```python
     from rail_django.extensions.reporting import ReportingDataset
 
@@ -1075,6 +1149,7 @@ Turn your Django models into analytical datasets without writing SQL or Graphene
 
 2.  **Query via GraphQL:**
     The framework exposes `reportingDataset(code: "sales_overview")` query.
+
     ```graphql
     query {
       reportingDataset(code: "sales_overview") {
@@ -1085,23 +1160,28 @@ Turn your Django models into analytical datasets without writing SQL or Graphene
 
 3.  **Postgres Accelerators:**
     If you use PostgreSQL, the engine automatically unlocks advanced aggregations:
-    *   `list`: Returns a list of values (`ArrayAgg`).
-    *   `concat`: Returns a comma-separated string.
-    *   `percentile:0.95`: Calculates the 95th percentile.
-    *   `stddev` / `variance`: Statistical analysis.
-    *   **Full Text Search:** The "quick search" box uses native Postgres vector search instead of slow `LIKE` queries.
+    - `list`: Returns a list of values (`ArrayAgg`).
+    - `concat`: Returns a comma-separated string.
+    - `percentile:0.95`: Calculates the 95th percentile.
+    - `stddev` / `variance`: Statistical analysis.
+    - **Full Text Search:** The "quick search" box uses native Postgres vector search instead of slow `LIKE` queries.
 
 ### Health Monitoring
+
 Expose a health check for Kubernetes or Load Balancers.
 
 **Query:**
+
 ```graphql
 query {
   health {
     healthStatus {
       overallStatus # "healthy", "degraded", "unhealthy"
       components {
-        databases { status message }
+        databases {
+          status
+          message
+        }
       }
       systemMetrics {
         cpuUsagePercent
@@ -1113,12 +1193,14 @@ query {
 ```
 
 ### Subscriptions (Real-time)
+
 Auto-generate GraphQL subscriptions for per-model create/update/delete events.
 
 1.  **Install dependencies:**
     `pip install -r requirements/base.txt`
 
 2.  **Backend config (already included in the template):**
+
     ```python
     INSTALLED_APPS = [
         "daphne",
@@ -1148,6 +1230,7 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
 
 3.  **WebSocket routing (already included in the template):**
     Use the same schema name you expose at `/graphql/` (default: `gql`).
+
     ```python
     # root/asgi.py
     from channels.auth import AuthMiddlewareStack
@@ -1173,6 +1256,7 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
 
 5.  **Subscribe from GraphQL:**
     Subscription field names are snake_case (for example `category_created`).
+
     ```graphql
     subscription {
       category_created(filters: { name: { icontains: "book" } }) {
@@ -1187,8 +1271,14 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
     ```
 
 6.  **Apollo React client example:**
+
     ```tsx
-    import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
+    import {
+      ApolloClient,
+      InMemoryCache,
+      HttpLink,
+      split,
+    } from "@apollo/client";
     import { WebSocketLink } from "@apollo/client/link/ws";
     import { getMainDefinition } from "@apollo/client/utilities";
 
@@ -1201,7 +1291,9 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
     const link = split(
       ({ query }) => {
         const def = getMainDefinition(query);
-        return def.kind === "OperationDefinition" && def.operation === "subscription";
+        return (
+          def.kind === "OperationDefinition" && def.operation === "subscription"
+        );
       },
       wsLink,
       httpLink
@@ -1214,6 +1306,7 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
     ```
 
 ### Multi-Factor Authentication (MFA)
+
 Secure your high-value users.
 
 1.  **Setup:**
@@ -1224,10 +1317,12 @@ Secure your high-value users.
     Middleware checks `user.mfa_devices.exists()`. If enforced, it blocks other mutations until verified.
 
 ### PDF Templating Engine
+
 Turn Django models into PDFs using HTML/CSS templates.
 
 1.  **Create Template:** `templates/pdf/invoice.html`
 2.  **Decorate Model:**
+
     ```python
     from rail_django.extensions.templating import model_pdf_template
 
@@ -1236,8 +1331,10 @@ Turn Django models into PDFs using HTML/CSS templates.
         def download_invoice(self):
             return {"items": self.items.all()}
     ```
+
 3.  **Download:** `GET /api/templates/store/order/download_invoice/<pk>/`
 4.  **Function-based Template (optional):**
+
     ```python
     from rail_django.extensions.templating import pdf_template
 
@@ -1245,8 +1342,10 @@ Turn Django models into PDFs using HTML/CSS templates.
     def invoice_pdf(request, order_id):
         return {"order_id": order_id}
     ```
+
     Ensure the module is imported at startup (e.g., in `apps.py` ready) so the
     decorator runs and registers the template.
+
 5.  **Async Jobs (optional):**
     `GET /api/templates/.../<pk>/?async=true` returns `job_id`, `status_url`, `download_url`.
     Enable via `RAIL_DJANGO_GRAPHQL_TEMPLATING["async_jobs"]["enable"] = True`.
@@ -1262,6 +1361,7 @@ Turn Django models into PDFs using HTML/CSS templates.
 
 **Configuration (`RAIL_DJANGO_GRAPHQL_TEMPLATING`):**
 Use CSS to style your PDFs (page size, margins).
+
 ```python
 "default_template_config": {
     "page_size": "A4",
@@ -1275,15 +1375,263 @@ async job storage, post-processing (watermarks, page stamps, encryption, signatu
 and catalog/preview toggles.
 
 Optional dependencies:
+
 - `pypdf` for watermark overlays and encryption.
 - `pyhanko` for digital signatures.
 - `wkhtmltopdf` binary for the wkhtml renderer.
 
 ---
 
+### Model Schema Introspection (Metadata V2)
+
+Enable frontends to automatically generate forms, tables, and detail views using rich model metadata exposed via GraphQL.
+
+**Enable in settings:**
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "schema_settings": {
+        "show_metadata": True,  # Enables both v1 and v2 metadata queries
+    }
+}
+```
+
+#### Available Queries
+
+**1. Get Complete Model Schema:**
+
+```graphql
+query {
+  modelSchema(app: "store", model: "Product") {
+    app
+    model
+    verboseName
+    verboseNamePlural
+    primaryKey
+    ordering
+
+    # All fields with rich classification
+    fields {
+      name
+      verboseName
+      fieldType # CharField, IntegerField, ForeignKey, etc.
+      graphqlType # String, Int, ID, etc.
+      required
+      nullable
+      editable
+      unique
+      maxLength
+      choices {
+        value
+        label
+      }
+
+      # Classification flags for frontend widget selection
+      isDate
+      isDatetime
+      isNumeric
+      isBoolean
+      isText
+      isRichText # TextField - frontend can use rich editor
+      isFile
+      isImage
+      isJson
+      isFsmField # django-fsm state field
+      # FSM transitions (if isFsmField)
+      fsmTransitions {
+        name # Method name to call
+        source # Source states ["pending", "confirmed"]
+        target # Target state
+        label # Human-readable action name
+      }
+
+      # Permissions for current user
+      readable
+      writable
+      visibility # VISIBLE, MASKED, HIDDEN
+    }
+
+    # Relationships
+    relationships {
+      name
+      relatedApp
+      relatedModel
+      relationType # FOREIGN_KEY, MANY_TO_MANY, REVERSE_FK, etc.
+      isReverse
+      isToOne # FK or O2O
+      isToMany # M2M or reverse
+      required
+      readable
+      writable
+    }
+
+    # Available filters
+    filters {
+      fieldName
+      fieldLabel
+      isNested
+      relatedModel
+      options {
+        name # Filter argument name (e.g., "price__gte")
+        lookup # Lookup type (e.g., "gte")
+        helpText # French help text
+        choices {
+          value
+          label
+        }
+      }
+    }
+
+    # Available mutations
+    mutations {
+      name # e.g., "create_Product"
+      operation # CREATE, UPDATE, DELETE, METHOD
+      allowed # Permission check result
+      requiredPermissions
+    }
+
+    # Model-level permissions
+    permissions {
+      canList
+      canCreate
+      canUpdate
+      canDelete
+      canExport
+    }
+
+    # Optional field grouping hints (from GraphQLMeta)
+    fieldGroups {
+      key
+      label
+      fields
+    }
+
+    # PDF templates (from @model_pdf_template)
+    templates {
+      key
+      title
+      endpoint
+    }
+
+    metadataVersion
+    customMetadata
+  }
+}
+```
+
+**2. List Available Models:**
+
+```graphql
+query {
+  availableModelsV2(app: "store") {
+    app
+    model
+    verboseName
+    verboseNamePlural
+  }
+}
+```
+
+**3. Get All Schemas for an App:**
+
+```graphql
+query {
+  appSchemas(app: "store") {
+    model
+    verboseName
+    fields {
+      name
+      fieldType
+    }
+  }
+}
+```
+
+#### Frontend Integration Example
+
+The frontend receives rich data and decides how to render:
+
+```typescript
+// TypeScript example
+interface FieldSchema {
+  name: string;
+  verboseName: string;
+  fieldType: string;
+  required: boolean;
+  isDate: boolean;
+  isNumeric: boolean;
+  isRichText: boolean;
+  isFsmField: boolean;
+  choices?: { value: string; label: string }[];
+  fsmTransitions?: { name: string; label: string; target: string }[];
+}
+
+function selectWidget(field: FieldSchema): string {
+  if (field.choices?.length) return "select";
+  if (field.isFsmField) return "state-badge";
+  if (field.isRichText) return "rich-text-editor";
+  if (field.isDate) return "date-picker";
+  if (field.isNumeric) return "number-input";
+  return "text-input";
+}
+
+function buildForm(schema: ModelSchema) {
+  return schema.fields
+    .filter((f) => f.editable && f.writable)
+    .map((field) => ({
+      name: field.name,
+      label: field.verboseName,
+      widget: selectWidget(field),
+      required: field.required,
+      choices: field.choices,
+    }));
+}
+```
+
+#### Customizing Metadata via GraphQLMeta
+
+Add hints for the frontend in your model:
+
+```python
+class Order(models.Model):
+    reference = models.CharField(max_length=50)
+    customer = models.ForeignKey("Customer", on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    notes = models.TextField(blank=True)
+
+    class GraphQLMeta:
+        # Group fields for frontend organization
+        field_groups = [
+            {"key": "main", "label": "Informations principales", "fields": ["reference", "customer", "status"]},
+            {"key": "details", "label": "Détails", "fields": ["notes"]},
+        ]
+
+        # Custom metadata passed through to frontend
+        custom_metadata = {
+            "icon": "shopping-cart",
+            "color": "#4A90D9",
+        }
+```
+
+#### Metadata V1 vs V2
+
+| Feature              | V1 (`modelMetadata`) | V2 (`modelSchema`)            |
+| -------------------- | -------------------- | ----------------------------- |
+| Query count          | 3 separate queries   | 1 unified query               |
+| Field classification | Limited              | 15+ boolean flags             |
+| FSM transitions      | ❌                   | ✅ Full support               |
+| Field groups         | ❌                   | ✅ Via GraphQLMeta            |
+| Custom metadata      | ❌                   | ✅ Pass-through               |
+| Relationship details | Basic                | Complete (on_delete, through) |
+
+Both APIs remain available simultaneously for gradual migration.
+
+---
+
 ## 10. Performance Tuning
 
 ### Query Optimization
+
 The N+1 problem is the enemy of GraphQL.
 Rail Django automatically uses `select_related` for ForeignKeys and `prefetch_related` for ManyToMany fields when you query nested data.
 
@@ -1292,48 +1640,56 @@ Rail Django automatically uses `select_related` for ForeignKeys and `prefetch_re
 The framework sees you asked for `category` and adds `.select_related('category')` to the underlying queryset automatically.
 
 ### DataLoader
+
 For complex cases where auto-optimization fails (e.g. calculated properties or cross-service calls), enable DataLoaders in settings.
 `"enable_dataloader": True`
 
 ### Performance Middleware
+
 Enable request-level metrics with:
 `GRAPHQL_PERFORMANCE_ENABLED=True`
 Optional headers: `GRAPHQL_PERFORMANCE_HEADERS=True`
 
 ### Complexity Limiting
+
 Prevent malicious users from crashing your server with massive queries.
 
 **Settings:**
-*   `max_query_depth`: 10 (e.g., `author { posts { author { posts ... } } }`)
-*   `max_query_complexity`: 2000 points.
-    *   Simple field = 1 point
-    *   Relationship = 5 points
-    *   List = 10 points * limit
+
+- `max_query_depth`: 10 (e.g., `author { posts { author { posts ... } } }`)
+- `max_query_complexity`: 2000 points.
+  - Simple field = 1 point
+  - Relationship = 5 points
+  - List = 10 points \* limit
 
 ---
 
 ## 11. Deployment & DevOps
 
 ### Docker Configuration
+
 The project comes with a multi-stage `Dockerfile`.
 
 **Structure:**
-*   **Builder Stage:** Compiles Python dependencies and wheels.
-*   **Final Stage:** Minimal slim image, copies wheels, installs runtime deps.
+
+- **Builder Stage:** Compiles Python dependencies and wheels.
+- **Final Stage:** Minimal slim image, copies wheels, installs runtime deps.
 
 **Environment Variables:**
 Ensure these are set in production (see `.env.example`):
-*   `DJANGO_SECRET_KEY`: Must be random and secret.
-*   `DJANGO_DEBUG`: **Must** be `False`.
-*   `DJANGO_ALLOWED_HOSTS`: List of valid domains.
-*   `DJANGO_SETTINGS_MODULE`: `root.settings.production`
-*   `DATABASE_URL`: Connection string for PostgreSQL.
-*   `CACHE_PATH`: Path for the shared cache backend (file-based).
-*   Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
-*   Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
-*   Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
+
+- `DJANGO_SECRET_KEY`: Must be random and secret.
+- `DJANGO_DEBUG`: **Must** be `False`.
+- `DJANGO_ALLOWED_HOSTS`: List of valid domains.
+- `DJANGO_SETTINGS_MODULE`: `root.settings.production`
+- `DATABASE_URL`: Connection string for PostgreSQL.
+- `CACHE_PATH`: Path for the shared cache backend (file-based).
+- Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
+- Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
+- Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
 
 ### Production Checklist
+
 1.  [ ] **HTTPS:** Ensure SSL is enabled (use the container Nginx or a load balancer).
 2.  [ ] **Secrets:** Move `.env` vars to a secure secret manager.
 3.  [ ] **Static Files:** Ensure `collectstatic` runs during build/deploy.
@@ -1344,16 +1700,19 @@ Ensure these are set in production (see `.env.example`):
 ### Troubleshooting
 
 **Error: "Signature has expired"**
-*   **Cause:** JWT token is too old.
-*   **Fix:** Use `refreshToken` mutation or login again. Check `JWT_ACCESS_TOKEN_LIFETIME`.
+
+- **Cause:** JWT token is too old.
+- **Fix:** Use `refreshToken` mutation or login again. Check `JWT_ACCESS_TOKEN_LIFETIME`.
 
 **Error: "Field 'xyz' not found"**
-*   **Cause:** You might have excluded it in `graphql_meta` or `excluded_fields`.
-*   **Fix:** Check permissions and visibility settings.
+
+- **Cause:** You might have excluded it in `graphql_meta` or `excluded_fields`.
+- **Fix:** Check permissions and visibility settings.
 
 **Performance is slow**
-*   **Check:** Are you querying a deep relationship without optimization?
-*   **Fix:** Inspect SQL queries using `django-debug-toolbar` (in dev) or enable `log_performance` middleware.
+
+- **Check:** Are you querying a deep relationship without optimization?
+- **Fix:** Inspect SQL queries using `django-debug-toolbar` (in dev) or enable `log_performance` middleware.
 
 ---
 
@@ -1377,6 +1736,7 @@ nano .env
 ```
 
 **Key variables to set:**
+
 - `DJANGO_DEBUG=False`
 - `DJANGO_SECRET_KEY`: A long, random string.
 - `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
@@ -1388,24 +1748,31 @@ nano .env
 Run these commands from your project root:
 
 #### A. Build and Start Services
+
 This will build the Python image and start the Web, Nginx, and Backup containers.
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
 
 #### B. Run Migrations
+
 Apply database schema changes to your external database:
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
 ```
 
 #### C. Collect Static Files
+
 Prepare CSS, JS, and images for Nginx to serve:
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py collectstatic --no-input
 ```
 
 #### D. Create Superuser (Optional)
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
 ```
@@ -1419,18 +1786,22 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 ### 4. Maintenance
 
 #### Viewing Logs
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml logs -f
 ```
 
 #### Stopping the Application
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml down
 ```
 
 #### Updating the Application
+
 1. Pull your latest code changes.
 2. Re-run the build and migration steps:
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
@@ -1453,15 +1824,18 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and mount your certificates into it.
 
 #### Step 1: Obtain Certificates
+
 You have two options:
 
 **Option A: Official Company Certificate (Recommended)**
 Ask your IT/Security team for the SSL certificate for your internal domain (e.g., `app.corp.local`). Place the files here:
+
 - `deploy/nginx/certs/server.crt`
 - `deploy/nginx/certs/server.key`
 
 **Option B: Self-Signed Certificate (For Testing)**
 If you don't have an official cert, generate a self-signed one:
+
 ```bash
 mkdir -p deploy/nginx/certs
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -1471,14 +1845,15 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ```
 
 #### Step 2: Configure Nginx
+
 Update `deploy/nginx/default.conf` and set `server_name` to your internal domain or IP. The template already redirects HTTP to HTTPS and listens on port 443.
 
 #### Step 3: Activate
+
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
 
 ---
 
-**Rail Django** - *Build faster, scale better.*
-
+**Rail Django** - _Build faster, scale better._

@@ -202,7 +202,10 @@ def generate_list_query(
             if name not in ["quick", "include"]:
                 continue
 
-            field_type = graphene.String  # Default to String
+            if name == "include":
+                field_type = graphene.List(graphene.ID)
+            else:
+                field_type = graphene.String  # Default to String
 
             # Map filter types to GraphQL types
             if hasattr(field, "field_class"):
