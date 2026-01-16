@@ -74,7 +74,7 @@ Long-running operations (PDF generation, bulk exports, email campaigns) block Gr
 
 ### Solution
 
-Celery/Dramatiq integration with built-in task tracking model and GraphQL subscriptions for real-time updates.
+Thread/Celery/Dramatiq integration with a task tracking model and GraphQL subscriptions for real-time updates.
 
 ### Features
 
@@ -82,7 +82,7 @@ Celery/Dramatiq integration with built-in task tracking model and GraphQL subscr
 | ---------------------------- | -------------------------------------------- |
 | **@task_mutation Decorator** | Wraps a mutation to run asynchronously       |
 | **TaskExecution Model**      | Tracks status, progress, result, and errors  |
-| **Task Subscriptions**       | Real-time `taskUpdated` subscription events  |
+| **Task Subscriptions**       | Real-time `task_updated` subscription events |
 | **REST Endpoint**            | `/api/v1/tasks/{id}/` for polling fallback   |
 | **Retry & Dead Letter**      | Configurable retry policies with DLQ         |
 | **Result Storage**           | Store results in DB or external storage (S3) |
@@ -90,10 +90,11 @@ Celery/Dramatiq integration with built-in task tracking model and GraphQL subscr
 ### Example Usage
 
 ```python
+import graphene
 from rail_django.extensions.tasks import task_mutation
 
 @task_mutation(name="generate_report", track_progress=True)
-def resolve_generate_report(root, info, dataset_id: str):
+def generate_report(root, info, dataset_id: str):
     """
     Generate a PDF report asynchronously.
 
@@ -105,24 +106,40 @@ def resolve_generate_report(root, info, dataset_id: str):
     """
     # This runs in a Celery worker
     from .services import ReportService
-    return ReportService.generate(dataset_id, progress_callback=info.context.task.update_progress)
+    return ReportService.generate(
+        dataset_id, progress_callback=info.context.task.update_progress
+    )
+
+
+class TaskMutations(graphene.ObjectType):
+    generate_report = generate_report
+```
+
+Register the task mutation class:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "schema_settings": {
+        "mutation_extensions": ["myapp.graphql.TaskMutations"],
+    }
+}
 ```
 
 ### GraphQL API
 
 ```graphql
 mutation {
-  generateReport(datasetId: "123") {
-    taskId
+  generate_report(dataset_id: "123") {
+    task_id
     status # PENDING
   }
 }
 
 subscription {
-  taskUpdated(taskId: "abc-123") {
+  task_updated(task_id: "abc-123") {
     status # PENDING -> RUNNING -> SUCCESS
     progress # 0 -> 50 -> 100
-    resultUrl
+    result
     error
   }
 }
@@ -133,8 +150,8 @@ query {
     status
     progress
     result
-    createdAt
-    completedAt
+    created_at
+    completed_at
   }
 }
 ```
@@ -145,7 +162,7 @@ query {
 RAIL_DJANGO_GRAPHQL = {
     "task_settings": {
         "enabled": True,
-        "backend": "celery",  # "celery", "dramatiq", or "django_q"
+        "backend": "thread",  # "thread", "sync", "celery", "dramatiq", or "django_q"
         "default_queue": "default",
         "result_ttl_seconds": 86400,
         "max_retries": 3,

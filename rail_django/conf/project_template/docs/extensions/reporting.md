@@ -1,575 +1,544 @@
 # Reporting & BI
 
-## Vue d'Ensemble
+## Overview
 
-Le module Reporting de Rail Django permet de définir des datasets analytiques, des visualisations et des rapports complets, le tout exposé via GraphQL. Il supporte les agrégations, les transformations de colonnes et les fonctionnalités PostgreSQL avancées.
+Rail Django includes a reporting and business intelligence module for defining analytical datasets, dimensions, metrics, and visualizations. This guide covers configuration, dataset definition, and GraphQL API usage.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
 1. [Concepts](#concepts)
-2. [Définition d'un Dataset](#définition-dun-dataset)
-3. [Dimensions et Transformations](#dimensions-et-transformations)
-4. [Métriques et Agrégations](#métriques-et-agrégations)
-5. [Exécution des Requêtes](#exécution-des-requêtes)
-6. [Visualisations](#visualisations)
-7. [Rapports](#rapports)
-8. [API GraphQL](#api-graphql)
-9. [Bonnes Pratiques](#bonnes-pratiques)
+2. [Dataset Definition](#dataset-definition)
+3. [Dimensions](#dimensions)
+4. [Metrics](#metrics)
+5. [Query Execution](#query-execution)
+6. [Visualizations](#visualizations)
+7. [Reports](#reports)
+8. [GraphQL API](#graphql-api)
+9. [Best Practices](#best-practices)
 
 ---
 
 ## Concepts
 
-### Architecture
+### Key Components
 
-```
-ReportingDataset       → Définition sémantique sur un modèle Django
-    └── dimensions[]   → Colonnes de groupement
-    └── metrics[]      → Agrégations calculées
-    └── computed_fields[] → Champs calculés post-agrégation
-
-ReportingVisualization → Configuration de graphique/tableau
-    └── dataset        → Référence au dataset
-    └── config         → Paramètres de visualisation
-
-ReportingReport        → Dashboard composé de visualisations
-    └── visualizations[] → Liste ordonnée de visualisations
-```
-
-### Modèles Django
-
-- `ReportingDataset` : Définit une couche sémantique sur un modèle.
-- `ReportingVisualization` : Sauvegarde des configurations de graphiques.
-- `ReportingReport` : Agrège plusieurs visualisations.
-- `ReportingExportJob` : Captures de snapshots pour export.
+| Component     | Description                                     |
+| ------------- | ----------------------------------------------- |
+| **Dataset**   | Data source (model or custom query)             |
+| **Dimension** | Grouping attribute (category, date, status)     |
+| **Metric**    | Aggregated measure (sum, count, average)        |
+| **Filter**    | Constraints on the data                         |
+| **Report**    | Saved combination of queries and visualizations |
 
 ---
 
-## Définition d'un Dataset
+## Dataset Definition
 
-### Création Basique
+### Model-Based Dataset
 
 ```python
+# apps/store/reporting.py
 from rail_django.extensions.reporting import ReportingDataset
 
-dataset = ReportingDataset.objects.create(
+class OrderDataset(ReportingDataset):
+    """
+    Dataset for order analysis.
+    """
+    name = "orders"
+    source_model = "store.Order"
+    description = "Order analysis and metrics"
+
+    # Base filters (always applied)
+    base_filters = {
+        "status__in": ["completed", "shipped"],
+    }
+
+    # Date field for time analysis
+    date_field = "created_at"
+
+    # Allowed aggregation period
+    time_granularities = ["day", "week", "month", "quarter", "year"]
+```
+
+### Database Registration
+
+```python
+# Create via admin or management command
+from rail_django.extensions.reporting import ReportingDataset
+
+ReportingDataset.objects.create(
     code="monthly_sales",
-    title="Ventes Mensuelles",
-    description="Analyse des ventes par mois et région",
     source_app_label="store",
     source_model="Order",
-
-    # Dimensions : colonnes de regroupement
     dimensions=[
-        {"name": "month", "field": "created_at", "transform": "trunc:month"},
-        {"name": "region", "field": "customer__region"},
+        {"field": "created_at", "transform": "trunc:month"},
+        {"field": "category__name"},
     ],
-
-    # Métriques : agrégations
     metrics=[
-        {"name": "total_revenue", "field": "total", "aggregation": "sum"},
-        {"name": "order_count", "field": "id", "aggregation": "count"},
-        {"name": "avg_order_value", "field": "total", "aggregation": "avg"},
+        {"field": "total", "aggregation": "sum", "name": "revenue"},
+        {"field": "id", "aggregation": "count", "name": "order_count"},
     ],
-)
-```
-
-### Configuration Avancée
-
-```python
-dataset = ReportingDataset.objects.create(
-    code="customer_analytics",
-    title="Analyse Clients",
-    source_app_label="crm",
-    source_model="Customer",
-
-    dimensions=[
-        {"name": "city", "field": "city"},
-        {"name": "signup_month", "field": "created_at", "transform": "trunc:month"},
-    ],
-
-    metrics=[
-        {"name": "customer_count", "field": "pk", "aggregation": "count"},
-        {"name": "avg_balance", "field": "account_balance", "aggregation": "avg"},
-    ],
-
-    # Champs calculés post-agrégation
-    computed_fields=[
-        {
-            "name": "balance_per_customer",
-            "formula": "avg_balance / customer_count",
-        },
-    ],
-
-    # Filtres par défaut (toujours appliqués)
-    default_filters=[
-        {"field": "is_active", "lookup": "exact", "value": True},
-    ],
-
-    # Métadonnées de sécurité et configuration
-    metadata={
-        "allow_ad_hoc": False,  # Pas de requêtes libres
-        "allowed_fields": ["is_active", "city"],  # Filtres autorisés
-        "record_fields": ["name", "email", "city"],  # Mode records
-        "quick_fields": ["name", "email"],  # Recherche rapide
-        "max_limit": 2000,
-        "cache_ttl_seconds": 60,
-    },
 )
 ```
 
 ---
 
-## Dimensions et Transformations
+## Dimensions
 
-### Définition d'une Dimension
+### Available Dimensions
+
+| Type      | Example                    | Description        |
+| --------- | -------------------------- | ------------------ |
+| Field     | `"customer__name"`         | Direct field value |
+| Date Part | `"created_at:month"`       | Date component     |
+| Bucket    | `"price:bucket:0,100,500"` | Numeric ranges     |
+| Custom    | `"custom:region_group"`    | Custom function    |
+
+### Dimension Configuration
+
+```python
+class OrderDataset(ReportingDataset):
+    dimensions = [
+        # Simple field
+        {
+            "name": "category",
+            "field": "product__category__name",
+            "label": "Product Category",
+        },
+        # Date truncation
+        {
+            "name": "month",
+            "field": "created_at",
+            "transform": "trunc:month",
+            "label": "Month",
+        },
+        # Numeric buckets
+        {
+            "name": "order_size",
+            "field": "total",
+            "transform": "bucket",
+            "buckets": [0, 100, 500, 1000, 5000],
+            "labels": ["Small", "Medium", "Large", "XL", "Enterprise"],
+        },
+        # Boolean
+        {
+            "name": "is_priority",
+            "field": "priority",
+            "label": "Priority Order",
+        },
+    ]
+```
+
+### Date Transformations
+
+| Transform       | Example Output |
+| --------------- | -------------- |
+| `trunc:day`     | `2026-01-16`   |
+| `trunc:week`    | `2026-W03`     |
+| `trunc:month`   | `2026-01`      |
+| `trunc:quarter` | `2026-Q1`      |
+| `trunc:year`    | `2026`         |
+| `extract:dow`   | `4` (Thursday) |
+| `extract:hour`  | `14`           |
+
+---
+
+## Metrics
+
+### Available Aggregations
+
+| Aggregation | Description              |
+| ----------- | ------------------------ |
+| `count`     | Record count             |
+| `sum`       | Sum of values            |
+| `avg`       | Average                  |
+| `min`       | Minimum                  |
+| `max`       | Maximum                  |
+| `stddev`    | Standard deviation       |
+| `variance`  | Variance                 |
+| `distinct`  | Count of distinct values |
+
+### Metric Configuration
+
+```python
+class OrderDataset(ReportingDataset):
+    metrics = [
+        # Simple count
+        {
+            "name": "order_count",
+            "aggregation": "count",
+            "label": "Number of Orders",
+        },
+        # Sum with formatting
+        {
+            "name": "revenue",
+            "field": "total",
+            "aggregation": "sum",
+            "label": "Total Revenue",
+            "format": "currency",
+            "currency": "USD",
+        },
+        # Average
+        {
+            "name": "avg_order_value",
+            "field": "total",
+            "aggregation": "avg",
+            "label": "Average Order Value",
+            "format": "currency",
+        },
+        # Calculated metric
+        {
+            "name": "conversion_rate",
+            "expression": "completed_orders / total_orders * 100",
+            "label": "Conversion Rate",
+            "format": "percent",
+        },
+    ]
+```
+
+### Calculated Metrics
 
 ```python
 {
-    "name": "alias_dimension",  # Nom dans le résultat
-    "field": "model_field",     # Champ Django
-    "transform": "...",         # Transformation optionnelle
-}
-```
-
-### Transformations Disponibles
-
-| Transform       | Description          | Exemple              |
-| --------------- | -------------------- | -------------------- |
-| `lower`         | Minuscules           | `"paris"`            |
-| `upper`         | Majuscules           | `"PARIS"`            |
-| `date`          | Date seule           | `2026-01-16`         |
-| `trunc:hour`    | Arrondi à l'heure    | `2026-01-16 10:00`   |
-| `trunc:day`     | Arrondi au jour      | `2026-01-16`         |
-| `trunc:week`    | Arrondi à la semaine | `2026-01-13` (lundi) |
-| `trunc:month`   | Arrondi au mois      | `2026-01-01`         |
-| `trunc:quarter` | Arrondi au trimestre | `2026-01-01`         |
-| `trunc:year`    | Arrondi à l'année    | `2026-01-01`         |
-| `year`          | Extraction année     | `2026`               |
-| `quarter`       | Extraction trimestre | `1`                  |
-| `month`         | Extraction mois      | `1`                  |
-| `week`          | Extraction semaine   | `3`                  |
-| `weekday`       | Jour de la semaine   | `4` (jeudi)          |
-| `day`           | Extraction jour      | `16`                 |
-
-### Exemple Multi-Dimensions
-
-```python
-dimensions=[
-    {"name": "year", "field": "created_at", "transform": "year"},
-    {"name": "month", "field": "created_at", "transform": "month"},
-    {"name": "category", "field": "product__category__name"},
-    {"name": "region", "field": "customer__address__region", "transform": "upper"},
-]
-```
-
----
-
-## Métriques et Agrégations
-
-### Définition d'une Métrique
-
-```python
-{
-    "name": "metric_alias",     # Nom dans le résultat
-    "field": "model_field",     # Champ à agréger
-    "aggregation": "sum",       # Type d'agrégation
-    "options": {},              # Options spécifiques
-}
-```
-
-### Agrégations Standards
-
-| Agrégation       | Description       | SQL                     |
-| ---------------- | ----------------- | ----------------------- |
-| `count`          | Nombre d'éléments | `COUNT(*)`              |
-| `distinct_count` | Nombre distinct   | `COUNT(DISTINCT field)` |
-| `sum`            | Somme             | `SUM(field)`            |
-| `avg`            | Moyenne           | `AVG(field)`            |
-| `min`            | Minimum           | `MIN(field)`            |
-| `max`            | Maximum           | `MAX(field)`            |
-
-### Agrégations PostgreSQL
-
-Disponibles uniquement avec PostgreSQL :
-
-| Agrégation   | Description      | Options                 |
-| ------------ | ---------------- | ----------------------- |
-| `array_agg`  | Liste de valeurs | `distinct`, `ordering`  |
-| `string_agg` | Concaténation    | `delimiter`, `distinct` |
-| `jsonb_agg`  | Agrégation JSONB |                         |
-| `bool_and`   | AND logique      |                         |
-| `bool_or`    | OR logique       |                         |
-| `bit_and`    | AND bit à bit    |                         |
-| `bit_or`     | OR bit à bit     |                         |
-| `bit_xor`    | XOR bit à bit    |                         |
-
-### Exemple avec Options
-
-```python
-metrics=[
-    # Liste d'emails distincts, triés
-    {
-        "name": "customer_emails",
-        "field": "customer__email",
-        "aggregation": "string_agg",
-        "options": {
-            "delimiter": "; ",
-            "distinct": True,
-            "ordering": ["customer__email"],
-        },
-    },
-    # Liste de produits
-    {
-        "name": "products",
-        "field": "product__name",
-        "aggregation": "array_agg",
-        "options": {
-            "distinct": True,
-        },
-    },
-]
-```
-
----
-
-## Exécution des Requêtes
-
-### Méthode Preview
-
-Exécute une requête rapide avec les dimensions/métriques par défaut :
-
-```python
-# Requête simple
-result = dataset.preview()
-
-# Avec filtres et options
-result = dataset.preview(
-    quick="recherche",          # Recherche rapide
-    limit=50,
-    ordering="-total_revenue",
-    filters=[
-        {"field": "region", "lookup": "exact", "value": "IDF"},
-    ],
-)
-```
-
-### Méthode run_query
-
-Pour des requêtes dynamiques avec override des dimensions/métriques :
-
-```python
-# Mode agrégation (défaut)
-spec = {
-    "dimensions": ["month", "category"],
-    "metrics": ["total_revenue", "order_count"],
-    "filters": [
-        {"field": "is_active", "lookup": "exact", "value": True},
-    ],
-    "having": [
-        {"field": "order_count", "lookup": "gte", "value": 5},
-    ],
-    "ordering": ["-total_revenue"],
-    "limit": 100,
-    "offset": 0,
-}
-result = dataset.run_query(spec)
-```
-
-### Mode Records
-
-Pour obtenir des lignes individuelles au lieu d'agrégations :
-
-```python
-spec = {
-    "mode": "records",
-    "fields": ["name", "email", "city", "created_at"],
-    "filters": [
-        {"field": "is_active", "lookup": "exact", "value": True},
-    ],
-    "ordering": ["-created_at"],
-    "limit": 100,
-}
-result = dataset.run_query(spec)
-```
-
-### Syntaxe des Filtres Avancée
-
-#### Liste Simple
-
-```python
-filters=[
-    {"field": "status", "lookup": "exact", "value": "active"},
-    {"field": "created_at", "lookup": "gte", "value": "2026-01-01"},
-]
-```
-
-#### Arbre de Conditions
-
-```python
-filters={
-    "op": "and",
-    "items": [
-        {"field": "is_active", "lookup": "exact", "value": True},
-        {
-            "op": "or",
-            "items": [
-                {"field": "city", "lookup": "icontains", "value": "paris"},
-                {"field": "city", "lookup": "icontains", "value": "lyon"},
-            ],
-        },
-    ],
+    "name": "margin_percent",
+    "expression": "(revenue - cost) / revenue * 100",
+    "label": "Margin %",
+    "format": "percent",
+    "dependencies": ["revenue", "cost"],
 }
 ```
 
 ---
 
-## Visualisations
+## Query Execution
 
-### Création d'une Visualisation
-
-```python
-from rail_django.extensions.reporting import ReportingVisualization
-
-viz = ReportingVisualization.objects.create(
-    dataset=dataset,
-    code="sales_by_region",
-    title="Ventes par Région",
-    kind="bar",  # bar, line, pie, table, area, scatter
-
-    config={
-        # Requête embarquée
-        "query": {
-            "dimensions": ["region"],
-            "metrics": ["total_revenue", "order_count"],
-            "ordering": ["-total_revenue"],
-            "limit": 10,
-        },
-
-        # Configuration du graphique
-        "x_axis": "region",
-        "y_axis": "total_revenue",
-        "series": "order_count",
-
-        # Options visuelles
-        "colors": ["#4A90D9", "#E94E77"],
-        "show_legend": True,
-        "show_values": True,
-    },
-)
-```
-
-### Rendu
-
-```python
-# Rendu avec les paramètres par défaut
-payload = viz.render()
-
-# Rendu avec filtres runtime
-payload = viz.render(
-    quick="",
-    limit=20,
-    filters=[{"field": "year", "lookup": "exact", "value": 2026}],
-)
-```
-
-### Types de Visualisations
-
-| Kind      | Description         |
-| --------- | ------------------- |
-| `bar`     | Graphique en barres |
-| `line`    | Graphique linéaire  |
-| `area`    | Graphique en aires  |
-| `pie`     | Camembert           |
-| `donut`   | Anneau              |
-| `scatter` | Nuage de points     |
-| `table`   | Tableau de données  |
-| `metric`  | Valeur unique (KPI) |
-
----
-
-## Rapports
-
-### Création d'un Rapport
-
-```python
-from rail_django.extensions.reporting import ReportingReport
-
-report = ReportingReport.objects.create(
-    code="monthly_overview",
-    title="Vue d'Ensemble Mensuelle",
-    description="Dashboard des ventes et clients",
-)
-
-# Associer des visualisations
-report.visualizations.add(viz_sales, viz_customers, viz_products)
-```
-
-### Construction du Payload
-
-```python
-payload = report.build_payload(
-    quick="",
-    limit=100,
-    filters=[{"field": "month", "lookup": "exact", "value": "2026-01"}],
-)
-```
-
-**Structure du Payload :**
-
-```python
-{
-    "report": {
-        "code": "monthly_overview",
-        "title": "Vue d'Ensemble Mensuelle",
-    },
-    "generated_at": "2026-01-16T10:30:00Z",
-    "visualizations": [
-        {
-            "code": "sales_by_region",
-            "title": "Ventes par Région",
-            "kind": "bar",
-            "data": [
-                {"region": "IDF", "total_revenue": 150000, "order_count": 450},
-                {"region": "PACA", "total_revenue": 85000, "order_count": 280},
-            ],
-        },
-        # ... autres visualisations
-    ],
-}
-```
-
----
-
-## API GraphQL
-
-### Query Dataset
+### GraphQL Query
 
 ```graphql
-query SalesData($code: String!, $spec: QuerySpec) {
-  reporting_dataset(code: $code) {
-    code
-    title
-
-    # Exécuter une requête
-    run_query(spec: $spec) {
-      data
-      total_count
+query OrderAnalysis(
+  $dimensions: [String!]!
+  $metrics: [String!]!
+  $filters: ReportFilterInput
+  $order_by: String
+  $limit: Int
+) {
+  report_query(
+    dataset: "orders"
+    dimensions: $dimensions
+    metrics: $metrics
+    filters: $filters
+    order_by: $order_by
+    limit: $limit
+  ) {
+    columns {
+      name
+      type
+      label
+    }
+    rows {
+      values
+    }
+    totals {
+      metric
+      value
+    }
+    metadata {
+      row_count
       execution_time_ms
     }
-
-    # Preview rapide
-    preview(limit: 100) {
-      data
-    }
   }
 }
 ```
 
-### Query Visualisation
+### Variables
 
-```graphql
-query ChartData($code: String!) {
-  reporting_visualization(code: $code) {
-    code
-    title
-    kind
-
-    render {
-      data
-      config
-    }
-  }
+```json
+{
+  "dimensions": ["month", "category"],
+  "metrics": ["revenue", "order_count"],
+  "filters": {
+    "date_range": {
+      "field": "created_at",
+      "from": "2025-01-01",
+      "to": "2025-12-31"
+    },
+    "conditions": [
+      { "field": "status", "operator": "eq", "value": "completed" }
+    ]
+  },
+  "order_by": "-revenue",
+  "limit": 100
 }
 ```
 
-### Query Rapport Complet
+### Response
 
-```graphql
-query DashboardData($code: String!, $filters: [FilterInput]) {
-  reporting_report(code: $code) {
-    build_payload(filters: $filters) {
-      generated_at
-      visualizations {
-        code
-        title
-        kind
-        data
+```json
+{
+  "data": {
+    "report_query": {
+      "columns": [
+        { "name": "month", "type": "date", "label": "Month" },
+        { "name": "category", "type": "string", "label": "Category" },
+        { "name": "revenue", "type": "currency", "label": "Revenue" },
+        { "name": "order_count", "type": "integer", "label": "Orders" }
+      ],
+      "rows": [
+        { "values": ["2025-01", "Electronics", 125000.0, 450] },
+        { "values": ["2025-01", "Clothing", 85000.0, 620] },
+        { "values": ["2025-02", "Electronics", 142000.0, 510] }
+      ],
+      "totals": [
+        { "metric": "revenue", "value": 352000.0 },
+        { "metric": "order_count", "value": 1580 }
+      ],
+      "metadata": {
+        "row_count": 3,
+        "execution_time_ms": 125
       }
     }
   }
 }
 ```
 
-### Mutations d'Export
+---
+
+## Visualizations
+
+### Chart Types
+
+| Type      | Use Case                      |
+| --------- | ----------------------------- |
+| `bar`     | Category comparison           |
+| `line`    | Trends over time              |
+| `area`    | Cumulative trends             |
+| `pie`     | Proportions                   |
+| `donut`   | Proportions with center value |
+| `table`   | Detailed data                 |
+| `kpi`     | Single metric display         |
+| `heatmap` | Two-dimensional comparison    |
+
+### Visualization Configuration
+
+```python
+{
+    "name": "revenue_by_month",
+    "chart_type": "line",
+    "dataset": "orders",
+    "dimensions": ["month"],
+    "metrics": ["revenue"],
+    "options": {
+        "show_legend": True,
+        "show_data_labels": False,
+        "colors": ["#4472C4"],
+        "axis": {
+            "x": {"label": "Month"},
+            "y": {"label": "Revenue", "format": "currency"},
+        },
+    },
+}
+```
+
+---
+
+## Reports
+
+### Report Definition
+
+```python
+from rail_django.extensions.reporting import Report
+
+class MonthlySalesReport(Report):
+    """
+    Monthly sales report.
+    """
+    name = "monthly_sales"
+    title = "Monthly Sales Report"
+    description = "Sales analysis by month and category"
+
+    # Datasets used
+    datasets = ["orders", "products"]
+
+    # Default filters
+    default_filters = {
+        "date_range": "last_12_months",
+    }
+
+    # Report sections
+    sections = [
+        {
+            "title": "Summary",
+            "widgets": [
+                {"type": "kpi", "metric": "revenue", "label": "Total Revenue"},
+                {"type": "kpi", "metric": "order_count", "label": "Orders"},
+                {"type": "kpi", "metric": "avg_order_value", "label": "Avg. Order"},
+            ],
+        },
+        {
+            "title": "Trends",
+            "widgets": [
+                {
+                    "type": "chart",
+                    "chart_type": "line",
+                    "dimensions": ["month"],
+                    "metrics": ["revenue"],
+                },
+            ],
+        },
+        {
+            "title": "By Category",
+            "widgets": [
+                {
+                    "type": "chart",
+                    "chart_type": "bar",
+                    "dimensions": ["category"],
+                    "metrics": ["revenue", "order_count"],
+                },
+            ],
+        },
+    ]
+```
+
+### Save Report
 
 ```graphql
-mutation ExportDataset($code: String!, $format: String!) {
-  export_dataset(code: $code, format: $format) {
-    job_id
-    status
-    download_url
+mutation SaveReport($input: ReportInput!) {
+  save_report(input: $input) {
+    ok
+    report {
+      id
+      name
+      created_at
+    }
   }
 }
 ```
 
 ---
 
-## Bonnes Pratiques
+## GraphQL API
 
-### 1. Indexation
+### List Datasets
 
-Indexez les colonnes utilisées dans les dimensions et filtres :
-
-```python
-class Order(models.Model):
-    created_at = models.DateTimeField(db_index=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["customer", "created_at"]),
-            models.Index(fields=["status", "created_at"]),
-        ]
-```
-
-### 2. Caching
-
-Configurez le cache pour les requêtes fréquentes :
-
-```python
-metadata={
-    "cache_ttl_seconds": 300,  # 5 minutes
+```graphql
+query AvailableDatasets {
+  reporting_datasets {
+    code
+    name
+    description
+    dimensions {
+      name
+      label
+      type
+    }
+    metrics {
+      name
+      label
+      aggregation
+    }
+  }
 }
 ```
 
-### 3. Limites
+### Execute Query
 
-Protégez contre les requêtes coûteuses :
-
-```python
-metadata={
-    "max_limit": 5000,
-    "max_dimensions": 5,
+```graphql
+query ExecuteReport($query: ReportQueryInput!) {
+  report_query(query: $query) {
+    columns {
+      name
+      type
+    }
+    rows {
+      values
+    }
+  }
 }
 ```
 
-### 4. Sécurité
+### List Saved Reports
 
-Utilisez les allowlists pour contrôler l'accès :
-
-```python
-metadata={
-    "allow_ad_hoc": False,  # Pas de requêtes libres
-    "allowed_fields": ["status", "region"],  # Filtres autorisés
+```graphql
+query MyReports {
+  my_reports {
+    id
+    name
+    description
+    created_at
+    updated_at
+  }
 }
 ```
 
 ---
 
-## Voir Aussi
+## Best Practices
 
-- [Export de Données](./exporting.md) - Export CSV/Excel
-- [Configuration](../graphql/configuration.md) - Paramètres reporting
-- [Optimisation](../performance/optimization.md) - Performance des requêtes
+### 1. Index Dimension Fields
+
+```python
+class Order(models.Model):
+    created_at = models.DateTimeField(db_index=True)
+    status = models.CharField(max_length=20, db_index=True)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at", "status"]),
+        ]
+```
+
+### 2. Use Materialized Views for Complex Reports
+
+```python
+# Create materialized view for heavy aggregations
+from django.db import connection
+
+def refresh_sales_summary():
+    with connection.cursor() as cursor:
+        cursor.execute("REFRESH MATERIALIZED VIEW sales_summary")
+```
+
+### 3. Limit Results
+
+```python
+RAIL_DJANGO_REPORTING = {
+    "max_rows": 10000,
+    "default_limit": 1000,
+    "query_timeout_seconds": 30,
+}
+```
+
+### 4. Cache Expensive Queries
+
+```python
+from django.core.cache import cache
+
+def get_cached_report(query_hash, execute_fn):
+    cached = cache.get(f"report_{query_hash}")
+    if cached:
+        return cached
+
+    result = execute_fn()
+    cache.set(f"report_{query_hash}", result, timeout=300)
+    return result
+```
+
+### 5. Monitor Query Performance
+
+```python
+RAIL_DJANGO_REPORTING = {
+    "log_slow_queries": True,
+    "slow_query_threshold_ms": 5000,
+}
+```
+
+---
+
+## See Also
+
+- [Data Export](./exporting.md) - Export report results
+- [PDF Generation](./templating.md) - Generate PDF reports
+- [Observability](./observability.md) - Performance monitoring

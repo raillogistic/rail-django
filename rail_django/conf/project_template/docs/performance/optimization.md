@@ -1,84 +1,84 @@
-# Optimisation des Requêtes
+# Query Optimization
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django inclut des optimisations automatiques pour éviter le problème N+1 et améliorer les performances des requêtes GraphQL. Ce guide couvre les mécanismes intégrés et les configurations avancées.
+Rail Django includes automatic optimizations to avoid the N+1 problem and improve GraphQL query performance. This guide covers built-in mechanisms and advanced configurations.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Optimisation Automatique](#optimisation-automatique)
+1. [Automatic Optimization](#automatic-optimization)
 2. [Configuration](#configuration)
 3. [DataLoader](#dataloader)
-4. [Limites de Complexité](#limites-de-complexité)
-5. [Profiling et Debugging](#profiling-et-debugging)
-6. [Bonnes Pratiques](#bonnes-pratiques)
+4. [Complexity Limits](#complexity-limits)
+5. [Profiling and Debugging](#profiling-and-debugging)
+6. [Best Practices](#best-practices)
 
 ---
 
-## Optimisation Automatique
+## Automatic Optimization
 
-### Le Problème N+1
+### The N+1 Problem
 
-Sans optimisation, une requête GraphQL peut générer des centaines de requêtes SQL :
+Without optimization, a GraphQL query can generate hundreds of SQL queries:
 
 ```graphql
-# Cette requête naïve génèrerait 1 + N requêtes
+# This naive query would generate 1 + N queries
 query {
   products(limit: 100) {
     name
     category {
       name
-    } # 100 requêtes supplémentaires !
+    } # 100 additional queries!
   }
 }
 ```
 
-### Solution Rail Django
+### Rail Django Solution
 
-Le framework analyse les champs demandés et injecte automatiquement les optimisations :
+The framework analyzes requested fields and automatically injects optimizations:
 
 ```python
-# Rail Django génère automatiquement :
+# Rail Django automatically generates:
 Product.objects.select_related("category").only("id", "name", "category__name")
 ```
 
-### Mécanismes d'Optimisation
+### Optimization Mechanisms
 
-| Mécanisme          | Cas d'Usage            | Résultat              |
-| ------------------ | ---------------------- | --------------------- |
-| `select_related`   | ForeignKey, OneToOne   | JOIN SQL              |
-| `prefetch_related` | ManyToMany, reverse FK | Requête batch         |
-| `only()`           | Tous les champs        | Sélection de colonnes |
-| `defer()`          | Champs volumineux      | Exclusion de colonnes |
+| Mechanism          | Use Case               | Result           |
+| ------------------ | ---------------------- | ---------------- |
+| `select_related`   | ForeignKey, OneToOne   | SQL JOIN         |
+| `prefetch_related` | ManyToMany, reverse FK | Batch query      |
+| `only()`           | All fields             | Column selection |
+| `defer()`          | Large fields           | Column exclusion |
 
 ---
 
 ## Configuration
 
-### Paramètres de Performance
+### Performance Settings
 
 ```python
 # root/settings/base.py
 RAIL_DJANGO_GRAPHQL = {
     "performance_settings": {
-        # ─── Optimisation des QuerySets ───
+        # ─── QuerySet Optimization ───
         "enable_query_optimization": True,
         "enable_select_related": True,
         "enable_prefetch_related": True,
         "enable_only_fields": True,
-        "enable_defer_fields": False,  # Désactivé par défaut
+        "enable_defer_fields": False,  # Disabled by default
 
         # ─── DataLoader ───
         "enable_dataloader": True,
         "dataloader_batch_size": 100,
 
-        # ─── Limites ───
+        # ─── Limits ───
         "max_query_depth": 10,
         "max_query_complexity": 1000,
 
-        # ─── Analyse de Coût ───
+        # ─── Cost Analysis ───
         "enable_query_cost_analysis": False,
 
         # ─── Timeout ───
@@ -87,15 +87,15 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-### Désactivation par Modèle
+### Per-Model Disable
 
 ```python
 class LargeReport(models.Model):
     class GraphQLMeta:
-        # Désactiver l'optimisation auto pour ce modèle
+        # Disable auto optimization for this model
         enable_optimization = False
 
-        # Ou personnaliser
+        # Or customize
         select_related = ["user"]
         prefetch_related = ["items"]
         only_fields = ["id", "title", "status"]
@@ -105,16 +105,16 @@ class LargeReport(models.Model):
 
 ## DataLoader
 
-### Fonctionnement
+### How It Works
 
-DataLoader résout le problème N+1 pour les cas où `select_related` ne suffit pas :
+DataLoader solves the N+1 problem for cases where `select_related` isn't sufficient:
 
 ```python
-# Sans DataLoader : N requêtes pour N objets
+# Without DataLoader: N queries for N objects
 for order in orders:
-    customer = order.customer  # Requête par order
+    customer = order.customer  # Query per order
 
-# Avec DataLoader : 1 requête batch
+# With DataLoader: 1 batch query
 customers = Customer.objects.filter(id__in=[o.customer_id for o in orders])
 ```
 
@@ -129,14 +129,14 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-### Cas d'Usage
+### Use Cases
 
-DataLoader est particulièrement utile pour :
+DataLoader is particularly useful for:
 
-- Relations avec conditions complexes
-- Propriétés calculées accédant à la DB
-- Relations polymorphiques
-- Appels à des services externes
+- Relationships with complex conditions
+- Computed properties accessing the DB
+- Polymorphic relationships
+- External service calls
 
 ### Custom DataLoader
 
@@ -147,7 +147,7 @@ from promise.dataloader import DataLoader
 
 class CustomerLoader(DataLoader):
     """
-    DataLoader personnalisé pour les clients.
+    Custom DataLoader for customers.
     """
     def batch_load_fn(self, customer_ids):
         customers = Customer.objects.filter(id__in=customer_ids)
@@ -160,24 +160,24 @@ class OrderType(ObjectType):
     customer = Field(CustomerType)
 
     def resolve_customer(self, info):
-        # Utiliser le loader depuis le contexte
+        # Use loader from context
         return info.context.loaders.customer.load(self.customer_id)
 ```
 
 ---
 
-## Limites de Complexité
+## Complexity Limits
 
-### Profondeur de Requête
+### Query Depth
 
-Limite l'imbrication des relations :
+Limits relationship nesting:
 
 ```python
 "max_query_depth": 10
 ```
 
 ```graphql
-# Profondeur 4 - OK
+# Depth 4 - OK
 query {
   orders {
     customer {
@@ -188,13 +188,13 @@ query {
   }
 }
 
-# Profondeur > 10 - Rejeté
+# Depth > 10 - Rejected
 query {
   orders {
     customer {
       orders {
         customer {
-          # ... trop profond
+          # ... too deep
         }
       }
     }
@@ -202,34 +202,34 @@ query {
 }
 ```
 
-### Complexité de Requête
+### Query Complexity
 
-Chaque champ a un coût calculé :
+Each field has a calculated cost:
 
 ```python
 "max_query_complexity": 1000
 ```
 
-| Type de Champ | Coût par Défaut |
-| ------------- | --------------- |
-| Scalaire      | 1               |
-| Relation (FK) | 5               |
-| Liste         | 10 × limit      |
-| Liste paginée | 10 × page_size  |
+| Field Type     | Default Cost   |
+| -------------- | -------------- |
+| Scalar         | 1              |
+| Relation (FK)  | 5              |
+| List           | 10 × limit     |
+| Paginated List | 10 × page_size |
 
-### Configuration des Coûts
+### Cost Configuration
 
 ```python
 class Order(models.Model):
     class GraphQLMeta:
         field_costs = {
-            "items": 5,           # Relation coûte 5
-            "total_calculated": 2, # Propriété calculée coûte 2
+            "items": 5,           # Relation costs 5
+            "total_calculated": 2, # Computed property costs 2
         }
-        max_complexity = 500      # Limite spécifique au modèle
+        max_complexity = 500      # Model-specific limit
 ```
 
-### Réponse avec Complexité
+### Response with Complexity
 
 ```json
 {
@@ -247,26 +247,26 @@ class Order(models.Model):
 
 ---
 
-## Profiling et Debugging
+## Profiling and Debugging
 
-### Middleware de Performance
+### Performance Middleware
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "middleware_settings": {
         "enable_performance_middleware": True,
         "log_performance": True,
-        "performance_threshold_ms": 1000,  # Alerte si > 1s
+        "performance_threshold_ms": 1000,  # Alert if > 1s
     },
 }
 ```
 
-### Headers de Performance
+### Performance Headers
 
-Activez les headers pour le debugging :
+Enable headers for debugging:
 
 ```python
-# Environnement
+# Environment
 GRAPHQL_PERFORMANCE_HEADERS = True
 ```
 
@@ -278,7 +278,7 @@ X-GraphQL-Complexity: 142
 
 ### Django Debug Toolbar
 
-En développement, utilisez le toolbar pour analyser les requêtes :
+In development, use the toolbar to analyze queries:
 
 ```python
 # settings/dev.py
@@ -286,7 +286,7 @@ INSTALLED_APPS += ["debug_toolbar"]
 MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
 ```
 
-### Logging SQL
+### SQL Logging
 
 ```python
 # settings/dev.py
@@ -306,7 +306,7 @@ LOGGING = {
 
 ### Query Explain
 
-Analysez les plans d'exécution SQL :
+Analyze SQL execution plans:
 
 ```python
 from django.db import connection
@@ -318,9 +318,9 @@ with connection.cursor() as cursor:
 
 ---
 
-## Bonnes Pratiques
+## Best Practices
 
-### 1. Indexation
+### 1. Indexing
 
 ```python
 class Order(models.Model):
@@ -335,42 +335,42 @@ class Order(models.Model):
         ]
 ```
 
-### 2. Évitez les Propriétés N+1
+### 2. Avoid N+1 Properties
 
 ```python
-# ❌ Mauvais : N+1 dans une propriété
+# ❌ Bad: N+1 in a property
 @property
 def order_count(self):
-    return self.orders.count()  # Requête à chaque accès !
+    return self.orders.count()  # Query on each access!
 
-# ✅ Bon : Annotation dans la query
+# ✅ Good: Annotation in the query
 queryset = Customer.objects.annotate(
     order_count=Count("orders")
 )
 ```
 
-### 3. Limitez les Listes
+### 3. Limit Lists
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "query_settings": {
         "default_page_size": 20,
-        "max_page_size": 100,  # Pas plus de 100 items
+        "max_page_size": 100,  # Max 100 items
     },
 }
 ```
 
-### 4. Utilisez only() pour les Gros Champs
+### 4. Use only() for Large Fields
 
 ```python
 class Document(models.Model):
-    content = models.TextField()  # Potentiellement gros
+    content = models.TextField()  # Potentially large
 
     class GraphQLMeta:
-        defer_fields = ["content"]  # Différer le chargement
+        defer_fields = ["content"]  # Defer loading
 ```
 
-### 5. Cachez les Calculs Coûteux
+### 5. Cache Expensive Calculations
 
 ```python
 from django.core.cache import cache
@@ -388,10 +388,10 @@ class Dashboard:
         return stats
 ```
 
-### 6. Monitoring Continu
+### 6. Continuous Monitoring
 
 ```python
-# Alertez sur les requêtes lentes
+# Alert on slow queries
 RAIL_DJANGO_GRAPHQL = {
     "middleware_settings": {
         "performance_threshold_ms": 500,
@@ -405,8 +405,8 @@ RAIL_DJANGO_GRAPHQL = {
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Rate Limiting](./rate-limiting.md) - Limitation de débit
-- [Configuration](../graphql/configuration.md) - Tous les paramètres
-- [Déploiement Production](../deployment/production.md) - Optimisations serveur
+- [Rate Limiting](./rate-limiting.md) - Request rate limiting
+- [Configuration](../graphql/configuration.md) - All settings
+- [Production Deployment](../deployment/production.md) - Server optimizations

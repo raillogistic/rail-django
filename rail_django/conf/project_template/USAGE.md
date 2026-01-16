@@ -42,6 +42,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
     - [Audit Logging](#audit-logging)
     - [Webhooks](#webhooks)
     - [Data Exporting (Excel/CSV)](#data-exporting-excelcsv)
+    - [Background Tasks](#background-tasks)
     - [Health Monitoring](#health-monitoring)
     - [Subscriptions (Real-time)](#subscriptions-real-time)
     - [Multi-Factor Authentication (MFA)](#multi-factor-authentication-mfa)
@@ -1191,6 +1192,49 @@ query {
   }
 }
 ```
+
+### Background Tasks
+
+Run long-running mutations asynchronously and track their status.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "task_settings": {
+        "enabled": True,
+        "backend": "thread",  # thread, sync, celery, dramatiq, django_q
+        "default_queue": "default",
+        "result_ttl_seconds": 86400,
+        "max_retries": 3,
+        "retry_backoff": True,
+        "track_in_database": True,
+        "emit_subscriptions": True,
+    }
+}
+```
+
+GraphQL example:
+
+```graphql
+mutation {
+  generate_report(dataset_id: "123") {
+    task_id
+    status
+  }
+}
+
+query {
+  task(id: "abc-123") {
+    status
+    progress
+    result
+    error
+  }
+}
+```
+
+REST polling:
+
+`GET /api/v1/tasks/<uuid>/`
 
 ### Subscriptions (Real-time)
 

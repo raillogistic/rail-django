@@ -96,6 +96,16 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "include_models": [],
         "exclude_models": [],
     },
+    "task_settings": {
+        "enabled": False,
+        "backend": "thread",
+        "default_queue": "default",
+        "result_ttl_seconds": 86400,
+        "max_retries": 3,
+        "retry_backoff": True,
+        "track_in_database": True,
+        "emit_subscriptions": True,
+    },
     "performance_settings": {
         "enable_query_optimization": True,
         "enable_select_related": True,

@@ -87,6 +87,18 @@ from .multitenancy import (
     TenantMixin,
     TenantQuerySet,
 )
+from .tasks import (
+    TaskExecution,
+    TaskExecutionHandle,
+    TaskQuery,
+    TaskStatus,
+    TaskStatusView,
+    get_task_settings,
+    get_task_subscription_field,
+    get_task_urls,
+    task_mutation,
+    tasks_enabled,
+)
 
 __all__ = [
     # Authentication
@@ -146,4 +158,15 @@ __all__ = [
     "TenantManager",
     "TenantMixin",
     "TenantQuerySet",
+    # Tasks
+    "TaskExecution",
+    "TaskExecutionHandle",
+    "TaskQuery",
+    "TaskStatus",
+    "TaskStatusView",
+    "get_task_settings",
+    "get_task_subscription_field",
+    "get_task_urls",
+    "task_mutation",
+    "tasks_enabled",
 ]

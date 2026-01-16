@@ -572,6 +572,20 @@ class SchemaBuilder:
                 "Subscription fields: %s", list(self._subscription_fields.keys())
             )
 
+        try:
+            from ..extensions.tasks import get_task_subscription_field, tasks_enabled
+
+            if tasks_enabled(self.schema_name):
+                task_field = get_task_subscription_field(self.schema_name)
+                if task_field is not None:
+                    self._subscription_fields["task_updated"] = task_field
+        except Exception as exc:
+            logger.warning(
+                "Could not import task subscriptions for schema '%s': %s",
+                self.schema_name,
+                exc,
+            )
+
     def _load_query_extensions(self) -> list[type[graphene.ObjectType]]:
         """
         Load custom query extensions defined in schema settings.
@@ -835,6 +849,46 @@ class SchemaBuilder:
                 except ImportError as e:
                     logger.warning(
                         f"Could not import health queries for schema '{self.schema_name}': {e}"
+                    )
+
+                # Add task orchestration queries
+                try:
+                    from ..extensions.tasks import TaskQuery, tasks_enabled
+
+                    if tasks_enabled(self.schema_name):
+                        task_query_instance = TaskQuery()
+
+                        for field_name, field in TaskQuery._meta.fields.items():
+                            resolver_method_name = f"resolve_{field_name}"
+                            if hasattr(task_query_instance, resolver_method_name):
+                                resolver_method = getattr(
+                                    task_query_instance, resolver_method_name
+                                )
+
+                                def create_resolver_wrapper(method):
+                                    def wrapper(root, info, **kwargs):
+                                        return method(info, **kwargs)
+
+                                    return wrapper
+
+                                query_attrs[field_name] = graphene.Field(
+                                    field.type,
+                                    description=field.description,
+                                    resolver=create_resolver_wrapper(resolver_method),
+                                    args=getattr(field, "args", None),
+                                )
+                            else:
+                                query_attrs[field_name] = field
+
+                        logger.info(
+                            "Task queries integrated into schema '%s'",
+                            self.schema_name,
+                        )
+                except ImportError as e:
+                    logger.warning(
+                        "Could not import task queries for schema '%s': %s",
+                        self.schema_name,
+                        e,
                     )
 
                 # Add model metadata queries

@@ -1,360 +1,348 @@
-# Subscriptions GraphQL
+# GraphQL Subscriptions
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django génère automatiquement des subscriptions GraphQL pour les événements create/update/delete de vos modèles Django. Cette fonctionnalité utilise Django Channels et WebSocket pour le temps réel.
+Rail Django supports real-time GraphQL subscriptions via WebSocket. This guide covers configuration, generated subscriptions, event filtering, and production deployment.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Prérequis](#prérequis)
+1. [Prerequisites](#prerequisites)
 2. [Configuration](#configuration)
-3. [Configuration ASGI](#configuration-asgi)
-4. [Subscriptions Générées](#subscriptions-générées)
-5. [Filtrage des Événements](#filtrage-des-événements)
-6. [Permissions et Sécurité](#permissions-et-sécurité)
-7. [Configuration par Modèle](#configuration-par-modèle)
-8. [Client Apollo (React)](#client-apollo-react)
-9. [Production](#production)
-10. [Dépannage](#dépannage)
+3. [ASGI Configuration](#asgi-configuration)
+4. [Generated Subscriptions](#generated-subscriptions)
+5. [Event Filtering](#event-filtering)
+6. [Permissions and Security](#permissions-and-security)
+7. [Per-Model Configuration](#per-model-configuration)
+8. [Apollo Client Integration](#apollo-client-integration)
+9. [Production Deployment](#production-deployment)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Prérequis
+## Prerequisites
 
-### Dépendances
-
-Les dépendances sont incluses dans `requirements/base.txt` :
-
-```txt
-channels>=4.0.0
-daphne>=4.0.0
-channels-graphql-ws>=1.0.0
-```
+- **Django Channels** for WebSocket support
+- **Redis** (recommended) for channel layer
+- **ASGI server** (Daphne, Uvicorn)
 
 ### Installation
 
 ```bash
-pip install -r requirements/base.txt
+pip install channels channels-redis
 ```
 
 ---
 
 ## Configuration
 
-### Activation des Subscriptions
+### Basic Configuration
 
 ```python
 # root/settings/base.py
-INSTALLED_APPS = [
-    "daphne",        # Serveur ASGI
-    "channels",      # Django Channels
-    # ... autres apps
-]
-
-ASGI_APPLICATION = "root.asgi.application"
-
-# Channel Layer (développement)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
-}
-
 RAIL_DJANGO_GRAPHQL = {
     "subscription_settings": {
-        # Active la génération des subscriptions
+        # Enable subscription generation
         "enable_subscriptions": True,
-        # Types d'événements
+
+        # Event types
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,
-        # Active les filtres sur les subscriptions
+
+        # Enable filters on subscriptions
         "enable_filters": True,
-        # Allowlist de modèles (vide = tous)
-        "include_models": [],
-        # Blocklist de modèles
-        "exclude_models": ["audit.AuditEvent", "django.Session"],
+
+        # Model allowlist/blocklist
+        "include_models": [],  # Empty = all
+        "exclude_models": ["audit.AuditEvent"],
     },
 }
-```
 
-### Allowlist des Subscriptions (Optionnel)
-
-Limitez les subscriptions exposées dans le schéma :
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "schema_settings": {
-        "subscription_field_allowlist": [
-            "order_created",
-            "order_updated",
-            "product_updated",
-        ],
+# Channel Layers
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("localhost", 6379)],
+        },
     },
 }
 ```
 
 ---
 
-## Configuration ASGI
+## ASGI Configuration
 
-### Fichier asgi.py
+### asgi.py
 
 ```python
 # root/asgi.py
-"""
-Configuration ASGI pour les subscriptions GraphQL.
-"""
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
+import os
 from django.core.asgi import get_asgi_application
-from django.urls import path
-from rail_django.extensions.subscriptions import get_subscription_consumer
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
 
-# Initialisation Django (IMPORTANT: avant les imports de modèles)
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "root.settings.production")
+
+# Import after Django setup
 django_asgi_app = get_asgi_application()
 
-application = ProtocolTypeRouter({
-    # HTTP standard
-    "http": django_asgi_app,
+from rail_django.subscriptions import GraphQLWebsocketConsumer
 
-    # WebSocket pour subscriptions GraphQL
+application = ProtocolTypeRouter({
+    "http": django_asgi_app,
     "websocket": AuthMiddlewareStack(
         URLRouter([
-            path("graphql/", get_subscription_consumer("gql")),
-            path("graphql/graphiql/", get_subscription_consumer("gql")),
+            path("graphql/ws/", GraphQLWebsocketConsumer.as_asgi()),
         ])
     ),
 })
 ```
 
-### Paramètre du Consumer
-
-`get_subscription_consumer(schema_name)` accepte le nom du schéma :
-
-- `"gql"` : Schéma par défaut
-- `"admin"` : Schéma admin (si configuré)
-- Autre nom défini dans `RAIL_DJANGO_GRAPHQL_SCHEMAS`
-
 ---
 
-## Subscriptions Générées
+## Generated Subscriptions
 
-### Convention de Nommage
+### Naming Convention
 
-Pour chaque modèle, trois subscriptions sont générées :
+For each model, Rail Django generates:
 
-```
-<model>_created
-<model>_updated
-<model>_deleted
-```
+| Subscription | Format            | Description          |
+| ------------ | ----------------- | -------------------- |
+| Created      | `<model>_created` | Listen for creations |
+| Updated      | `<model>_updated` | Listen for updates   |
+| Deleted      | `<model>_deleted` | Listen for deletions |
+| All events   | `<model>_changed` | All events           |
 
-Les noms sont en `snake_case` (ex: `order_item_created` pour `OrderItem`).
-
-### Structure du Payload
+**Example for the `Order` model:**
 
 ```graphql
-subscription {
-  order_created {
-    event # "created", "updated", ou "deleted"
-    id # Clé primaire de l'instance
-    node {
-      # Instance complète du modèle
-      id
-      reference
-      status
-      total
-      customer {
-        id
-        name
-      }
-    }
-  }
+type Subscription {
+  order_created(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  order_updated(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  order_deleted(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  order_changed(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
 }
 ```
 
-### Champs de Réponse
-
-| Champ   | Type       | Description                                        |
-| ------- | ---------- | -------------------------------------------------- |
-| `event` | String     | Type d'événement (`created`, `updated`, `deleted`) |
-| `id`    | ID         | Clé primaire de l'objet                            |
-| `node`  | ObjectType | Instance complète avec relations                   |
-
----
-
-## Filtrage des Événements
-
-Si `enable_filters: True`, les subscriptions acceptent un argument `filters` :
-
-### Syntaxe des Filtres
+### Payload Structure
 
 ```graphql
-subscription FilteredOrders {
-  order_created(
-    filters: {
-      status: { exact: "pending" }
-      total: { gte: 100 }
-      customer__country: { in: ["FR", "BE", "CH"] }
-    }
-  ) {
+type OrderSubscriptionPayload {
+  event: String! # "created", "updated", "deleted"
+  node: OrderType # The object (null for delete)
+  previous: OrderType # Previous values (for update)
+  changed_fields: [String] # Modified fields
+  timestamp: DateTime!
+  user: UserType # User who made the change
+}
+```
+
+### Usage Example
+
+```graphql
+subscription OnOrderCreated {
+  order_created {
     event
     node {
       id
       reference
       status
       total
+      customer {
+        name
+      }
+    }
+    timestamp
+    user {
+      username
     }
   }
 }
 ```
 
-### Opérateurs Supportés
-
-Les mêmes opérateurs que les queries list sont disponibles :
-
-- `exact`, `iexact`
-- `contains`, `icontains`
-- `startswith`, `istartswith`
-- `endswith`, `iendswith`
-- `gt`, `gte`, `lt`, `lte`
-- `in`, `isnull`
-- `range`
-
-### Comportement du Filtrage
-
-- Pour `created` et `updated` : Le filtre est appliqué en base de données.
-- Pour `deleted` : Le filtre est évalué en mémoire (l'objet n'existe plus en DB).
-- Filtres invalides : L'événement est ignoré (log warning).
-
 ---
 
-## Permissions et Sécurité
+## Event Filtering
 
-### Authentification
+### Filter by Field
 
-Les subscriptions respectent `authentication_required` :
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "schema_settings": {
-        "authentication_required": True,
-    },
+```graphql
+subscription OrdersByStatus {
+  order_updated(filters: { status: { exact: "pending" } }) {
+    event
+    node {
+      id
+      status
+    }
+  }
 }
 ```
 
-Si activé, les connexions WebSocket sans token JWT valide sont refusées.
+### Available Operators
 
-### Permissions Modèle
+| Operator    | Example                              |
+| ----------- | ------------------------------------ |
+| `exact`     | `status: { exact: "pending" }`       |
+| `in`        | `status: { in: ["pending", "new"] }` |
+| `contains`  | `name: { contains: "urgent" }`       |
+| `gt`, `gte` | `total: { gte: 1000 }`               |
+| `lt`, `lte` | `total: { lt: 100 }`                 |
 
-Les vérifications `GraphQLMeta` s'appliquent :
+### Filter by Relationship
 
-```python
-class Order(models.Model):
-    class GraphQLMeta:
-        access = {
-            "operations": {
-                "list": {"roles": ["sales", "admin"]},
-                "subscribe": {"roles": ["sales", "admin"]},  # Optionnel
-            },
-        }
+```graphql
+subscription CustomerOrders($customer_id: ID!) {
+  order_created(filters: { customer: { id: { exact: $customer_id } } }) {
+    node {
+      id
+      reference
+    }
+  }
+}
 ```
 
-Si `subscribe` n'est pas défini, la permission `list` est utilisée.
+### Combined Filters
 
-### Masquage des Champs
-
-Le masquage par rôle s'applique au payload de subscription :
-
-```python
-class Order(models.Model):
-    class GraphQLMeta:
-        field_permissions = {
-            "margin": {
-                "roles": ["finance"],
-                "visibility": "hidden",
-            },
-        }
-```
-
-Un utilisateur `sales` ne verra pas le champ `margin` même dans les subscriptions.
-
----
-
-## Configuration par Modèle
-
-### Via GraphQLMeta
-
-```python
-class Project(models.Model):
-    """
-    Projet avec configuration de subscription personnalisée.
-    """
-    name = models.CharField("Nom", max_length=100)
-    status = models.CharField("Statut", max_length=20)
-
-    class GraphQLMeta:
-        # Activer toutes les subscriptions
-        subscriptions = True
-
-        # Ou spécifier les événements
-        # subscriptions = ["create", "update"]
-
-        # Ou configuration détaillée
-        # subscriptions = {
-        #     "create": True,
-        #     "update": True,
-        #     "delete": False,
-        # }
-```
-
-### Désactiver pour un Modèle
-
-```python
-class AuditLog(models.Model):
-    """
-    Logs d'audit - pas de subscription.
-    """
-    class GraphQLMeta:
-        subscriptions = False
+```graphql
+subscription HighValuePendingOrders {
+  order_changed(
+    filters: {
+      AND: [{ status: { exact: "pending" } }, { total: { gte: 1000 } }]
+    }
+  ) {
+    event
+    node {
+      id
+      total
+    }
+  }
+}
 ```
 
 ---
 
-## Client Apollo (React)
+## Permissions and Security
 
-### Configuration du Client
+### JWT Authentication
+
+```python
+# root/asgi.py
+from rail_django.subscriptions import JWTAuthMiddleware
+
+application = ProtocolTypeRouter({
+    "websocket": JWTAuthMiddleware(
+        URLRouter([
+            path("graphql/ws/", GraphQLWebsocketConsumer.as_asgi()),
+        ])
+    ),
+})
+```
+
+### Client-Side Connection
+
+```javascript
+const wsLink = new WebSocketLink({
+  uri: "wss://example.com/graphql/ws/",
+  options: {
+    connectionParams: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  },
+});
+```
+
+### Per-Subscription Permissions
+
+```python
+class Order(models.Model):
+    class GraphQLMeta:
+        subscription_permissions = {
+            "created": {"roles": ["sales", "admin"]},
+            "updated": {"roles": ["sales", "admin"]},
+            "deleted": {"roles": ["admin"]},
+        }
+```
+
+---
+
+## Per-Model Configuration
+
+### GraphQLMeta Configuration
+
+```python
+from django.db import models
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+
+class Order(models.Model):
+    """
+    Order Model with subscription configuration.
+    """
+    reference = models.CharField(max_length=50)
+    status = models.CharField(max_length=20)
+    total = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        # ─── Subscription Configuration ───
+        subscriptions = GraphQLMetaConfig.Subscriptions(
+            # Enable for this model
+            enabled=True,
+
+            # Enabled events
+            events=["created", "updated"],  # exclude "deleted"
+
+            # Allowed filter fields
+            filter_fields=["status", "customer_id", "total"],
+
+            # Fields included in payload
+            payload_fields=["id", "reference", "status", "total"],
+
+            # Exclude sensitive fields
+            exclude_fields=["internal_notes"],
+        )
+```
+
+### Disable for a Model
+
+```python
+class InternalLog(models.Model):
+    class GraphQLMeta:
+        subscriptions = GraphQLMetaConfig.Subscriptions(
+            enabled=False,
+        )
+```
+
+---
+
+## Apollo Client Integration
+
+### Client Configuration
 
 ```typescript
-// src/apollo.ts
 import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
 import { WebSocketLink } from "@apollo/client/link/ws";
 import { getMainDefinition } from "@apollo/client/utilities";
 
-// Lien HTTP pour queries et mutations
+// HTTP link for queries and mutations
 const httpLink = new HttpLink({
   uri: "/graphql/gql/",
-  headers: {
-    Authorization: `Bearer ${getAccessToken()}`,
-  },
 });
 
-// Lien WebSocket pour subscriptions
+// WebSocket link for subscriptions
 const wsLink = new WebSocketLink({
-  uri: `ws://${window.location.host}/graphql/`,
+  uri: `wss://${window.location.host}/graphql/ws/`,
   options: {
     reconnect: true,
     connectionParams: () => ({
-      authorization: `Bearer ${getAccessToken()}`,
+      authorization: `Bearer ${localStorage.getItem("access_token")}`,
     }),
   },
 });
 
-// Split : WebSocket pour subscriptions, HTTP pour le reste
-const link = split(
+// Split between HTTP and WebSocket
+const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
     return (
@@ -363,23 +351,23 @@ const link = split(
     );
   },
   wsLink,
-  httpLink
+  httpLink,
 );
 
 export const client = new ApolloClient({
-  link,
+  link: splitLink,
   cache: new InMemoryCache(),
 });
 ```
 
-### Hook useSubscription
+### React Component
 
 ```tsx
-import { gql, useSubscription } from "@apollo/client";
+import { useSubscription, gql } from "@apollo/client";
 
 const ORDER_SUBSCRIPTION = gql`
-  subscription OnOrderCreated($filters: OrderComplexFilter) {
-    order_created(filters: $filters) {
+  subscription OnOrderCreated {
+    order_created {
       event
       node {
         id
@@ -392,101 +380,29 @@ const ORDER_SUBSCRIPTION = gql`
 `;
 
 function OrderNotifications() {
-  const { data, loading, error } = useSubscription(ORDER_SUBSCRIPTION, {
-    variables: {
-      filters: {
-        status: { exact: "pending" },
-      },
-    },
-    onSubscriptionData: ({ subscriptionData }) => {
-      const order = subscriptionData.data?.order_created?.node;
-      if (order) {
-        showNotification(`Nouvelle commande: ${order.reference}`);
-      }
-    },
-  });
+  const { data, loading, error } = useSubscription(ORDER_SUBSCRIPTION);
 
-  if (loading) return <p>En attente d'événements...</p>;
-  if (error) return <p>Erreur: {error.message}</p>;
+  if (loading) return <p>Listening for orders...</p>;
+  if (error) return <p>Subscription error: {error.message}</p>;
 
-  return <div>Dernière commande: {data?.order_created?.node?.reference}</div>;
-}
-```
-
-### Composant de Liste Temps Réel
-
-```tsx
-import { gql, useQuery, useSubscription } from "@apollo/client";
-import { useCallback } from "react";
-
-const ORDERS_QUERY = gql`
-  query Orders {
-    orders(order_by: ["-created_at"], limit: 100) {
-      id
-      reference
-      status
-    }
+  if (data) {
+    const { node } = data.order_created;
+    return (
+      <div className="notification">
+        New order: {node.reference} - ${node.total}
+      </div>
+    );
   }
-`;
 
-const ORDER_CREATED = gql`
-  subscription {
-    order_created {
-      node {
-        id
-        reference
-        status
-      }
-    }
-  }
-`;
-
-const ORDER_UPDATED = gql`
-  subscription {
-    order_updated {
-      node {
-        id
-        reference
-        status
-      }
-    }
-  }
-`;
-
-function OrderList() {
-  const { data, refetch } = useQuery(ORDERS_QUERY);
-
-  // Ajouter les nouvelles commandes
-  useSubscription(ORDER_CREATED, {
-    onSubscriptionData: () => refetch(),
-  });
-
-  // Mettre à jour les commandes existantes (Apollo Cache)
-  useSubscription(ORDER_UPDATED);
-
-  return (
-    <ul>
-      {data?.orders.map((order) => (
-        <li key={order.id}>
-          {order.reference} - {order.status}
-        </li>
-      ))}
-    </ul>
-  );
+  return null;
 }
 ```
 
 ---
 
-## Production
+## Production Deployment
 
-### Channel Layer Redis
-
-En production, utilisez Redis pour le support multi-workers :
-
-```bash
-pip install channels-redis
-```
+### Redis Channel Layer
 
 ```python
 # root/settings/production.py
@@ -494,7 +410,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(os.environ.get("REDIS_HOST", "localhost"), 6379)],
+            "hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379/0")],
             "capacity": 1500,
             "expiry": 10,
         },
@@ -502,101 +418,109 @@ CHANNEL_LAYERS = {
 }
 ```
 
-### Déploiement avec Daphne
+### Daphne (ASGI Server)
 
-```dockerfile
-# Dockerfile
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "root.asgi:application"]
+```bash
+# Install
+pip install daphne
+
+# Run
+daphne -b 0.0.0.0 -p 8000 root.asgi:application
 ```
 
-Ou avec Uvicorn :
+### Uvicorn
 
-```dockerfile
-CMD ["uvicorn", "root.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
+```bash
+# Install
+pip install uvicorn
+
+# Run
+uvicorn root.asgi:application --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ### Nginx Configuration
 
 ```nginx
-# /etc/nginx/conf.d/app.conf
-upstream django_ws {
-    server app:8000;
-}
-
-server {
-    listen 443 ssl;
-
-    location /graphql/ {
-        proxy_pass http://django_ws;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
+# WebSocket support
+location /graphql/ws/ {
+    proxy_pass http://django;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_read_timeout 86400;
 }
 ```
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-### Erreur : ImportError channels-graphql-ws
+### Connection Refused
 
-**Cause :** Package non installé.
+**Cause:** ASGI server not running or port blocked.
 
-**Solution :**
-
-```bash
-pip install channels-graphql-ws
-```
-
-### Erreur : WebSocket connection failed
-
-**Causes possibles :**
-
-1. ASGI_APPLICATION mal configuré
-2. Nginx ne forward pas les en-têtes WebSocket
-3. Token JWT invalide ou expiré
-
-**Vérifications :**
+**Solution:**
 
 ```bash
-# Test direct sans Nginx
-daphne -b 0.0.0.0 -p 8000 root.asgi:application
+# Check if server is listening
+netstat -tlnp | grep 8000
+
+# Check firewall
+sudo ufw allow 8000
 ```
 
-### Les événements ne sont pas reçus
+### Authentication Failed
 
-**Causes possibles :**
+**Cause:** JWT token not passed or invalid.
 
-1. Channel Layer InMemory avec plusieurs workers
-2. Le modèle est dans `exclude_models`
-3. Permissions insuffisantes
+**Solution:**
 
-**Solution :**
+```javascript
+// Verify connectionParams
+const wsLink = new WebSocketLink({
+  options: {
+    connectionParams: () => {
+      const token = localStorage.getItem("access_token");
+      console.log("Token:", token); // Debug
+      return { authorization: `Bearer ${token}` };
+    },
+  },
+});
+```
+
+### No Events Received
+
+**Cause:** Channel layer not configured or Redis unavailable.
+
+**Solution:**
 
 ```python
-# Utilisez Redis en production
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        ...
-    },
-}
+# Test channel layer
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+channel_layer = get_channel_layer()
+async_to_sync(channel_layer.send)("test", {"type": "test.message"})
 ```
 
-### Filtres ignorés
+### Connection Drops
 
-**Cause :** Erreur de syntaxe dans le filtre.
+**Cause:** Nginx timeout or network issues.
 
-**Solution :** Vérifiez les logs pour les warnings de filtre invalide.
+**Solution:**
+
+```nginx
+# Increase timeouts
+proxy_read_timeout 86400;
+proxy_send_timeout 86400;
+```
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Webhooks](./webhooks.md) - Alternative pour l'intégration système-à-système
-- [Configuration](../graphql/configuration.md) - Paramètres subscription_settings
-- [Permissions](../security/permissions.md) - Contrôle d'accès aux subscriptions
+- [Webhooks](./webhooks.md) - Event-based integration
+- [Configuration](../graphql/configuration.md) - subscription_settings
+- [Production Deployment](../deployment/production.md) - ASGI server setup

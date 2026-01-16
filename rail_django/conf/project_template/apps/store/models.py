@@ -9,10 +9,8 @@ from django.db import models
 from django.db.models import F
 from django.utils import timezone
 
-from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 from rail_django.extensions.templating import model_pdf_template
 
-from .access_control import STORE_ROLES, catalog_operations, order_operations
 
 def _coerce_filter_value(args, kwargs):
     # Support both django-filter (qs, name, value) and GraphQLMeta (qs, value).
@@ -99,16 +97,6 @@ class Customer(models.Model):
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}".strip()
 
-    class GraphqlMeta(GraphQLMetaConfig):
-        classifications = GraphQLMetaConfig.Classification(
-            model=["pii"],
-            fields={
-                "email": ["pii"],
-                "phone_number": ["pii"],
-                "notes": ["confidential"],
-            },
-        )
-
 
 class Address(models.Model):
     customer = models.ForeignKey(
@@ -156,67 +144,6 @@ class Product(models.Model):
 
     def __str__(self) -> str:
         return f"{self.sku} - {self.name}"
-
-    class GraphQLMeta(GraphQLMetaConfig):
-        fields = GraphQLMetaConfig.Fields(
-            include=[
-                "id",
-                "sku",
-                "name",
-                "description",
-                "category",
-                "tags",
-                "price",
-                "currency",
-                "inventory_count",
-                "weight_grams",
-                "is_active",
-                "internal_notes",
-                "metadata",
-                "created_at",
-                "updated_at",
-            ],
-            read_only=["sku", "created_at", "updated_at"],
-            write_only=["internal_notes"],
-        )
-        filtering = GraphQLMetaConfig.Filtering(
-            quick=["name", "sku", "category__name"],
-            quick_lookup="icontains",
-            auto_detect_quick=False,
-            fields={
-                "price": GraphQLMetaConfig.FilterField(
-                    lookups=["gte", "lte", "range"],
-                    help_text="Filter by list price.",
-                ),
-                "category__name": GraphQLMetaConfig.FilterField(
-                    lookups=["icontains", "exact"],
-                    help_text="Filter by category name.",
-                ),
-                "tags__name": GraphQLMetaConfig.FilterField(
-                    lookups=["icontains"],
-                    help_text="Filter by tag name.",
-                ),
-                "is_active": GraphQLMetaConfig.FilterField(
-                    lookups=["exact"], help_text="Filter active products."
-                ),
-            },
-        )
-        ordering = GraphQLMetaConfig.Ordering(
-            allowed=["name", "price", "created_at"],
-            default=["-created_at"],
-            allow_related=False,
-        )
-        access = GraphQLMetaConfig.AccessControl(
-            roles=STORE_ROLES,
-            operations=catalog_operations(allow_anonymous_read=True),
-            fields=[
-                GraphQLMetaConfig.FieldGuard(
-                    field="price",
-                    access="read",
-                    visibility="visible",
-                )
-            ],
-        )
 
 
 class Order(models.Model):
@@ -372,135 +299,6 @@ class Order(models.Model):
         return (
             getattr(instance, "created_by_id", None) == user.id
             or getattr(instance, "assigned_to_id", None) == user.id
-        )
-
-    class GraphQLMeta(GraphQLMetaConfig):
-        filtering = GraphQLMetaConfig.Filtering(
-            quick=[
-                "order_number",
-                "contact_email",
-                "customer__email",
-                "shipping_address__city",
-            ],
-            quick_lookup="icontains",
-            auto_detect_quick=False,
-            fields={
-                "status": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "in"],
-                    choices=OrderStatus.choices,
-                    help_text="Filter by order status.",
-                ),
-                "total_amount": GraphQLMetaConfig.FilterField(
-                    lookups=["gte", "lte", "range"],
-                    help_text="Filter by order totals.",
-                ),
-                "placed_at": GraphQLMetaConfig.FilterField(
-                    lookups=["date", "gte", "lte", "range"],
-                    help_text="Filter by placement date.",
-                ),
-                "customer__email": GraphQLMetaConfig.FilterField(
-                    lookups=["icontains", "exact"],
-                    help_text="Filter by customer email.",
-                ),
-                "shipping_address__city": GraphQLMetaConfig.FilterField(
-                    lookups=["icontains", "exact"],
-                    help_text="Filter by shipping city.",
-                ),
-            },
-            custom={
-                "overdue": "filter_overdue",
-                "high_value": "filter_high_value",
-                "has_balance": "filter_has_balance",
-            },
-        )
-        fields = GraphQLMetaConfig.Fields(
-            exclude=["raw_payload"],
-            read_only=[
-                "order_number",
-                "subtotal_amount",
-                "tax_amount",
-                "shipping_amount",
-                "discount_amount",
-                "total_amount",
-                "paid_amount",
-                "placed_at",
-                "paid_at",
-                "fulfilled_at",
-                "created_at",
-                "updated_at",
-            ],
-            write_only=["fraud_context"],
-        )
-        ordering = GraphQLMetaConfig.Ordering(
-            allowed=["placed_at", "total_amount", "status", "customer__last_name"],
-            default=["-placed_at"],
-            allow_related=True,
-        )
-        resolvers = GraphQLMetaConfig.Resolvers(
-            queries={"priority_queue": "resolve_priority_queue"},
-            mutations={"mark_paid": "resolve_mark_paid"},
-            fields={"balance_due": "resolve_balance_due"},
-        )
-        access = GraphQLMetaConfig.AccessControl(
-            roles=STORE_ROLES,
-            operations=order_operations(),
-            fields=[
-                GraphQLMetaConfig.FieldGuard(
-                    field="payment_token",
-                    access="read",
-                    visibility="visible",
-                    roles=["order_admin"],
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="payment_token",
-                    access="read",
-                    visibility="masked",
-                    mask_value="tok_****",
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="internal_notes",
-                    access="read",
-                    visibility="visible",
-                    roles=["order_manager", "order_admin"],
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="internal_notes",
-                    access="read",
-                    visibility="hidden",
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="contact_email",
-                    access="read",
-                    visibility="visible",
-                    condition="can_view_contact_email",
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="contact_email",
-                    access="read",
-                    visibility="redacted",
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="risk_score",
-                    access="read",
-                    visibility="visible",
-                    permissions=["store.view_risk_score"],
-                ),
-                GraphQLMetaConfig.FieldGuard(
-                    field="risk_score",
-                    access="read",
-                    visibility="hidden",
-                ),
-            ],
-        )
-        classifications = GraphQLMetaConfig.Classification(
-            model=["transactional", "financial"],
-            fields={
-                "contact_email": ["pii"],
-                "payment_token": ["secret", "pci"],
-                "internal_notes": ["confidential"],
-                "risk_score": ["risk"],
-                "total_amount": ["financial"],
-            },
         )
 
 

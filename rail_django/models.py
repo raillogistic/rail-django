@@ -22,6 +22,7 @@ from rail_django.extensions.reporting import (
     ReportingReportBlock,
     ReportingVisualization,
 )
+from rail_django.extensions.tasks import TaskExecution
 from rail_django.validation.schema_validator import SchemaValidator
 
 
@@ -255,6 +256,7 @@ __all__ = [
     "ReportingReport",
     "ReportingReportBlock",
     "ReportingExportJob",
+    "TaskExecution",
     "SchemaRegistryModel",
     "SchemaSnapshotModel",
 ]

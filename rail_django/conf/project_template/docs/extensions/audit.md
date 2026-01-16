@@ -1,574 +1,515 @@
 # Audit & Logging
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django intègre un système d'audit complet qui trace les événements de sécurité, les actions utilisateurs et les modifications de données. Ce système est essentiel pour la conformité réglementaire (RGPD, SOC2) et le dépannage.
+Rail Django includes a comprehensive audit system for tracking data modifications, authentication events, and security incidents. This guide covers configuration, event types, and best practices.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
 1. [Configuration](#configuration)
-2. [Types d'Événements](#types-dévénements)
-3. [Modèle AuditEvent](#modèle-auditevent)
-4. [Logging Automatique](#logging-automatique)
-5. [API de Logging](#api-de-logging)
-6. [Rapports de Sécurité](#rapports-de-sécurité)
-7. [Query GraphQL](#query-graphql)
-8. [Rétention et Archivage](#rétention-et-archivage)
-9. [Bonnes Pratiques](#bonnes-pratiques)
+2. [Event Types](#event-types)
+3. [AuditEvent Model](#auditevent-model)
+4. [Automatic Logging](#automatic-logging)
+5. [Logging API](#logging-api)
+6. [Security Reports](#security-reports)
+7. [GraphQL Query](#graphql-query)
+8. [Retention and Archiving](#retention-and-archiving)
+9. [Best Practices](#best-practices)
 
 ---
 
 ## Configuration
 
-### Paramètres d'Audit
+### Basic Configuration
 
 ```python
 # root/settings/base.py
 RAIL_DJANGO_GRAPHQL = {
-    "security_settings": {
-        # Audit des vérifications de permissions
-        "enable_permission_audit": True,
-        "permission_audit_log_denies": True,  # Log les refus
-        "permission_audit_log_all": False,    # Log tous les checks (verbose)
-    },
-    "middleware_settings": {
-        # Active le logging des requêtes
-        "enable_logging_middleware": True,
-        # Types d'opérations à logger
-        "log_queries": True,
-        "log_mutations": True,
-        "log_introspection": False,  # Évite le bruit
-        "log_errors": True,
-        # Performance logging
-        "log_performance": True,
-        "performance_threshold_ms": 1000,  # Alerter si > 1s
-    },
-}
-```
-
-### Activation des Extensions d'Audit
-
-```python
-RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
-        "enable_extension_mutations": True,  # Expose les mutations d'audit
+        "enable_extension_mutations": True,
     },
+}
+
+RAIL_DJANGO_AUDIT = {
+    # Activation
+    "enabled": True,
+
+    # Event types to track
+    "track_data_events": True,
+    "track_security_events": True,
+    "track_system_events": True,
+
+    # Granularity
+    "track_field_changes": True,
+    "track_old_values": True,
+    "track_new_values": True,
+
+    # Exclusions
+    "exclude_apps": ["sessions", "contenttypes"],
+    "exclude_models": ["audit.AuditEvent"],
+    "exclude_fields": ["password", "token", "secret"],
+
+    # Storage
+    "database_alias": "default",
+    "retention_days": 365,
+
+    # Performance
+    "async_logging": True,
+    "batch_size": 100,
 }
 ```
 
 ---
 
-## Types d'Événements
+## Event Types
 
-### Événements de Sécurité
+### Security Events
 
-| Type                     | Description                 |
-| ------------------------ | --------------------------- |
-| `login_success`          | Connexion réussie           |
-| `login_failure`          | Échec de connexion          |
-| `logout`                 | Déconnexion                 |
-| `password_change`        | Changement de mot de passe  |
-| `password_reset_request` | Demande de réinitialisation |
-| `permission_denied`      | Permission refusée          |
-| `mfa_setup`              | Configuration MFA           |
-| `mfa_verified`           | Vérification MFA réussie    |
-| `mfa_failed`             | Échec de vérification MFA   |
+| Event                 | Description                  |
+| --------------------- | ---------------------------- |
+| `LOGIN_SUCCESS`       | Successful login             |
+| `LOGIN_FAILURE`       | Failed login attempt         |
+| `LOGOUT`              | User logout                  |
+| `PASSWORD_CHANGE`     | Password change              |
+| `PASSWORD_RESET`      | Password reset               |
+| `MFA_SETUP`           | MFA device configured        |
+| `MFA_VERIFY`          | MFA code verified            |
+| `MFA_FAILURE`         | Failed MFA attempt           |
+| `PERMISSION_DENIED`   | Authorization denied         |
+| `RATE_LIMIT_EXCEEDED` | Rate limit exceeded          |
+| `SUSPICIOUS_ACTIVITY` | Suspicious activity detected |
 
-### Événements de Données
+### Data Events
 
-| Type             | Description             |
-| ---------------- | ----------------------- |
-| `model_created`  | Création d'un objet     |
-| `model_updated`  | Modification d'un objet |
-| `model_deleted`  | Suppression d'un objet  |
-| `bulk_operation` | Opération en masse      |
+| Event          | Description            |
+| -------------- | ---------------------- |
+| `CREATE`       | Object creation        |
+| `UPDATE`       | Object modification    |
+| `DELETE`       | Object deletion        |
+| `BULK_CREATE`  | Bulk creation          |
+| `BULK_UPDATE`  | Bulk modification      |
+| `BULK_DELETE`  | Bulk deletion          |
+| `FIELD_ACCESS` | Sensitive field access |
 
-### Événements Système
+### System Events
 
-| Type               | Description                 |
-| ------------------ | --------------------------- |
-| `schema_rebuilt`   | Reconstruction du schéma    |
-| `export_requested` | Demande d'export de données |
-| `api_rate_limited` | Rate limiting déclenché     |
+| Event               | Description           |
+| ------------------- | --------------------- |
+| `SCHEMA_REFRESH`    | Schema rebuilt        |
+| `MIGRATION_APPLIED` | Migration applied     |
+| `CACHE_CLEARED`     | Cache cleared         |
+| `EXPORT_STARTED`    | Data export initiated |
+| `EXPORT_COMPLETED`  | Export completed      |
+| `WEBHOOK_SENT`      | Webhook sent          |
+| `WEBHOOK_FAILED`    | Webhook failed        |
 
 ---
 
-## Modèle AuditEvent
+## AuditEvent Model
 
 ### Structure
 
 ```python
-class AuditEventModel(models.Model):
+class AuditEvent(models.Model):
     """
-    Modèle de stockage des événements d'audit.
+    Audit event model.
 
     Attributes:
-        event_type: Type de l'événement.
-        severity: Niveau de sévérité (info, warning, error, critical).
-        user: Utilisateur concerné (nullable pour événements système).
-        ip_address: Adresse IP de la requête.
-        user_agent: User-Agent du client.
-        action: Description de l'action.
-        target_model: Modèle Django ciblé.
-        target_id: ID de l'objet ciblé.
-        old_values: Valeurs avant modification (JSON).
-        new_values: Valeurs après modification (JSON).
-        metadata: Données additionnelles (JSON).
-        created_at: Horodatage de l'événement.
+        event_type: Type of event (security, data, system).
+        event_name: Specific event name.
+        user: User who performed the action.
+        ip_address: Client IP address.
+        user_agent: Client User-Agent.
+        app_label: Application concerned.
+        model_name: Model concerned.
+        object_id: Object ID.
+        object_repr: Text representation of the object.
+        old_values: Values before modification.
+        new_values: Values after modification.
+        changed_fields: List of modified fields.
+        metadata: Additional metadata.
+        severity: Severity level.
+        timestamp: Event date and time.
     """
-    event_type = models.CharField(max_length=50, db_index=True)
-    severity = models.CharField(max_length=20, default="info")
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True
-    )
+    EVENT_TYPES = [
+        ("security", "Security"),
+        ("data", "Data"),
+        ("system", "System"),
+    ]
+
+    SEVERITY_LEVELS = [
+        ("debug", "Debug"),
+        ("info", "Info"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+        ("critical", "Critical"),
+    ]
+
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    event_name = models.CharField(max_length=50)
+    user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
     ip_address = models.GenericIPAddressField(null=True)
     user_agent = models.TextField(blank=True)
-    action = models.TextField()
-    target_model = models.CharField(max_length=100, blank=True)
-    target_id = models.CharField(max_length=100, blank=True)
-    old_values = models.JSONField(default=dict)
-    new_values = models.JSONField(default=dict)
+    app_label = models.CharField(max_length=100, blank=True)
+    model_name = models.CharField(max_length=100, blank=True)
+    object_id = models.CharField(max_length=100, blank=True)
+    object_repr = models.TextField(blank=True)
+    old_values = models.JSONField(null=True)
+    new_values = models.JSONField(null=True)
+    changed_fields = models.JSONField(default=list)
     metadata = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    severity = models.CharField(max_length=10, choices=SEVERITY_LEVELS)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["event_type", "timestamp"]),
+            models.Index(fields=["user", "timestamp"]),
+            models.Index(fields=["app_label", "model_name", "timestamp"]),
+        ]
 ```
 
 ---
 
-## Logging Automatique
+## Automatic Logging
 
-### Événements de Connexion
-
-Les connexions sont automatiquement loggées :
+### Enable for a Model
 
 ```python
-# Connexion réussie
-AuditEventModel.objects.create(
-    event_type="login_success",
-    severity="info",
-    user=user,
-    ip_address=get_client_ip(request),
-    action=f"User {user.username} logged in successfully",
-    metadata={
-        "user_agent": request.META.get("HTTP_USER_AGENT"),
-        "method": "jwt",
-    }
-)
+from django.db import models
+from rail_django.extensions.audit import AuditMixin
 
-# Connexion échouée (inclut la détection de brute force)
-AuditEventModel.objects.create(
-    event_type="login_failure",
-    severity="warning",
-    ip_address=get_client_ip(request),
-    action=f"Failed login attempt for username: {username}",
-    metadata={
-        "attempt_count": attempt_count,
-        "is_locked": is_locked,
-    }
-)
+class SensitiveDocument(AuditMixin, models.Model):
+    """
+    Sensitive document with automatic auditing.
+    """
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    classification = models.CharField(max_length=20)
+
+    class AuditMeta:
+        # Tracked events
+        track_create = True
+        track_update = True
+        track_delete = True
+
+        # Fields to include/exclude
+        include_fields = None  # All
+        exclude_fields = ["content"]  # Don't log content
+
+        # Sensitive field access logging
+        sensitive_fields = ["classification"]
 ```
 
-### Modifications de Données
+### Automatic Tracking via Signal
 
-Les mutations CRUD loggent automatiquement les changements :
-
-```json
-{
-  "event_type": "model_updated",
-  "severity": "info",
-  "user": 1,
-  "target_model": "store.Order",
-  "target_id": "42",
-  "old_values": {
-    "status": "pending",
-    "total": "100.00"
-  },
-  "new_values": {
-    "status": "confirmed",
-    "total": "120.00"
-  },
-  "metadata": {
-    "mutation": "update_order",
-    "fields_changed": ["status", "total"]
-  }
+```python
+# All model modifications are tracked
+RAIL_DJANGO_AUDIT = {
+    "auto_track_models": True,
+    "exclude_models": ["sessions.Session"],
 }
 ```
 
 ---
 
-## API de Logging
+## Logging API
 
-### Utilisation de audit_logger
+### Manual Logging
 
 ```python
-from rail_django.extensions.audit import audit_logger
+from rail_django.extensions.audit import audit_log
 
-# Log un événement simple
-audit_logger.log(
-    event_type="custom_action",
-    severity="info",
+# Security event
+audit_log.security(
+    event_name="SUSPICIOUS_ACTIVITY",
     user=request.user,
-    action="User performed custom action",
-    target_model="myapp.MyModel",
-    target_id="123",
-)
-
-# Log avec métadonnées
-audit_logger.log(
-    event_type="export_requested",
-    severity="info",
-    user=request.user,
-    action="User requested data export",
+    request=request,
     metadata={
-        "export_format": "xlsx",
-        "filters": {"status": "active"},
-        "row_count": 1500,
-    }
-)
-
-# Log de sécurité
-audit_logger.log_security_event(
-    event_type="permission_denied",
+        "reason": "Multiple failed login attempts",
+        "attempt_count": 5,
+    },
     severity="warning",
+)
+
+# Data event
+audit_log.data(
+    event_name="EXPORT_STARTED",
     user=request.user,
-    action="Access denied to sensitive resource",
+    request=request,
+    app_label="store",
+    model_name="Product",
     metadata={
-        "resource": "financial_report",
-        "required_role": "finance",
-        "user_roles": ["sales"],
-    }
+        "format": "xlsx",
+        "record_count": 1500,
+    },
+)
+
+# System event
+audit_log.system(
+    event_name="CACHE_CLEARED",
+    metadata={
+        "cache_key": "products_*",
+        "reason": "Manual refresh",
+    },
 )
 ```
 
-### Décorateur pour les Resolvers
+### Logging Decorator
 
 ```python
 from rail_django.extensions.audit import audit_action
 
-@audit_action(
-    event_type="sensitive_operation",
-    severity="info",
-    include_args=True,  # Inclut les arguments dans les métadonnées
-)
-def resolve_sensitive_operation(root, info, **kwargs):
+@audit_action(event_name="CUSTOM_ACTION", event_type="data")
+def my_sensitive_function(request, **kwargs):
     """
-    Cette opération est automatiquement auditée.
+    Automatically logged function.
     """
-    return perform_sensitive_operation(**kwargs)
-```
-
-### Context Manager
-
-```python
-from rail_django.extensions.audit import audit_context
-
-def process_payment(order_id, amount):
-    with audit_context(
-        event_type="payment_processed",
-        severity="info",
-        target_model="store.Order",
-        target_id=order_id,
-    ) as ctx:
-        # Opération
-        result = payment_gateway.charge(amount)
-
-        # Ajouter des métadonnées
-        ctx.metadata["transaction_id"] = result.transaction_id
-        ctx.metadata["status"] = result.status
-
-        return result
+    # ... logic
+    return result
 ```
 
 ---
 
-## Rapports de Sécurité
+## Security Reports
 
-### Dashboard de Sécurité
-
-```python
-from rail_django.extensions.audit import audit_logger
-
-# Obtenir un rapport des 24 dernières heures
-report = audit_logger.get_security_report(hours=24)
-```
-
-**Structure du Rapport :**
-
-```python
-{
-    "period": {
-        "start": "2026-01-15T10:30:00Z",
-        "end": "2026-01-16T10:30:00Z",
-    },
-    "summary": {
-        "total_events": 1542,
-        "by_severity": {
-            "info": 1200,
-            "warning": 300,
-            "error": 40,
-            "critical": 2,
-        },
-    },
-    "authentication": {
-        "login_success": 150,
-        "login_failure": 45,
-        "unique_users": 85,
-        "locked_accounts": 3,
-        "suspicious_ips": ["192.168.1.100", "10.0.0.50"],
-    },
-    "permissions": {
-        "denied_count": 120,
-        "top_denied_resources": [
-            {"resource": "financial_report", "count": 40},
-            {"resource": "admin_dashboard", "count": 30},
-        ],
-    },
-    "data_changes": {
-        "creates": 200,
-        "updates": 500,
-        "deletes": 50,
-        "by_model": {
-            "store.Order": 300,
-            "crm.Customer": 150,
-        },
-    },
-}
-```
-
-### Alertes Automatiques
-
-Configurez des seuils pour les alertes :
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "audit_settings": {
-        "alert_on_suspicious_activity": True,
-        "failed_login_threshold": 5,  # 5 échecs = alerte
-        "failed_login_window_minutes": 10,
-        "alert_callback": "myapp.alerts.send_security_alert",
-    },
-}
-```
-
-```python
-# myapp/alerts.py
-def send_security_alert(alert_type, data):
-    """
-    Callback pour les alertes de sécurité.
-
-    Args:
-        alert_type: Type d'alerte (brute_force, suspicious_ip, etc.)
-        data: Données de l'alerte
-    """
-    if alert_type == "brute_force":
-        send_slack_notification(
-            channel="#security",
-            message=f"⚠️ Tentative de brute force détectée: {data['ip_address']}",
-        )
-```
-
----
-
-## Query GraphQL
-
-### Liste des Événements
+### Execute via GraphQL
 
 ```graphql
-query AuditEvents($filters: AuditEventFilter!) {
-  audit_events(filters: $filters, order_by: ["-created_at"], limit: 100) {
+query SecurityReport($from: DateTime!, $to: DateTime!) {
+  security_report(from_date: $from, to_date: $to) {
+    summary {
+      total_events
+      login_successes
+      login_failures
+      permission_denials
+      rate_limit_hits
+    }
+    by_severity {
+      severity
+      count
+    }
+    by_user {
+      user_id
+      username
+      event_count
+    }
+    suspicious_ips {
+      ip_address
+      event_count
+      last_event
+    }
+  }
+}
+```
+
+### Generate Scheduled Report
+
+```python
+from rail_django.extensions.audit import generate_security_report
+
+# Daily report
+report = generate_security_report(
+    from_date=timezone.now() - timedelta(days=1),
+    to_date=timezone.now(),
+    format="pdf",
+)
+
+# Send by email
+send_report_email(
+    to=["security@example.com"],
+    subject="Daily Security Report",
+    attachment=report,
+)
+```
+
+---
+
+## GraphQL Query
+
+### Query Audit Events
+
+```graphql
+query AuditEvents(
+  $event_type: String
+  $app_label: String
+  $user_id: ID
+  $from: DateTime
+  $to: DateTime
+  $limit: Int
+) {
+  audit_events(
+    event_type: $event_type
+    app_label: $app_label
+    user_id: $user_id
+    from_date: $from
+    to_date: $to
+    limit: $limit
+  ) {
     id
     event_type
-    severity
+    event_name
     user {
       id
       username
     }
-    action
-    target_model
-    target_id
-    created_at
-    metadata
+    ip_address
+    app_label
+    model_name
+    object_id
+    object_repr
+    changed_fields
+    severity
+    timestamp
   }
 }
 ```
 
-**Variables :**
-
-```json
-{
-  "filters": {
-    "event_type": { "in": ["login_success", "login_failure"] },
-    "created_at": { "gte": "2026-01-15T00:00:00Z" }
-  }
-}
-```
-
-### Événements par Objet
+### Query for a Specific Object
 
 ```graphql
-query ObjectHistory($model: String!, $objectId: ID!) {
-  audit_events(
-    filters: {
-      target_model: { exact: $model }
-      target_id: { exact: $objectId }
-    }
-    order_by: ["-created_at"]
+query ObjectHistory(
+  $app_label: String!
+  $model_name: String!
+  $object_id: ID!
+) {
+  object_audit_history(
+    app_label: $app_label
+    model_name: $model_name
+    object_id: $object_id
   ) {
-    event_type
+    id
+    event_name
     user {
       username
     }
     old_values
     new_values
-    created_at
-  }
-}
-```
-
-### Statistiques de Sécurité
-
-```graphql
-query SecurityStats {
-  security_report(hours: 24) {
-    summary {
-      total_events
-      by_severity {
-        info
-        warning
-        error
-        critical
-      }
-    }
-    authentication {
-      login_success
-      login_failure
-      locked_accounts
-    }
+    changed_fields
+    timestamp
   }
 }
 ```
 
 ---
 
-## Rétention et Archivage
+## Retention and Archiving
 
-### Configuration de Rétention
+### Automatic Cleanup
 
 ```python
-RAIL_DJANGO_GRAPHQL = {
-    "audit_settings": {
-        # Rétention par défaut
-        "retention_days": 90,
-
-        # Rétention par sévérité
-        "retention_by_severity": {
-            "info": 30,
-            "warning": 90,
-            "error": 365,
-            "critical": 730,  # 2 ans
-        },
-
-        # Archivage avant suppression
-        "archive_before_delete": True,
-        "archive_backend": "s3",
-        "archive_prefix": "audit-logs/",
-    },
+RAIL_DJANGO_AUDIT = {
+    "retention_days": 365,  # Keep 1 year
+    "archive_before_delete": True,
+    "archive_path": "/backups/audit/",
 }
 ```
 
-### Commande de Nettoyage
+### Management Command
 
 ```bash
-# Supprimer les anciens événements selon la politique de rétention
-python manage.py cleanup_audit_logs
+# Clean old events
+python manage.py cleanup_audit_events --days 365
 
-# Avec archivage
-python manage.py cleanup_audit_logs --archive
+# Archive before cleaning
+python manage.py archive_audit_events --days 365 --output /backups/
 
-# Simulation (dry run)
-python manage.py cleanup_audit_logs --dry-run
+# Force without confirmation
+python manage.py cleanup_audit_events --days 365 --force
 ```
 
-### Tâche Planifiée
+### Archiving Task
 
 ```python
-# Celery beat schedule
-CELERY_BEAT_SCHEDULE = {
-    "cleanup-audit-logs": {
-        "task": "rail_django.tasks.cleanup_audit_logs",
-        "schedule": crontab(hour=2, minute=0),  # Chaque nuit à 2h
-    },
-}
+# Use with Celery
+from celery import shared_task
+
+@shared_task
+def archive_old_audit_events():
+    from rail_django.extensions.audit import archive_events
+
+    archived_count = archive_events(
+        older_than_days=365,
+        output_path="/backups/audit/",
+        delete_after_archive=True,
+    )
+    return f"Archived {archived_count} events"
 ```
 
 ---
 
-## Bonnes Pratiques
+## Best Practices
 
-### 1. Sélectivité du Logging
+### 1. Exclude Sensitive Fields
 
 ```python
-# ✅ Logger les événements significatifs
-@audit_action(event_type="payment_processed")
-def process_payment(amount):
-    ...
-
-# ❌ Éviter le logging excessif
-@audit_action(event_type="list_products")  # Trop de bruit
-def list_products():
-    ...
+RAIL_DJANGO_AUDIT = {
+    "exclude_fields": [
+        "password",
+        "token",
+        "secret",
+        "api_key",
+        "credit_card",
+    ],
+}
 ```
 
-### 2. Protection des Données Sensibles
+### 2. Configure Severity
 
 ```python
-# ✅ Masquer les données sensibles
-audit_logger.log(
-    event_type="user_updated",
-    old_values={"email": "old@example.com"},
-    new_values={"email": "new@example.com"},
+# Model-level custom severity
+class FinancialTransaction(AuditMixin, models.Model):
+    class AuditMeta:
+        default_severity = "warning"  # All events are important
+```
+
+### 3. Use Metadata
+
+```python
+audit_log.data(
+    event_name="PAYMENT_PROCESSED",
     metadata={
-        "password_changed": True,  # Indiquer sans exposer
-        # "password": "..." ❌ Jamais les mots de passe
-    }
+        "amount": 1500.00,
+        "currency": "EUR",
+        "payment_method": "card",
+        "transaction_id": "txn_123",
+    },
 )
 ```
 
-### 3. Indexation pour les Requêtes
+### 4. Monitor Critical Events
 
 ```python
-# Ajoutez des index pour les queries fréquentes
-class AuditEventModel(models.Model):
-    event_type = models.CharField(max_length=50, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+# Alert on critical events
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
-    class Meta:
-        indexes = [
-            models.Index(fields=["user", "created_at"]),
-            models.Index(fields=["target_model", "target_id"]),
-        ]
+@receiver(post_save, sender=AuditEvent)
+def notify_critical_events(sender, instance, **kwargs):
+    if instance.severity == "critical":
+        send_security_alert(instance)
 ```
 
-### 4. Alertes Critiques
+### 5. Regular Reporting
 
 ```python
-# ✅ Alerter sur les événements critiques
-from rail_django.extensions.audit import audit_logger
-
-def on_critical_event(event):
-    if event.severity == "critical":
-        send_immediate_alert(event)
-
-audit_logger.register_callback("critical", on_critical_event)
+# Scheduled task for weekly report
+@shared_task
+def weekly_security_report():
+    report = generate_security_report(
+        from_date=timezone.now() - timedelta(days=7),
+        to_date=timezone.now(),
+    )
+    send_report_email(report)
 ```
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Permissions & RBAC](../security/permissions.md) - Audit des permissions
-- [Configuration](../graphql/configuration.md) - Paramètres d'audit
-- [Webhooks](./webhooks.md) - Notification externe des événements
+- [Authentication](../security/authentication.md) - Authentication events
+- [Permissions](../security/permissions.md) - Permission auditing
+- [Observability](./observability.md) - Sentry and metrics

@@ -134,8 +134,8 @@ mutation Login($username: String!, $password: String!) {
 Obtains a new access token from the refresh token.
 
 ```graphql
-mutation RefreshToken($refreshToken: String!) {
-  refresh_token(refresh_token: $refreshToken) {
+mutation RefreshToken($refresh_token: String!) {
+  refresh_token(refresh_token: $refresh_token) {
     ok
     token # New access token
     refresh_token # New refresh token (optional rotation)
@@ -149,7 +149,7 @@ mutation RefreshToken($refreshToken: String!) {
 
 ```json
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 

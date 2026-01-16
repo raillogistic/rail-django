@@ -51,6 +51,16 @@ RAIL_DJANGO_GRAPHQL = {
         "include_models": [],
         "exclude_models": [],
     },
+    "task_settings": {
+        "enabled": False,
+        "backend": "thread",
+        "default_queue": "default",
+        "result_ttl_seconds": 86400,
+        "max_retries": 3,
+        "retry_backoff": True,
+        "track_in_database": True,
+        "emit_subscriptions": True,
+    },
     "type_generation_settings": {
         "exclude_fields": {},
         "include_fields": None,
@@ -219,6 +229,36 @@ RAIL_DJANGO_GRAPHQL = {
     },
 }
 ```
+
+## Task settings
+
+Background task orchestration lets you run long-running mutations asynchronously.
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "task_settings": {
+        "enabled": True,
+        "backend": "thread",  # thread, sync, celery, dramatiq, django_q
+        "default_queue": "default",
+        "result_ttl_seconds": 86400,
+        "max_retries": 3,
+        "retry_backoff": True,
+        "track_in_database": True,
+        "emit_subscriptions": True,
+    }
+}
+```
+
+Key options:
+
+- `enabled`: master toggle for task orchestration.
+- `backend`: execution backend (`thread` by default).
+- `default_queue`: queue name for backends that support queues.
+- `result_ttl_seconds`: how long task results are kept.
+- `max_retries`: retry attempts on failure.
+- `retry_backoff`: exponential retry backoff when enabled.
+- `track_in_database`: persist results/progress in `TaskExecution`.
+- `emit_subscriptions`: emit `task_updated` events when subscriptions are available.
 
 ## Webhook settings
 

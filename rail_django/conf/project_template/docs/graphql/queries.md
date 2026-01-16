@@ -260,8 +260,8 @@ Variables: `{ "offset": 0, "limit": 20 }`
 ### Page-Based Pagination
 
 ```graphql
-query PagedProducts($page: Int!, $perPage: Int!) {
-  products_pages(page: $page, per_page: $perPage) {
+query PagedProducts($page: Int!, $per_page: Int!) {
+  products_pages(page: $page, per_page: $per_page) {
     items {
       id
       name

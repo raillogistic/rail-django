@@ -1,331 +1,244 @@
-# Génération PDF (Templating)
+# PDF Generation (Templating)
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django inclut un moteur de templates PDF qui convertit des templates HTML/CSS en documents PDF. Il supporte les templates de modèles, les templates de fonctions, le rendu asynchrone et le post-processing (watermarks, signatures).
+Rail Django includes a PDF generation system using HTML templates. This guide covers configuration, template definitions, REST endpoints, and best practices.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
 1. [Configuration](#configuration)
-2. [Templates de Modèles](#templates-de-modèles)
-3. [Templates de Fonctions](#templates-de-fonctions)
-4. [Endpoints REST](#endpoints-rest)
-5. [Rendu Asynchrone](#rendu-asynchrone)
-6. [Post-Processing](#post-processing)
-7. [API Programmatique](#api-programmatique)
-8. [Bonnes Pratiques](#bonnes-pratiques)
+2. [Template Types](#template-types)
+3. [REST Endpoints](#rest-endpoints)
+4. [Asynchronous Rendering](#asynchronous-rendering)
+5. [Post-Processing](#post-processing)
+6. [Programmatic API](#programmatic-api)
+7. [Template Structure](#template-structure)
+8. [Best Practices](#best-practices)
 
 ---
 
 ## Configuration
 
-### Paramètres de Templating
+### Basic Configuration
 
 ```python
 # root/settings/base.py
-RAIL_DJANGO_GRAPHQL_TEMPLATING = {
-    # ─── Rendu ───
-    "renderer": "weasyprint",  # "weasyprint" ou "wkhtmltopdf"
-    "default_template_config": {
-        "page_size": "A4",
-        "margin": "2cm",
-        "font_family": "Helvetica",
-    },
+RAIL_DJANGO_TEMPLATING = {
+    # Activation
+    "enabled": True,
 
-    # ─── Sécurité ───
-    "url_fetcher_allowlist": [
-        "https://cdn.example.com/",
-        "file:///static/",
+    # Rendering engine
+    "engine": "weasyprint",  # "weasyprint" or "wkhtmltopdf"
+
+    # Template paths
+    "template_dirs": [
+        BASE_DIR / "templates" / "pdf",
     ],
-    "max_render_time_seconds": 60,
 
-    # ─── Endpoints ───
-    "enable_catalog": True,      # GET /api/templates/catalog/
-    "enable_preview": True,      # GET /api/templates/preview/.../
+    # Temporary storage
+    "temp_dir": "/tmp/pdf_generation/",
+    "retention_hours": 24,
 
-    # ─── Rate Limiting ───
-    "rate_limit_per_minute": 30,
+    # Security
+    "require_authentication": True,
+    "require_permission": True,
 
-    # ─── Async ───
-    "async_jobs": {
-        "enable": False,
-        "storage": "default",  # Ou "s3"
-        "expiry_hours": 24,
-    },
-
-    # ─── Post-Processing ───
-    "post_processing": {
-        "watermark": {
-            "enable": False,
-            "text": "CONFIDENTIEL",
-            "opacity": 0.3,
-        },
-        "encryption": {
-            "enable": False,
-            "user_password": None,
-            "owner_password": None,
-        },
+    # Default options
+    "default_options": {
+        "page_size": "A4",
+        "margin_top": "20mm",
+        "margin_bottom": "20mm",
+        "margin_left": "15mm",
+        "margin_right": "15mm",
     },
 }
 ```
 
-### Dépendances Optionnelles
+### Installation
 
-```txt
-# requirements/base.txt
-weasyprint>=60.0           # Moteur de rendu principal
-pypdf>=4.0.0               # Post-processing (watermarks, encryption)
-pyhanko>=0.21.0            # Signatures numériques
+```bash
+# WeasyPrint (recommended)
+pip install weasyprint
+
+# Or wkhtmltopdf
+# sudo apt-get install wkhtmltopdf
+# pip install pdfkit
 ```
 
 ---
 
-## Templates de Modèles
+## Template Types
 
-### Décorateur @model_pdf_template
+### Model Templates
 
-Associez un template PDF à un modèle Django :
+Templates linked to a specific model.
 
 ```python
-# apps/store/models.py
-from django.db import models
-from rail_django.extensions.templating import model_pdf_template
+# apps/store/pdf_templates.py
+from rail_django.extensions.templating import ModelPDFTemplate
 
-class Order(models.Model):
+class InvoiceTemplate(ModelPDFTemplate):
     """
-    Modèle Commande avec templates PDF.
+    Invoice template for orders.
     """
-    reference = models.CharField("Référence", max_length=50)
-    customer = models.ForeignKey("Customer", on_delete=models.CASCADE)
-    total = models.DecimalField("Total", max_digits=10, decimal_places=2)
+    name = "invoice"
+    model = "store.Order"
+    template_path = "pdf/invoice.html"
 
-    @model_pdf_template(content="pdf/invoice.html")
-    def download_invoice(self):
+    # PDF options
+    page_size = "A4"
+    orientation = "portrait"
+
+    def get_context(self, instance):
         """
-        Génère une facture PDF pour cette commande.
-
-        Returns:
-            Contexte de template pour le rendu.
+        Returns template context.
         """
         return {
-            "order": self,
-            "items": self.items.select_related("product"),
+            "order": instance,
             "company": get_company_info(),
+            "items": instance.items.all(),
+            "subtotal": instance.subtotal,
+            "tax": instance.tax,
+            "total": instance.total,
         }
+```
 
-    @model_pdf_template(
-        content="pdf/packing_slip.html",
-        filename="bon_livraison_{reference}.pdf",
-        config={
-            "page_size": "A4",
-            "margin": "1.5cm",
-        },
-    )
-    def download_packing_slip(self):
+### Function Templates
+
+Templates for custom documents.
+
+```python
+from rail_django.extensions.templating import FunctionPDFTemplate
+
+class MonthlyReportTemplate(FunctionPDFTemplate):
+    """
+    Monthly report template.
+    """
+    name = "monthly_report"
+    template_path = "pdf/monthly_report.html"
+
+    def get_context(self, **kwargs):
         """
-        Génère un bon de livraison.
+        Returns template context.
         """
+        month = kwargs.get("month")
+        year = kwargs.get("year")
+
         return {
-            "order": self,
-            "items": self.items.all(),
+            "month": month,
+            "year": year,
+            "orders": Order.objects.filter(
+                created_at__month=month,
+                created_at__year=year,
+            ),
+            "stats": calculate_monthly_stats(month, year),
         }
 ```
 
-### Options du Décorateur
-
-| Option     | Type | Description                                      |
-| ---------- | ---- | ------------------------------------------------ |
-| `content`  | str  | Chemin du template HTML (dans `templates/`)      |
-| `filename` | str  | Nom du fichier généré (supporte les variables)   |
-| `config`   | dict | Configuration de rendu (page_size, margin, etc.) |
-
-### URL Générée
-
-```
-GET /api/templates/store/order/download_invoice/<pk>/
-GET /api/templates/store/order/download_packing_slip/<pk>/
-```
-
 ---
 
-## Templates de Fonctions
+## REST Endpoints
 
-### Décorateur @pdf_template
+### POST /api/v1/pdf/generate/
 
-Pour les PDFs non liés à un modèle spécifique :
+Generates a PDF from a template.
 
-```python
-# apps/reports/views.py
-from rail_django.extensions.templating import pdf_template
-
-@pdf_template(
-    content="pdf/monthly_report.html",
-    url="reports/monthly",  # URL personnalisée
-    filename="rapport_mensuel_{year}_{month}.pdf",
-)
-def monthly_report(request, year, month):
-    """
-    Génère un rapport mensuel.
-
-    Args:
-        year: Année du rapport.
-        month: Mois du rapport.
-
-    Returns:
-        Contexte de template.
-    """
-    orders = Order.objects.filter(
-        created_at__year=year,
-        created_at__month=month,
-    )
-
-    return {
-        "year": year,
-        "month": month,
-        "orders": orders,
-        "total_revenue": orders.aggregate(Sum("total"))["total__sum"],
+```bash
+curl -X POST /api/v1/pdf/generate/ \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "invoice",
+    "model": "store.Order",
+    "object_id": "42",
+    "options": {
+      "orientation": "portrait"
     }
+  }'
 ```
 
-### Chargement au Démarrage
+### Response
 
-Assurez-vous que le module est importé au démarrage :
-
-```python
-# apps/reports/apps.py
-from django.apps import AppConfig
-
-class ReportsConfig(AppConfig):
-    name = "apps.reports"
-
-    def ready(self):
-        # Importe les templates PDF
-        from . import views  # noqa
+```json
+{
+  "status": "success",
+  "pdf_id": "pdf_abc123",
+  "download_url": "/api/v1/pdf/pdf_abc123/download/",
+  "file_size": "125 KB",
+  "expires_at": "2026-01-17T12:00:00Z"
+}
 ```
 
-### URL Générée
+### GET /api/v1/pdf/{id}/download/
 
+Downloads the generated PDF.
+
+```bash
+curl -O /api/v1/pdf/pdf_abc123/download/ \
+  -H "Authorization: Bearer <jwt>"
 ```
-GET /api/templates/reports/monthly/<year>/<month>/
+
+### POST /api/v1/pdf/preview/
+
+Generates an HTML preview.
+
+```bash
+curl -X POST /api/v1/pdf/preview/ \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "template": "invoice",
+    "model": "store.Order",
+    "object_id": "42"
+  }'
 ```
 
 ---
 
-## Endpoints REST
+## Asynchronous Rendering
 
-### Catalogue des Templates
+For complex documents, use asynchronous rendering.
 
-```http
-GET /api/templates/catalog/
-Authorization: Bearer <jwt>
-```
-
-**Réponse :**
-
-```json
-{
-  "templates": [
-    {
-      "key": "store.order.download_invoice",
-      "title": "Facture",
-      "model": "store.Order",
-      "endpoint": "/api/templates/store/order/download_invoice/{pk}/"
-    },
-    {
-      "key": "reports.monthly_report",
-      "title": "Rapport Mensuel",
-      "model": null,
-      "endpoint": "/api/templates/reports/monthly/{year}/{month}/"
-    }
-  ]
-}
-```
-
-### Rendu PDF
-
-```http
-GET /api/templates/store/order/download_invoice/42/
-Authorization: Bearer <jwt>
-```
-
-**Réponse :**
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/pdf
-Content-Disposition: attachment; filename="invoice_42.pdf"
-
-%PDF-1.4
-[binary data]
-```
-
-### Preview HTML (Dev)
-
-```http
-GET /api/templates/preview/store/order/download_invoice/42/
-Authorization: Bearer <jwt>
-```
-
-Retourne le HTML rendu (sans conversion PDF).
-
----
-
-## Rendu Asynchrone
-
-Pour les PDFs lourds ou les gros volumes.
-
-### Activation
+### Configuration
 
 ```python
-RAIL_DJANGO_GRAPHQL_TEMPLATING = {
-    "async_jobs": {
-        "enable": True,
-        "storage": "s3",  # Ou "default" (système de fichiers)
-        "expiry_hours": 24,
-    },
+RAIL_DJANGO_TEMPLATING = {
+    "async_rendering": True,
+    "async_backend": "celery",
+    "async_timeout": 300,  # 5 minutes
 }
 ```
 
-### Requête Async
-
-```http
-GET /api/templates/store/order/download_invoice/42/?async=true
-Authorization: Bearer <jwt>
-```
-
-**Réponse :**
+### Request
 
 ```json
 {
-  "job_id": "tpl_a1b2c3d4",
-  "status": "pending",
-  "status_url": "/api/templates/jobs/tpl_a1b2c3d4/",
-  "download_url": "/api/templates/jobs/tpl_a1b2c3d4/download/"
+  "template": "annual_report",
+  "params": { "year": 2025 },
+  "async": true,
+  "notify_email": "user@example.com"
 }
 ```
 
-### Vérification du Statut
-
-```http
-GET /api/templates/jobs/tpl_a1b2c3d4/
-Authorization: Bearer <jwt>
-```
+### Response
 
 ```json
 {
-  "job_id": "tpl_a1b2c3d4",
+  "status": "processing",
+  "pdf_id": "pdf_xyz789",
+  "status_url": "/api/v1/pdf/pdf_xyz789/status/"
+}
+```
+
+### Status Endpoint
+
+```json
+{
   "status": "completed",
-  "created_at": "2026-01-16T10:30:00Z",
-  "completed_at": "2026-01-16T10:30:15Z"
+  "progress": 100,
+  "download_url": "/api/v1/pdf/pdf_xyz789/download/"
 }
-```
-
-### Téléchargement
-
-```http
-GET /api/templates/jobs/tpl_a1b2c3d4/download/
 ```
 
 ---
@@ -335,142 +248,102 @@ GET /api/templates/jobs/tpl_a1b2c3d4/download/
 ### Watermarks
 
 ```python
-RAIL_DJANGO_GRAPHQL_TEMPLATING = {
-    "post_processing": {
-        "watermark": {
-            "enable": True,
-            "text": "CONFIDENTIEL",
-            "opacity": 0.3,
-            "angle": 45,
-            "font_size": 60,
-            "color": "#CCCCCC",
-        },
-    },
-}
+class DraftInvoiceTemplate(ModelPDFTemplate):
+    name = "draft_invoice"
+    model = "store.Order"
+    template_path = "pdf/invoice.html"
+
+    # Watermark configuration
+    watermark = {
+        "text": "DRAFT",
+        "font_size": 60,
+        "color": "#CCCCCC",
+        "angle": 45,
+        "opacity": 0.3,
+    }
 ```
 
-### Watermark Image
+### Encryption
 
 ```python
-"watermark": {
-    "enable": True,
-    "image": "/static/images/watermark.png",
-    "opacity": 0.2,
-    "position": "center",  # "center", "top", "bottom"
-}
+class ConfidentialReportTemplate(FunctionPDFTemplate):
+    name = "confidential_report"
+    template_path = "pdf/report.html"
+
+    # Encryption
+    encryption = {
+        "user_password": None,  # Open without password
+        "owner_password": "secret",  # Edit with password
+        "permissions": ["print", "copy"],
+    }
 ```
 
-### Encryption (Mot de Passe)
+### Digital Signatures
 
 ```python
-"encryption": {
-    "enable": True,
-    "user_password": "lecture_seule",  # Pour ouvrir le PDF
-    "owner_password": "admin_password", # Pour modifier
-    "permissions": ["print", "copy"],   # Permissions accordées
-}
-```
+class SignedContractTemplate(ModelPDFTemplate):
+    name = "signed_contract"
+    model = "contracts.Contract"
+    template_path = "pdf/contract.html"
 
-### Signature Numérique
-
-Nécessite `pyhanko` et un certificat :
-
-```python
-"signature": {
-    "enable": True,
-    "certificate_path": "/path/to/certificate.p12",
-    "certificate_password": os.environ.get("CERT_PASSWORD"),
-    "reason": "Document généré automatiquement",
-    "location": "Paris, France",
-}
-```
-
-### Page Stamps
-
-Ajoutez des numéros de page ou autres informations :
-
-```python
-"page_stamp": {
-    "enable": True,
-    "template": "Page {page} sur {total}",
-    "position": "bottom-center",  # Position sur la page
-    "font_size": 10,
-}
+    # Digital signature
+    signature = {
+        "enabled": True,
+        "certificate_path": "/certs/signing.p12",
+        "certificate_password": os.environ.get("CERT_PASSWORD"),
+        "reason": "Document approval",
+        "location": "Paris, France",
+    }
 ```
 
 ---
 
-## API Programmatique
+## Programmatic API
 
-### render_pdf Helper
+### Generate PDF
 
 ```python
-from rail_django.extensions.templating import render_pdf
+from rail_django.extensions.templating import PDFGenerator
 
-# Rendu simple
-pdf_bytes = render_pdf(
-    template="pdf/invoice.html",
-    context={"order": order, "items": items},
-)
+# From model instance
+generator = PDFGenerator(template="invoice")
+pdf_bytes = generator.render(instance=order)
 
-# Avec options
-pdf_bytes = render_pdf(
-    template="pdf/report.html",
-    context={"data": report_data},
-    filename="report.pdf",
-    config={
-        "page_size": "A3",
+# From parameters
+generator = PDFGenerator(template="monthly_report")
+pdf_bytes = generator.render(month=1, year=2026)
+
+# Save to file
+generator.render_to_file(instance=order, output_path="/tmp/invoice.pdf")
+```
+
+### Custom Options
+
+```python
+generator = PDFGenerator(
+    template="invoice",
+    options={
+        "page_size": "Letter",
         "orientation": "landscape",
-        "margin": "1cm",
+        "margin_top": "10mm",
     },
 )
-
-# Sauvegarder
-with open("output.pdf", "wb") as f:
-    f.write(pdf_bytes)
 ```
 
-### PdfBuilder Class
-
-Pour plus de contrôle :
+### Direct HTML to PDF
 
 ```python
-from rail_django.extensions.templating import PdfBuilder
+from rail_django.extensions.templating import html_to_pdf
 
-builder = PdfBuilder(
-    template="pdf/invoice.html",
-    context={"order": order},
-)
-
-# Configurer
-builder.set_page_size("A4")
-builder.set_margins(top="2cm", bottom="2cm", left="1.5cm", right="1.5cm")
-
-# Post-processing
-builder.add_watermark("BROUILLON", opacity=0.2)
-builder.add_page_numbers(format="Page {page}/{total}")
-
-# Générer
-pdf_bytes = builder.render()
-```
-
-### Commande Management
-
-```bash
-# Générer un PDF depuis la ligne de commande
-python manage.py render_pdf pdf/invoice.html --pk 42 --output facture_42.pdf
-
-# Avec contexte personnalisé
-python manage.py render_pdf pdf/report.html \
-    --context '{"title": "Rapport Q1"}' \
-    --output rapport.pdf
+html_content = render_to_string("my_template.html", context)
+pdf_bytes = html_to_pdf(html_content, options={"page_size": "A4"})
 ```
 
 ---
 
-## Structure des Templates
+## Template Structure
 
-### Template HTML Basique
+### Basic Template
 
 ```html
 <!-- templates/pdf/invoice.html -->
@@ -478,15 +351,18 @@ python manage.py render_pdf pdf/report.html \
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Facture {{ order.reference }}</title>
+    <title>Invoice {{ order.reference }}</title>
     <style>
       @page {
         size: A4;
-        margin: 2cm;
+        margin: 20mm 15mm;
+        @top-right {
+          content: "Page " counter(page) " of " counter(pages);
+        }
       }
 
       body {
-        font-family: Helvetica, Arial, sans-serif;
+        font-family: "Helvetica Neue", sans-serif;
         font-size: 12pt;
         line-height: 1.4;
       }
@@ -494,11 +370,11 @@ python manage.py render_pdf pdf/report.html \
       .header {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 2cm;
+        margin-bottom: 30px;
       }
 
       .logo {
-        max-width: 150px;
+        max-height: 60px;
       }
 
       table {
@@ -510,43 +386,52 @@ python manage.py render_pdf pdf/report.html \
       td {
         padding: 8px;
         border-bottom: 1px solid #ddd;
-        text-align: left;
       }
 
       .total-row {
         font-weight: bold;
-        font-size: 14pt;
+        background-color: #f5f5f5;
       }
 
-      /* Saut de page */
-      .page-break {
-        page-break-after: always;
+      .footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 10pt;
+        color: #666;
       }
     </style>
   </head>
   <body>
     <div class="header">
-      <img src="{{ company.logo_url }}" class="logo" alt="Logo" />
+      <img src="{{ company.logo_url }}" alt="Logo" class="logo" />
       <div class="invoice-info">
-        <h1>Facture {{ order.reference }}</h1>
-        <p>Date: {{ order.created_at|date:"d/m/Y" }}</p>
+        <h1>INVOICE</h1>
+        <p>{{ order.reference }}</p>
+        <p>{{ order.created_at|date:"F d, Y" }}</p>
       </div>
     </div>
 
-    <div class="customer">
-      <h3>Client</h3>
-      <p>
-        {{ order.customer.name }}<br />
-        {{ order.customer.address }}
-      </p>
+    <div class="addresses">
+      <div class="from">
+        <strong>{{ company.name }}</strong><br />
+        {{ company.address }}<br />
+        {{ company.city }}, {{ company.postal_code }}
+      </div>
+      <div class="to">
+        <strong>{{ order.customer.name }}</strong><br />
+        {{ order.customer.address }}<br />
+        {{ order.customer.city }}, {{ order.customer.postal_code }}
+      </div>
     </div>
 
     <table>
       <thead>
         <tr>
-          <th>Article</th>
-          <th>Qté</th>
-          <th>Prix unitaire</th>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Unit Price</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -555,80 +440,122 @@ python manage.py render_pdf pdf/report.html \
         <tr>
           <td>{{ item.product.name }}</td>
           <td>{{ item.quantity }}</td>
-          <td>{{ item.unit_price|floatformat:2 }} €</td>
-          <td>{{ item.total|floatformat:2 }} €</td>
+          <td>${{ item.unit_price }}</td>
+          <td>${{ item.total }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
+        <tr>
+          <td colspan="3">Subtotal</td>
+          <td>${{ subtotal }}</td>
+        </tr>
+        <tr>
+          <td colspan="3">Tax (20%)</td>
+          <td>${{ tax }}</td>
+        </tr>
         <tr class="total-row">
-          <td colspan="3">Total TTC</td>
-          <td>{{ order.total|floatformat:2 }} €</td>
+          <td colspan="3">Total</td>
+          <td>${{ total }}</td>
         </tr>
       </tfoot>
     </table>
+
+    <div class="footer">
+      {{ company.name }} - {{ company.registration_number }}
+    </div>
   </body>
 </html>
 ```
 
----
-
-## Bonnes Pratiques
-
-### 1. Optimisez les Templates
+### Template with Charts
 
 ```html
-<!-- ✅ Embedez les images en base64 pour éviter les requêtes -->
-<img src="data:image/png;base64,{{ logo_base64 }}" />
-
-<!-- ✅ CSS inline pour performance -->
-<style>
-  /* styles ici */
-</style>
-
-<!-- ❌ Évitez les ressources externes -->
-<link href="https://fonts.googleapis.com/..." />
+<!-- Use inline SVG for charts -->
+<div class="chart">
+  <svg viewBox="0 0 400 200">
+    {% for point in chart_data %}
+    <rect
+      x="{{ point.x }}"
+      y="{{ 200 - point.value }}"
+      width="30"
+      height="{{ point.value }}"
+      fill="#4472C4"
+    />
+    {% endfor %}
+  </svg>
+</div>
 ```
 
-### 2. Sécurisez les URLs
+---
+
+## Best Practices
+
+### 1. Optimize Images
 
 ```python
-# ✅ Allowlist des URL fetchables
-"url_fetcher_allowlist": [
-    "https://cdn.internal.corp/",
-    "file:///app/static/",
-],
-```
-
-### 3. Gérez les Gros PDFs
-
-```python
-# ✅ Utilisez le mode async pour les gros documents
-"async_jobs": {
-    "enable": True,
-    "threshold_pages": 50,  # Auto-async si > 50 pages
+RAIL_DJANGO_TEMPLATING = {
+    "image_optimization": {
+        "enabled": True,
+        "max_width": 800,
+        "quality": 85,
+    },
 }
 ```
 
-### 4. Tests
+### 2. Use Caching
+
+```python
+from django.core.cache import cache
+
+class CachedReportTemplate(FunctionPDFTemplate):
+    def render(self, **kwargs):
+        cache_key = f"pdf_report_{kwargs['year']}_{kwargs['month']}"
+        cached = cache.get(cache_key)
+
+        if cached:
+            return cached
+
+        pdf_bytes = super().render(**kwargs)
+        cache.set(cache_key, pdf_bytes, timeout=3600)
+
+        return pdf_bytes
+```
+
+### 3. Handle Errors Gracefully
+
+```python
+from rail_django.extensions.templating import PDFGenerator, PDFGenerationError
+
+try:
+    pdf = PDFGenerator(template="invoice").render(instance=order)
+except PDFGenerationError as e:
+    logger.error(f"PDF generation failed: {e}")
+    # Fallback or notification
+```
+
+### 4. Test Templates
 
 ```python
 from django.test import TestCase
-from rail_django.extensions.templating import render_pdf
+from rail_django.extensions.templating import PDFGenerator
 
-class PdfTests(TestCase):
-    def test_invoice_renders(self):
+class PDFTemplateTests(TestCase):
+    def test_invoice_generation(self):
         order = Order.objects.create(...)
-        pdf = render_pdf("pdf/invoice.html", {"order": order})
+        generator = PDFGenerator(template="invoice")
+        pdf_bytes = generator.render(instance=order)
 
-        self.assertTrue(pdf.startswith(b"%PDF-"))
-        self.assertGreater(len(pdf), 1000)
+        self.assertIsNotNone(pdf_bytes)
+        self.assertGreater(len(pdf_bytes), 0)
+        # Check PDF header
+        self.assertTrue(pdf_bytes.startswith(b"%PDF-"))
 ```
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Export de Données](./exporting.md) - Export CSV/Excel
-- [Reporting](./reporting.md) - Génération de rapports
-- [Configuration](../graphql/configuration.md) - Paramètres complets
+- [Data Export](./exporting.md) - Excel/CSV exports
+- [Reporting & BI](./reporting.md) - Analytical reports
+- [Configuration](../graphql/configuration.md) - All settings

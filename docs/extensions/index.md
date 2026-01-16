@@ -14,6 +14,7 @@ in your schema build or including their URLs.
 - [Persisted queries](persisted-queries.md)
 - [Observability](observability.md)
 - [Subscriptions](subscriptions.md)
+- [Tasks](tasks.md)
 - [Rate limiting](rate-limiting.md)
 - [MFA](mfa.md)
 - [Permissions](permissions.md)

@@ -14,12 +14,13 @@ This document is the complete reference for all Rail Django configuration settin
 4. [query_settings](#query_settings)
 5. [mutation_settings](#mutation_settings)
 6. [subscription_settings](#subscription_settings)
-7. [performance_settings](#performance_settings)
-8. [security_settings](#security_settings)
-9. [middleware_settings](#middleware_settings)
-10. [error_handling](#error_handling)
-11. [custom_scalars](#custom_scalars)
-12. [Multi-Schema](#multi-schema)
+7. [task_settings](#task_settings)
+8. [performance_settings](#performance_settings)
+9. [security_settings](#security_settings)
+10. [middleware_settings](#middleware_settings)
+11. [error_handling](#error_handling)
+12. [custom_scalars](#custom_scalars)
+13. [Multi-Schema](#multi-schema)
 
 ---
 
@@ -33,6 +34,7 @@ RAIL_DJANGO_GRAPHQL = {
     "query_settings": { ... },
     "mutation_settings": { ... },
     "subscription_settings": { ... },
+    "task_settings": { ... },
     "performance_settings": { ... },
     "security_settings": { ... },
     "middleware_settings": { ... },
@@ -253,6 +255,25 @@ Real-time subscription configuration.
     # Allowlist/Blocklist of models
     "include_models": [],  # Empty = all
     "exclude_models": ["audit.AuditEvent"],
+}
+```
+
+---
+
+## task_settings
+
+Background task orchestration.
+
+```python
+"task_settings": {
+    "enabled": False,
+    "backend": "thread",  # thread, sync, celery, dramatiq, django_q
+    "default_queue": "default",
+    "result_ttl_seconds": 86400,
+    "max_retries": 3,
+    "retry_backoff": True,
+    "track_in_database": True,
+    "emit_subscriptions": True,
 }
 ```
 

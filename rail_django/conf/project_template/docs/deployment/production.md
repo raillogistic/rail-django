@@ -1,96 +1,103 @@
-# Déploiement Production
+# Production Deployment
 
-## Vue d'Ensemble
+## Overview
 
-Ce guide couvre le déploiement d'une application Rail Django en production, incluant la configuration Docker, la checklist de sécurité et le guide de déploiement manuel.
-
----
-
-## Table des Matières
-
-1. [Configuration Docker](#configuration-docker)
-2. [Variables d'Environnement](#variables-denvironnement)
-3. [Checklist de Production](#checklist-de-production)
-4. [Déploiement Manuel](#déploiement-manuel)
-5. [HTTPS et Certificats](#https-et-certificats)
-6. [Maintenance](#maintenance)
-7. [Dépannage](#dépannage)
+This guide covers deploying a Rail Django application in production, including Docker configuration, environment variables, deployment checklist, and best practices.
 
 ---
 
-## Configuration Docker
+## Table of Contents
 
-### Structure des Fichiers
+1. [Docker Configuration](#docker-configuration)
+2. [Environment Variables](#environment-variables)
+3. [Production Checklist](#production-checklist)
+4. [Manual Deployment](#manual-deployment)
+5. [HTTPS and Certificates](#https-and-certificates)
+6. [Maintenance Procedures](#maintenance-procedures)
+7. [Troubleshooting](#troubleshooting)
+8. [Network Security](#network-security)
 
-```
-project/
-├── Dockerfile
-├── deploy/
-│   ├── docker/
-│   │   └── docker-compose.yml
-│   └── nginx/
-│       ├── default.conf
-│       └── certs/
-│           ├── server.crt
-│           └── server.key
-└── .env
-```
+---
 
-### Dockerfile Multi-Stage
+## Docker Configuration
 
-Le Dockerfile inclus utilise un build multi-stage :
+### Dockerfile
 
 ```dockerfile
-# Stage 1 : Builder
-FROM python:3.11-slim AS builder
-
-WORKDIR /app
-COPY requirements/ requirements/
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements/prod.txt
-
-# Stage 2 : Final
+# Dockerfile
 FROM python:3.11-slim
 
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Working directory
 WORKDIR /app
 
-# Copier les wheels et installer
-COPY --from=builder /app/wheels /wheels
-RUN pip install --no-cache /wheels/*
+# Python dependencies
+COPY requirements/prod.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le code
+# Application code
 COPY . .
 
-# Collectstatic
-RUN python manage.py collectstatic --no-input
+# Collect static files
+RUN python manage.py collectstatic --noinput
 
-# Utilisateur non-root
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# Non-root user for security
+RUN adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app
 USER appuser
 
+# Gunicorn entrypoint
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "root.wsgi:application"]
+
 EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "root.wsgi:application"]
 ```
 
 ### Docker Compose
 
 ```yaml
-# deploy/docker/docker-compose.yml
+# docker-compose.yml
 version: "3.8"
 
 services:
   web:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    environment:
-      - DJANGO_SETTINGS_MODULE=root.settings.production
+    build: .
+    ports:
+      - "8000:8000"
     env_file:
-      - ../../.env
+      - .env.production
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ping/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:15-alpine
     volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
-    networks:
-      - app-network
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
 
   nginx:
@@ -99,413 +106,418 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../nginx/certs:/etc/nginx/certs:ro
-      - static_volume:/app/staticfiles:ro
-      - media_volume:/app/media:ro
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./staticfiles:/app/static:ro
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - web
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  backup:
-    image: postgres:15-alpine
-    volumes:
-      - ../../backups:/backups
-    env_file:
-      - ../../.env
-    entrypoint: /bin/sh -c "while true; do pg_dump $$DATABASE_URL > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql; sleep 86400; done"
-    networks:
-      - app-network
     restart: unless-stopped
 
 volumes:
-  static_volume:
-  media_volume:
+  postgres_data:
+  redis_data:
+```
 
-networks:
-  app-network:
-    driver: bridge
+### Nginx Configuration
+
+```nginx
+# deploy/nginx.conf
+events {
+    worker_connections 1024;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript;
+
+    # Upstream
+    upstream django {
+        server web:8000;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name example.com;
+        return 301 https://$server_name$request_uri;
+    }
+
+    # HTTPS
+    server {
+        listen 443 ssl http2;
+        server_name example.com;
+
+        ssl_certificate /etc/nginx/certs/fullchain.pem;
+        ssl_certificate_key /etc/nginx/certs/privkey.pem;
+
+        # SSL configuration
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+        ssl_prefer_server_ciphers on;
+
+        # Security headers
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+
+        # Static files
+        location /static/ {
+            alias /app/static/;
+            expires 30d;
+        }
+
+        # GraphQL
+        location /graphql/ {
+            proxy_pass http://django;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket support
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+
+        # API
+        location / {
+            proxy_pass http://django;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
 ```
 
 ---
 
-## Variables d'Environnement
+## Environment Variables
 
-### Fichier .env.example
+### .env.production Example
 
 ```bash
-# ─── Django ───
-DJANGO_DEBUG=False
-DJANGO_SECRET_KEY=votre_cle_secrete_tres_longue_et_aleatoire
-DJANGO_ALLOWED_HOSTS=example.com,www.example.com
+# Django
 DJANGO_SETTINGS_MODULE=root.settings.production
+DJANGO_SECRET_KEY=your-very-long-and-secure-secret-key
+DEBUG=False
+ALLOWED_HOSTS=example.com,www.example.com
 
-# ─── Base de Données ───
-DATABASE_URL=postgres://user:password@db-host:5432/dbname
+# Database
+DATABASE_URL=postgres://user:password@db:5432/dbname
 
-# ─── Cache ───
-REDIS_URL=redis://redis-host:6379/0
-CACHE_PATH=/app/cache
+# Redis
+REDIS_URL=redis://redis:6379/0
 
-# ─── JWT ───
-JWT_SECRET_KEY=${DJANGO_SECRET_KEY}
-JWT_ACCESS_TOKEN_LIFETIME=30  # minutes
-JWT_REFRESH_TOKEN_LIFETIME=7  # jours
+# JWT
+JWT_SECRET_KEY=your-jwt-secret-key
+JWT_ACCESS_TOKEN_LIFETIME=30
+JWT_REFRESH_TOKEN_LIFETIME=10080
 
-# ─── Auth Cookies (optionnel) ───
-JWT_ALLOW_COOKIE_AUTH=False
-JWT_ENFORCE_CSRF=True
-
-# ─── Performance ───
-GRAPHQL_PERFORMANCE_ENABLED=True
-GRAPHQL_PERFORMANCE_HEADERS=False
-
-# ─── Export ───
-EXPORT_MAX_ROWS=10000
-EXPORT_STREAM_CSV=True
-
-# ─── Email ───
+# Email
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_HOST_USER=noreply@example.com
-EMAIL_HOST_PASSWORD=email_password
+EMAIL_HOST_PASSWORD=your-email-password
 EMAIL_USE_TLS=True
 
-# ─── Sentry (optionnel) ───
-SENTRY_DSN=https://xxx@sentry.io/yyy
+# Sentry (optional)
+SENTRY_DSN=https://xxx@sentry.io/xxx
+
+# Storage (optional)
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_STORAGE_BUCKET_NAME=your-bucket
+
+# Security
+CORS_ALLOWED_ORIGINS=https://example.com,https://www.example.com
+CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
 ```
-
-### Variables Critiques
-
-| Variable               | Importance  | Description                      |
-| ---------------------- | ----------- | -------------------------------- |
-| `DJANGO_SECRET_KEY`    | 🔴 Critique | Clé cryptographique (> 50 chars) |
-| `DJANGO_DEBUG`         | 🔴 Critique | **DOIT** être `False`            |
-| `DATABASE_URL`         | 🔴 Critique | Connexion PostgreSQL             |
-| `DJANGO_ALLOWED_HOSTS` | 🔴 Critique | Domaines autorisés               |
 
 ---
 
-## Checklist de Production
+## Production Checklist
 
-### Sécurité
+### Security
 
-- [ ] `DJANGO_DEBUG=False`
-- [ ] `DJANGO_SECRET_KEY` unique et aléatoire
-- [ ] `DJANGO_ALLOWED_HOSTS` configuré
-- [ ] HTTPS activé avec certificats valides
-- [ ] CORS configuré (`allowed_origins`)
-- [ ] CSRF protection activée
-- [ ] Rate limiting activé
-- [ ] Introspection GraphQL désactivée :
-  ```python
-  "enable_introspection": False,
-  "enable_graphiql": False,
-  ```
+- [ ] `DEBUG=False`
+- [ ] Strong unique `DJANGO_SECRET_KEY`
+- [ ] `ALLOWED_HOSTS` correctly configured
+- [ ] HTTPS enabled with valid certificate
+- [ ] `CSRF_TRUSTED_ORIGINS` configured
+- [ ] `CORS_ALLOWED_ORIGINS` configured
+- [ ] GraphQL introspection disabled (optional)
+- [ ] Rate limiting enabled
+- [ ] Secure cookies configured
 
-### Base de Données
+### Database
 
-- [ ] Utilisateur DB avec privilèges minimaux
-- [ ] Connexion SSL si DB distante
-- [ ] Backups automatiques configurés
-- [ ] Migrations appliquées
+- [ ] PostgreSQL (not SQLite)
+- [ ] Regular backups configured
+- [ ] User with limited privileges
+- [ ] SSL connections if remote
 
-### Fichiers
+### Performance
 
-- [ ] `collectstatic` exécuté
-- [ ] Nginx sert les fichiers statiques
-- [ ] Permissions correctes sur les dossiers
+- [ ] `collectstatic` executed
+- [ ] Gunicorn with multiple workers
+- [ ] Redis for cache and rate limiting
+- [ ] CDN for static files (optional)
 
 ### Monitoring
 
-- [ ] Sentry ou équivalent configuré
-- [ ] Health checks actifs
-- [ ] Logs centralisés
-- [ ] Alertes configurées
+- [ ] Health checks configured
+- [ ] Sentry or equivalent for error tracking
+- [ ] Prometheus metrics (optional)
+- [ ] Centralized logs
 
-### MFA
+### Backup
 
-- [ ] MFA obligatoire pour staff
-- [ ] MFA obligatoire pour superusers
+- [ ] Automatic daily backups
+- [ ] Tested restore procedure
+- [ ] Off-site backup storage
 
 ---
 
-## Déploiement Manuel
+## Manual Deployment
 
-### Prérequis
-
-1. **Docker & Docker Compose** installés
-2. **Base de données** PostgreSQL accessible
-3. **Domaine/DNS** configuré
-
-### Étapes
-
-#### 1. Configuration Environnement
+### Step 1: Prepare the Server
 
 ```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install dependencies
+sudo apt install -y python3.11 python3.11-venv postgresql nginx redis-server
+
+# Create application user
+sudo useradd -m -s /bin/bash appuser
+```
+
+### Step 2: Configure Database
+
+```bash
+# Create database and user
+sudo -u postgres psql
+CREATE DATABASE myproject;
+CREATE USER myproject WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE myproject TO myproject;
+\q
+```
+
+### Step 3: Deploy Application
+
+```bash
+# Clone repository
+cd /var/www
+sudo git clone https://github.com/your/repo.git myproject
+sudo chown -R appuser:appuser myproject
+
+# Create virtual environment
+sudo -u appuser bash
+cd /var/www/myproject
+python3.11 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements/prod.txt
+
+# Configure environment
 cp .env.example .env
-nano .env  # Éditer les valeurs
+nano .env  # Edit values
+
+# Initialize
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py createsuperuser
 ```
 
-#### 2. Build et Démarrage
+### Step 4: Configure Systemd
 
-```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
+```ini
+# /etc/systemd/system/myproject.service
+[Unit]
+Description=My Project Gunicorn Service
+After=network.target
+
+[Service]
+User=appuser
+Group=appuser
+WorkingDirectory=/var/www/myproject
+Environment="PATH=/var/www/myproject/venv/bin"
+EnvironmentFile=/var/www/myproject/.env
+ExecStart=/var/www/myproject/venv/bin/gunicorn \
+    --workers 4 \
+    --bind unix:/var/www/myproject/gunicorn.sock \
+    root.wsgi:application
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-#### 3. Migrations
-
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
-```
-
-#### 4. Collectstatic
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py collectstatic --no-input
-```
-
-#### 5. Superuser
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
-```
-
-### Vérification
-
-```bash
-# Logs
-docker-compose -f deploy/docker/docker-compose.yml logs -f
-
-# Health check
-curl -s http://localhost/health/ping/
+sudo systemctl daemon-reload
+sudo systemctl enable myproject
+sudo systemctl start myproject
 ```
 
 ---
 
-## HTTPS et Certificats
+## HTTPS and Certificates
 
-### Certificat Officiel (Recommandé)
-
-Demandez à votre équipe IT un certificat pour votre domaine :
-
-```
-deploy/nginx/certs/server.crt
-deploy/nginx/certs/server.key
-```
-
-### Certificat Auto-Signé (Test)
+### Let's Encrypt with Certbot
 
 ```bash
-mkdir -p deploy/nginx/certs
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout deploy/nginx/certs/server.key \
-  -out deploy/nginx/certs/server.crt \
-  -subj "/CN=app.example.com"
-```
+# Install Certbot
+sudo apt install certbot python3-certbot-nginx
 
-### Configuration Nginx
+# Obtain certificate
+sudo certbot --nginx -d example.com -d www.example.com
 
-```nginx
-# deploy/nginx/default.conf
-server {
-    listen 80;
-    server_name _;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name app.example.com;
-
-    ssl_certificate /etc/nginx/certs/server.crt;
-    ssl_certificate_key /etc/nginx/certs/server.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location /static/ {
-        alias /app/staticfiles/;
-    }
-
-    location /media/ {
-        alias /app/media/;
-    }
-
-    location / {
-        proxy_pass http://web:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # WebSocket pour subscriptions
-    location /graphql/ {
-        proxy_pass http://web:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_read_timeout 86400;
-    }
-}
+# Automatic renewal
+sudo crontab -e
+# Add:
+0 0 1 * * /usr/bin/certbot renew --quiet
 ```
 
 ---
 
-## Maintenance
+## Maintenance Procedures
 
-### Logs
-
-```bash
-# Tous les services
-docker-compose -f deploy/docker/docker-compose.yml logs -f
-
-# Service spécifique
-docker-compose -f deploy/docker/docker-compose.yml logs -f web
-```
-
-### Arrêt
+### Update Application
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml down
-```
-
-### Mise à Jour
-
-```bash
-# Pull du code
+cd /var/www/myproject
 git pull origin main
-
-# Rebuild et redémarrage
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
-
-# Migrations
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
+source venv/bin/activate
+pip install -r requirements/prod.txt
+python manage.py migrate
+python manage.py collectstatic --noinput
+sudo systemctl restart myproject
 ```
 
-### Backups
-
-Les backups sont automatiques (tous les 24h) dans `./backups/`.
-
-Restauration :
+### Database Backup
 
 ```bash
-psql $DATABASE_URL < backups/backup_20260116_120000.sql
+# Manual backup
+pg_dump -U myproject myproject > backup_$(date +%Y%m%d).sql
+
+# Automatic backup (crontab)
+0 2 * * * pg_dump -U myproject myproject > /backups/daily/backup_$(date +\%Y\%m\%d).sql
 ```
 
-### Nettoyage
+### Log Management
 
 ```bash
-# Supprimer les anciennes images
-docker image prune -a
+# View logs
+sudo journalctl -u myproject -f
 
-# Supprimer les volumes orphelins
-docker volume prune
+# Rotate logs
+sudo logrotate /etc/logrotate.d/myproject
 ```
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-### Container ne démarre pas
-
-```bash
-# Voir les logs
-docker-compose -f deploy/docker/docker-compose.yml logs web
-
-# Vérifier le status
-docker-compose -f deploy/docker/docker-compose.yml ps
-```
-
-### Erreur 502 Bad Gateway
-
-**Causes possibles :**
-
-- Le service web n'est pas démarré
-- Erreur dans l'application Python
-
-**Solution :**
+### Application Not Starting
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml restart web
-docker-compose -f deploy/docker/docker-compose.yml logs -f web
+# Check status
+sudo systemctl status myproject
+
+# View detailed logs
+sudo journalctl -u myproject -n 100
+
+# Check configuration
+python manage.py check --deploy
 ```
 
-### Erreur de connexion DB
-
-**Causes possibles :**
-
-- `DATABASE_URL` incorrecte
-- DB non accessible depuis le container
-
-**Solution :**
+### Database Connection Issues
 
 ```bash
-# Test de connexion
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py dbshell
+# Test connection
+python manage.py dbshell
+
+# Check PostgreSQL status
+sudo systemctl status postgresql
 ```
 
-### Fichiers statiques 404
-
-**Causes possibles :**
-
-- `collectstatic` non exécuté
-- Volume non monté correctement
-
-**Solution :**
+### 502 Bad Gateway
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py collectstatic --no-input
+# Check if Gunicorn is running
+sudo systemctl status myproject
+
+# Check socket permissions
+ls -la /var/www/myproject/gunicorn.sock
+
+# Check Nginx configuration
+sudo nginx -t
 ```
 
-### Performances dégradées
+### High Memory Usage
 
-**Vérifications :**
+```bash
+# Check processes
+ps aux | grep gunicorn
 
-1. Activer les logs de performance :
-   ```python
-   GRAPHQL_PERFORMANCE_ENABLED=True
-   ```
-2. Vérifier les requêtes lentes :
-   ```bash
-   docker-compose -f deploy/docker/docker-compose.yml logs web | grep "SLOW"
-   ```
-3. Vérifier l'utilisation mémoire :
-   ```bash
-   docker stats
-   ```
+# Adjust workers
+# In gunicorn config:
+--workers 2 --threads 4 --worker-class gthread
+```
 
 ---
 
-## Sécurité Réseau
+## Network Security
 
 ### Firewall (UFW)
 
 ```bash
-# Autoriser uniquement le trafic interne
-ufw allow from 10.0.0.0/8 to any port 443
-ufw allow ssh
-ufw enable
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+sudo ufw enable
 ```
 
-### Headers de Sécurité
+### Fail2Ban
 
-Ajoutez dans Nginx :
+```bash
+sudo apt install fail2ban
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+sudo nano /etc/fail2ban/jail.local
+# Enable [sshd] and [nginx-http-auth]
+sudo systemctl restart fail2ban
+```
 
-```nginx
-add_header X-Frame-Options "DENY" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Content-Security-Policy "default-src 'self'" always;
+### Database Security
+
+```bash
+# Limit PostgreSQL connections
+# In /etc/postgresql/15/main/pg_hba.conf
+local   all   all                 peer
+host    all   all   127.0.0.1/32  scram-sha-256
+host    all   all   ::1/128       scram-sha-256
+# Deny external connections
 ```
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Configuration](../graphql/configuration.md) - Paramètres de production
-- [Health Monitoring](../extensions/health.md) - Vérifications de santé
-- [Sécurité](../security/authentication.md) - Authentification et sécurité
+- [Configuration](../graphql/configuration.md) - All settings
+- [Health Monitoring](../extensions/health.md) - Health endpoints
+- [Observability](../extensions/observability.md) - Sentry and metrics

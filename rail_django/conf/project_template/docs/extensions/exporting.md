@@ -1,554 +1,456 @@
-# Export de Données (Excel/CSV)
+# Data Export
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django fournit un système d'export de données sécurisé avec allowlists, limites de lignes, et support asynchrone pour les gros volumes. Les exports sont disponibles aux formats CSV et Excel (XLSX).
+Rail Django includes a data export system supporting Excel (.xlsx) and CSV formats. This guide covers configuration, REST endpoint usage, export options, security, and best practices.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
 1. [Configuration](#configuration)
-2. [Endpoint REST](#endpoint-rest)
-3. [Options d'Export](#options-dexport)
-4. [Sécurité et Allowlists](#sécurité-et-allowlists)
-5. [Exports Asynchrones](#exports-asynchrones)
-6. [Templates d'Export](#templates-dexport)
-7. [Exemples](#exemples)
-8. [Bonnes Pratiques](#bonnes-pratiques)
+2. [REST Endpoint](#rest-endpoint)
+3. [Export Options](#export-options)
+4. [Security and Allowlists](#security-and-allowlists)
+5. [Asynchronous Exports](#asynchronous-exports)
+6. [Templates](#templates)
+7. [Examples](#examples)
+8. [Best Practices](#best-practices)
 
 ---
 
 ## Configuration
 
-### Paramètres d'Export
+### Basic Configuration
 
 ```python
 # root/settings/base.py
 RAIL_DJANGO_EXPORT = {
-    # ─── Limites ───
-    "max_rows": 10000,          # Limite par défaut
-    "max_rows_csv": 50000,      # Limite plus élevée pour CSV
-    "max_rows_xlsx": 10000,     # Excel limité (mémoire)
+    # Activation
+    "enabled": True,
 
-    # ─── Streaming ───
-    "enforce_streaming_csv": True,  # Stream les gros CSV
-    "streaming_threshold": 1000,    # Seuil pour activer le streaming
+    # Default format
+    "default_format": "xlsx",  # "xlsx" or "csv"
 
-    # ─── Formats ───
-    "allowed_formats": ["csv", "xlsx"],
-    "default_format": "xlsx",
+    # Limits
+    "max_records": 50000,
+    "max_file_size_mb": 50,
 
-    # ─── Allowlists (Sécurité) ───
-    "allowed_models": [],  # Vide = tous les modèles autorisés
-    "allowed_fields": {},  # {"app.Model": ["field1", "field2"]}
-    "allowed_filters": {}, # {"app.Model": ["status", "created_at"]}
-    "allowed_orderings": {},
+    # Security
+    "require_authentication": True,
+    "require_permission": True,  # Requires export_<model> permission
 
-    # ─── Rate Limiting ───
-    "rate_limit_per_minute": 10,
-    "rate_limit_per_hour": 100,
+    # Storage
+    "storage_backend": "local",  # "local", "s3", "azure"
+    "storage_path": "/exports/",
+    "retention_days": 7,
 
-    # ─── Async ───
-    "async_enabled": False,
-    "async_threshold": 5000,  # Lignes au-delà desquelles passer en async
+    # Allowed models
+    "allowlist": None,  # None = all, or ["app.Model", ...]
+    "blocklist": ["auth.User", "sessions.Session"],
 }
 ```
 
 ---
 
-## Endpoint REST
+## REST Endpoint
 
-### URL
+### POST /api/v1/export/
 
-```
-POST /api/v1/export/
-```
-
-### Authentification
-
-L'endpoint requiert un JWT valide :
-
-```http
-POST /api/v1/export/ HTTP/1.1
-Host: api.example.com
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-### Payload Basique
-
-```json
-{
-  "app_name": "store",
-  "model_name": "Product",
-  "file_extension": "xlsx"
-}
-```
-
-### Payload Complet
-
-```json
-{
-  "app_name": "store",
-  "model_name": "Product",
-  "file_extension": "xlsx",
-  "filename": "export_produits_2026",
-  "fields": [
-    "id",
-    "name",
-    "sku",
-    "category.name",
-    { "accessor": "price", "title": "Prix unitaire" },
-    { "accessor": "stock_quantity", "title": "Quantité en stock" }
-  ],
-  "ordering": ["-created_at", "name"],
-  "max_rows": 5000,
-  "variables": {
-    "is_active__exact": true,
-    "category__id__in": [1, 2, 3]
-  },
-  "include_headers": true,
-  "date_format": "%d/%m/%Y",
-  "datetime_format": "%d/%m/%Y %H:%M"
-}
-```
-
-### Réponse
-
-**Export Synchrone :**
-
-Retourne directement le fichier binaire :
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-Content-Disposition: attachment; filename="export_produits_2026.xlsx"
-
-[binary data]
-```
-
-**Export Asynchrone :**
-
-Voir [Exports Asynchrones](#exports-asynchrones).
-
----
-
-## Options d'Export
-
-### Sélection des Champs
-
-#### Liste Simple
-
-```json
-{
-  "fields": ["id", "name", "price", "created_at"]
-}
-```
-
-#### Champs Relationnels (Dot Notation)
-
-```json
-{
-  "fields": [
-    "id",
-    "name",
-    "category.name",
-    "category.parent.name",
-    "supplier.company_name"
-  ]
-}
-```
-
-#### Titres Personnalisés
-
-```json
-{
-  "fields": [
-    { "accessor": "id", "title": "ID Produit" },
-    { "accessor": "name", "title": "Désignation" },
-    { "accessor": "price", "title": "Prix HT (€)" },
-    { "accessor": "category.name", "title": "Catégorie" }
-  ]
-}
-```
-
-### Filtrage
-
-Les filtres utilisent la syntaxe Django ORM :
-
-```json
-{
-  "variables": {
-    "is_active__exact": true,
-    "price__gte": 100,
-    "price__lte": 500,
-    "name__icontains": "premium",
-    "category__id__in": [1, 2, 3],
-    "created_at__gte": "2026-01-01"
-  }
-}
-```
-
-### Tri
-
-```json
-{
-  "ordering": ["-created_at", "category__name", "name"]
-}
-```
-
-### Formatage des Dates
-
-```json
-{
-  "date_format": "%d/%m/%Y",
-  "datetime_format": "%d/%m/%Y %H:%M:%S"
-}
-```
-
-| Format           | Exemple          |
-| ---------------- | ---------------- |
-| `%Y-%m-%d`       | 2026-01-16       |
-| `%d/%m/%Y`       | 16/01/2026       |
-| `%d/%m/%Y %H:%M` | 16/01/2026 10:30 |
-
----
-
-## Sécurité et Allowlists
-
-### Principle de Défaut-Refus
-
-Par défaut, tous les champs et filtres sont **refusés** sauf ceux explicitement autorisés.
-
-### Configuration des Allowlists
-
-```python
-RAIL_DJANGO_EXPORT = {
-    # Modèles autorisés à l'export
-    "allowed_models": [
-        "store.Product",
-        "store.Order",
-        "crm.Customer",
-    ],
-
-    # Champs autorisés par modèle
-    "allowed_fields": {
-        "store.Product": [
-            "id", "name", "sku", "price", "category.name"
-        ],
-        "store.Order": [
-            "id", "reference", "status", "total", "customer.name"
-        ],
-        "crm.Customer": [
-            "id", "name", "email", "company"
-            # ❌ "internal_score" non inclus = non exportable
-        ],
-    },
-
-    # Filtres autorisés par modèle
-    "allowed_filters": {
-        "store.Product": ["is_active", "category__id", "price"],
-        "store.Order": ["status", "created_at", "customer__id"],
-    },
-
-    # Colonnes de tri autorisées
-    "allowed_orderings": {
-        "store.Product": ["name", "price", "created_at"],
-        "store.Order": ["reference", "created_at", "total"],
-    },
-}
-```
-
-### Validation des Requêtes
-
-Si un champ ou filtre non autorisé est demandé :
-
-```json
-{
-  "error": "Field 'internal_notes' is not allowed for export on model 'Store.Product'",
-  "code": "EXPORT_FIELD_NOT_ALLOWED"
-}
-```
-
----
-
-## Exports Asynchrones
-
-Pour les gros volumes, utilisez les exports asynchrones.
-
-### Activation
-
-```python
-RAIL_DJANGO_EXPORT = {
-    "async_enabled": True,
-    "async_threshold": 5000,  # Auto-async si > 5000 lignes
-    "async_storage": "default",  # Ou "s3", "gcs"
-    "async_expiry_hours": 24,
-}
-```
-
-### Requête Asynchrone
-
-```json
-{
-  "app_name": "store",
-  "model_name": "Order",
-  "file_extension": "csv",
-  "async": true,
-  "variables": {
-    "created_at__gte": "2025-01-01"
-  }
-}
-```
-
-### Réponse
-
-```json
-{
-  "job_id": "exp_a1b2c3d4",
-  "status": "pending",
-  "status_url": "/api/v1/export/jobs/exp_a1b2c3d4/",
-  "download_url": "/api/v1/export/jobs/exp_a1b2c3d4/download/"
-}
-```
-
-### Vérification du Statut
-
-```http
-GET /api/v1/export/jobs/exp_a1b2c3d4/
-Authorization: Bearer <jwt>
-```
-
-```json
-{
-  "job_id": "exp_a1b2c3d4",
-  "status": "completed",
-  "progress": 100,
-  "row_count": 15000,
-  "file_size": 2456789,
-  "created_at": "2026-01-16T10:30:00Z",
-  "completed_at": "2026-01-16T10:32:15Z",
-  "expires_at": "2026-01-17T10:30:00Z"
-}
-```
-
-### Téléchargement
-
-```http
-GET /api/v1/export/jobs/exp_a1b2c3d4/download/
-Authorization: Bearer <jwt>
-```
-
----
-
-## Templates d'Export
-
-Définissez des templates réutilisables pour simplifier les exports fréquents.
-
-### Création d'un Template
-
-```python
-# root/export_templates.py
-EXPORT_TEMPLATES = {
-    "recent_orders": {
-        "app_name": "store",
-        "model_name": "Order",
-        "file_extension": "xlsx",
-        "fields": [
-            {"accessor": "reference", "title": "Réf. Commande"},
-            {"accessor": "customer.name", "title": "Client"},
-            {"accessor": "status", "title": "Statut"},
-            {"accessor": "total", "title": "Total TTC"},
-            {"accessor": "created_at", "title": "Date"},
-        ],
-        "ordering": ["-created_at"],
-        "max_rows": 1000,
-        "default_filters": {
-            "created_at__gte": "last_30_days",
-        },
-    },
-    "active_products": {
-        "app_name": "store",
-        "model_name": "Product",
-        "fields": ["sku", "name", "price", "stock"],
-        "default_filters": {
-            "is_active__exact": True,
-        },
-    },
-}
-```
-
-### Utilisation d'un Template
-
-```json
-{
-  "template": "recent_orders",
-  "variables": {
-    "status__exact": "completed"
-  }
-}
-```
-
-Le template est mergé avec les variables fournies.
-
----
-
-## Exemples
-
-### Export Produits avec cURL
+Creates a data export.
 
 ```bash
-curl -X POST "https://api.example.com/api/v1/export/" \
-  -H "Authorization: Bearer $JWT_TOKEN" \
+curl -X POST /api/v1/export/ \
+  -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
   -d '{
     "app_name": "store",
     "model_name": "Product",
     "file_extension": "xlsx",
-    "filename": "catalogue_produits",
-    "fields": [
-      {"accessor": "sku", "title": "Référence"},
-      {"accessor": "name", "title": "Désignation"},
-      {"accessor": "category.name", "title": "Catégorie"},
-      {"accessor": "price", "title": "Prix HT"}
+    "filters": {
+      "is_active": true,
+      "category__name__icontains": "Electronics"
+    },
+    "fields": ["id", "name", "sku", "price", "category__name"],
+    "order_by": ["-created_at"]
+  }'
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "export_id": "exp_abc123",
+  "download_url": "/api/v1/export/exp_abc123/download/",
+  "record_count": 1500,
+  "file_size": "2.3 MB",
+  "expires_at": "2026-01-23T12:00:00Z"
+}
+```
+
+### GET /api/v1/export/{id}/download/
+
+Downloads the exported file.
+
+```bash
+curl -O /api/v1/export/exp_abc123/download/ \
+  -H "Authorization: Bearer <jwt>"
+```
+
+### GET /api/v1/export/{id}/status/
+
+Checks export status (for async exports).
+
+```json
+{
+  "status": "completed",
+  "progress": 100,
+  "record_count": 1500,
+  "download_url": "/api/v1/export/exp_abc123/download/"
+}
+```
+
+---
+
+## Export Options
+
+### Available Fields
+
+| Parameter         | Type    | Description                      |
+| ----------------- | ------- | -------------------------------- |
+| `app_name`        | string  | Django application name          |
+| `model_name`      | string  | Model name                       |
+| `file_extension`  | string  | Format: "xlsx" or "csv"          |
+| `filters`         | object  | Django ORM filters               |
+| `fields`          | array   | Fields to include (default: all) |
+| `exclude_fields`  | array   | Fields to exclude                |
+| `order_by`        | array   | Sorting                          |
+| `limit`           | integer | Maximum records                  |
+| `offset`          | integer | Starting offset                  |
+| `include_headers` | boolean | Include headers (CSV)            |
+| `date_format`     | string  | Date format (default: ISO 8601)  |
+| `decimal_places`  | integer | Decimal precision                |
+| `template_id`     | string  | Excel template ID                |
+
+### Filters
+
+Uses Django ORM filter syntax:
+
+```json
+{
+  "filters": {
+    "status__in": ["active", "pending"],
+    "created_at__gte": "2026-01-01",
+    "price__range": [100, 500],
+    "category__name__icontains": "electronics"
+  }
+}
+```
+
+### Relationship Fields
+
+Include relationship fields using double underscores:
+
+```json
+{
+  "fields": [
+    "id",
+    "name",
+    "category__name",
+    "supplier__company_name",
+    "supplier__contact__email"
+  ]
+}
+```
+
+---
+
+## Security and Allowlists
+
+### Allowlist Configuration
+
+```python
+RAIL_DJANGO_EXPORT = {
+    # Only these models can be exported
+    "allowlist": [
+        "store.Product",
+        "store.Category",
+        "store.Order",
     ],
-    "variables": {
-      "is_active__exact": true
-    },
-    "ordering": ["category__name", "name"]
-  }' \
-  --output catalogue_produits.xlsx
-```
 
-### Export JavaScript (Fetch)
-
-```javascript
-async function exportProducts(filters) {
-  const response = await fetch("/api/v1/export/", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getAccessToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      app_name: "store",
-      model_name: "Product",
-      file_extension: "xlsx",
-      variables: filters,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-
-  // Télécharger le fichier
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "export.xlsx";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+    # These models are never exported
+    "blocklist": [
+        "auth.User",
+        "auth.Permission",
+        "sessions.Session",
+    ],
 }
 ```
 
-### Export Asynchrone avec Polling
+### Per-Model Configuration
 
-```javascript
-async function exportLargeDataset(options) {
-  // Lancer l'export async
-  const response = await fetch("/api/v1/export/", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getAccessToken()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      ...options,
-      async: true,
-    }),
-  });
+```python
+class Product(models.Model):
+    class ExportMeta:
+        # Allowed for export
+        allow_export = True
 
-  const job = await response.json();
+        # Fields allowed for export
+        exportable_fields = ["id", "name", "sku", "price", "is_active"]
 
-  // Polling du statut
-  while (true) {
-    await new Promise((r) => setTimeout(r, 2000)); // 2s
+        # Never export these fields
+        exclude_fields = ["internal_notes", "cost_price"]
 
-    const statusRes = await fetch(job.status_url, {
-      headers: { Authorization: `Bearer ${getAccessToken()}` },
-    });
-    const status = await statusRes.json();
+        # Required permission
+        permission = "store.export_product"
 
-    updateProgress(status.progress);
+        # Maximum records for this model
+        max_records = 10000
+```
 
-    if (status.status === "completed") {
-      // Télécharger
-      window.location.href = job.download_url;
-      break;
-    }
+### Field Restrictions
 
-    if (status.status === "failed") {
-      throw new Error(status.error);
-    }
-  }
+Sensitive fields are automatically excluded:
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "sensitive_field_patterns": [
+        "*password*",
+        "*secret*",
+        "*token*",
+        "*key*",
+        "*ssn*",
+        "*credit_card*",
+    ],
 }
 ```
 
 ---
 
-## Bonnes Pratiques
+## Asynchronous Exports
 
-### 1. Limitez les Champs Exposés
+For large exports, processing is done asynchronously.
 
-```python
-# ✅ Allowlist explicite
-"allowed_fields": {
-    "store.Product": ["id", "name", "price"],
-}
-
-# ❌ Ne pas autoriser tous les champs par défaut
-```
-
-### 2. Utilisez des Templates
+### Configuration
 
 ```python
-# ✅ Templates pour les exports récurrents
-EXPORT_TEMPLATES = {
-    "monthly_sales": {...},
-    "inventory_report": {...},
+RAIL_DJANGO_EXPORT = {
+    # Threshold for async export
+    "async_threshold": 10000,
+
+    # Backend (requires Celery or similar)
+    "async_backend": "celery",
+
+    # Notifications
+    "notify_on_complete": True,
+    "notification_email": True,
 }
 ```
 
-### 3. Configurez les Limites
+### Async Request
 
-```python
-# ✅ Limites différenciées par format
-"max_rows_csv": 100000,  # CSV peut gérer plus
-"max_rows_xlsx": 10000,  # Excel limité
-
-# ✅ Utilisez async pour les gros volumes
-"async_threshold": 5000,
+```json
+{
+  "app_name": "store",
+  "model_name": "Order",
+  "async": true,
+  "notify_email": "user@example.com"
+}
 ```
 
-### 4. Auditez les Exports
+### Response
 
-```python
-# Les exports sont automatiquement loggés
-# event_type: "export_requested"
-# metadata: { model, row_count, user, etc. }
+```json
+{
+  "status": "processing",
+  "export_id": "exp_xyz789",
+  "status_url": "/api/v1/export/exp_xyz789/status/",
+  "estimated_time": "2 minutes"
+}
 ```
 
-📖 Voir [Audit & Logging](./audit.md).
+### Email Notification
+
+When export completes:
+
+```
+Subject: Your export is ready
+
+Your export of 25,000 Order records is ready for download.
+
+Download link: https://example.com/api/v1/export/exp_xyz789/download/
+
+This link expires on January 23, 2026.
+```
 
 ---
 
-## Voir Aussi
+## Templates
 
-- [Reporting & BI](./reporting.md) - Agrégations et datasets
-- [Génération PDF](./templating.md) - Exports PDF personnalisés
-- [Permissions](../security/permissions.md) - Contrôle d'accès aux exports
+### Excel Templates
+
+Use predefined templates for formatting:
+
+```python
+# apps/store/export_templates.py
+from rail_django.extensions.export import ExcelTemplate
+
+class ProductExportTemplate(ExcelTemplate):
+    name = "product_catalog"
+
+    # Style configuration
+    header_style = {
+        "font_bold": True,
+        "bg_color": "#4472C4",
+        "font_color": "#FFFFFF",
+    }
+
+    column_widths = {
+        "name": 30,
+        "description": 50,
+        "price": 15,
+    }
+
+    # Conditional formatting
+    conditional_formats = [
+        {
+            "column": "price",
+            "condition": "greater_than",
+            "value": 1000,
+            "format": {"bg_color": "#FFC7CE"},
+        },
+    ]
+```
+
+### Use Template
+
+```json
+{
+  "app_name": "store",
+  "model_name": "Product",
+  "template_id": "product_catalog"
+}
+```
+
+---
+
+## Examples
+
+### Basic Export
+
+```bash
+curl -X POST /api/v1/export/ \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "app_name": "store",
+    "model_name": "Product",
+    "file_extension": "xlsx"
+  }'
+```
+
+### Filtered Export
+
+```bash
+curl -X POST /api/v1/export/ \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{
+    "app_name": "store",
+    "model_name": "Order",
+    "file_extension": "csv",
+    "filters": {
+      "status": "completed",
+      "created_at__gte": "2026-01-01"
+    },
+    "fields": ["reference", "customer__name", "total", "created_at"]
+  }'
+```
+
+### Programmatic Export
+
+```python
+from rail_django.extensions.export import Exporter
+
+# Create exporter
+exporter = Exporter(
+    model=Product,
+    filters={"is_active": True},
+    fields=["id", "name", "sku", "price"],
+    format="xlsx",
+)
+
+# Generate file
+file_path = exporter.export()
+
+# Or get as bytes
+file_bytes = exporter.export_to_bytes()
+```
+
+---
+
+## Best Practices
+
+### 1. Limit Exports
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "max_records": 50000,
+    "max_file_size_mb": 50,
+}
+```
+
+### 2. Use Filters
+
+```python
+# ❌ Avoid exporting millions of records
+{"model_name": "LogEntry"}
+
+# ✅ Use filters
+{
+    "model_name": "LogEntry",
+    "filters": {"created_at__gte": "2026-01-01"},
+    "limit": 10000
+}
+```
+
+### 3. Select Only Needed Fields
+
+```json
+{
+  "fields": ["id", "name", "price"]
+}
+```
+
+### 4. Use Async for Large Exports
+
+```json
+{
+  "async": true,
+  "notify_email": "user@example.com"
+}
+```
+
+### 5. Configure Retention
+
+```python
+RAIL_DJANGO_EXPORT = {
+    "retention_days": 7,  # Automatically delete after 7 days
+}
+```
+
+### 6. Monitor Exports
+
+```python
+# Log all exports
+RAIL_DJANGO_AUDIT = {
+    "track_system_events": True,
+}
+```
+
+---
+
+## See Also
+
+- [Reporting & BI](./reporting.md) - Analytical reports
+- [Audit & Logging](./audit.md) - Export tracking
+- [Configuration](../graphql/configuration.md) - All settings

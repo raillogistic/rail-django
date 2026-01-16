@@ -42,6 +42,7 @@ Rail Django simplifies GraphQL API development by automating schema generation, 
 | [Audit & Logging](./extensions/audit.md)       | Action traceability and security events       |
 | [Data Export](./extensions/exporting.md)       | Excel/CSV export with safeguards              |
 | [Reporting & BI](./extensions/reporting.md)    | Define analytical datasets and visualizations |
+| [Background Tasks](./extensions/tasks.md)      | Async mutations and task status tracking      |
 | [PDF Generation](./extensions/templating.md)   | HTML templates to PDF                         |
 | [Health Monitoring](./extensions/health.md)    | Health endpoints for orchestration            |
 | [Schema Metadata](./extensions/metadata.md)    | Schema introspection for dynamic interfaces   |
@@ -165,7 +166,10 @@ class Product(models.Model):
 
 ```graphql
 query {
-  products(is_active: true, price_Gt: 50, ordering: ["-price"]) {
+  products(
+    filters: { is_active__exact: true, price__gt: 50 }
+    order_by: ["-price"]
+  ) {
     id
     name
     price

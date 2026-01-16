@@ -332,6 +332,24 @@ RAIL_DJANGO_GRAPHQL = {
         # Optional blocklist of models for subscriptions
         "exclude_models": [],
     },
+    "task_settings": {
+        # Enable background task orchestration
+        "enabled": False,
+        # Backend: thread, sync (tests), celery, dramatiq, django_q
+        "backend": "thread",
+        # Default queue name for task backends that support queues
+        "default_queue": "default",
+        # How long to keep task results (seconds)
+        "result_ttl_seconds": 86400,
+        # Max retry attempts for failed tasks
+        "max_retries": 3,
+        # Use exponential backoff between retries
+        "retry_backoff": True,
+        # Persist task progress/results in the database
+        "track_in_database": True,
+        # Emit task_updated subscription events when available
+        "emit_subscriptions": True,
+    },
     "performance_settings": {
         # Optimize DB queries using select_related/prefetch_related
         "enable_query_optimization": True,
