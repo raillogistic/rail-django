@@ -1,83 +1,83 @@
 # Permissions & RBAC
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django offre un système de permissions granulaire combinant le RBAC (Role-Based Access Control), les permissions au niveau des champs, et un moteur de politiques d'accès. Ce guide couvre la configuration et l'utilisation complète de ces fonctionnalités.
+Rail Django offers a granular permission system combining RBAC (Role-Based Access Control), field-level permissions, and a policy engine. This guide covers the complete configuration and usage of these features.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Concepts de Base](#concepts-de-base)
+1. [Basic Concepts](#basic-concepts)
 2. [Configuration](#configuration)
-3. [Contrôle d'Accès Basé sur les Rôles (RBAC)](#contrôle-daccès-basé-sur-les-rôles-rbac)
-4. [Permissions par Champ](#permissions-par-champ)
-5. [Moteur de Politiques](#moteur-de-politiques)
-6. [GraphQLMeta - Configuration par Modèle](#graphqlmeta---configuration-par-modèle)
-7. [Définition des Rôles via meta.json](#définition-des-rôles-via-metajson)
-8. [API GraphQL](#api-graphql)
-9. [Exemples Complets](#exemples-complets)
-10. [Bonnes Pratiques](#bonnes-pratiques)
+3. [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
+4. [Field Permissions](#field-permissions)
+5. [Policy Engine](#policy-engine)
+6. [GraphQLMeta - Per-Model Configuration](#graphqlmeta---per-model-configuration)
+7. [Defining Roles via meta.json](#defining-roles-via-metajson)
+8. [GraphQL API](#graphql-api)
+9. [Complete Examples](#complete-examples)
+10. [Best Practices](#best-practices)
 
 ---
 
-## Concepts de Base
+## Basic Concepts
 
-### Hiérarchie des Permissions
+### Permission Hierarchy
 
 ```
-Niveau                 Description
+Level                 Description
 ─────────────────────────────────────────────────────────
-Opération             create, read, update, delete (CRUD)
-Modèle                Accès au Type GraphQL entier
-Champ                 Accès/visibilité par champ
-Objet                 Accès contextuel (propriétaire, assigné)
+Operation             create, read, update, delete (CRUD)
+Model                 Access to the entire GraphQL Type
+Field                 Access/visibility per field
+Object                Contextual access (owner, assigned)
 ```
 
-### Types de Visibilité
+### Visibility Types
 
-| Valeur     | Comportement                                |
-| ---------- | ------------------------------------------- |
-| `visible`  | Champ accessible normalement                |
-| `masked`   | Valeur partiellement cachée (`***@***.com`) |
-| `hidden`   | Champ non visible (null ou erreur)          |
-| `redacted` | Champ visible mais contenu remplacé         |
+| Value      | Behavior                               |
+| ---------- | -------------------------------------- |
+| `visible`  | Field accessible normally              |
+| `masked`   | Value partially hidden (`***@***.com`) |
+| `hidden`   | Field not visible (null or error)      |
+| `redacted` | Field visible but content replaced     |
 
 ---
 
 ## Configuration
 
-### Paramètres Globaux
+### Global Settings
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
-        # Active les vérifications d'authentification
+        # Enables authentication checks
         "enable_authentication": True,
-        # Active les vérifications d'autorisation
+        # Enables authorization checks
         "enable_authorization": True,
-        # Active le moteur de politiques allow/deny
+        # Enables the allow/deny policy engine
         "enable_policy_engine": True,
-        # Cache les résultats de permissions
+        # Caches permission results
         "enable_permission_cache": True,
         "permission_cache_ttl_seconds": 300,
-        # Audit des vérifications de permissions
+        # Audit of permission checks
         "enable_permission_audit": False,
         "permission_audit_log_denies": True,
-        # Permissions au niveau des champs
+        # Field-level permissions
         "enable_field_permissions": True,
-        # Mode de gestion des inputs non autorisés
-        "field_permission_input_mode": "reject",  # ou "strip"
-        # Permissions au niveau des objets
+        # Handling mode for unauthorized inputs
+        "field_permission_input_mode": "reject",  # or "strip"
+        # Object-level permissions
         "enable_object_permissions": True,
     },
     "query_settings": {
-        # Requiert les permissions Django pour les queries
+        # Requires Django permissions for queries
         "require_model_permissions": True,
         "model_permission_codename": "view",
     },
     "mutation_settings": {
-        # Requiert les permissions Django pour les mutations
+        # Requires Django permissions for mutations
         "require_model_permissions": True,
         "model_permission_codenames": {
             "create": "add",
@@ -86,7 +86,7 @@ RAIL_DJANGO_GRAPHQL = {
         },
     },
     "middleware_settings": {
-        # Middleware de permissions par champ
+        # Field permission middleware
         "enable_field_permission_middleware": True,
     },
 }
@@ -94,18 +94,18 @@ RAIL_DJANGO_GRAPHQL = {
 
 ---
 
-## Contrôle d'Accès Basé sur les Rôles (RBAC)
+## Role-Based Access Control (RBAC)
 
-### Définition des Rôles en Code
+### Defining Roles in Code
 
 ```python
 from rail_django.security import role_manager, RoleDefinition
 
-# Définir un rôle simple
+# Define a simple role
 role_manager.register_role(
     RoleDefinition(
         name="catalog_viewer",
-        description="Accès en lecture seule au catalogue",
+        description="Read-only access to the catalog",
         permissions=[
             "store.view_product",
             "store.view_category",
@@ -113,35 +113,35 @@ role_manager.register_role(
     )
 )
 
-# Définir un rôle avec héritage
+# Define a role with inheritance
 role_manager.register_role(
     RoleDefinition(
         name="catalog_editor",
-        description="Création et modification du catalogue",
+        description="Create and modify catalog",
         permissions=[
             "store.add_product",
             "store.change_product",
         ],
-        parent_roles=["catalog_viewer"],  # Hérite des permissions
+        parent_roles=["catalog_viewer"],  # Inherits permissions
     )
 )
 
-# Rôle système avec limites
+# System role with limits
 role_manager.register_role(
     RoleDefinition(
         name="catalog_admin",
-        description="Administration complète du catalogue",
+        description="Complete catalog administration",
         permissions=["store.*"],  # Wildcard
         parent_roles=["catalog_editor"],
         is_system_role=True,
-        max_users=5,  # Limite le nombre d'utilisateurs
+        max_users=5,  # Limits number of users
     )
 )
 ```
 
-### Décorateur @require_role
+### @require_role Decorator
 
-Protège les resolvers et fonctions avec des vérifications de rôle :
+Protects resolvers and functions with role checks:
 
 ```python
 from rail_django.security import require_role
@@ -149,20 +149,20 @@ from rail_django.security import require_role
 @require_role("manager")
 def resolve_financial_report(root, info):
     """
-    Génère un rapport financier.
-    Accessible uniquement aux managers.
+    Generates a financial report.
+    Accessible only to managers.
     """
     return generate_report()
 
-@require_role(["admin", "support"])  # OU logique
+@require_role(["admin", "support"])  # OR logic
 def resolve_sensitive_data(root, info):
-    """Accessible aux admins OU support."""
+    """Accessible to admins OR support."""
     return get_sensitive_data()
 ```
 
-### Permissions Contextuelles
+### Contextual Permissions
 
-Pour les permissions basées sur l'objet (`*_own`, `*_assigned`) :
+For object-based permissions (`*_own`, `*_assigned`):
 
 ```python
 from rail_django.security import PermissionContext, role_manager
@@ -170,28 +170,28 @@ from rail_django.security import PermissionContext, role_manager
 def resolve_update_project(root, info, project_id, input):
     project = Project.objects.get(pk=project_id)
 
-    # Créer un contexte avec l'instance
+    # Create a context with the instance
     context = PermissionContext(
         user=info.context.user,
         object_instance=project
     )
 
-    # Vérifier la permission contextuelle
+    # Check contextual permission
     if not role_manager.has_permission(
         info.context.user,
         "project.update_own",
         context
     ):
-        raise PermissionError("Vous ne pouvez modifier que vos propres projets")
+        raise PermissionError("You can only modify your own projects")
 
-    # ... logique de mise à jour
+    # ... update logic
 ```
 
 ---
 
-## Permissions par Champ
+## Field Permissions
 
-### Configuration dans GraphQLMeta
+### Configuration in GraphQLMeta
 
 ```python
 from django.db import models
@@ -199,18 +199,18 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 
 class Customer(models.Model):
     """
-    Modèle Client avec permissions par champ.
+    Customer Model with field permissions.
 
     Attributes:
-        name: Nom du client.
-        email: Email (masqué pour non-support).
-        phone: Téléphone (caché pour utilisateurs basiques).
-        internal_notes: Notes internes (admin uniquement).
+        name: Customer name.
+        email: Email (masked for non-support).
+        phone: Phone (hidden for basic users).
+        internal_notes: Internal notes (admin only).
     """
-    name = models.CharField("Nom", max_length=200)
+    name = models.CharField("Name", max_length=200)
     email = models.EmailField("Email")
-    phone = models.CharField("Téléphone", max_length=20)
-    internal_notes = models.TextField("Notes internes", blank=True)
+    phone = models.CharField("Phone", max_length=20)
+    internal_notes = models.TextField("Internal Notes", blank=True)
 
     class GraphQLMeta(GraphQLMetaConfig):
         field_permissions = {
@@ -218,90 +218,90 @@ class Customer(models.Model):
                 "roles": ["support", "admin"],
                 "visibility": "masked",
                 "mask_value": "***@***.com",
-                "access": "read",  # read, write, ou both
+                "access": "read",  # read, write, or both
             },
             "phone": {
                 "roles": ["support", "admin"],
-                "visibility": "hidden",  # Retourne null
+                "visibility": "hidden",  # Returns null
             },
             "internal_notes": {
                 "roles": ["admin"],
                 "visibility": "hidden",
-                "access": "both",  # Lecture et écriture
+                "access": "both",  # Read and write
             },
         }
 ```
 
-### Comportement par Rôle
+### Behavior by Role
 
-| Champ            | Utilisateur Basique | Support    | Admin      |
-| ---------------- | ------------------- | ---------- | ---------- |
-| `name`           | ✅ Visible          | ✅ Visible | ✅ Visible |
-| `email`          | `***@***.com`       | ✅ Visible | ✅ Visible |
-| `phone`          | `null`              | ✅ Visible | ✅ Visible |
-| `internal_notes` | `null`              | `null`     | ✅ Visible |
+| Field            | Basic User    | Support    | Admin      |
+| ---------------- | ------------- | ---------- | ---------- |
+| `name`           | ✅ Visible    | ✅ Visible | ✅ Visible |
+| `email`          | `***@***.com` | ✅ Visible | ✅ Visible |
+| `phone`          | `null`        | ✅ Visible | ✅ Visible |
+| `internal_notes` | `null`        | `null`     | ✅ Visible |
 
-### Mode de Gestion des Inputs
+### Input Handling Mode
 
-Contrôle le comportement lors de tentatives d'écriture sur des champs non autorisés :
+Controls behavior when attempting to write to unauthorized fields:
 
 ```python
 "security_settings": {
-    # "reject" : Refuse la mutation avec une erreur
-    # "strip" : Ignore silencieusement les champs non autorisés
+    # "reject": Refuses the mutation with an error
+    # "strip": Silently ignores unauthorized fields
     "field_permission_input_mode": "reject",
 }
 ```
 
 ---
 
-## Moteur de Politiques
+## Policy Engine
 
-Le moteur de politiques permet de définir des règles d'accès explicites avec priorités.
+The policy engine allows defining explicit access rules with priorities.
 
-### Création de Politiques
+### Creating Policies
 
 ```python
 from rail_django.security import (
     AccessPolicy, PolicyEffect, policy_manager
 )
 
-# Politique DENY avec haute priorité
+# DENY policy with high priority
 policy_manager.register_policy(
     AccessPolicy(
         name="deny_tokens_for_contractors",
         effect=PolicyEffect.DENY,
-        priority=50,  # Plus haut = plus prioritaire
+        priority=50,  # Higher = more priority
         roles=["contractor"],
         fields=["*token*", "*secret*"],  # Pattern matching
         operations=["read", "write"],
-        reason="Les contractuels ne peuvent pas accéder aux tokens",
+        reason="Contractors cannot access tokens",
     )
 )
 
-# Politique ALLOW spécifique
+# Specific ALLOW policy
 policy_manager.register_policy(
     AccessPolicy(
         name="allow_own_profile",
         effect=PolicyEffect.ALLOW,
         priority=40,
-        roles=["*"],  # Tous les rôles
+        roles=["*"],  # All roles
         models=["auth.User"],
         operations=["read", "update"],
-        conditions={"owner_field": "id"},  # Vérifie si c'est son propre profil
+        conditions={"owner_field": "id"},  # Checks if it's their own profile
     )
 )
 ```
 
-### Résolution des Conflits
+### Conflict Resolution
 
-1. Les politiques sont triées par priorité (décroissante).
-2. À priorité égale, **DENY l'emporte sur ALLOW**.
-3. Première politique matchante détermine le résultat.
+1. Policies are sorted by priority (descending).
+2. At equal priority, **DENY takes precedence over ALLOW**.
+3. First matching policy determines the result.
 
-### Query Explain Permission
+### Explain Permission Query
 
-Debugez les décisions de permissions via GraphQL :
+Debug permission decisions via GraphQL:
 
 ```graphql
 query ExplainPermission {
@@ -322,19 +322,19 @@ query ExplainPermission {
 }
 ```
 
-**Réponse :**
+**Response:**
 
 ```json
 {
   "data": {
     "explain_permission": {
       "allowed": true,
-      "reason": "Autorisé par politique 'allow_own_profile'",
+      "reason": "Allowed by policy 'allow_own_profile'",
       "policy_decision": {
         "name": "allow_own_profile",
         "effect": "ALLOW",
         "priority": 40,
-        "reason": "L'utilisateur est propriétaire de l'objet"
+        "reason": "User is owner of the object"
       }
     }
   }
@@ -343,9 +343,9 @@ query ExplainPermission {
 
 ---
 
-## GraphQLMeta - Configuration par Modèle
+## GraphQLMeta - Per-Model Configuration
 
-### Structure Complète
+### Complete Structure
 
 ```python
 from django.db import models
@@ -353,24 +353,24 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 
 class Order(models.Model):
     """
-    Modèle Commande avec configuration GraphQL complète.
+    Order Model with complete GraphQL configuration.
     """
-    reference = models.CharField("Référence", max_length=50)
+    reference = models.CharField("Reference", max_length=50)
     customer = models.ForeignKey("Customer", on_delete=models.CASCADE)
-    status = models.CharField("Statut", max_length=20)
+    status = models.CharField("Status", max_length=20)
     total = models.DecimalField("Total", max_digits=10, decimal_places=2)
-    internal_notes = models.TextField("Notes internes", blank=True)
+    internal_notes = models.TextField("Internal Notes", blank=True)
 
     class GraphQLMeta(GraphQLMetaConfig):
-        # ─── Configuration des Champs ───
+        # ─── Field Configuration ───
         fields = GraphQLMetaConfig.Fields(
-            exclude=["internal_notes"],  # Jamais exposé
-            read_only=["reference", "created_at"],  # Non modifiable
+            exclude=["internal_notes"],  # Never exposed
+            read_only=["reference", "created_at"],  # Not modifiable
         )
 
-        # ─── Filtrage ───
+        # ─── Filtering ───
         filtering = GraphQLMetaConfig.Filtering(
-            quick=["reference", "customer__name"],  # Recherche rapide
+            quick=["reference", "customer__name"],  # Quick search
             fields={
                 "status": GraphQLMetaConfig.FilterField(
                     lookups=["exact", "in"],
@@ -385,13 +385,13 @@ class Order(models.Model):
             },
         )
 
-        # ─── Tri ───
+        # ─── Sorting ───
         ordering = GraphQLMetaConfig.Ordering(
             allowed=["reference", "total", "created_at"],
             default=["-created_at"],
         )
 
-        # ─── Permissions par Opération ───
+        # ─── Permissions by Operation ───
         access = GraphQLMetaConfig.Access(
             operations={
                 "list": {"roles": ["sales", "admin"]},
@@ -402,7 +402,7 @@ class Order(models.Model):
             }
         )
 
-        # ─── Permissions par Champ ───
+        # ─── Field Permissions ───
         field_permissions = {
             "total": {
                 "roles": ["accounting", "admin"],
@@ -422,23 +422,23 @@ class Order(models.Model):
 
 ---
 
-## Définition des Rôles via meta.json
+## Defining Roles via meta.json
 
-Définissez les rôles et configurations GraphQL par application dans un fichier JSON :
+Define roles and GraphQL configurations per application in a JSON file:
 
-### Structure du Fichier
+### File Structure
 
 ```json
 // apps/store/meta.json
 {
   "roles": {
     "catalog_viewer": {
-      "description": "Accès en lecture seule au catalogue.",
+      "description": "Read-only access to the catalog.",
       "role_type": "functional",
       "permissions": ["store.view_product", "store.view_category"]
     },
     "catalog_editor": {
-      "description": "Création et modification du catalogue.",
+      "description": "Create and modify catalog.",
       "role_type": "business",
       "permissions": [
         "store.view_product",
@@ -448,7 +448,7 @@ Définissez les rôles et configurations GraphQL par application dans un fichier
       "parent_roles": ["catalog_viewer"]
     },
     "catalog_admin": {
-      "description": "Administration complète du catalogue.",
+      "description": "Complete catalog administration.",
       "role_type": "system",
       "permissions": ["store.*"],
       "parent_roles": ["catalog_editor"],
@@ -495,31 +495,31 @@ Définissez les rôles et configurations GraphQL par application dans un fichier
 }
 ```
 
-### Notes Importantes
+### Important Notes
 
-- Placez le fichier à la racine de l'application (`apps/store/meta.json`).
-- Le loader s'exécute au démarrage ; redémarrez le serveur pour appliquer les changements.
-- Les rôles sont additifs et ne remplacent pas les rôles système.
-- Si un modèle définit `GraphQLMeta` en code, il a priorité sur le JSON.
+- Place the file at the application root (`apps/store/meta.json`).
+- The loader runs at startup; restart the server to apply changes.
+- Roles are additive and don't replace system roles.
+- If a model defines `GraphQLMeta` in code, it takes priority over JSON.
 
 ---
 
-## API GraphQL
+## GraphQL API
 
-### Mes Permissions
+### My Permissions
 
 ```graphql
 query MyPermissions {
   my_permissions {
-    permissions # Liste des permissions Django
-    roles # Liste des rôles assignés
+    permissions # List of Django permissions
+    roles # List of assigned roles
     is_superuser
     is_staff
   }
 }
 ```
 
-### Vérifier une Permission
+### Check a Permission
 
 ```graphql
 query CheckPermission {
@@ -532,28 +532,28 @@ query CheckPermission {
 
 ---
 
-## Exemples Complets
+## Complete Examples
 
-### Système de Gestion de Contenu
+### Content Management System
 
 ```python
 class Article(models.Model):
     """
-    Modèle Article avec workflow de publication.
+    Article Model with publication workflow.
     """
-    title = models.CharField("Titre", max_length=200)
-    content = models.TextField("Contenu")
+    title = models.CharField("Title", max_length=200)
+    content = models.TextField("Content")
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    status = models.CharField("Statut", max_length=20, default="draft")
+    status = models.CharField("Status", max_length=20, default="draft")
 
     class GraphQLMeta:
-        # Seuls les auteurs et éditeurs peuvent voir les brouillons
+        # Only authors and editors can see drafts
         access = {
             "operations": {
                 "list": {
-                    "roles": ["*"],  # Tout le monde
+                    "roles": ["*"],  # Everyone
                     "conditions": [
-                        # Ajoute automatiquement un filtre
+                        # Automatically adds a filter
                         {"or": [
                             {"status": "published"},
                             {"author": "current_user"},
@@ -562,7 +562,7 @@ class Article(models.Model):
                 },
                 "update": {
                     "roles": ["editor"],
-                    # OU l'auteur peut modifier ses propres articles
+                    # OR author can modify their own articles
                     "object_permission": "author",
                 },
             },
@@ -577,21 +577,21 @@ class Article(models.Model):
         }
 ```
 
-### API Multi-Tenant
+### Multi-Tenant API
 
 ```python
 class Project(TenantMixin, models.Model):
     """
-    Projet avec isolation par tenant.
+    Project with tenant isolation.
     """
-    name = models.CharField("Nom", max_length=100)
+    name = models.CharField("Name", max_length=100)
     budget = models.DecimalField("Budget", max_digits=12, decimal_places=2)
 
     class GraphQLMeta:
-        # Le tenant field est filtré automatiquement
+        # The tenant field is automatically filtered
         tenant_field = "organization"
 
-        # Permissions additionnelles par rôle dans le tenant
+        # Additional permissions by role within tenant
         access = {
             "operations": {
                 "update": {"roles": ["project_manager", "org_admin"]},
@@ -609,12 +609,12 @@ class Project(TenantMixin, models.Model):
 
 ---
 
-## Bonnes Pratiques
+## Best Practices
 
-### 1. Principe du Moindre Privilège
+### 1. Principle of Least Privilege
 
 ```python
-# ✅ Définissez des rôles granulaires
+# ✅ Define granular roles
 RoleDefinition(
     name="order_viewer",
     permissions=["store.view_order"],
@@ -626,26 +626,26 @@ RoleDefinition(
     parent_roles=["order_viewer"],
 )
 
-# ❌ Évitez les rôles trop larges
+# ❌ Avoid overly broad roles
 RoleDefinition(
     name="super_user",
-    permissions=["*"],  # Dangereux
+    permissions=["*"],  # Dangerous
 )
 ```
 
-### 2. Audit des Permissions
+### 2. Permission Audit
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
         "enable_permission_audit": True,
         "permission_audit_log_denies": True,
-        "permission_audit_log_all": False,  # True en dev uniquement
+        "permission_audit_log_all": False,  # True in dev only
     },
 }
 ```
 
-### 3. Tests de Permissions
+### 3. Permission Tests
 
 ```python
 from django.test import TestCase
@@ -664,15 +664,15 @@ class PermissionTests(TestCase):
         )
 ```
 
-### 4. Documentation des Rôles
+### 4. Role Documentation
 
-Documentez clairement les rôles et leurs permissions dans votre `meta.json` :
+Clearly document roles and their permissions in your `meta.json`:
 
 ```json
 {
   "roles": {
     "support_level_1": {
-      "description": "Support niveau 1: Lecture des tickets et clients.",
+      "description": "Level 1 support: Read tickets and customers.",
       "role_type": "functional",
       "permissions": ["support.view_ticket", "crm.view_customer"]
     }
@@ -682,9 +682,9 @@ Documentez clairement les rôles et leurs permissions dans votre `meta.json` :
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Authentification JWT](./authentication.md)
-- [Authentification Multi-Facteurs](./mfa.md)
+- [JWT Authentication](./authentication.md)
+- [Multi-Factor Authentication](./mfa.md)
 - [Audit & Logging](../extensions/audit.md)
-- [Configuration Complète](../graphql/configuration.md)
+- [Complete Configuration](../graphql/configuration.md)

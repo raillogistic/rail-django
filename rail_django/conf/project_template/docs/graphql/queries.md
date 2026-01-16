@@ -1,36 +1,36 @@
-# Requêtes GraphQL
+# GraphQL Queries
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django génère automatiquement des requêtes GraphQL pour chaque modèle Django. Ce guide couvre les différents types de requêtes, le filtrage avancé, la pagination et le tri.
+Rail Django automatically generates GraphQL queries for each Django model. This guide covers the different types of queries, advanced filtering, pagination, and sorting.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Types de Requêtes](#types-de-requêtes)
-2. [Requête Unique](#requête-unique)
-3. [Requête Liste](#requête-liste)
-4. [Filtrage Avancé](#filtrage-avancé)
+1. [Query Types](#query-types)
+2. [Single Query](#single-query)
+3. [List Query](#list-query)
+4. [Advanced Filtering](#advanced-filtering)
 5. [Pagination](#pagination)
-6. [Tri (Ordering)](#tri-ordering)
-7. [Groupement (Aggregation)](#groupement-aggregation)
+6. [Sorting (Ordering)](#sorting-ordering)
+7. [Grouping (Aggregation)](#grouping-aggregation)
 8. [GraphQLMeta - Configuration](#graphqlmeta---configuration)
 
 ---
 
-## Types de Requêtes
+## Query Types
 
-Pour chaque modèle, Rail Django génère :
+For each model, Rail Django generates:
 
-| Champ     | Format            | Description          |
-| --------- | ----------------- | -------------------- |
-| Single    | `<model>`         | Un seul objet par ID |
-| List      | `<model>s`        | Liste avec filtres   |
-| Paginated | `<model>s_pages`  | Liste paginée        |
-| Grouped   | `<model>s_groups` | Agrégation           |
+| Field     | Format            | Description         |
+| --------- | ----------------- | ------------------- |
+| Single    | `<model>`         | Single object by ID |
+| List      | `<model>s`        | List with filters   |
+| Paginated | `<model>s_pages`  | Paginated list      |
+| Grouped   | `<model>s_groups` | Aggregation         |
 
-**Exemple pour le modèle `Product` :**
+**Example for the `Product` model:**
 
 ```graphql
 type Query {
@@ -52,9 +52,9 @@ type Query {
 
 ---
 
-## Requête Unique
+## Single Query
 
-### Par ID
+### By ID
 
 ```graphql
 query GetProduct($id: ID!) {
@@ -71,9 +71,9 @@ query GetProduct($id: ID!) {
 }
 ```
 
-### Par Autre Champ
+### By Other Field
 
-Si configuré via `additional_lookup_fields` :
+If configured via `additional_lookup_fields`:
 
 ```graphql
 query GetProductBySku($sku: String!) {
@@ -84,7 +84,7 @@ query GetProductBySku($sku: String!) {
 }
 ```
 
-Configuration :
+Configuration:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -98,9 +98,9 @@ RAIL_DJANGO_GRAPHQL = {
 
 ---
 
-## Requête Liste
+## List Query
 
-### Basique
+### Basic
 
 ```graphql
 query ListProducts {
@@ -112,7 +112,7 @@ query ListProducts {
 }
 ```
 
-### Avec Limite
+### With Limit
 
 ```graphql
 query ListProducts {
@@ -123,7 +123,7 @@ query ListProducts {
 }
 ```
 
-### Avec Relations
+### With Relationships
 
 ```graphql
 query ListProducts {
@@ -143,9 +143,9 @@ query ListProducts {
 
 ---
 
-## Filtrage Avancé
+## Advanced Filtering
 
-### Filtres Simples
+### Simple Filters
 
 ```graphql
 query FilteredProducts {
@@ -163,24 +163,24 @@ query FilteredProducts {
 }
 ```
 
-### Opérateurs Disponibles
+### Available Operators
 
-| Opérateur    | Description                   | Exemple                             |
-| ------------ | ----------------------------- | ----------------------------------- |
-| `exact`      | Égalité exacte                | `status__exact: "active"`           |
-| `iexact`     | Égalité insensible à la casse | `name__iexact: "product"`           |
-| `contains`   | Contient (sensible)           | `name__contains: "Pro"`             |
-| `icontains`  | Contient (insensible)         | `name__icontains: "pro"`            |
-| `startswith` | Commence par                  | `sku__startswith: "PRD"`            |
-| `endswith`   | Finit par                     | `email__endswith: ".com"`           |
-| `in`         | Dans une liste                | `status__in: ["active", "pending"]` |
-| `gt`, `gte`  | Plus grand (ou égal)          | `price__gt: 100`                    |
-| `lt`, `lte`  | Plus petit (ou égal)          | `price__lt: 500`                    |
-| `range`      | Entre deux valeurs            | `price__range: [100, 500]`          |
-| `isnull`     | Est null                      | `deleted_at__isnull: true`          |
-| `date`       | Partie date                   | `created_at__date: "2026-01-16"`    |
+| Operator     | Description                 | Example                             |
+| ------------ | --------------------------- | ----------------------------------- |
+| `exact`      | Exact equality              | `status__exact: "active"`           |
+| `iexact`     | Case-insensitive equality   | `name__iexact: "product"`           |
+| `contains`   | Contains (case-sensitive)   | `name__contains: "Pro"`             |
+| `icontains`  | Contains (case-insensitive) | `name__icontains: "pro"`            |
+| `startswith` | Starts with                 | `sku__startswith: "PRD"`            |
+| `endswith`   | Ends with                   | `email__endswith: ".com"`           |
+| `in`         | In a list                   | `status__in: ["active", "pending"]` |
+| `gt`, `gte`  | Greater than (or equal)     | `price__gt: 100`                    |
+| `lt`, `lte`  | Less than (or equal)        | `price__lt: 500`                    |
+| `range`      | Between two values          | `price__range: [100, 500]`          |
+| `isnull`     | Is null                     | `deleted_at__isnull: true`          |
+| `date`       | Date part                   | `created_at__date: "2026-01-16"`    |
 
-### Filtres Complexes (AND/OR/NOT)
+### Complex Filters (AND/OR/NOT)
 
 ```graphql
 query ComplexFilter {
@@ -200,14 +200,14 @@ query ComplexFilter {
 }
 ```
 
-### Filtres sur Relations
+### Relationship Filters
 
 ```graphql
 query ProductsByCategory {
   products(
     filters: {
       category__name__icontains: "Electronics"
-      supplier__country__exact: "FR"
+      supplier__country__exact: "US"
     }
   ) {
     id
@@ -222,15 +222,15 @@ query ProductsByCategory {
 }
 ```
 
-### Filtres Temporels Prédéfinis
+### Predefined Temporal Filters
 
 ```graphql
 query RecentProducts {
   products(
     filters: {
       created_at_today: true
-      # Ou: created_at_this_week: true
-      # Ou: created_at_past_month: true
+      # Or: created_at_this_week: true
+      # Or: created_at_past_month: true
     }
   ) {
     id
@@ -244,7 +244,7 @@ query RecentProducts {
 
 ## Pagination
 
-### Offset Pagination (Défaut)
+### Offset Pagination (Default)
 
 ```graphql
 query PaginatedProducts($offset: Int!, $limit: Int!) {
@@ -255,7 +255,7 @@ query PaginatedProducts($offset: Int!, $limit: Int!) {
 }
 ```
 
-Variables : `{ "offset": 0, "limit": 20 }`
+Variables: `{ "offset": 0, "limit": 20 }`
 
 ### Page-Based Pagination
 
@@ -278,7 +278,7 @@ query PagedProducts($page: Int!, $perPage: Int!) {
 }
 ```
 
-### Configuration de Pagination
+### Pagination Configuration
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -291,7 +291,7 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-### Relay-Style (Optionnel)
+### Relay-Style (Optional)
 
 ```python
 "query_settings": {
@@ -319,9 +319,9 @@ query RelayProducts($first: Int!, $after: String) {
 
 ---
 
-## Tri (Ordering)
+## Sorting (Ordering)
 
-### Tri Simple
+### Simple Sort
 
 ```graphql
 query OrderedProducts {
@@ -332,9 +332,9 @@ query OrderedProducts {
 }
 ```
 
-### Tri Descendant
+### Descending Sort
 
-Préfixez avec `-` :
+Prefix with `-`:
 
 ```graphql
 query OrderedProducts {
@@ -346,7 +346,7 @@ query OrderedProducts {
 }
 ```
 
-### Tri Multiple
+### Multiple Sort
 
 ```graphql
 query OrderedProducts {
@@ -358,7 +358,7 @@ query OrderedProducts {
 }
 ```
 
-### Tri sur Relations
+### Relationship Sort
 
 ```graphql
 query OrderedProducts {
@@ -372,7 +372,7 @@ query OrderedProducts {
 }
 ```
 
-### Configuration du Tri
+### Sort Configuration
 
 ```python
 class Product(models.Model):
@@ -385,21 +385,21 @@ class Product(models.Model):
 
 ---
 
-## Groupement (Aggregation)
+## Grouping (Aggregation)
 
-### Comptage par Groupe
+### Count by Group
 
 ```graphql
 query ProductsByCategory {
   products_groups(group_by: "category__name", order_by: "-count", limit: 10) {
-    key # Valeur du groupe
-    label # Label affiché
-    count # Nombre d'éléments
+    key # Group value
+    label # Display label
+    count # Number of items
   }
 }
 ```
 
-**Résultat :**
+**Result:**
 
 ```json
 {
@@ -413,7 +413,7 @@ query ProductsByCategory {
 }
 ```
 
-### Avec Filtres
+### With Filters
 
 ```graphql
 query ActiveProductsByCategory {
@@ -442,7 +442,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## GraphQLMeta - Configuration
 
-### Structure Complète
+### Complete Structure
 
 ```python
 from django.db import models
@@ -450,34 +450,34 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 
 class Product(models.Model):
     """
-    Modèle Produit avec configuration GraphQL complète.
+    Product Model with complete GraphQL configuration.
 
     Attributes:
-        name: Nom du produit.
-        sku: Code article unique.
-        price: Prix unitaire HT.
-        category: Catégorie du produit.
-        is_active: Statut d'activation.
+        name: Product name.
+        sku: Unique article code.
+        price: Unit price (excluding tax).
+        category: Product category.
+        is_active: Activation status.
     """
-    name = models.CharField("Nom", max_length=200)
-    sku = models.CharField("Référence", max_length=50, unique=True)
-    price = models.DecimalField("Prix", max_digits=10, decimal_places=2)
+    name = models.CharField("Name", max_length=200)
+    sku = models.CharField("SKU", max_length=50, unique=True)
+    price = models.DecimalField("Price", max_digits=10, decimal_places=2)
     category = models.ForeignKey("Category", on_delete=models.CASCADE)
-    is_active = models.BooleanField("Actif", default=True)
-    internal_notes = models.TextField("Notes internes", blank=True)
+    is_active = models.BooleanField("Active", default=True)
+    internal_notes = models.TextField("Internal Notes", blank=True)
 
     class GraphQLMeta(GraphQLMetaConfig):
-        # ─── Exposition des Champs ───
+        # ─── Field Exposure ───
         fields = GraphQLMetaConfig.Fields(
-            exclude=["internal_notes"],  # Jamais exposé
-            read_only=["sku"],           # Non modifiable via mutation
+            exclude=["internal_notes"],  # Never exposed
+            read_only=["sku"],           # Not modifiable via mutation
         )
 
-        # ─── Filtrage ───
+        # ─── Filtering ───
         filtering = GraphQLMetaConfig.Filtering(
-            # Champs pour la recherche rapide
+            # Fields for quick search
             quick=["name", "sku"],
-            # Configuration détaillée par champ
+            # Detailed configuration by field
             fields={
                 "name": GraphQLMetaConfig.FilterField(
                     lookups=["exact", "icontains", "istartswith"],
@@ -494,16 +494,16 @@ class Product(models.Model):
             },
         )
 
-        # ─── Tri ───
+        # ─── Sorting ───
         ordering = GraphQLMetaConfig.Ordering(
             allowed=["name", "price", "created_at", "category__name"],
             default=["-created_at"],
         )
 ```
 
-### Filtering Quick
+### Quick Filtering
 
-La configuration `quick` active la recherche textuelle rapide :
+The `quick` configuration enables fast text search:
 
 ```graphql
 query QuickSearch {
@@ -514,12 +514,12 @@ query QuickSearch {
 }
 ```
 
-Recherche dans tous les champs `quick` avec `icontains`.
+Searches all `quick` fields with `icontains`.
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Mutations](./mutations.md) - Opérations CRUD
-- [Configuration](./configuration.md) - Paramètres query_settings
-- [Permissions](../security/permissions.md) - Contrôle d'accès aux queries
+- [Mutations](./mutations.md) - CRUD operations
+- [Configuration](./configuration.md) - query_settings parameters
+- [Permissions](../security/permissions.md) - Query access control

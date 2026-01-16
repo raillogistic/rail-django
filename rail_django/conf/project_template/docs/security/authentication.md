@@ -1,79 +1,79 @@
-# Authentification JWT
+# JWT Authentication
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django intègre un système d'authentification JWT (JSON Web Token) complet pour sécuriser vos APIs GraphQL. Ce guide couvre la configuration, les mutations d'authentification, et les bonnes pratiques.
+Rail Django integrates a complete JWT (JSON Web Token) authentication system to secure your GraphQL APIs. This guide covers configuration, authentication mutations, and best practices.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
 1. [Configuration](#configuration)
-2. [Mutations d'Authentification](#mutations-dauthentification)
-3. [Utilisation des Tokens](#utilisation-des-tokens)
-4. [Authentification par Cookie](#authentification-par-cookie)
-5. [Variables d'Environnement](#variables-denvironnement)
-6. [Bonnes Pratiques](#bonnes-pratiques)
+2. [Authentication Mutations](#authentication-mutations)
+3. [Using Tokens](#using-tokens)
+4. [Cookie Authentication](#cookie-authentication)
+5. [Environment Variables](#environment-variables)
+6. [Best Practices](#best-practices)
 
 ---
 
 ## Configuration
 
-### Paramètres Principaux
+### Main Settings
 
 ```python
 # root/settings/base.py
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
-        # Requiert un JWT valide pour toutes les requêtes
+        # Requires a valid JWT for all requests
         "authentication_required": True,
-        # Désactive les mutations login/register si False
+        # Disables login/register mutations if False
         "disable_security_mutations": False,
     },
     "security_settings": {
-        # Active les vérifications d'authentification
+        # Enables authentication checks
         "enable_authentication": True,
-        # Timeout de session en minutes
+        # Session timeout in minutes
         "session_timeout_minutes": 30,
     },
 }
 ```
 
-### Configuration JWT
+### JWT Configuration
 
 ```python
-# Durée de vie des tokens
+# Token lifetime
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(minutes=30)
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)
 
-# Algorithme de signature
+# Signing algorithm
 JWT_ALGORITHM = "HS256"
 
-# Authentification par cookie (optionnel)
+# Cookie authentication (optional)
 JWT_ALLOW_COOKIE_AUTH = False
 JWT_ENFORCE_CSRF = True
 JWT_COOKIE_NAME = "access_token"
-JWT_COOKIE_SECURE = True  # HTTPS uniquement
+JWT_COOKIE_SECURE = True  # HTTPS only
 JWT_COOKIE_HTTPONLY = True
 JWT_COOKIE_SAMESITE = "Lax"
 ```
 
 ---
 
-## Mutations d'Authentification
+## Authentication Mutations
 
-### Connexion (Login)
+### Login
 
-Authentifie un utilisateur et retourne les tokens d'accès.
+Authenticates a user and returns access tokens.
 
 ```graphql
 mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {
     ok
-    token # Token d'accès JWT
-    refresh_token # Token de rafraîchissement
-    expires_at # Date d'expiration du token
-    errors # Liste des erreurs éventuelles
+    token # JWT access token
+    refresh_token # Refresh token
+    expires_at # Token expiration date
+    errors # List of any errors
     user {
       id
       username
@@ -84,16 +84,16 @@ mutation Login($username: String!, $password: String!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
   "username": "john.doe",
-  "password": "mon_mot_de_passe_secret"
+  "password": "my_secret_password"
 }
 ```
 
-**Réponse Succès :**
+**Success Response:**
 
 ```json
 {
@@ -115,7 +115,7 @@ mutation Login($username: String!, $password: String!) {
 }
 ```
 
-**Réponse Erreur :**
+**Error Response:**
 
 ```json
 {
@@ -123,29 +123,29 @@ mutation Login($username: String!, $password: String!) {
     "login": {
       "ok": false,
       "token": null,
-      "errors": ["Identifiants invalides"]
+      "errors": ["Invalid credentials"]
     }
   }
 }
 ```
 
-### Rafraîchissement du Token
+### Token Refresh
 
-Obtient un nouveau token d'accès à partir du refresh token.
+Obtains a new access token from the refresh token.
 
 ```graphql
 mutation RefreshToken($refreshToken: String!) {
   refresh_token(refresh_token: $refreshToken) {
     ok
-    token # Nouveau token d'accès
-    refresh_token # Nouveau refresh token (rotation optionnelle)
+    token # New access token
+    refresh_token # New refresh token (optional rotation)
     expires_at
     errors
   }
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -153,9 +153,9 @@ mutation RefreshToken($refreshToken: String!) {
 }
 ```
 
-### Déconnexion (Logout)
+### Logout
 
-Invalide le token actuel (si la liste noire est activée).
+Invalidates the current token (if blacklist is enabled).
 
 ```graphql
 mutation Logout {
@@ -165,9 +165,9 @@ mutation Logout {
 }
 ```
 
-### Inscription (Register)
+### Register
 
-Crée un nouveau compte utilisateur.
+Creates a new user account.
 
 ```graphql
 mutation Register($input: RegisterInput!) {
@@ -184,22 +184,22 @@ mutation Register($input: RegisterInput!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
   "input": {
-    "username": "nouveau_user",
-    "email": "nouveau@example.com",
-    "password": "MotDePasse123!",
-    "password_confirm": "MotDePasse123!"
+    "username": "new_user",
+    "email": "new@example.com",
+    "password": "Password123!",
+    "password_confirm": "Password123!"
   }
 }
 ```
 
-### Utilisateur Courant (Me)
+### Current User (Me)
 
-Récupère les informations de l'utilisateur authentifié.
+Retrieves information about the authenticated user.
 
 ```graphql
 query Me {
@@ -211,7 +211,7 @@ query Me {
     last_name
     is_staff
     is_superuser
-    permissions # Liste des permissions Django
+    permissions # List of Django permissions
     groups {
       id
       name
@@ -222,11 +222,11 @@ query Me {
 
 ---
 
-## Utilisation des Tokens
+## Using Tokens
 
-### En-tête Authorization
+### Authorization Header
 
-Ajoutez le token JWT dans l'en-tête `Authorization` de chaque requête :
+Add the JWT token to the `Authorization` header of each request:
 
 ```http
 POST /graphql/gql/ HTTP/1.1
@@ -239,7 +239,7 @@ Content-Type: application/json
 }
 ```
 
-### Exemple JavaScript (Fetch)
+### JavaScript Example (Fetch)
 
 ```javascript
 const token = localStorage.getItem("access_token");
@@ -262,7 +262,7 @@ const response = await fetch("/graphql/gql/", {
 const data = await response.json();
 ```
 
-### Exemple Apollo Client
+### Apollo Client Example
 
 ```typescript
 import { ApolloClient, InMemoryCache, HttpLink } from "@apollo/client";
@@ -286,9 +286,9 @@ export const client = new ApolloClient({
 });
 ```
 
-### Gestion de l'Expiration
+### Expiration Handling
 
-Implémentez un intercepteur pour rafraîchir automatiquement les tokens expirés :
+Implement an interceptor to automatically refresh expired tokens:
 
 ```typescript
 import { onError } from "@apollo/client/link/error";
@@ -297,11 +297,11 @@ const errorLink = onError(({ graphQLErrors, operation, forward }) => {
   if (graphQLErrors) {
     for (const err of graphQLErrors) {
       if (err.message.includes("Signature has expired")) {
-        // Rafraîchir le token
+        // Refresh the token
         const refreshToken = localStorage.getItem("refresh_token");
-        // ... appeler refresh_token mutation
-        // ... mettre à jour le token stocké
-        // ... réessayer la requête originale
+        // ... call refresh_token mutation
+        // ... update stored token
+        // ... retry original request
         return forward(operation);
       }
     }
@@ -311,34 +311,34 @@ const errorLink = onError(({ graphQLErrors, operation, forward }) => {
 
 ---
 
-## Authentification par Cookie
+## Cookie Authentication
 
-Pour les applications web, vous pouvez utiliser des cookies HTTP-only au lieu des en-têtes Authorization.
+For web applications, you can use HTTP-only cookies instead of Authorization headers.
 
 ### Activation
 
 ```python
 # settings.py
 JWT_ALLOW_COOKIE_AUTH = True
-JWT_ENFORCE_CSRF = True  # Recommandé pour les cookies
+JWT_ENFORCE_CSRF = True  # Recommended for cookies
 JWT_COOKIE_NAME = "access_token"
-JWT_COOKIE_SECURE = True  # Uniquement HTTPS
+JWT_COOKIE_SECURE = True  # HTTPS only
 JWT_COOKIE_HTTPONLY = True  # Inaccessible via JavaScript
-JWT_COOKIE_SAMESITE = "Lax"  # Protection CSRF basique
+JWT_COOKIE_SAMESITE = "Lax"  # Basic CSRF protection
 ```
 
-### Fonctionnement
+### How It Works
 
-1. La mutation `login` définit le cookie automatiquement.
-2. Le navigateur envoie le cookie avec chaque requête.
-3. CSRF protection s'applique aux mutations.
+1. The `login` mutation sets the cookie automatically.
+2. The browser sends the cookie with each request.
+3. CSRF protection applies to mutations.
 
-### Protection CSRF
+### CSRF Protection
 
-Lorsque `JWT_ENFORCE_CSRF=True`, incluez le token CSRF dans les requêtes mutation :
+When `JWT_ENFORCE_CSRF=True`, include the CSRF token in mutation requests:
 
 ```javascript
-// Lire le token CSRF depuis le cookie Django
+// Read CSRF token from Django cookie
 function getCsrfToken() {
   return document.cookie
     .split("; ")
@@ -348,7 +348,7 @@ function getCsrfToken() {
 
 const response = await fetch("/graphql/gql/", {
   method: "POST",
-  credentials: "include", // Envoie les cookies
+  credentials: "include", // Sends cookies
   headers: {
     "Content-Type": "application/json",
     "X-CSRFToken": getCsrfToken(),
@@ -359,54 +359,54 @@ const response = await fetch("/graphql/gql/", {
 
 ---
 
-## Variables d'Environnement
+## Environment Variables
 
-| Variable                     | Description                        | Défaut              |
-| ---------------------------- | ---------------------------------- | ------------------- |
-| `JWT_SECRET_KEY`             | Clé secrète pour signer les tokens | `DJANGO_SECRET_KEY` |
-| `JWT_ACCESS_TOKEN_LIFETIME`  | Durée de vie du token d'accès      | `30 minutes`        |
-| `JWT_REFRESH_TOKEN_LIFETIME` | Durée de vie du refresh token      | `7 jours`           |
-| `JWT_ALLOW_COOKIE_AUTH`      | Active l'auth par cookie           | `False`             |
-| `JWT_ENFORCE_CSRF`           | Applique CSRF pour cookies         | `True`              |
+| Variable                     | Description                   | Default             |
+| ---------------------------- | ----------------------------- | ------------------- |
+| `JWT_SECRET_KEY`             | Secret key for signing tokens | `DJANGO_SECRET_KEY` |
+| `JWT_ACCESS_TOKEN_LIFETIME`  | Access token lifetime         | `30 minutes`        |
+| `JWT_REFRESH_TOKEN_LIFETIME` | Refresh token lifetime        | `7 days`            |
+| `JWT_ALLOW_COOKIE_AUTH`      | Enables cookie authentication | `False`             |
+| `JWT_ENFORCE_CSRF`           | Enforces CSRF for cookies     | `True`              |
 
 ---
 
-## Bonnes Pratiques
+## Best Practices
 
-### 1. Sécurité des Tokens
+### 1. Token Security
 
 ```python
-# ✅ Utilisez une clé secrète forte et unique
+# ✅ Use a strong and unique secret key
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 
-# ✅ Durée de vie courte pour les tokens d'accès
+# ✅ Short lifetime for access tokens
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(minutes=15)
 
-# ✅ Rotation des refresh tokens
+# ✅ Refresh token rotation
 JWT_ROTATE_REFRESH_TOKENS = True
 JWT_BLACKLIST_AFTER_ROTATION = True
 ```
 
-### 2. Stockage Côté Client
+### 2. Client-Side Storage
 
 ```javascript
-// ✅ Pour applications SPA : LocalStorage avec refresh token flow
+// ✅ For SPA applications: LocalStorage with refresh token flow
 localStorage.setItem("access_token", token);
 
-// ✅ Pour applications web classiques : Cookies HTTP-only
-// (géré automatiquement par le serveur)
+// ✅ For classic web applications: HTTP-only cookies
+// (handled automatically by the server)
 
-// ❌ Évitez de stocker des tokens sensibles dans SessionStorage
-// ❌ N'exposez jamais le refresh token dans l'URL
+// ❌ Avoid storing sensitive tokens in SessionStorage
+// ❌ Never expose the refresh token in the URL
 ```
 
-### 3. Gestion des Erreurs
+### 3. Error Handling
 
-Gérez les erreurs d'authentification de manière cohérente :
+Handle authentication errors consistently:
 
 ```python
-# Les erreurs retournées incluent :
-# - "Identifiants invalides"
+# Returned errors include:
+# - "Invalid credentials"
 # - "Signature has expired"
 # - "Token is invalid"
 # - "User account is disabled"
@@ -414,7 +414,7 @@ Gérez les erreurs d'authentification de manière cohérente :
 
 ### 4. Audit
 
-Activez le logging des événements d'authentification :
+Enable authentication event logging:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -425,37 +425,37 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-📖 Voir [Audit & Logging](../extensions/audit.md) pour plus de détails.
+📖 See [Audit & Logging](../extensions/audit.md) for more details.
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-### Erreur : "Signature has expired"
+### Error: "Signature has expired"
 
-**Cause :** Le token JWT a expiré.
+**Cause:** The JWT token has expired.
 
-**Solution :** Utilisez la mutation `refresh_token` pour obtenir un nouveau token d'accès.
+**Solution:** Use the `refresh_token` mutation to obtain a new access token.
 
-### Erreur : "Token is invalid"
+### Error: "Token is invalid"
 
-**Cause :** Token malformé, modifié, ou clé secrète différente.
+**Cause:** Malformed token, modified, or different secret key.
 
-**Solution :**
+**Solution:**
 
-1. Vérifiez que `JWT_SECRET_KEY` est cohérente entre environnements.
-2. Demandez à l'utilisateur de se reconnecter.
+1. Verify that `JWT_SECRET_KEY` is consistent across environments.
+2. Ask the user to log in again.
 
-### Erreur : "Authentication required"
+### Error: "Authentication required"
 
-**Cause :** Requête sans token vers un endpoint protégé.
+**Cause:** Request without token to a protected endpoint.
 
-**Solution :** Ajoutez l'en-tête `Authorization: Bearer <token>`.
+**Solution:** Add the `Authorization: Bearer <token>` header.
 
 ---
 
-## Voir Aussi
+## See Also
 
 - [Permissions & RBAC](./permissions.md)
-- [Authentification Multi-Facteurs](./mfa.md)
+- [Multi-Factor Authentication](./mfa.md)
 - [Audit & Logging](../extensions/audit.md)

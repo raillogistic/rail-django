@@ -1,32 +1,32 @@
 # Installation
 
-## Prérequis
+## Prerequisites
 
-- **Python** 3.11 ou supérieur
+- **Python** 3.11 or higher
 - **pip** (Python Package Installer)
-- **PostgreSQL** (recommandé pour la production)
-- **Redis** (optionnel, pour le cache et rate limiting)
-- **Docker & Docker Compose** (optionnel, pour le développement containerisé)
+- **PostgreSQL** (recommended for production)
+- **Redis** (optional, for cache and rate limiting)
+- **Docker & Docker Compose** (optional, for containerized development)
 
 ---
 
-## Installation du Package
+## Package Installation
 
-### Depuis PyPI
+### From PyPI
 
 ```bash
 pip install rail-django
 ```
 
-### Depuis GitHub
+### From GitHub
 
 ```bash
 pip install git+https://github.com/raillogistic/rail-django.git
 ```
 
-### Installation en Mode Développement
+### Development Mode Installation
 
-Pour contribuer au framework :
+To contribute to the framework:
 
 ```bash
 git clone https://github.com/raillogistic/rail-django.git
@@ -36,49 +36,49 @@ pip install -e .
 
 ---
 
-## Création d'un Nouveau Projet
+## Creating a New Project
 
-### Utiliser rail-admin
+### Using rail-admin
 
-Le CLI `rail-admin` crée automatiquement la structure de projet recommandée :
+The `rail-admin` CLI automatically creates the recommended project structure:
 
 ```bash
-rail-admin startproject mon_projet
-cd mon_projet
+rail-admin startproject my_project
+cd my_project
 ```
 
-### Structure Créée
+### Created Structure
 
 ```
-mon_projet/
-├── manage.py           # Point d'entrée Django
-├── root/               # Configuration principale
+my_project/
+├── manage.py           # Django entry point
+├── root/               # Main configuration
 │   ├── __init__.py
-│   ├── settings/       # Paramètres (base, dev, prod)
+│   ├── settings/       # Settings (base, dev, prod)
 │   │   ├── __init__.py
 │   │   ├── base.py
 │   │   ├── dev.py
 │   │   └── production.py
-│   ├── urls.py         # Routage global
+│   ├── urls.py         # Global routing
 │   ├── wsgi.py         # WSGI (production)
 │   ├── asgi.py         # ASGI (WebSocket)
-│   └── webhooks.py     # Configuration webhooks
-├── apps/               # Vos applications Django
-├── requirements/       # Dépendances
+│   └── webhooks.py     # Webhook configuration
+├── apps/               # Your Django applications
+├── requirements/       # Dependencies
 │   ├── base.txt
 │   ├── dev.txt
 │   └── prod.txt
 ├── docs/               # Documentation
-├── deploy/             # Configuration déploiement
-├── .env.example        # Variables d'environnement
-└── Dockerfile          # Build Docker
+├── deploy/             # Deployment configuration
+├── .env.example        # Environment variables
+└── Dockerfile          # Docker build
 ```
 
 ---
 
-## Installation des Dépendances
+## Installing Dependencies
 
-### Développement
+### Development
 
 ```bash
 pip install -r requirements/dev.txt
@@ -92,66 +92,66 @@ pip install -r requirements/prod.txt
 
 ---
 
-## Configuration de la Base de Données
+## Database Configuration
 
-### SQLite (Développement)
+### SQLite (Development)
 
-Par défaut, le projet utilise SQLite (aucune configuration nécessaire).
+By default, the project uses SQLite (no configuration required).
 
 ### PostgreSQL (Production)
 
-1. Créez la base de données :
+1. Create the database:
 
 ```bash
-createdb mon_projet_db
+createdb my_project_db
 ```
 
-2. Configurez la variable d'environnement :
+2. Configure the environment variable:
 
 ```bash
-export DATABASE_URL=postgres://user:password@localhost:5432/mon_projet_db
+export DATABASE_URL=postgres://user:password@localhost:5432/my_project_db
 ```
 
-3. Ou modifiez `.env` :
+3. Or modify `.env`:
 
 ```ini
-DATABASE_URL=postgres://user:password@localhost:5432/mon_projet_db
+DATABASE_URL=postgres://user:password@localhost:5432/my_project_db
 ```
 
 ---
 
-## Initialisation
+## Initialization
 
-### Appliquer les Migrations
+### Apply Migrations
 
 ```bash
 python manage.py migrate
 ```
 
-### Créer un Superutilisateur
+### Create a Superuser
 
 ```bash
 python manage.py createsuperuser
 ```
 
-### Démarrer le Serveur
+### Start the Server
 
 ```bash
 python manage.py runserver
 ```
 
-Accédez à :
+Access:
 
-- **GraphiQL** : http://localhost:8000/graphql/graphiql/
-- **Admin Django** : http://localhost:8000/admin/
+- **GraphiQL**: http://localhost:8000/graphql/graphiql/
+- **Django Admin**: http://localhost:8000/admin/
 
 ---
 
-## Vérification de l'Installation
+## Verifying Installation
 
-### Test GraphQL
+### GraphQL Test
 
-Ouvrez GraphiQL et exécutez :
+Open GraphiQL and execute:
 
 ```graphql
 query {
@@ -163,11 +163,11 @@ query {
 }
 ```
 
-### Test d'Authentification
+### Authentication Test
 
 ```graphql
 mutation {
-  login(username: "admin", password: "votre_mot_de_passe") {
+  login(username: "admin", password: "your_password") {
     ok
     token
     user {
@@ -179,41 +179,41 @@ mutation {
 
 ---
 
-## Prochaines Étapes
+## Next Steps
 
-- [Démarrage Rapide](./quickstart.md) - Créer votre première API
-- [Configuration](../graphql/configuration.md) - Personnaliser le framework
+- [Quickstart](./quickstart.md) - Create your first API
+- [Configuration](../graphql/configuration.md) - Customize the framework
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-### Erreur : "rail-admin command not found"
+### Error: "rail-admin command not found"
 
-Assurez-vous que le package est installé et que le répertoire Scripts/bin est dans votre PATH.
+Make sure the package is installed and that the Scripts/bin directory is in your PATH.
 
 ```bash
 pip show rail-django
-# Vérifiez "Location" et ajoutez bin/ à votre PATH
+# Check "Location" and add bin/ to your PATH
 ```
 
-### Erreur : "No module named 'rail_django'"
+### Error: "No module named 'rail_django'"
 
-Vérifiez l'installation :
+Verify the installation:
 
 ```bash
 pip list | grep rail
 ```
 
-Si absent, réinstallez :
+If absent, reinstall:
 
 ```bash
 pip install rail-django
 ```
 
-### Erreur de migration
+### Migration Error
 
-Assurez-vous que la base de données est accessible et que `DATABASE_URL` est correcte.
+Make sure the database is accessible and that `DATABASE_URL` is correct.
 
 ```bash
 python manage.py dbshell

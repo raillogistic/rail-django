@@ -1,114 +1,114 @@
-# Rail Django - Guide d'Utilisation Complet
+# Rail Django - Complete Usage Guide
 
-Bienvenue dans la documentation de **Rail Django**, le framework de production pour construire des APIs GraphQL d'entreprise avec Django.
-
----
-
-## 📖 Présentation
-
-Rail Django simplifie le développement d'APIs GraphQL en automatisant la génération de schémas, les mutations CRUD, et en intégrant des fonctionnalités d'entreprise prêtes à l'emploi.
-
-### Philosophie
-
-1. **Convention plutôt que Configuration** - Définissez un modèle Django, obtenez une API fonctionnelle immédiatement.
-2. **Sécurité par Défaut** - Permissions, limites de profondeur et validation des entrées activées par défaut.
-3. **Batteries Incluses** - Audit, exports, webhooks et moniteur de santé intégrés.
+Welcome to the **Rail Django** documentation, the production framework for building enterprise GraphQL APIs with Django.
 
 ---
 
-## 📑 Table des Matières
+## 📖 Overview
 
-### Démarrage Rapide
+Rail Django simplifies GraphQL API development by automating schema generation, CRUD mutations, and integrating enterprise-ready features out of the box.
 
-| Guide                                               | Description                             |
-| --------------------------------------------------- | --------------------------------------- |
-| [Installation](./getting-started/installation.md)   | Prérequis et installation du framework  |
-| [Démarrage Rapide](./getting-started/quickstart.md) | Créer votre premier projet en 5 minutes |
+### Philosophy
 
-### Sécurité
+1. **Convention over Configuration** - Define a Django model, get a working API immediately.
+2. **Security by Default** - Permissions, depth limits, and input validation enabled by default.
+3. **Batteries Included** - Built-in audit, exports, webhooks, and health monitoring.
 
-| Guide                                                | Description                                                |
-| ---------------------------------------------------- | ---------------------------------------------------------- |
-| [Authentification JWT](./security/authentication.md) | Connexion, tokens, cookies et sessions                     |
-| [Permissions & RBAC](./security/permissions.md)      | Contrôle d'accès basé sur les rôles, permissions par champ |
-| [Authentification Multi-Facteurs](./security/mfa.md) | Configuration TOTP et sécurisation des comptes             |
+---
+
+## 📑 Table of Contents
+
+### Getting Started
+
+| Guide                                             | Description                              |
+| ------------------------------------------------- | ---------------------------------------- |
+| [Installation](./getting-started/installation.md) | Prerequisites and framework installation |
+| [Quickstart](./getting-started/quickstart.md)     | Create your first project in 5 minutes   |
+
+### Security
+
+| Guide                                              | Description                                  |
+| -------------------------------------------------- | -------------------------------------------- |
+| [JWT Authentication](./security/authentication.md) | Login, tokens, cookies, and sessions         |
+| [Permissions & RBAC](./security/permissions.md)    | Role-based access control, field permissions |
+| [Multi-Factor Authentication](./security/mfa.md)   | TOTP configuration and account security      |
 
 ### Extensions
 
-| Guide                                          | Description                                        |
-| ---------------------------------------------- | -------------------------------------------------- |
-| [Webhooks](./extensions/webhooks.md)           | Envoi d'événements vers des systèmes externes      |
-| [Subscriptions](./extensions/subscriptions.md) | Temps réel avec GraphQL et WebSocket               |
-| [Audit & Logging](./extensions/audit.md)       | Traçabilité des actions et événements de sécurité  |
-| [Export de Données](./extensions/exporting.md) | Export Excel/CSV avec gardes-fous                  |
-| [Reporting & BI](./extensions/reporting.md)    | Définir des datasets analytiques et visualisations |
-| [Génération PDF](./extensions/templating.md)   | Templates HTML vers PDF                            |
-| [Monitoring Santé](./extensions/health.md)     | Points de terminaison de santé pour orchestration  |
-| [Métadonnées Schema](./extensions/metadata.md) | Introspection de schéma pour interfaces dynamiques |
-| [Observabilité](./extensions/observability.md) | Sentry, OpenTelemetry et métriques Prometheus      |
+| Guide                                          | Description                                   |
+| ---------------------------------------------- | --------------------------------------------- |
+| [Webhooks](./extensions/webhooks.md)           | Send events to external systems               |
+| [Subscriptions](./extensions/subscriptions.md) | Real-time with GraphQL and WebSocket          |
+| [Audit & Logging](./extensions/audit.md)       | Action traceability and security events       |
+| [Data Export](./extensions/exporting.md)       | Excel/CSV export with safeguards              |
+| [Reporting & BI](./extensions/reporting.md)    | Define analytical datasets and visualizations |
+| [PDF Generation](./extensions/templating.md)   | HTML templates to PDF                         |
+| [Health Monitoring](./extensions/health.md)    | Health endpoints for orchestration            |
+| [Schema Metadata](./extensions/metadata.md)    | Schema introspection for dynamic interfaces   |
+| [Observability](./extensions/observability.md) | Sentry, OpenTelemetry, and Prometheus metrics |
 
 ### GraphQL
 
-| Guide                                       | Description                                                |
-| ------------------------------------------- | ---------------------------------------------------------- |
-| [Requêtes](./graphql/queries.md)            | Listes, filtres, pagination et tri                         |
-| [Mutations](./graphql/mutations.md)         | CRUD automatique, opérations bulk, méthodes personnalisées |
-| [Configuration](./graphql/configuration.md) | Référence complète des paramètres                          |
+| Guide                                       | Description                                     |
+| ------------------------------------------- | ----------------------------------------------- |
+| [Queries](./graphql/queries.md)             | Lists, filters, pagination, and sorting         |
+| [Mutations](./graphql/mutations.md)         | Automatic CRUD, bulk operations, custom methods |
+| [Configuration](./graphql/configuration.md) | Complete settings reference                     |
 
 ### Performance
 
-| Guide                                           | Description                                 |
-| ----------------------------------------------- | ------------------------------------------- |
-| [Optimisation](./performance/optimization.md)   | Prefetch, DataLoader, limites de complexité |
-| [Rate Limiting](./performance/rate-limiting.md) | Limitation de débit des requêtes            |
+| Guide                                           | Description                             |
+| ----------------------------------------------- | --------------------------------------- |
+| [Optimization](./performance/optimization.md)   | Prefetch, DataLoader, complexity limits |
+| [Rate Limiting](./performance/rate-limiting.md) | Request rate limiting                   |
 
-### Déploiement
+### Deployment
 
 | Guide                                    | Description                                  |
 | ---------------------------------------- | -------------------------------------------- |
-| [Production](./deployment/production.md) | Docker, checklist, HTTPS et bonnes pratiques |
+| [Production](./deployment/production.md) | Docker, checklist, HTTPS, and best practices |
 
 ---
 
-## 🚀 Démarrage Express
+## 🚀 Quick Start
 
 ```bash
 # Installation
 pip install rail-django
 
-# Création du projet
-rail-admin startproject mon_projet
-cd mon_projet
+# Create project
+rail-admin startproject my_project
+cd my_project
 
-# Initialisation
+# Initialization
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Accédez au playground GraphiQL : `http://localhost:8000/graphql/graphiql/`
+Access the GraphiQL playground: `http://localhost:8000/graphql/graphiql/`
 
 ---
 
-## 🏗️ Structure du Projet
+## 🏗️ Project Structure
 
 ```
-mon_projet/
-├── manage.py           # Point d'entrée Django
-├── root/               # Configuration principale
-│   ├── settings/       # Paramètres (base, dev, prod)
-│   ├── urls.py         # Routage global
+my_project/
+├── manage.py           # Django entry point
+├── root/               # Main configuration
+│   ├── settings/       # Settings (base, dev, prod)
+│   ├── urls.py         # Global routing
 │   └── asgi.py         # WebSocket support
-├── apps/               # Vos applications Django
-├── requirements/       # Dépendances (base, dev, prod)
-└── docs/               # Cette documentation
+├── apps/               # Your Django applications
+├── requirements/       # Dependencies (base, dev, prod)
+└── docs/               # This documentation
 ```
 
 ---
 
-## ⚙️ Configuration Principale
+## ⚙️ Main Configuration
 
-Toute la configuration est centralisée dans `RAIL_DJANGO_GRAPHQL` :
+All configuration is centralized in `RAIL_DJANGO_GRAPHQL`:
 
 ```python
 # root/settings/base.py
@@ -130,38 +130,38 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-📖 Voir [Configuration Complète](./graphql/configuration.md) pour toutes les options.
+📖 See [Complete Configuration](./graphql/configuration.md) for all options.
 
 ---
 
-## 📊 Fonctionnalités Clés
+## 📊 Key Features
 
-### Auto-Génération de Schéma
+### Auto-Generated Schema
 
-Définissez vos modèles Django, Rail Django génère automatiquement :
+Define your Django models, Rail Django automatically generates:
 
-- Types GraphQL (`DjangoObjectType`)
-- Filtres avancés (`FilterSet`)
-- Requêtes list/retrieve
-- Mutations create/update/delete
+- GraphQL Types (`DjangoObjectType`)
+- Advanced Filters (`FilterSet`)
+- List/retrieve queries
+- Create/update/delete mutations
 
 ```python
 # apps/store/models.py
 class Product(models.Model):
     """
-    Modèle Produit.
+    Product Model.
 
     Attributes:
-        name: Nom du produit.
-        price: Prix unitaire.
-        is_active: Statut d'activation.
+        name: Product name.
+        price: Unit price.
+        is_active: Activation status.
     """
-    name = models.CharField("Nom", max_length=255)
-    price = models.DecimalField("Prix", max_digits=10, decimal_places=2)
-    is_active = models.BooleanField("Actif", default=True)
+    name = models.CharField("Name", max_length=255)
+    price = models.DecimalField("Price", max_digits=10, decimal_places=2)
+    is_active = models.BooleanField("Active", default=True)
 ```
 
-### Requête GraphQL Automatique
+### Automatic GraphQL Query
 
 ```graphql
 query {
@@ -173,11 +173,11 @@ query {
 }
 ```
 
-### Mutations Automatiques
+### Automatic Mutations
 
 ```graphql
 mutation {
-  create_product(input: { name: "Nouveau", price: 99.99 }) {
+  create_product(input: { name: "New", price: 99.99 }) {
     ok
     object {
       id
@@ -193,9 +193,9 @@ mutation {
 
 ---
 
-## 🔐 Sécurité Intégrée
+## 🔐 Built-in Security
 
-### Authentification JWT
+### JWT Authentication
 
 ```graphql
 mutation {
@@ -210,7 +210,7 @@ mutation {
 }
 ```
 
-### Permissions par Champ
+### Field Permissions
 
 ```python
 class Customer(models.Model):
@@ -226,15 +226,15 @@ class Customer(models.Model):
         }
 ```
 
-📖 Voir [Permissions & RBAC](./security/permissions.md)
+📖 See [Permissions & RBAC](./security/permissions.md)
 
 ---
 
-## 📡 Extensions Temps Réel
+## 📡 Real-Time Extensions
 
 ### Webhooks
 
-Envoyez des événements aux systèmes externes lors de create/update/delete.
+Send events to external systems on create/update/delete.
 
 ```python
 RAIL_DJANGO_WEBHOOKS = {
@@ -247,9 +247,9 @@ RAIL_DJANGO_WEBHOOKS = {
 }
 ```
 
-📖 Voir [Webhooks](./extensions/webhooks.md)
+📖 See [Webhooks](./extensions/webhooks.md)
 
-### Subscriptions GraphQL
+### GraphQL Subscriptions
 
 ```graphql
 subscription {
@@ -263,13 +263,13 @@ subscription {
 }
 ```
 
-📖 Voir [Subscriptions](./extensions/subscriptions.md)
+📖 See [Subscriptions](./extensions/subscriptions.md)
 
 ---
 
 ## 📈 Reporting & Export
 
-### Datasets BI
+### BI Datasets
 
 ```python
 from rail_django.extensions.reporting import ReportingDataset
@@ -283,9 +283,9 @@ ReportingDataset.objects.create(
 )
 ```
 
-📖 Voir [Reporting & BI](./extensions/reporting.md)
+📖 See [Reporting & BI](./extensions/reporting.md)
 
-### Export Excel/CSV
+### Excel/CSV Export
 
 ```bash
 curl -X POST /api/v1/export/ \
@@ -293,7 +293,7 @@ curl -X POST /api/v1/export/ \
   -d '{"app_name": "store", "model_name": "Product", "file_extension": "xlsx"}'
 ```
 
-📖 Voir [Export de Données](./extensions/exporting.md)
+📖 See [Data Export](./extensions/exporting.md)
 
 ---
 
@@ -316,16 +316,16 @@ query {
 }
 ```
 
-📖 Voir [Monitoring Santé](./extensions/health.md)
+📖 See [Health Monitoring](./extensions/health.md)
 
 ---
 
-## 📚 Ressources Additionnelles
+## 📚 Additional Resources
 
-- [CHANGELOG](../CHANGELOG.md) - Historique des versions
-- [CONTRIBUTING](../CONTRIBUTING.md) - Guide de contribution
-- [GitHub](https://github.com/raillogistic/rail-django) - Code source
+- [CHANGELOG](../CHANGELOG.md) - Version history
+- [CONTRIBUTING](../CONTRIBUTING.md) - Contribution guide
+- [GitHub](https://github.com/raillogistic/rail-django) - Source code
 
 ---
 
-**Rail Django** - _Construisez plus vite, scalez mieux._
+**Rail Django** - _Build faster, scale better._

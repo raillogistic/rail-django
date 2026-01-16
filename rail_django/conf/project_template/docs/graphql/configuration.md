@@ -1,14 +1,14 @@
-# Configuration Complète
+# Complete Configuration
 
-## Vue d'Ensemble
+## Overview
 
-Ce document est la référence complète de tous les paramètres de configuration de Rail Django. Tous les paramètres sont définis dans `RAIL_DJANGO_GRAPHQL` de votre fichier `settings.py`.
+This document is the complete reference for all Rail Django configuration settings. All settings are defined in `RAIL_DJANGO_GRAPHQL` in your `settings.py` file.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Structure Générale](#structure-générale)
+1. [General Structure](#general-structure)
 2. [schema_settings](#schema_settings)
 3. [type_generation_settings](#type_generation_settings)
 4. [query_settings](#query_settings)
@@ -23,7 +23,7 @@ Ce document est la référence complète de tous les paramètres de configuratio
 
 ---
 
-## Structure Générale
+## General Structure
 
 ```python
 # root/settings/base.py
@@ -47,58 +47,58 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## schema_settings
 
-Configuration globale du schéma GraphQL.
+Global GraphQL schema configuration.
 
 ```python
 "schema_settings": {
     # ─── Exclusions ───
-    # Apps Django à ignorer lors de la génération
+    # Django apps to ignore during generation
     "excluded_apps": ["admin", "contenttypes", "sessions"],
-    # Modèles spécifiques à ignorer ("app.Model" ou "Model")
+    # Specific models to ignore ("app.Model" or "Model")
     "excluded_models": ["auth.Permission"],
 
-    # ─── Fonctionnalités du Schéma ───
-    # Permet la query __schema / __type
+    # ─── Schema Features ───
+    # Allows the __schema / __type query
     "enable_introspection": True,
-    # Active l'interface GraphiQL
+    # Enables the GraphiQL interface
     "enable_graphiql": True,
-    # Reconstruire le schéma après save/delete mod (dev only)
+    # Rebuild schema after save/delete model (dev only)
     "auto_refresh_on_model_change": False,
-    # Reconstruire après migrations
+    # Rebuild after migrations
     "auto_refresh_on_migration": True,
-    # Construire le schéma au démarrage
+    # Build schema at startup
     "prebuild_on_startup": False,
 
-    # ─── Authentification ───
-    # Requiert un JWT valide pour toutes les requêtes
+    # ─── Authentication ───
+    # Requires a valid JWT for all requests
     "authentication_required": True,
-    # Désactive login/register/logout mutations
+    # Disables login/register/logout mutations
     "disable_security_mutations": False,
-    # Active les mutations des extensions (audit, health, etc.)
+    # Enables extension mutations (audit, health, etc.)
     "enable_extension_mutations": True,
 
     # ─── Pagination ───
-    # Active les champs de pagination (offset/limit)
+    # Enables pagination fields (offset/limit)
     "enable_pagination": True,
 
     # ─── Naming ───
-    # Convertit les noms en camelCase (false = snake_case)
+    # Converts names to camelCase (false = snake_case)
     "auto_camelcase": False,
 
     # ─── Metadata ───
-    # Expose les queries de métadonnées pour les UI dynamiques
+    # Exposes metadata queries for dynamic UIs
     "show_metadata": False,
 
     # ─── Extensions ───
-    # Classes Query additionnelles (dotted path)
+    # Additional Query classes (dotted path)
     "query_extensions": [
         "myapp.schema.CustomQuery",
     ],
-    # Classes Mutation additionnelles
+    # Additional Mutation classes
     "mutation_extensions": [],
 
-    # ─── Allowlists (optionnel) ───
-    # Si défini, seuls ces champs root sont exposés
+    # ─── Allowlists (optional) ───
+    # If defined, only these root fields are exposed
     "query_field_allowlist": None,  # ["users", "products"]
     "mutation_field_allowlist": None,
     "subscription_field_allowlist": None,
@@ -109,34 +109,34 @@ Configuration globale du schéma GraphQL.
 
 ## type_generation_settings
 
-Contrôle la génération des types GraphQL.
+Controls GraphQL type generation.
 
 ```python
 "type_generation_settings": {
-    # Champs à exclure par modèle
+    # Fields to exclude by model
     "exclude_fields": {
         "auth.User": ["password"],
         "store.Product": ["internal_notes"],
     },
-    # Alias legacy
+    # Legacy alias
     "excluded_fields": {},
 
-    # Champs à inclure (None = tous)
+    # Fields to include (None = all)
     "include_fields": None,
 
-    # Mappings de types personnalisés
+    # Custom type mappings
     "custom_field_mappings": {
         # Django Field Class: Graphene Scalar
     },
 
-    # Génère les inputs de filtrage
+    # Generates filtering inputs
     "generate_filters": True,
     "enable_filtering": True,  # Alias
 
     # Naming
     "auto_camelcase": False,
 
-    # Utilise help_text des modèles comme descriptions
+    # Uses model help_text as descriptions
     "generate_descriptions": True,
 }
 ```
@@ -145,21 +145,21 @@ Contrôle la génération des types GraphQL.
 
 ## query_settings
 
-Configuration des requêtes GraphQL.
+GraphQL query configuration.
 
 ```python
 "query_settings": {
-    # ─── Génération ───
+    # ─── Generation ───
     "generate_filters": True,
     "generate_ordering": True,
     "generate_pagination": True,
 
-    # ─── Exécution ───
+    # ─── Execution ───
     "enable_pagination": True,
     "enable_ordering": True,
 
     # ─── Style ───
-    # Utilise les connections Relay au lieu de listes
+    # Uses Relay connections instead of lists
     "use_relay": False,
 
     # ─── Pagination ───
@@ -170,11 +170,11 @@ Configuration des requêtes GraphQL.
     "max_grouping_buckets": 200,
 
     # ─── Property Ordering ───
-    # Limite les résultats quand on trie par propriété Python
+    # Limits results when sorting by Python property
     "max_property_ordering_results": 2000,
 
-    # ─── Lookups Additionnels ───
-    # Permet de fetch par d'autres champs que l'ID
+    # ─── Additional Lookups ───
+    # Allows fetching by fields other than ID
     "additional_lookup_fields": {
         "store.Product": ["sku", "slug"],
         "auth.User": ["username", "email"],
@@ -190,24 +190,24 @@ Configuration des requêtes GraphQL.
 
 ## mutation_settings
 
-Configuration des mutations GraphQL.
+GraphQL mutation configuration.
 
 ```python
 "mutation_settings": {
-    # ─── Génération ───
+    # ─── Generation ───
     "generate_create": True,
     "generate_update": True,
     "generate_delete": True,
     "generate_bulk": False,
 
-    # ─── Exécution ───
+    # ─── Execution ───
     "enable_create": True,
     "enable_update": True,
     "enable_delete": True,
     "enable_bulk_operations": False,
 
-    # ─── Méthodes ───
-    # Expose les méthodes de modèle comme mutations
+    # ─── Methods ───
+    # Exposes model methods as mutations
     "enable_method_mutations": True,
 
     # ─── Permissions ───
@@ -221,10 +221,10 @@ Configuration des mutations GraphQL.
     # ─── Bulk ───
     "bulk_batch_size": 100,
 
-    # ─── Champs Requis ───
+    # ─── Required Fields ───
     "required_update_fields": {},
 
-    # ─── Relations Imbriquées ───
+    # ─── Nested Relationships ───
     "enable_nested_relations": True,
     "nested_relations_config": {},
     "nested_field_config": {},
@@ -235,23 +235,23 @@ Configuration des mutations GraphQL.
 
 ## subscription_settings
 
-Configuration des subscriptions temps réel.
+Real-time subscription configuration.
 
 ```python
 "subscription_settings": {
-    # Active la génération des subscriptions
+    # Enables subscription generation
     "enable_subscriptions": True,
 
-    # Types d'événements
+    # Event types
     "enable_create": True,
     "enable_update": True,
     "enable_delete": True,
 
-    # Active les filtres sur les subscriptions
+    # Enables filters on subscriptions
     "enable_filters": True,
 
-    # Allowlist/Blocklist de modèles
-    "include_models": [],  # Vide = tous
+    # Allowlist/Blocklist of models
+    "include_models": [],  # Empty = all
     "exclude_models": ["audit.AuditEvent"],
 }
 ```
@@ -260,11 +260,11 @@ Configuration des subscriptions temps réel.
 
 ## performance_settings
 
-Optimisation des performances.
+Performance optimization.
 
 ```python
 "performance_settings": {
-    # ─── Optimisation QuerySet ───
+    # ─── QuerySet Optimization ───
     "enable_query_optimization": True,
     "enable_select_related": True,
     "enable_prefetch_related": True,
@@ -275,11 +275,11 @@ Optimisation des performances.
     "enable_dataloader": True,
     "dataloader_batch_size": 100,
 
-    # ─── Limites ───
+    # ─── Limits ───
     "max_query_depth": 10,
     "max_query_complexity": 1000,
 
-    # ─── Coût ───
+    # ─── Cost ───
     "enable_query_cost_analysis": False,
 
     # ─── Timeout ───
@@ -291,7 +291,7 @@ Optimisation des performances.
 
 ## security_settings
 
-Configuration de la sécurité.
+Security configuration.
 
 ```python
 "security_settings": {
@@ -326,7 +326,7 @@ Configuration de la sécurité.
 
     # ─── Field Permissions ───
     "enable_field_permissions": True,
-    "field_permission_input_mode": "reject",  # ou "strip"
+    "field_permission_input_mode": "reject",  # or "strip"
     "enable_object_permissions": True,
 
     # ─── Input Validation ───
@@ -334,12 +334,12 @@ Configuration de la sécurité.
     "enable_sql_injection_protection": True,
     "enable_xss_protection": True,
 
-    # ─── HTML dans Inputs ───
+    # ─── HTML in Inputs ───
     "input_allow_html": False,
     "input_allowed_html_tags": ["p", "br", "strong", "em", ...],
     "input_allowed_html_attributes": {"*": ["class"], "a": ["href"], ...},
 
-    # ─── Limites Strings ───
+    # ─── String Limits ───
     "input_max_string_length": None,
     "input_truncate_long_strings": False,
     "input_failure_severity": "high",
@@ -358,7 +358,7 @@ Configuration de la sécurité.
 
 ## middleware_settings
 
-Configuration du middleware GraphQL.
+GraphQL middleware configuration.
 
 ```python
 "middleware_settings": {
@@ -389,12 +389,12 @@ Configuration du middleware GraphQL.
 
 ## error_handling
 
-Gestion des erreurs.
+Error handling.
 
 ```python
 "error_handling": {
-    # Inclut les détails d'erreur
-    "enable_detailed_errors": False,  # True en dev
+    # Includes error details
+    "enable_detailed_errors": False,  # True in dev
 
     # Logging
     "enable_error_logging": True,
@@ -403,7 +403,7 @@ Gestion des erreurs.
     # Sentry
     "enable_sentry_integration": False,
 
-    # Masquage
+    # Masking
     "mask_internal_errors": True,
     "include_stack_trace": False,
 
@@ -411,7 +411,7 @@ Gestion des erreurs.
     "error_code_prefix": "RAIL_GQL",
     "max_error_message_length": 500,
 
-    # Catégorisation
+    # Categorization
     "enable_error_categorization": True,
     "enable_error_metrics": True,
 
@@ -424,7 +424,7 @@ Gestion des erreurs.
 
 ## custom_scalars
 
-Scalaires GraphQL personnalisés.
+Custom GraphQL scalars.
 
 ```python
 "custom_scalars": {
@@ -445,12 +445,12 @@ Scalaires GraphQL personnalisés.
 
 ## Multi-Schema
 
-Configuration de schémas multiples.
+Multiple schema configuration.
 
 ```python
-# Schémas distincts avec configurations différentes
+# Distinct schemas with different configurations
 RAIL_DJANGO_GRAPHQL_SCHEMAS = {
-    # Schéma d'authentification (public)
+    # Authentication schema (public)
     "auth": {
         "schema_settings": {
             "authentication_required": False,
@@ -464,14 +464,14 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
         },
     },
 
-    # Schéma principal (authentifié)
+    # Main schema (authenticated)
     "default": {
         "schema_settings": {
             "authentication_required": True,
         },
     },
 
-    # Schéma admin (privilégié)
+    # Admin schema (privileged)
     "admin": {
         "schema_settings": {
             "authentication_required": True,
@@ -484,48 +484,48 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 }
 ```
 
-### Endpoints Générés
+### Generated Endpoints
 
-- `/graphql/auth/` - Schéma auth
-- `/graphql/gql/` - Schéma default
-- `/graphql/admin/` - Schéma admin
+- `/graphql/auth/` - Auth schema
+- `/graphql/gql/` - Default schema
+- `/graphql/admin/` - Admin schema
 
-### Enregistrement des Schémas
+### Schema Registration
 
-Les schémas sont enregistrés depuis deux sources :
+Schemas are registered from two sources:
 
-1. **Discovery automatique** : Modules `schemas.py`, `graphql_schema.py` avec `register_schema()`
-2. **Settings fallback** : Entrées dans `RAIL_DJANGO_GRAPHQL_SCHEMAS`
+1. **Automatic discovery**: `schemas.py`, `graphql_schema.py` modules with `register_schema()`
+2. **Settings fallback**: Entries in `RAIL_DJANGO_GRAPHQL_SCHEMAS`
 
-### Désactivation d'un Schéma
+### Disabling a Schema
 
 ```python
 RAIL_DJANGO_GRAPHQL_SCHEMAS = {
     "admin": {
-        "enabled": False,  # Désactivé
+        "enabled": False,  # Disabled
     },
 }
 ```
 
 ---
 
-## Variables d'Environnement
+## Environment Variables
 
-| Variable                      | Description                   | Défaut                     |
+| Variable                      | Description                   | Default                    |
 | ----------------------------- | ----------------------------- | -------------------------- |
-| `DJANGO_SETTINGS_MODULE`      | Module de settings            | `root.settings.dev`        |
-| `DJANGO_SECRET_KEY`           | Clé secrète Django            | (requis)                   |
-| `DATABASE_URL`                | URL de connexion DB           | (requis)                   |
-| `REDIS_URL`                   | URL Redis (cache, rate limit) | `redis://localhost:6379/0` |
-| `JWT_SECRET_KEY`              | Clé pour signer les JWT       | `DJANGO_SECRET_KEY`        |
-| `GRAPHQL_PERFORMANCE_ENABLED` | Active les métriques de perf  | `False`                    |
-| `GRAPHQL_PERFORMANCE_HEADERS` | Ajoute les headers de perf    | `False`                    |
+| `DJANGO_SETTINGS_MODULE`      | Settings module               | `root.settings.dev`        |
+| `DJANGO_SECRET_KEY`           | Django secret key             | (required)                 |
+| `DATABASE_URL`                | DB connection URL             | (required)                 |
+| `REDIS_URL`                   | Redis URL (cache, rate limit) | `redis://localhost:6379/0` |
+| `JWT_SECRET_KEY`              | JWT signing key               | `DJANGO_SECRET_KEY`        |
+| `GRAPHQL_PERFORMANCE_ENABLED` | Enables perf metrics          | `False`                    |
+| `GRAPHQL_PERFORMANCE_HEADERS` | Adds perf headers             | `False`                    |
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Requêtes](./queries.md) - Utilisation des query_settings
-- [Mutations](./mutations.md) - Utilisation des mutation_settings
-- [Permissions](../security/permissions.md) - Utilisation des security_settings
-- [Déploiement](../deployment/production.md) - Configuration production
+- [Queries](./queries.md) - Using query_settings
+- [Mutations](./mutations.md) - Using mutation_settings
+- [Permissions](../security/permissions.md) - Using security_settings
+- [Deployment](../deployment/production.md) - Production configuration

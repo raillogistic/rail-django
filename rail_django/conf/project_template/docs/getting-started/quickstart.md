@@ -1,41 +1,41 @@
-# Démarrage Rapide
+# Quickstart
 
-## Vue d'Ensemble
+## Overview
 
-Ce guide vous montre comment créer une API GraphQL complète en 10 minutes avec Rail Django.
-
----
-
-## Objectif
-
-Créer une API pour gérer des **Produits** et des **Catégories** avec :
-
-- Requêtes list/retrieve avec filtres
-- Mutations CRUD
-- Authentification JWT
-- Permissions par rôle
+This guide shows you how to create a complete GraphQL API in 10 minutes with Rail Django.
 
 ---
 
-## Étape 1 : Créer l'Application
+## Objective
+
+Create an API to manage **Products** and **Categories** with:
+
+- List/retrieve queries with filters
+- CRUD mutations
+- JWT authentication
+- Role-based permissions
+
+---
+
+## Step 1: Create the Application
 
 ```bash
-cd mon_projet
+cd my_project
 python manage.py startapp store
 ```
 
-Rail Django crée l'app dans `apps/store/`.
+Rail Django creates the app in `apps/store/`.
 
 ---
 
-## Étape 2 : Définir les Modèles
+## Step 2: Define the Models
 
 ```python
 # apps/store/models.py
 """
-Modèles du module Store.
+Store module models.
 
-Ce module contient les modèles pour la gestion du catalogue produits.
+This module contains models for product catalog management.
 """
 from django.db import models
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
@@ -43,22 +43,22 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 
 class Category(models.Model):
     """
-    Modèle Catégorie.
+    Category Model.
 
-    Représente une catégorie de produits dans le catalogue.
+    Represents a product category in the catalog.
 
     Attributes:
-        name: Nom de la catégorie.
-        description: Description optionnelle.
-        is_active: Indique si la catégorie est active.
+        name: Category name.
+        description: Optional description.
+        is_active: Indicates if the category is active.
     """
-    name = models.CharField("Nom", max_length=100)
+    name = models.CharField("Name", max_length=100)
     description = models.TextField("Description", blank=True)
     is_active = models.BooleanField("Active", default=True)
 
     class Meta:
-        verbose_name = "Catégorie"
-        verbose_name_plural = "Catégories"
+        verbose_name = "Category"
+        verbose_name_plural = "Categories"
 
     def __str__(self):
         return self.name
@@ -83,46 +83,46 @@ class Category(models.Model):
 
 class Product(models.Model):
     """
-    Modèle Produit.
+    Product Model.
 
-    Représente un produit dans le catalogue.
+    Represents a product in the catalog.
 
     Attributes:
-        name: Nom du produit.
-        sku: Code article unique.
-        price: Prix unitaire HT.
-        category: Catégorie du produit.
-        is_active: Indique si le produit est actif.
-        created_at: Date de création.
+        name: Product name.
+        sku: Unique article code.
+        price: Unit price (excluding tax).
+        category: Product category.
+        is_active: Indicates if the product is active.
+        created_at: Creation date.
     """
-    name = models.CharField("Nom", max_length=200)
-    sku = models.CharField("Référence", max_length=50, unique=True)
-    price = models.DecimalField("Prix", max_digits=10, decimal_places=2)
+    name = models.CharField("Name", max_length=200)
+    sku = models.CharField("SKU", max_length=50, unique=True)
+    price = models.DecimalField("Price", max_digits=10, decimal_places=2)
     description = models.TextField("Description", blank=True)
     category = models.ForeignKey(
         Category,
         on_delete=models.CASCADE,
         related_name="products",
-        verbose_name="Catégorie"
+        verbose_name="Category"
     )
-    is_active = models.BooleanField("Actif", default=True)
-    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+    is_active = models.BooleanField("Active", default=True)
+    created_at = models.DateTimeField("Created at", auto_now_add=True)
 
     class Meta:
-        verbose_name = "Produit"
-        verbose_name_plural = "Produits"
+        verbose_name = "Product"
+        verbose_name_plural = "Products"
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.sku} - {self.name}"
 
     class GraphQLMeta(GraphQLMetaConfig):
-        # Champs
+        # Fields
         fields = GraphQLMetaConfig.Fields(
             read_only=["sku", "created_at"],
         )
 
-        # Filtrage
+        # Filtering
         filtering = GraphQLMetaConfig.Filtering(
             quick=["name", "sku"],
             fields={
@@ -144,7 +144,7 @@ class Product(models.Model):
             },
         )
 
-        # Tri
+        # Sorting
         ordering = GraphQLMetaConfig.Ordering(
             allowed=["name", "price", "created_at", "category__name"],
             default=["-created_at"],
@@ -153,7 +153,7 @@ class Product(models.Model):
 
 ---
 
-## Étape 3 : Enregistrer l'Application
+## Step 3: Register the Application
 
 ```python
 # root/settings/base.py
@@ -165,7 +165,7 @@ INSTALLED_APPS = [
 
 ---
 
-## Étape 4 : Appliquer les Migrations
+## Step 4: Apply Migrations
 
 ```bash
 python manage.py makemigrations store
@@ -174,21 +174,21 @@ python manage.py migrate
 
 ---
 
-## Étape 5 : Tester l'API
+## Step 5: Test the API
 
-Démarrez le serveur :
+Start the server:
 
 ```bash
 python manage.py runserver
 ```
 
-Ouvrez GraphiQL : http://localhost:8000/graphql/graphiql/
+Open GraphiQL: http://localhost:8000/graphql/graphiql/
 
-### Authentification
+### Authentication
 
 ```graphql
 mutation {
-  login(username: "admin", password: "votre_password") {
+  login(username: "admin", password: "your_password") {
     ok
     token
     user {
@@ -198,22 +198,22 @@ mutation {
 }
 ```
 
-Copiez le `token` et ajoutez-le dans les HTTP Headers :
+Copy the `token` and add it to the HTTP Headers:
 
 ```json
 {
-  "Authorization": "Bearer <votre_token>"
+  "Authorization": "Bearer <your_token>"
 }
 ```
 
-### Créer une Catégorie
+### Create a Category
 
 ```graphql
 mutation {
   create_category(
     input: {
-      name: "Électronique"
-      description: "Appareils électroniques"
+      name: "Electronics"
+      description: "Electronic devices"
       is_active: true
     }
   ) {
@@ -230,7 +230,7 @@ mutation {
 }
 ```
 
-### Créer un Produit
+### Create a Product
 
 ```graphql
 mutation {
@@ -239,7 +239,7 @@ mutation {
       name: "iPhone 15 Pro"
       sku: "IPHONE-15-PRO"
       price: "1199.00"
-      description: "Smartphone Apple dernière génération"
+      description: "Latest generation Apple smartphone"
       category_id: "1"
       is_active: true
     }
@@ -258,7 +258,7 @@ mutation {
 }
 ```
 
-### Lister les Produits
+### List Products
 
 ```graphql
 query {
@@ -278,7 +278,7 @@ query {
 }
 ```
 
-### Filtrage Avancé
+### Advanced Filtering
 
 ```graphql
 query {
@@ -286,7 +286,7 @@ query {
     filters: {
       price__gte: 100
       price__lte: 500
-      category__name__icontains: "électronique"
+      category__name__icontains: "electronics"
     }
   ) {
     id
@@ -296,7 +296,7 @@ query {
 }
 ```
 
-### Recherche Rapide
+### Quick Search
 
 ```graphql
 query {
@@ -308,7 +308,7 @@ query {
 }
 ```
 
-### Requête Paginée
+### Paginated Query
 
 ```graphql
 query {
@@ -330,21 +330,21 @@ query {
 
 ---
 
-## Étape 6 : Ajouter des Permissions
+## Step 6: Add Permissions
 
-Modifier `GraphQLMeta` pour ajouter des restrictions :
+Modify `GraphQLMeta` to add restrictions:
 
 ```python
 class Product(models.Model):
-    # ... champs ...
+    # ... fields ...
 
     class GraphQLMeta(GraphQLMetaConfig):
         # ... filtering, ordering ...
 
-        # Permissions par opération
+        # Permissions by operation
         access = GraphQLMetaConfig.Access(
             operations={
-                "list": {"roles": ["*"]},  # Tout le monde
+                "list": {"roles": ["*"]},  # Everyone
                 "retrieve": {"roles": ["*"]},
                 "create": {"roles": ["catalog_manager", "admin"]},
                 "update": {"roles": ["catalog_manager", "admin"]},
@@ -355,27 +355,27 @@ class Product(models.Model):
 
 ---
 
-## Récapitulatif
+## Summary
 
-Vous avez créé :
+You have created:
 
-✅ Deux modèles avec relations  
-✅ Requêtes auto-générées avec filtres et pagination  
-✅ Mutations CRUD  
-✅ Authentification JWT  
-✅ Configuration des permissions
-
----
-
-## Prochaines Étapes
-
-- [Requêtes](../graphql/queries.md) - Filtrage avancé et pagination
-- [Mutations](../graphql/mutations.md) - Opérations bulk et relations imbriquées
-- [Permissions](../security/permissions.md) - RBAC et permissions par champ
-- [Webhooks](../extensions/webhooks.md) - Notifications externes
+✅ Two models with relationships  
+✅ Auto-generated queries with filters and pagination  
+✅ CRUD mutations  
+✅ JWT authentication  
+✅ Permission configuration
 
 ---
 
-## Code Complet
+## Next Steps
 
-Le code complet de ce tutoriel est disponible dans `apps/store/` après création avec `python manage.py startapp store`.
+- [Queries](../graphql/queries.md) - Advanced filtering and pagination
+- [Mutations](../graphql/mutations.md) - Bulk operations and nested relationships
+- [Permissions](../security/permissions.md) - RBAC and field permissions
+- [Webhooks](../extensions/webhooks.md) - External notifications
+
+---
+
+## Complete Code
+
+The complete code for this tutorial is available in `apps/store/` after creation with `python manage.py startapp store`.

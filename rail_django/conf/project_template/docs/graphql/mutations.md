@@ -1,38 +1,38 @@
-# Mutations GraphQL
+# GraphQL Mutations
 
-## Vue d'Ensemble
+## Overview
 
-Rail Django génère automatiquement les mutations CRUD pour chaque modèle Django. Ce guide couvre les mutations auto-générées, les opérations bulk, les mutations personnalisées et les relations imbriquées.
+Rail Django automatically generates CRUD mutations for each Django model. This guide covers auto-generated mutations, bulk operations, custom mutations, and nested relationships.
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Mutations Auto-Générées](#mutations-auto-générées)
+1. [Auto-Generated Mutations](#auto-generated-mutations)
 2. [Create](#create)
 3. [Update](#update)
 4. [Delete](#delete)
-5. [Opérations Bulk](#opérations-bulk)
-6. [Relations Imbriquées](#relations-imbriquées)
-7. [Mutations de Méthodes](#mutations-de-méthodes)
+5. [Bulk Operations](#bulk-operations)
+6. [Nested Relationships](#nested-relationships)
+7. [Method Mutations](#method-mutations)
 8. [Configuration](#configuration)
 
 ---
 
-## Mutations Auto-Générées
+## Auto-Generated Mutations
 
-Pour chaque modèle, Rail Django génère :
+For each model, Rail Django generates:
 
-| Mutation    | Format                | Description                    |
-| ----------- | --------------------- | ------------------------------ |
-| Create      | `create_<model>`      | Crée une nouvelle instance     |
-| Update      | `update_<model>`      | Modifie une instance existante |
-| Delete      | `delete_<model>`      | Supprime une instance          |
-| Bulk Create | `bulk_create_<model>` | Crée plusieurs instances       |
-| Bulk Update | `bulk_update_<model>` | Modifie plusieurs instances    |
-| Bulk Delete | `bulk_delete_<model>` | Supprime plusieurs instances   |
+| Mutation    | Format                | Description                   |
+| ----------- | --------------------- | ----------------------------- |
+| Create      | `create_<model>`      | Creates a new instance        |
+| Update      | `update_<model>`      | Modifies an existing instance |
+| Delete      | `delete_<model>`      | Deletes an instance           |
+| Bulk Create | `bulk_create_<model>` | Creates multiple instances    |
+| Bulk Update | `bulk_update_<model>` | Modifies multiple instances   |
+| Bulk Delete | `bulk_delete_<model>` | Deletes multiple instances    |
 
-**Exemple pour le modèle `Product` :**
+**Example for the `Product` model:**
 
 ```graphql
 type Mutation {
@@ -49,7 +49,7 @@ type Mutation {
 
 ## Create
 
-### Mutation Basique
+### Basic Mutation
 
 ```graphql
 mutation CreateProduct($input: ProductCreateInput!) {
@@ -69,12 +69,12 @@ mutation CreateProduct($input: ProductCreateInput!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
   "input": {
-    "name": "Nouveau Produit",
+    "name": "New Product",
     "sku": "PRD-001",
     "price": "99.99",
     "category_id": "1",
@@ -83,7 +83,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 }
 ```
 
-### Réponse Succès
+### Success Response
 
 ```json
 {
@@ -92,7 +92,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
       "ok": true,
       "object": {
         "id": "42",
-        "name": "Nouveau Produit",
+        "name": "New Product",
         "sku": "PRD-001",
         "price": "99.99"
       },
@@ -102,7 +102,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 }
 ```
 
-### Réponse Erreur (Validation)
+### Error Response (Validation)
 
 ```json
 {
@@ -113,11 +113,11 @@ mutation CreateProduct($input: ProductCreateInput!) {
       "errors": [
         {
           "field": "sku",
-          "message": "Un produit avec ce SKU existe déjà."
+          "message": "A product with this SKU already exists."
         },
         {
           "field": "price",
-          "message": "Le prix doit être positif."
+          "message": "Price must be positive."
         }
       ]
     }
@@ -129,7 +129,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 
 ## Update
 
-### Mutation Basique
+### Basic Mutation
 
 ```graphql
 mutation UpdateProduct($id: ID!, $input: ProductUpdateInput!) {
@@ -148,7 +148,7 @@ mutation UpdateProduct($id: ID!, $input: ProductUpdateInput!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -160,9 +160,9 @@ mutation UpdateProduct($id: ID!, $input: ProductUpdateInput!) {
 }
 ```
 
-### Mise à Jour Partielle
+### Partial Update
 
-Seuls les champs fournis sont modifiés :
+Only provided fields are modified:
 
 ```json
 {
@@ -173,9 +173,9 @@ Seuls les champs fournis sont modifiés :
 }
 ```
 
-### Champs Read-Only
+### Read-Only Fields
 
-Les champs marqués `read_only` dans `GraphQLMeta` sont ignorés :
+Fields marked `read_only` in `GraphQLMeta` are ignored:
 
 ```python
 class Product(models.Model):
@@ -183,7 +183,7 @@ class Product(models.Model):
 
     class GraphQLMeta:
         fields = GraphQLMeta.Fields(
-            read_only=["sku"],  # Non modifiable via update
+            read_only=["sku"],  # Not modifiable via update
         )
 ```
 
@@ -191,7 +191,7 @@ class Product(models.Model):
 
 ## Delete
 
-### Mutation Basique
+### Basic Mutation
 
 ```graphql
 mutation DeleteProduct($id: ID!) {
@@ -204,7 +204,7 @@ mutation DeleteProduct($id: ID!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -212,7 +212,7 @@ mutation DeleteProduct($id: ID!) {
 }
 ```
 
-### Réponse Succès
+### Success Response
 
 ```json
 {
@@ -225,9 +225,9 @@ mutation DeleteProduct($id: ID!) {
 }
 ```
 
-### Gestion des Contraintes
+### Constraint Handling
 
-Si la suppression échoue (contrainte FK) :
+If deletion fails (FK constraint):
 
 ```json
 {
@@ -236,7 +236,7 @@ Si la suppression échoue (contrainte FK) :
       "ok": false,
       "errors": [
         {
-          "message": "Impossible de supprimer : cet élément est référencé par d'autres enregistrements."
+          "message": "Cannot delete: this item is referenced by other records."
         }
       ]
     }
@@ -246,7 +246,7 @@ Si la suppression échoue (contrainte FK) :
 
 ---
 
-## Opérations Bulk
+## Bulk Operations
 
 ### Activation
 
@@ -280,25 +280,25 @@ mutation BulkCreateProducts($inputs: [ProductCreateInput!]!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
   "inputs": [
     {
-      "name": "Produit A",
+      "name": "Product A",
       "sku": "A-001",
       "price": "10.00",
       "category_id": "1"
     },
     {
-      "name": "Produit B",
+      "name": "Product B",
       "sku": "B-001",
       "price": "20.00",
       "category_id": "1"
     },
     {
-      "name": "Produit C",
+      "name": "Product C",
       "sku": "C-001",
       "price": "30.00",
       "category_id": "2"
@@ -322,7 +322,7 @@ mutation BulkUpdateProducts($inputs: [ProductUpdateWithIdInput!]!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -345,7 +345,7 @@ mutation BulkDeleteProducts($ids: [ID!]!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -355,7 +355,7 @@ mutation BulkDeleteProducts($ids: [ID!]!) {
 
 ---
 
-## Relations Imbriquées
+## Nested Relationships
 
 ### Activation
 
@@ -368,9 +368,9 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-### Create avec Relation
+### Create with Relationship
 
-Créez l'objet parent et les enfants en une seule mutation :
+Create the parent object and children in a single mutation:
 
 ```graphql
 mutation CreateOrder($input: OrderCreateInput!) {
@@ -391,7 +391,7 @@ mutation CreateOrder($input: OrderCreateInput!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -405,7 +405,7 @@ mutation CreateOrder($input: OrderCreateInput!) {
 }
 ```
 
-### Update avec Relation
+### Update with Relationship
 
 ```graphql
 mutation UpdateOrder($id: ID!, $input: OrderUpdateInput!) {
@@ -422,7 +422,7 @@ mutation UpdateOrder($id: ID!, $input: OrderUpdateInput!) {
 }
 ```
 
-**Variables :**
+**Variables:**
 
 ```json
 {
@@ -436,13 +436,13 @@ mutation UpdateOrder($id: ID!, $input: OrderUpdateInput!) {
 }
 ```
 
-Comportement :
+Behavior:
 
-- Élément avec `id` : mise à jour
-- Élément sans `id` : création
-- Éléments absents : suppression (si configuré)
+- Element with `id`: update
+- Element without `id`: creation
+- Absent elements: deletion (if configured)
 
-### Configuration des Relations Imbriquées
+### Nested Relationship Configuration
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -452,7 +452,7 @@ RAIL_DJANGO_GRAPHQL = {
                 "items": {
                     "create": True,
                     "update": True,
-                    "delete": True,  # Supprimer les absents
+                    "delete": True,  # Delete absent ones
                     "max_items": 50,
                 },
             },
@@ -463,11 +463,11 @@ RAIL_DJANGO_GRAPHQL = {
 
 ---
 
-## Mutations de Méthodes
+## Method Mutations
 
-Exposez des méthodes de modèle comme mutations GraphQL.
+Expose model methods as GraphQL mutations.
 
-### Déclaration
+### Declaration
 
 ```python
 from django.db import models
@@ -477,13 +477,13 @@ class Order(models.Model):
 
     def confirm(self, confirmed_by=None):
         """
-        Confirme la commande.
+        Confirms the order.
 
         Args:
-            confirmed_by: Utilisateur qui confirme.
+            confirmed_by: User who confirms.
 
         Returns:
-            L'instance mise à jour.
+            The updated instance.
         """
         self.status = "confirmed"
         self.confirmed_at = timezone.now()
@@ -493,10 +493,10 @@ class Order(models.Model):
 
     def cancel(self, reason):
         """
-        Annule la commande.
+        Cancels the order.
 
         Args:
-            reason: Motif d'annulation.
+            reason: Cancellation reason.
         """
         self.status = "cancelled"
         self.cancellation_reason = reason
@@ -504,11 +504,11 @@ class Order(models.Model):
         return self
 
     class GraphQLMeta:
-        # Expose ces méthodes comme mutations
+        # Expose these methods as mutations
         method_mutations = ["confirm", "cancel"]
 ```
 
-### Utilisation
+### Usage
 
 ```graphql
 mutation ConfirmOrder($id: ID!) {
@@ -534,7 +534,7 @@ mutation CancelOrder($id: ID!, $reason: String!) {
 }
 ```
 
-### Configuration des Méthodes
+### Method Configuration
 
 ```python
 class Order(models.Model):
@@ -542,7 +542,7 @@ class Order(models.Model):
         method_mutations = {
             "confirm": {
                 "permissions": ["store.confirm_order"],
-                "description": "Confirme une commande en attente",
+                "description": "Confirms a pending order",
             },
             "cancel": {
                 "permissions": ["store.cancel_order"],
@@ -555,24 +555,24 @@ class Order(models.Model):
 
 ## Configuration
 
-### Paramètres Globaux
+### Global Settings
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "mutation_settings": {
-        # ─── Génération ───
+        # ─── Generation ───
         "generate_create": True,
         "generate_update": True,
         "generate_delete": True,
         "generate_bulk": False,
 
-        # ─── Exécution ───
+        # ─── Execution ───
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,
         "enable_bulk_operations": False,
 
-        # ─── Méthodes ───
+        # ─── Methods ───
         "enable_method_mutations": True,
 
         # ─── Permissions ───
@@ -586,25 +586,25 @@ RAIL_DJANGO_GRAPHQL = {
         # ─── Bulk ───
         "bulk_batch_size": 100,
 
-        # ─── Relations ───
+        # ─── Relationships ───
         "enable_nested_relations": True,
         "nested_relations_config": {},
 
-        # ─── Champs Requis ───
+        # ─── Required Fields ───
         "required_update_fields": {},
     },
 }
 ```
 
-### Désactiver par Modèle
+### Disable by Model
 
 ```python
 class ReadOnlyModel(models.Model):
     class GraphQLMeta:
-        # Désactiver toutes les mutations
+        # Disable all mutations
         mutations = False
 
-        # Ou sélectivement
+        # Or selectively
         # mutations = {
         #     "create": True,
         #     "update": False,
@@ -612,13 +612,13 @@ class ReadOnlyModel(models.Model):
         # }
 ```
 
-### Champs Requis pour Update
+### Required Fields for Update
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "mutation_settings": {
         "required_update_fields": {
-            "store.Order": ["id"],  # Toujours requis
+            "store.Order": ["id"],  # Always required
         },
     },
 }
@@ -626,8 +626,8 @@ RAIL_DJANGO_GRAPHQL = {
 
 ---
 
-## Voir Aussi
+## See Also
 
-- [Requêtes](./queries.md) - Lecture des données
-- [Configuration](./configuration.md) - Tous les paramètres
-- [Permissions](../security/permissions.md) - Contrôle d'accès aux mutations
+- [Queries](./queries.md) - Data reading
+- [Configuration](./configuration.md) - All settings
+- [Permissions](../security/permissions.md) - Mutation access control
