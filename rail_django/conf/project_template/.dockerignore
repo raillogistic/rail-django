@@ -19,3 +19,9 @@ coverage.xml
 .gitignore
 .env
 .DS_Store
+media/
+staticfiles/
+backups/
+cache/
+logs/
+*.sqlite3

@@ -3566,6 +3566,9 @@ class ModelFormMetadataExtractor:
             disabled_flag = True
             readonly_flag = True
 
+        validators = self._extract_field_validators(field)
+        error_messages = self._extract_error_messages(field)
+
         return FormFieldMetadata(
             name=field.name,
             field_type=field.__class__.__name__,
@@ -3588,8 +3591,8 @@ class ModelFormMetadataExtractor:
             null=field.null,
             unique=field.unique,
             editable=editable_flag,
-            validators=[],  # TODO: Extract validators
-            error_messages={},  # TODO: Extract error messages
+            validators=validators,
+            error_messages=error_messages,
             has_permission=has_permission,
             disabled=disabled_flag,
             readonly=readonly_flag,
@@ -4196,6 +4199,28 @@ class ModelFormMetadataExtractor:
             attributes["minlength"] = field.min_length
 
         return attributes if attributes else None
+
+    def _extract_field_validators(self, field) -> Optional[list[str]]:
+        """Return validator identifiers suitable for frontend metadata."""
+        validators = getattr(field, "validators", None) or []
+        validator_names = []
+        for validator in validators:
+            name = getattr(validator, "__name__", None) or validator.__class__.__name__
+            if name:
+                validator_names.append(name)
+        return validator_names or None
+
+    def _extract_error_messages(self, field) -> Optional[dict[str, str]]:
+        """Return field error message templates as plain strings."""
+        error_messages = getattr(field, "error_messages", None) or {}
+        if not error_messages:
+            return None
+        cleaned = {}
+        for key, message in error_messages.items():
+            if message in (None, ""):
+                continue
+            cleaned[force_str(key)] = force_str(message)
+        return cleaned or None
 
     def _get_form_validation_rules(self, model) -> Optional[dict[str, Any]]:
         """Get form validation rules for the model."""

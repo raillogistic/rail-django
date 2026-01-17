@@ -489,7 +489,7 @@ RAIL_DJANGO_GRAPHQL = {
 ```txt
 # requirements/gis.txt
 django.contrib.gis
-psycopg2-binary  # or psycopg[binary]
+psycopg2  # or psycopg[binary]
 # PostgreSQL must have PostGIS extension enabled
 ```
 

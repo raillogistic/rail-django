@@ -24,6 +24,17 @@ nano .env
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 
+**Optional runtime toggles:**
+- `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Disable if you prefer to run these manually.
+- `DJANGO_CHECK_DEPLOY`: Run `python manage.py check --deploy` on container start.
+- `MEDIA_PATH`: Host path for uploads (absolute or relative to `deploy/docker/`).
+
+**Optional Gunicorn tuning:**
+- `GUNICORN_WORKERS`, `GUNICORN_THREADS`
+- `GUNICORN_TIMEOUT`, `GUNICORN_GRACEFUL_TIMEOUT`, `GUNICORN_KEEPALIVE`
+- `GUNICORN_MAX_REQUESTS`, `GUNICORN_MAX_REQUESTS_JITTER`
+- `GUNICORN_LOG_LEVEL`, `GUNICORN_ACCESS_LOG`, `GUNICORN_ERROR_LOG`
+
 ## 2. One-Click Deployment (Recommended)
 
 From your project root:

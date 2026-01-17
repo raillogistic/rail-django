@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-LIBRARY_VERSION = "0.2.0"
+LIBRARY_VERSION = "1.1.4"
 LIBRARY_NAME = "rail-django"
 
 

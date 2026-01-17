@@ -152,7 +152,15 @@ if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then
   chmod 600 "$CERT_KEY"
 fi
 
-ensure_dir "$PROJECT_ROOT/media"
+media_path="$(read_env MEDIA_PATH)"
+if [ -z "$media_path" ]; then
+  media_path="../../media"
+fi
+if [[ "$media_path" = /* ]]; then
+  ensure_dir "$media_path"
+else
+  ensure_dir "$SCRIPT_DIR/docker/$media_path"
+fi
 
 backup_path="$(read_env BACKUP_PATH)"
 if [ -z "$backup_path" ]; then

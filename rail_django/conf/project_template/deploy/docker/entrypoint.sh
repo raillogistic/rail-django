@@ -4,6 +4,13 @@ set -e
 : "${DJANGO_SETTINGS_MODULE:=root.settings.production}"
 export DJANGO_SETTINGS_MODULE
 
+is_truthy() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|y|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Wait for database
 if [ "$DATABASE_URL" ]; then
     echo "Waiting for database..."
@@ -49,11 +56,20 @@ PY
     echo "Database started"
 fi
 
-echo "Running migrations..."
-python manage.py migrate
+if is_truthy "${RUN_MIGRATIONS:-true}"; then
+    echo "Running migrations..."
+    python manage.py migrate
+fi
 
-echo "Collecting static files..."
-python manage.py collectstatic --noinput
+if is_truthy "${RUN_COLLECTSTATIC:-true}"; then
+    echo "Collecting static files..."
+    python manage.py collectstatic --noinput
+fi
+
+if is_truthy "${DJANGO_CHECK_DEPLOY:-false}"; then
+    echo "Running Django system checks..."
+    python manage.py check --deploy
+fi
 
 echo "Starting server..."
 # Optimization:
@@ -63,10 +79,26 @@ echo "Starting server..."
 # - worker-class: gthread enables threading
 WORKERS=${GUNICORN_WORKERS:-3}
 THREADS=${GUNICORN_THREADS:-4}
+TIMEOUT=${GUNICORN_TIMEOUT:-30}
+GRACEFUL_TIMEOUT=${GUNICORN_GRACEFUL_TIMEOUT:-30}
+KEEPALIVE=${GUNICORN_KEEPALIVE:-2}
+MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
+MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-100}
+ACCESS_LOG=${GUNICORN_ACCESS_LOG:--}
+ERROR_LOG=${GUNICORN_ERROR_LOG:--}
+LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
 
 exec gunicorn {{ project_name }}.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers $WORKERS \
     --threads $THREADS \
     --worker-class gthread \
+    --timeout $TIMEOUT \
+    --graceful-timeout $GRACEFUL_TIMEOUT \
+    --keep-alive $KEEPALIVE \
+    --max-requests $MAX_REQUESTS \
+    --max-requests-jitter $MAX_REQUESTS_JITTER \
+    --access-logfile "$ACCESS_LOG" \
+    --error-logfile "$ERROR_LOG" \
+    --log-level "$LOG_LEVEL" \
     --preload

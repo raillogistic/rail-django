@@ -6,19 +6,26 @@ services:
       context: ../../
       dockerfile: deploy/docker/Dockerfile
     command: /home/app/web/entrypoint.sh
+    restart: unless-stopped
     volumes:
       - static_volume:/home/app/web/staticfiles
-      - ../../media:/home/app/web/mediafiles
+      - ${MEDIA_PATH:-../../media}:/home/app/web/mediafiles
     expose:
       - 8000
     env_file:
       - ../../.env
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.connect(('127.0.0.1', 8000)); s.close()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   nginx:
     image: nginx:1.25-alpine
+    restart: unless-stopped
     volumes:
       - static_volume:/app/staticfiles
-      - ../../media:/app/mediafiles
+      - ${MEDIA_PATH:-../../media}:/app/mediafiles
       - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ../nginx/certs:/etc/nginx/certs:ro
     ports:
@@ -29,6 +36,7 @@ services:
 
   backup:
     image: postgres:15-alpine
+    restart: unless-stopped
     volumes:
       - ${BACKUP_PATH:-../../backups}:/backups
       - ./backup.sh:/usr/local/bin/backup.sh

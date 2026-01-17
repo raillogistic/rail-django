@@ -37,6 +37,7 @@ from django_filters import (
 )
 
 from ..core.meta import GraphQLMeta, get_model_graphql_meta
+from ..core.settings import SchemaSettings
 from .introspector import ModelIntrospector
 
 logger = logging.getLogger(__name__)
@@ -596,6 +597,33 @@ class AdvancedFilterGenerator:
         if name.startswith("Historical"):
             return True
         return "simple_history" in module
+
+    def _is_model_excluded(self, model: type[models.Model]) -> bool:
+        """Return True when schema settings exclude the model."""
+        if model is None or not hasattr(model, "_meta"):
+            return False
+        try:
+            settings = SchemaSettings.from_schema(self.schema_name)
+        except Exception:
+            return False
+
+        app_label = getattr(model._meta, "app_label", "")
+        if app_label in (settings.excluded_apps or []):
+            return True
+
+        excluded_models = set(settings.excluded_models or [])
+        if not excluded_models:
+            return False
+
+        model_name = getattr(model, "__name__", "")
+        model_label = getattr(model._meta, "model_name", "")
+        full_model_name = f"{app_label}.{model_name}" if app_label else model_name
+
+        return (
+            model_name in excluded_models
+            or model_label in excluded_models
+            or full_model_name in excluded_models
+        )
 
     def _generate_historical_filters(
         self, model: type[models.Model]
@@ -2869,10 +2897,8 @@ class AdvancedFilterGenerator:
                 else:
                     continue  # Skip if we can't determine the relation name
 
-                # Skip if this model is excluded (for now, we'll include all models)
-                # TODO: Implement model exclusion logic if needed
-                # if self._is_model_excluded(related_model):
-                #     continue
+                if self._is_model_excluded(related_model):
+                    continue
 
                 # Generate filters for fields of the related model
                 filters.update(

@@ -10,6 +10,8 @@ env = environ.Env()
 # pointing to the project root (one level up from project_name, two levels from settings)
 # actually: settings/ -> project_name/ -> root/
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Take environment variables from .env file
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
@@ -183,7 +185,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
+            'filename': LOG_DIR / 'django.log',
             'formatter': 'verbose',
         },
     },

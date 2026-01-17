@@ -1,2 +1,2 @@
 -r base.txt
-rail-django==0.2.0
+git+https://github.com/raillogistic/rail-django.git

@@ -9,10 +9,10 @@ django-environ==0.11.2
 django-fsm>=3.0.0
 graphql-relay>=3.2.0
 gunicorn>=21.2.0
-psycopg2-binary==2.9.9
+psycopg2==2.9.9
 channels>=4.0.0
 daphne>=4.0.0
-git+https://github.com/raillogistic/DjangoChannelsGraphqlWs.git@f868611667e4688d41dabbdfd50553e09dac98b5
+git+https://github.com/datadvance/DjangoChannelsGraphqlWs.git
 weasyprint>=60.1
 pillow>=10.3.0
 PyJWT>=2.8.0

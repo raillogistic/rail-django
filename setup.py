@@ -8,18 +8,19 @@ if os.path.exists("README.md"):
 
 setup(
     name="rail-django",
-    version="0.2.0",
+    version="1.1.4",
     description="A Django wrapper framework with pre-configured settings and tools.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Milia Khaled",
     author_email="miliakhaled@gmail.com",
     url="https://github.com/raillogistic/rail-django",
+    license="MIT",
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
         "Django>=4.2.27",
-        "psycopg2-binary>=2.9.9",
+        "psycopg2>=2.9.9",
         "graphene-django>=3.1.5",
         "graphql-relay>=3.2.0",
         "django-filter>=23.2",
@@ -38,7 +39,7 @@ setup(
     extras_require={
         "subscriptions": [
             "channels>=4.0.0",
-            "channels-graphql-ws",
+            "channels-graphql-ws>=0.9.0",
             "daphne>=4.0.0",
         ],
     },
@@ -48,7 +49,7 @@ setup(
         ],
     },
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",
         "Framework :: Django",
         "Framework :: Django :: 4.2",
