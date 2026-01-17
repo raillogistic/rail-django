@@ -30,6 +30,7 @@ setup(
         "psutil>=5.9.0",
         "pyotp>=2.9.0",
         "qrcode>=7.4.2",
+        "PyYAML>=6.0.1",
         "requests>=2.32.4",
         "sentry-sdk>=2.8.0",
         "pillow>=10.3.0",

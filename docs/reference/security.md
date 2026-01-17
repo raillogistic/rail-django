@@ -40,8 +40,8 @@ Authorization uses a hybrid RBAC system:
 - Role definitions live in code (`rail_django.security.rbac.RoleManager`).
 - Assignments use Django `Group` records.
 - The permission manager also checks GraphQLMeta guards (per model).
-- Installed apps can define role definitions in `meta.json` under a top-level
-  `roles` key (additive with code-defined roles).
+- Installed apps can define role definitions in `meta.yaml` (or `meta.json`)
+  under a top-level `roles` key (additive with code-defined roles).
 
 Auto-generated model queries enforce Django model permissions by default. The
 required permission is built as `<app_label>.<codename>_<model>` with the
@@ -53,44 +53,43 @@ GraphQLMeta access guards per model.
 Use GraphQLMeta to guard operations per model and to hide fields. See the
 [GraphQLMeta guide](meta.md) for configuration examples and field-level rules.
 
-### Role definitions in `meta.json`
+### Role definitions in `meta.yaml`
 
-Place a `meta.json` file in the root of a Django app and define roles under
-`roles`. The loader scans installed apps at startup and registers each role
-with `role_manager`. It does not override existing role definitions (for
-example, system roles or GraphQLMeta roles with the same name).
+Place a `meta.yaml` file in the root of a Django app and define roles under
+`roles` (the loader still supports `meta.json` for backward compatibility).
+The loader scans installed apps at startup and registers each role with
+`role_manager`. It does not override existing role definitions (for example,
+system roles or GraphQLMeta roles with the same name).
 
-Example (`apps/store/meta.json`):
+Example (`apps/store/meta.yaml`):
 
-```json
-{
-  "roles": {
-    "catalog_viewer": {
-      "description": "Read-only access to the catalog.",
-      "role_type": "functional",
-      "permissions": ["store.view_product", "store.view_category"]
-    },
-    "catalog_editor": {
-      "description": "Create and update catalog entries.",
-      "role_type": "business",
-      "permissions": [
-        "store.view_product",
-        "store.add_product",
-        "store.change_product"
-      ],
-      "parent_roles": ["catalog_viewer"]
-    },
-    "catalog_admin": {
-      "description": "Full control over catalog data.",
-      "role_type": "system",
-      "permissions": ["store.*"],
-      "parent_roles": ["catalog_editor"],
-      "is_system_role": true,
-      "max_users": 5
-    }
-  },
-  "models": {}
-}
+```yaml
+roles:
+  catalog_viewer:
+    description: Read-only access to the catalog.
+    role_type: functional
+    permissions:
+      - store.view_product
+      - store.view_category
+  catalog_editor:
+    description: Create and update catalog entries.
+    role_type: business
+    permissions:
+      - store.view_product
+      - store.add_product
+      - store.change_product
+    parent_roles:
+      - catalog_viewer
+  catalog_admin:
+    description: Full control over catalog data.
+    role_type: system
+    permissions:
+      - store.*
+    parent_roles:
+      - catalog_editor
+    is_system_role: true
+    max_users: 5
+models: {}
 ```
 
 Notes:

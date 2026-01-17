@@ -1,8 +1,9 @@
 """
-Unit tests for JSON-based GraphQLMeta configuration loading.
+Unit tests for file-based GraphQLMeta configuration loading.
 """
 
 import json
+import textwrap
 from types import SimpleNamespace
 
 import pytest
@@ -27,45 +28,78 @@ def allow_all(user=None, operation=None, info=None, instance=None, model=None):
     return True
 
 
-def test_meta_json_applies_to_models(tmp_path):
-    meta_path = tmp_path / "meta.json"
-    meta_path.write_text(
-        json.dumps(
-            {
-                "roles": {
-                    "meta_role": {
-                        "description": "Meta role",
-                        "role_type": "business",
-                        "permissions": ["project.read"],
-                    }
+META_PAYLOAD = {
+    "roles": {
+        "meta_role": {
+            "description": "Meta role",
+            "role_type": "business",
+            "permissions": ["project.read"],
+        }
+    },
+    "models": {
+        "Category": {
+            "fields": {"exclude": ["description"]},
+            "filtering": {
+                "quick": ["name"],
+                "custom": {
+                    "by_name": "rail_django.tests.unit.test_meta_json.filter_by_name"
                 },
-                "models": {
-                    "Category": {
-                        "fields": {"exclude": ["description"]},
-                        "filtering": {
-                            "quick": ["name"],
-                            "custom": {
-                                "by_name": "rail_django.tests.unit.test_meta_json.filter_by_name"
-                            },
-                        },
-                        "resolvers": {
-                            "queries": {
-                                "custom_list": "rail_django.tests.unit.test_meta_json.resolve_custom_list"
-                            }
-                        },
-                        "access": {
-                            "operations": {
-                                "list": {
-                                    "condition": "rail_django.tests.unit.test_meta_json.allow_all"
-                                }
-                            }
-                        },
+            },
+            "resolvers": {
+                "queries": {
+                    "custom_list": "rail_django.tests.unit.test_meta_json.resolve_custom_list"
+                }
+            },
+            "access": {
+                "operations": {
+                    "list": {
+                        "condition": "rail_django.tests.unit.test_meta_json.allow_all"
                     }
                 }
-            }
-        ),
-        encoding="utf-8",
-    )
+            },
+        }
+    },
+}
+
+YAML_PAYLOAD = textwrap.dedent(
+    """
+    roles:
+      meta_role:
+        description: Meta role
+        role_type: business
+        permissions:
+          - project.read
+    models:
+      Category:
+        fields:
+          exclude:
+            - description
+        filtering:
+          quick:
+            - name
+          custom:
+            by_name: rail_django.tests.unit.test_meta_json.filter_by_name
+        resolvers:
+          queries:
+            custom_list: rail_django.tests.unit.test_meta_json.resolve_custom_list
+        access:
+          operations:
+            list:
+              condition: rail_django.tests.unit.test_meta_json.allow_all
+    """
+).lstrip()
+
+
+@pytest.mark.parametrize(
+    "filename, content",
+    [
+        ("meta.json", json.dumps(META_PAYLOAD)),
+        ("meta.yaml", YAML_PAYLOAD),
+    ],
+)
+def test_meta_file_applies_to_models(tmp_path, filename, content):
+    meta_path = tmp_path / filename
+    meta_path.write_text(content, encoding="utf-8")
 
     clear_meta_configs()
     if hasattr(Category, "_graphql_meta_instance"):
@@ -84,5 +118,39 @@ def test_meta_json_applies_to_models(tmp_path):
     clear_meta_configs()
     role_manager._roles_cache.pop("meta_role", None)
     role_manager._role_hierarchy.pop("meta_role", None)
+    if hasattr(Category, "_graphql_meta_instance"):
+        delattr(Category, "_graphql_meta_instance")
+
+
+def test_meta_yaml_preferred_over_json(tmp_path):
+    yaml_path = tmp_path / "meta.yaml"
+    yaml_path.write_text(
+        textwrap.dedent(
+            """
+            models:
+              Category:
+                fields:
+                  exclude:
+                    - name
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    json_path = tmp_path / "meta.json"
+    json_path.write_text(
+        json.dumps({"models": {"Category": {"fields": {"exclude": ["description"]}}}}),
+        encoding="utf-8",
+    )
+
+    clear_meta_configs()
+    if hasattr(Category, "_graphql_meta_instance"):
+        delattr(Category, "_graphql_meta_instance")
+
+    load_app_meta_configs([SimpleNamespace(path=str(tmp_path), label="test_app")])
+    graphql_meta = get_model_graphql_meta(Category)
+
+    assert graphql_meta.field_config.exclude == ["name"]
+
+    clear_meta_configs()
     if hasattr(Category, "_graphql_meta_instance"):
         delattr(Category, "_graphql_meta_instance")

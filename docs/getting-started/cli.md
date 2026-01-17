@@ -20,7 +20,7 @@ renames `*.py-tpl` files after generation.
 
 Available commands in `rail_django.management.commands`:
 
-- `startapp`: project scaffolding with Rail Django defaults (includes a `meta.json` stub)
+- `startapp`: project scaffolding with Rail Django defaults (includes a `meta.yaml` stub)
 - `setup_security`: create default RBAC groups and permissions
 - `security_check`: run security validation checks
 - `manage_schema_versions`: inspect or update schema versions

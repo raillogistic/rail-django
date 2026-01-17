@@ -118,14 +118,14 @@ class AppConfig(BaseAppConfig):
                 raise
 
     def _load_meta_files(self):
-        """Load meta.json GraphQLMeta definitions from installed apps."""
+        """Load meta.yaml/meta.json GraphQLMeta definitions from installed apps."""
         try:
             from .core.meta_json import load_app_meta_configs
 
             registered_count = load_app_meta_configs()
             if registered_count:
                 logger.info(
-                    "Registered %s GraphQLMeta definitions from meta.json files",
+                    "Registered %s GraphQLMeta definitions from meta files",
                     registered_count,
                 )
         except Exception as exc:

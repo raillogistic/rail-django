@@ -14,7 +14,7 @@ Rail Django offers a granular permission system combining RBAC (Role-Based Acces
 4. [Field Permissions](#field-permissions)
 5. [Policy Engine](#policy-engine)
 6. [GraphQLMeta - Per-Model Configuration](#graphqlmeta---per-model-configuration)
-7. [Defining Roles via meta.json](#defining-roles-via-metajson)
+7. [Defining Roles via meta.yaml](#defining-roles-via-metayaml)
 8. [GraphQL API](#graphql-api)
 9. [Complete Examples](#complete-examples)
 10. [Best Practices](#best-practices)
@@ -422,85 +422,91 @@ class Order(models.Model):
 
 ---
 
-## Defining Roles via meta.json
+## Defining Roles via meta.yaml
 
-Define roles and GraphQL configurations per application in a JSON file:
+Define roles and GraphQL configurations per application in a YAML file:
 
 ### File Structure
 
-```json
-// apps/store/meta.json
-{
-  "roles": {
-    "catalog_viewer": {
-      "description": "Read-only access to the catalog.",
-      "role_type": "functional",
-      "permissions": ["store.view_product", "store.view_category"]
-    },
-    "catalog_editor": {
-      "description": "Create and modify catalog.",
-      "role_type": "business",
-      "permissions": [
-        "store.view_product",
-        "store.add_product",
-        "store.change_product"
-      ],
-      "parent_roles": ["catalog_viewer"]
-    },
-    "catalog_admin": {
-      "description": "Complete catalog administration.",
-      "role_type": "system",
-      "permissions": ["store.*"],
-      "parent_roles": ["catalog_editor"],
-      "is_system_role": true,
-      "max_users": 5
-    }
-  },
-  "models": {
-    "Product": {
-      "fields": {
-        "exclude": ["internal_notes"],
-        "read_only": ["sku"]
-      },
-      "filtering": {
-        "quick": ["name", "category__name"],
-        "fields": {
-          "status": {
-            "lookups": ["exact", "in"],
-            "choices": ["draft", "active"]
-          },
-          "price": ["gt", "lt", "range"]
-        }
-      },
-      "ordering": {
-        "allowed": ["name", "price", "created_at"],
-        "default": ["-created_at"]
-      },
-      "access": {
-        "operations": {
-          "list": { "roles": ["catalog_viewer"] },
-          "update": { "roles": ["catalog_admin"] }
-        },
-        "fields": [
-          {
-            "field": "cost_price",
-            "access": "read",
-            "visibility": "hidden",
-            "roles": ["catalog_admin"]
-          }
-        ]
-      }
-    }
-  }
-}
+```yaml
+# apps/store/meta.yaml
+roles:
+  catalog_viewer:
+    description: Read-only access to the catalog.
+    role_type: functional
+    permissions:
+      - store.view_product
+      - store.view_category
+  catalog_editor:
+    description: Create and modify catalog.
+    role_type: business
+    permissions:
+      - store.view_product
+      - store.add_product
+      - store.change_product
+    parent_roles:
+      - catalog_viewer
+  catalog_admin:
+    description: Complete catalog administration.
+    role_type: system
+    permissions:
+      - store.*
+    parent_roles:
+      - catalog_editor
+    is_system_role: true
+    max_users: 5
+models:
+  Product:
+    fields:
+      exclude:
+        - internal_notes
+      read_only:
+        - sku
+    filtering:
+      quick:
+        - name
+        - category__name
+      fields:
+        status:
+          lookups:
+            - exact
+            - in
+          choices:
+            - draft
+            - active
+        price:
+          - gt
+          - lt
+          - range
+    ordering:
+      allowed:
+        - name
+        - price
+        - created_at
+      default:
+        - -created_at
+    access:
+      operations:
+        list:
+          roles:
+            - catalog_viewer
+        update:
+          roles:
+            - catalog_admin
+      fields:
+        - field: cost_price
+          access: read
+          visibility: hidden
+          roles:
+            - catalog_admin
 ```
 
 ### Important Notes
 
-- Place the file at the application root (`apps/store/meta.json`).
+- Place the file at the application root (`apps/store/meta.yaml`).
 - The loader runs at startup; restart the server to apply changes.
 - Roles are additive and don't replace system roles.
-- If a model defines `GraphQLMeta` in code, it takes priority over JSON.
+- If a model defines `GraphQLMeta` in code, it takes priority over file-based meta.
 
 ---
 
@@ -666,7 +672,7 @@ class PermissionTests(TestCase):
 
 ### 4. Role Documentation
 
-Clearly document roles and their permissions in your `meta.json`:
+Clearly document roles and their permissions in your `meta.yaml`:
 
 ```json
 {

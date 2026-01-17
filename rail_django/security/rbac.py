@@ -12,7 +12,18 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from django.core.cache import cache
 from django.db import models
@@ -33,11 +44,13 @@ def _get_group_model():
 
     return Group
 
+
 logger = logging.getLogger(__name__)
 
 
 class RoleType(Enum):
     """Types de rôles dans le système."""
+
     SYSTEM = "system"  # Rôles système (admin, superuser)
     BUSINESS = "business"  # Rôles métier (manager, employee)
     FUNCTIONAL = "functional"  # Rôles fonctionnels (editor, viewer)
@@ -45,6 +58,7 @@ class RoleType(Enum):
 
 class PermissionScope(Enum):
     """Portée des permissions."""
+
     GLOBAL = "global"  # Permission globale
     ORGANIZATION = "organization"  # Permission au niveau organisation
     DEPARTMENT = "department"  # Permission au niveau département
@@ -55,6 +69,7 @@ class PermissionScope(Enum):
 @dataclass
 class RoleDefinition:
     """Définition d'un rôle."""
+
     name: str
     description: str
     role_type: RoleType
@@ -67,6 +82,7 @@ class RoleDefinition:
 @dataclass
 class PermissionContext:
     """Contexte d'une permission."""
+
     user: "AbstractUser"
     object_id: Optional[str] = None
     object_instance: Optional[models.Model] = None
@@ -138,56 +154,72 @@ class RoleManager:
 
         # Rôles système prédéfinis
         self.system_roles = {
-            'superadmin': RoleDefinition(
-                name='superadmin',
-                description='Super administrateur avec tous les droits',
+            "superadmin": RoleDefinition(
+                name="superadmin",
+                description="Super administrateur avec tous les droits",
                 role_type=RoleType.SYSTEM,
-                permissions=['*'],
+                permissions=["*"],
                 is_system_role=True,
-                max_users=5
+                max_users=5,
             ),
-            'admin': RoleDefinition(
-                name='admin',
-                description='Administrateur système',
+            "admin": RoleDefinition(
+                name="admin",
+                description="Administrateur système",
                 role_type=RoleType.SYSTEM,
                 permissions=[
-                    'user.create', 'user.read', 'user.update', 'user.delete',
-                    'role.create', 'role.read', 'role.update', 'role.delete',
-                    'system.configure', 'audit.read'
+                    "user.create",
+                    "user.read",
+                    "user.update",
+                    "user.delete",
+                    "role.create",
+                    "role.read",
+                    "role.update",
+                    "role.delete",
+                    "system.configure",
+                    "audit.read",
                 ],
                 is_system_role=True,
-                max_users=10
+                max_users=10,
             ),
-            'manager': RoleDefinition(
-                name='manager',
-                description='Gestionnaire métier',
+            "manager": RoleDefinition(
+                name="manager",
+                description="Gestionnaire métier",
                 role_type=RoleType.BUSINESS,
                 permissions=[
-                    'user.read', 'user.update',
-                    'project.create', 'project.read', 'project.update', 'project.delete',
-                    'report.read', 'report.create'
-                ]
+                    "user.read",
+                    "user.update",
+                    "project.create",
+                    "project.read",
+                    "project.update",
+                    "project.delete",
+                    "report.read",
+                    "report.create",
+                ],
             ),
-            'employee': RoleDefinition(
-                name='employee',
-                description='Employé standard',
+            "employee": RoleDefinition(
+                name="employee",
+                description="Employé standard",
                 role_type=RoleType.BUSINESS,
                 permissions=[
-                    'user.read_own', 'user.update_own',
-                    'project.read', 'project.update_assigned',
-                    'task.create', 'task.read', 'task.update_own'
-                ]
+                    "user.read_own",
+                    "user.update_own",
+                    "project.read",
+                    "project.update_assigned",
+                    "task.create",
+                    "task.read",
+                    "task.update_own",
+                ],
             ),
-            'viewer': RoleDefinition(
-                name='viewer',
-                description='Utilisateur en lecture seule',
+            "viewer": RoleDefinition(
+                name="viewer",
+                description="Utilisateur en lecture seule",
                 role_type=RoleType.FUNCTIONAL,
                 permissions=[
-                    'user.read_own',
-                    'project.read_assigned',
-                    'task.read_assigned'
-                ]
-            )
+                    "user.read_own",
+                    "project.read_assigned",
+                    "task.read_assigned",
+                ],
+            ),
         }
 
     def register_role(self, role_definition: RoleDefinition):
@@ -197,7 +229,10 @@ class RoleManager:
         Args:
             role_definition: Définition du rôle à enregistrer
         """
-        if role_definition.name in self.system_roles or role_definition.name in self._roles_cache:
+        if (
+            role_definition.name in self.system_roles
+            or role_definition.name in self._roles_cache
+        ):
             logger.debug("Le rôle '%s' est déjà enregistré", role_definition.name)
             return
         self._roles_cache[role_definition.name] = role_definition
@@ -211,7 +246,11 @@ class RoleManager:
     def register_default_model_roles(self, model_class: type[models.Model]):
         """Crée des rôles CRUD par défaut pour un modèle installé."""
 
-        if not model_class or model_class._meta.abstract or model_class._meta.auto_created:
+        if (
+            not model_class
+            or model_class._meta.abstract
+            or model_class._meta.auto_created
+        ):
             return
 
         model_label = model_class._meta.label_lower
@@ -220,13 +259,13 @@ class RoleManager:
 
         app_label = model_class._meta.app_label
         model_name = model_class._meta.model_name
-        base_role_name = model_label.replace('.', '_')
+        base_role_name = model_label.replace(".", "_")
 
         permissions = {
-            'view': f"{app_label}.view_{model_name}",
-            'add': f"{app_label}.add_{model_name}",
-            'change': f"{app_label}.change_{model_name}",
-            'delete': f"{app_label}.delete_{model_name}",
+            "view": f"{app_label}.view_{model_name}",
+            "add": f"{app_label}.add_{model_name}",
+            "change": f"{app_label}.change_{model_name}",
+            "delete": f"{app_label}.delete_{model_name}",
         }
 
         default_roles = [
@@ -234,23 +273,27 @@ class RoleManager:
                 name=f"{base_role_name}_viewer",
                 description=f"Lecture du modèle {model_label}",
                 role_type=RoleType.BUSINESS,
-                permissions=[permissions['view']],
+                permissions=[permissions["view"]],
             ),
             RoleDefinition(
                 name=f"{base_role_name}_editor",
                 description=f"Gestion de base du modèle {model_label}",
                 role_type=RoleType.BUSINESS,
-                permissions=[permissions['view'], permissions['add'], permissions['change']],
+                permissions=[
+                    permissions["view"],
+                    permissions["add"],
+                    permissions["change"],
+                ],
             ),
             RoleDefinition(
                 name=f"{base_role_name}_manager",
                 description=f"Administration complète du modèle {model_label}",
                 role_type=RoleType.BUSINESS,
                 permissions=[
-                    permissions['view'],
-                    permissions['add'],
-                    permissions['change'],
-                    permissions['delete'],
+                    permissions["view"],
+                    permissions["add"],
+                    permissions["change"],
+                    permissions["delete"],
                 ],
             ),
         ]
@@ -282,7 +325,9 @@ class RoleManager:
         self._assignment_resolvers[key] = resolver
         self._context_resolver_version += 1
 
-    def _normalize_model_key(self, model_class: Union[type[models.Model], str, None]) -> str:
+    def _normalize_model_key(
+        self, model_class: Union[type[models.Model], str, None]
+    ) -> str:
         if model_class is None:
             return ""
         if isinstance(model_class, str):
@@ -359,14 +404,15 @@ class RoleManager:
 
         # Add system roles if applicable
         if user.is_superuser:
-            roles.append('superadmin')
+            roles.append("superadmin")
         elif user.is_staff:
-            roles.append('admin')
+            roles.append("admin")
 
         return roles
 
-    def get_effective_permissions(self, user: "AbstractUser",
-                                  context: PermissionContext = None) -> set[str]:
+    def get_effective_permissions(
+        self, user: "AbstractUser", context: PermissionContext = None
+    ) -> set[str]:
         """
         Récupère les permissions effectives d'un utilisateur.
 
@@ -400,8 +446,9 @@ class RoleManager:
 
         return permissions
 
-    def _get_inherited_permissions(self, role_name: str,
-                                   visited: Optional[set[str]] = None) -> set[str]:
+    def _get_inherited_permissions(
+        self, role_name: str, visited: Optional[set[str]] = None
+    ) -> set[str]:
         """
         Récupère les permissions héritées des rôles parents.
 
@@ -431,14 +478,15 @@ class RoleManager:
 
         return permissions
 
-    def _permission_in_effective_permissions(self, permission: str,
-                                             effective_permissions: set[str]) -> bool:
+    def _permission_in_effective_permissions(
+        self, permission: str, effective_permissions: set[str]
+    ) -> bool:
         if permission in effective_permissions:
             return True
-        if '*' in effective_permissions:
+        if "*" in effective_permissions:
             return True
         for perm in effective_permissions:
-            if perm.endswith('*'):
+            if perm.endswith("*"):
                 prefix = perm[:-1]
                 if permission.startswith(prefix):
                     return True
@@ -492,9 +540,7 @@ class RoleManager:
             if model_class is not None:
                 model_label = self._normalize_model_key(model_class)
             object_id = str(
-                context.object_id
-                or getattr(context.object_instance, "pk", "")
-                or ""
+                context.object_id or getattr(context.object_instance, "pk", "") or ""
             )
             operation = str(context.operation or "")
             is_contextual = permission.endswith("_own") or permission.endswith(
@@ -518,7 +564,9 @@ class RoleManager:
     def _set_cached_permission(self, cache_key: Optional[str], allowed: bool) -> None:
         if not cache_key or not self._permission_cache_ttl:
             return
-        cache.set(cache_key, {"allowed": bool(allowed)}, timeout=self._permission_cache_ttl)
+        cache.set(
+            cache_key, {"allowed": bool(allowed)}, timeout=self._permission_cache_ttl
+        )
 
     def _build_policy_context(
         self,
@@ -556,7 +604,10 @@ class RoleManager:
     def _describe_policy(self, policy: Any) -> PolicyDecisionDetail:
         return PolicyDecisionDetail(
             name=str(getattr(policy, "name", "")),
-            effect=str(getattr(getattr(policy, "effect", None), "value", None) or getattr(policy, "effect", "")),
+            effect=str(
+                getattr(getattr(policy, "effect", None), "value", None)
+                or getattr(policy, "effect", "")
+            ),
             priority=int(getattr(policy, "priority", 0) or 0),
             reason=getattr(policy, "reason", None),
         )
@@ -567,9 +618,8 @@ class RoleManager:
         permission: str,
         context: PermissionContext = None,
     ) -> bool:
-        audit_enabled = (
-            self._permission_audit_enabled
-            and (self._permission_audit_log_all or self._permission_audit_log_denies)
+        audit_enabled = self._permission_audit_enabled and (
+            self._permission_audit_log_all or self._permission_audit_log_denies
         )
         cache_key = self._build_permission_cache_key(
             getattr(user, "id", None), permission, context
@@ -590,9 +640,7 @@ class RoleManager:
             self._permission_audit_log_all
             or (self._permission_audit_log_denies and not allowed)
         ):
-            self._audit_permission_decision(
-                user, permission, context, explanation
-            )
+            self._audit_permission_decision(user, permission, context, explanation)
 
         return allowed
 
@@ -617,9 +665,7 @@ class RoleManager:
     ) -> tuple[bool, Optional[PermissionExplanation]]:
         explanation = None
         if include_explanation:
-            explanation = PermissionExplanation(
-                permission=permission, allowed=False
-            )
+            explanation = PermissionExplanation(permission=permission, allowed=False)
 
         if not user or not getattr(user, "is_authenticated", False):
             if explanation:
@@ -641,13 +687,10 @@ class RoleManager:
                             for match in policy_explanation.matches
                         ]
                         explanation.allowed = decision.allowed
-                        explanation.reason = (
-                            decision.reason
-                            or (
-                                "policy_allow"
-                                if decision.effect == PolicyEffect.ALLOW
-                                else "policy_deny"
-                            )
+                        explanation.reason = decision.reason or (
+                            "policy_allow"
+                            if decision.effect == PolicyEffect.ALLOW
+                            else "policy_deny"
                         )
                     return decision.allowed, explanation
             else:
@@ -692,9 +735,7 @@ class RoleManager:
                 explanation.reason = reason or "context_allowed"
             return allowed, explanation
 
-        if self._permission_in_effective_permissions(
-            permission, effective_permissions
-        ):
+        if self._permission_in_effective_permissions(permission, effective_permissions):
             if explanation:
                 explanation.allowed = True
                 explanation.reason = "permission_granted"
@@ -731,7 +772,9 @@ class RoleManager:
 
         request = None
         if context and isinstance(context.additional_context, dict):
-            request = context.additional_context.get("request") or context.additional_context.get("context")
+            request = context.additional_context.get(
+                "request"
+            ) or context.additional_context.get("context")
 
         model_label = ""
         object_id = ""
@@ -743,9 +786,7 @@ class RoleManager:
             if model_class is not None:
                 model_label = self._normalize_model_key(model_class)
             object_id = str(
-                context.object_id
-                or getattr(context.object_instance, "pk", "")
-                or ""
+                context.object_id or getattr(context.object_instance, "pk", "") or ""
             )
             operation = context.operation
 
@@ -782,13 +823,12 @@ class RoleManager:
             user, permission, context, include_explanation=True
         )
         if explanation is None:
-            explanation = PermissionExplanation(
-                permission=permission, allowed=allowed
-            )
+            explanation = PermissionExplanation(permission=permission, allowed=allowed)
         return explanation
 
-    def _check_contextual_permission(self, user: "AbstractUser",
-                                     permission: str, context: PermissionContext) -> bool:
+    def _check_contextual_permission(
+        self, user: "AbstractUser", permission: str, context: PermissionContext
+    ) -> bool:
         """
         Vérifie les permissions contextuelles.
 
@@ -800,12 +840,12 @@ class RoleManager:
         Returns:
             True si l'utilisateur a la permission dans ce contexte
         """
-        allowed, _ = self._check_contextual_permission_with_reason(
-            permission, context
-        )
+        allowed, _ = self._check_contextual_permission_with_reason(permission, context)
         return allowed
 
-    def _get_context_instance(self, context: PermissionContext) -> Optional[models.Model]:
+    def _get_context_instance(
+        self, context: PermissionContext
+    ) -> Optional[models.Model]:
         if context.object_instance is not None:
             return context.object_instance
         if context.model_class is None or context.object_id is None:
@@ -888,12 +928,12 @@ class RoleManager:
                 return bool(resolved)
 
         user = context.user
-        if hasattr(obj, 'assigned_to'):
+        if hasattr(obj, "assigned_to"):
             assigned_to = obj.assigned_to
             if assigned_to == user:
                 return True
             return getattr(assigned_to, "pk", assigned_to) == getattr(user, "pk", user)
-        if hasattr(obj, 'assignees'):
+        if hasattr(obj, "assignees"):
             try:
                 assignees = obj.assignees.all()
             except Exception:
@@ -920,8 +960,13 @@ class RoleManager:
 
         if role_def.max_users:
             current_count = group.user_set.count()
-            if current_count >= role_def.max_users and not group.user_set.filter(id=user.id).exists():
-                raise ValueError(f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'")
+            if (
+                current_count >= role_def.max_users
+                and not group.user_set.filter(id=user.id).exists()
+            ):
+                raise ValueError(
+                    f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'"
+                )
 
         user.groups.add(group)
         self.invalidate_user_cache(user)
@@ -967,11 +1012,11 @@ def require_role(required_roles: Union[str, list[str]]):
             # Extraire l'utilisateur du contexte GraphQL
             info = None
             for arg in args:
-                if hasattr(arg, 'context'):
+                if hasattr(arg, "context"):
                     info = arg
                     break
 
-            if not info or not hasattr(info.context, 'user'):
+            if not info or not hasattr(info.context, "user"):
                 raise GraphQLError("Contexte utilisateur non disponible")
 
             user = info.context.user
@@ -985,7 +1030,9 @@ def require_role(required_roles: Union[str, list[str]]):
                 raise GraphQLError(f"Rôles requis: {', '.join(required_roles)}")
 
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -1000,6 +1047,7 @@ def require_permission(permission: str, context_func: callable = None):
     Returns:
         Décorateur de vérification de permission
     """
+
     def _extract_object_instance(args, kwargs):
         for key in ("instance", "obj", "object"):
             if key in kwargs and kwargs[key] is not None:
@@ -1062,7 +1110,9 @@ def require_permission(permission: str, context_func: callable = None):
                 "project_id",
                 "additional_context",
             }
-            extra = {key: value for key, value in context.items() if key not in known_keys}
+            extra = {
+                key: value for key, value in context.items() if key not in known_keys
+            }
             additional_context = context.get("additional_context") or extra or None
             context = PermissionContext(
                 user=user,
@@ -1072,9 +1122,7 @@ def require_permission(permission: str, context_func: callable = None):
                     or context.get("object")
                 ),
                 object_id=(
-                    context.get("object_id")
-                    or context.get("id")
-                    or context.get("pk")
+                    context.get("object_id") or context.get("id") or context.get("pk")
                 ),
                 model_class=context.get("model_class"),
                 operation=context.get("operation"),
@@ -1093,7 +1141,9 @@ def require_permission(permission: str, context_func: callable = None):
         if context.additional_context is None:
             context.additional_context = {}
         if info is not None and isinstance(context.additional_context, dict):
-            context.additional_context.setdefault("request", getattr(info, "context", None))
+            context.additional_context.setdefault(
+                "request", getattr(info, "context", None)
+            )
         if context.operation is None and info is not None:
             try:
                 op_value = info.operation.operation.value if info.operation else None
@@ -1129,11 +1179,11 @@ def require_permission(permission: str, context_func: callable = None):
             # Extraire l'utilisateur du contexte GraphQL
             info = None
             for arg in args:
-                if hasattr(arg, 'context'):
+                if hasattr(arg, "context"):
                     info = arg
                     break
 
-            if not info or not hasattr(info.context, 'user'):
+            if not info or not hasattr(info.context, "user"):
                 raise GraphQLError("Contexte utilisateur non disponible")
 
             user = info.context.user
@@ -1150,7 +1200,9 @@ def require_permission(permission: str, context_func: callable = None):
                 raise GraphQLError(f"Permission requise: {permission}")
 
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 

@@ -1,5 +1,5 @@
 """
-Load GraphQLMeta configuration from app-level meta.json files.
+Load GraphQLMeta configuration from app-level meta.yaml or meta.json files.
 """
 
 from __future__ import annotations
@@ -14,12 +14,17 @@ from django.utils.module_loading import import_string
 
 logger = logging.getLogger(__name__)
 
+try:
+    import yaml
+except Exception:  # pragma: no cover - optional dependency
+    yaml = None
+
 _META_CONFIGS: dict[str, object] = {}
 _META_CONFIGS_LOADED = False
 
 
 class JsonGraphQLMeta:
-    """Simple attribute container for JSON-based GraphQLMeta."""
+    """Simple attribute container for file-based GraphQLMeta."""
 
     def __init__(self, payload: dict[str, object]) -> None:
         for key, value in payload.items():
@@ -33,7 +38,7 @@ def load_app_meta_configs(
     app_configs: Optional[Iterable[object]] = None,
 ) -> int:
     """
-    Load meta.json files from installed apps.
+    Load meta.yaml or meta.json files from installed apps.
 
     Args:
         app_configs: Optional iterable of Django app configs. Defaults to all
@@ -52,21 +57,11 @@ def load_app_meta_configs(
         app_path = getattr(app_config, "path", None)
         if not app_path:
             continue
-        meta_path = Path(app_path) / "meta.json"
-        if not meta_path.exists():
+        meta_path = _find_meta_path(app_path)
+        if not meta_path:
             continue
-        try:
-            content = meta_path.read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            logger.warning("Could not read meta file %s: %s", meta_path, exc)
-            continue
-        if not content:
-            logger.debug("Skipping empty meta file %s", meta_path)
-            continue
-        try:
-            payload = json.loads(content)
-        except json.JSONDecodeError as exc:
-            logger.warning("Invalid JSON in meta file %s: %s", meta_path, exc)
+        payload = _load_meta_payload(meta_path)
+        if payload is None:
             continue
 
         _register_roles(payload, meta_path)
@@ -121,7 +116,7 @@ def _extract_model_configs(
     meta_path: Path,
 ) -> dict[str, object]:
     if not isinstance(payload, dict):
-        logger.warning("Meta file %s must be a JSON object", meta_path)
+        logger.warning("Meta file %s must be a mapping", meta_path)
         return {}
     if "models" in payload:
         models = payload.get("models", {})
@@ -129,8 +124,10 @@ def _extract_model_configs(
         models = payload.get("models", {})
     else:
         models = payload
+    if models is None:
+        return {}
     if not isinstance(models, dict):
-        logger.warning("Meta file %s must define a models object", meta_path)
+        logger.warning("Meta file %s must define a models mapping", meta_path)
         return {}
     return models
 
@@ -319,3 +316,52 @@ def _resolve_callable(value: object, meta_path: Path) -> object:
     if callable(resolved):
         return resolved
     return value
+
+
+def _find_meta_path(app_path: str) -> Optional[Path]:
+    base_path = Path(app_path)
+    yaml_path = base_path / "meta.yaml"
+    json_path = base_path / "meta.json"
+    if yaml_path.exists():
+        if json_path.exists():
+            logger.warning(
+                "Both meta.yaml and meta.json found in %s; using meta.yaml",
+                base_path,
+            )
+        return yaml_path
+    if json_path.exists():
+        return json_path
+    return None
+
+
+def _load_meta_payload(meta_path: Path) -> Optional[object]:
+    try:
+        content = meta_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logger.warning("Could not read meta file %s: %s", meta_path, exc)
+        return None
+    if not content:
+        logger.debug("Skipping empty meta file %s", meta_path)
+        return None
+    if meta_path.suffix == ".json":
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            logger.warning("Invalid JSON in meta file %s: %s", meta_path, exc)
+            return None
+        return payload
+    if meta_path.suffix == ".yaml":
+        if yaml is None:
+            logger.warning("PyYAML is required to parse %s", meta_path)
+            return None
+        try:
+            payload = yaml.safe_load(content)
+        except Exception as exc:
+            logger.warning("Invalid YAML in meta file %s: %s", meta_path, exc)
+            return None
+        if payload is None:
+            logger.debug("Skipping empty meta file %s", meta_path)
+            return None
+        return payload
+    logger.warning("Unsupported meta file type for %s", meta_path)
+    return None
