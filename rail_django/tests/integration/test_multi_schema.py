@@ -162,6 +162,100 @@ class TestMultiSchemaRouting(TestCase):
         self.assertIn("test_schema1", schema_names)
         self.assertIn("test_schema2", schema_names)
 
+
+class TestGraphiQLAccess(TestCase):
+    """Tests d'integration pour l'acces GraphiQL."""
+
+    def _graphiql_schema_info(self):
+        schema_info = Mock()
+        schema_info.name = "graphiql"
+        schema_info.enabled = True
+        schema_info.settings = {
+            "schema_settings": {
+                "graphiql_allowed_hosts": ["localhost"],
+                "graphiql_superuser_only": True,
+            }
+        }
+        return schema_info
+
+    @patch("rail_django.core.registry.schema_registry")
+    def test_graphiql_denied_for_non_localhost(self, mock_registry):
+        schema_info = self._graphiql_schema_info()
+        mock_registry.discover_schemas.return_value = None
+        mock_registry.get_schema.return_value = schema_info
+
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {"HTTP_HOST": "example.com"}
+
+        response = view.dispatch(request, schema_name="graphiql")
+
+        self.assertEqual(response.status_code, 404)
+
+    @patch("rail_django.core.registry.schema_registry")
+    def test_graphiql_requires_superuser(self, mock_registry):
+        schema_info = self._graphiql_schema_info()
+        mock_registry.discover_schemas.return_value = None
+        mock_registry.get_schema.return_value = schema_info
+
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {"HTTP_HOST": "localhost"}
+        request.user = Mock(is_authenticated=True, is_superuser=False)
+
+        response = view.dispatch(request, schema_name="graphiql")
+
+        self.assertEqual(response.status_code, 403)
+
+    @patch("rail_django.core.registry.schema_registry")
+    def test_schema_list_hides_graphiql_when_not_authorized(self, mock_registry):
+        schema_info = self._graphiql_schema_info()
+        gql_schema = Mock()
+        gql_schema.name = "gql"
+        gql_schema.enabled = True
+        gql_schema.settings = {}
+        mock_registry.discover_schemas.return_value = None
+        mock_registry.list_schemas.return_value = [gql_schema, schema_info]
+
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {"HTTP_HOST": "example.com"}
+
+        response = SchemaListView().get(request)
+        content = json.loads(response.content.decode("utf-8"))
+
+        schema_names = [schema["name"] for schema in content["schemas"]]
+        self.assertIn("gql", schema_names)
+        self.assertNotIn("graphiql", schema_names)
+
+    @patch("rail_django.core.registry.schema_registry")
+    def test_schema_list_shows_graphiql_for_superuser_localhost(self, mock_registry):
+        schema_info = self._graphiql_schema_info()
+        gql_schema = Mock()
+        gql_schema.name = "gql"
+        gql_schema.enabled = True
+        gql_schema.settings = {}
+        mock_registry.discover_schemas.return_value = None
+        mock_registry.list_schemas.return_value = [gql_schema, schema_info]
+
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {"HTTP_HOST": "localhost"}
+        request.user = Mock(is_authenticated=True, is_superuser=True)
+
+        response = SchemaListView().get(request)
+        content = json.loads(response.content.decode("utf-8"))
+
+        schema_names = [schema["name"] for schema in content["schemas"]]
+        self.assertIn("gql", schema_names)
+        self.assertIn("graphiql", schema_names)
+
 class TestMultiSchemaURLIntegration(TestCase):
     """Tests d'intégration pour les URLs multi-schémas."""
 

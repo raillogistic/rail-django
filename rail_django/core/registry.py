@@ -349,8 +349,11 @@ class SchemaRegistry:
                 settings_proxy = get_schema_settings(name)
 
                 # Build a concrete SchemaSettings dataclass from nested schema_settings
-                schema_settings_dict = settings_proxy.get("schema_settings", {})
-                schema_settings = SchemaSettings(**(schema_settings_dict or {}))
+                schema_settings_dict = settings_proxy.get("schema_settings", {}) or {}
+                valid_fields = SchemaSettings.__dataclass_fields__.keys()
+                schema_settings = SchemaSettings(
+                    **{key: value for key, value in schema_settings_dict.items() if key in valid_fields}
+                )
 
                 # Create raw settings dictionary from the proxy with the actual schema_settings
                 raw_settings = {"schema_settings": schema_settings_dict}

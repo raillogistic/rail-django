@@ -87,8 +87,9 @@ MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-100}
 ACCESS_LOG=${GUNICORN_ACCESS_LOG:--}
 ERROR_LOG=${GUNICORN_ERROR_LOG:--}
 LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
+WSGI_MODULE=${DJANGO_WSGI_MODULE:-root.wsgi:application}
 
-exec gunicorn {{ project_name }}.wsgi:application \
+exec gunicorn "$WSGI_MODULE" \
     --bind 0.0.0.0:8000 \
     --workers $WORKERS \
     --threads $THREADS \

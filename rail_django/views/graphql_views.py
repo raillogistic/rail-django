@@ -18,7 +18,7 @@ from django.views.generic import View
 
 try:
     import graphene
-    from graphene_django.views import GraphQLView
+    from graphene_django.views import GraphQLView, HttpError, HttpResponseBadRequest
 except ImportError:
     raise ImportError(
         "graphene-django is required for GraphQL views. "
@@ -26,6 +26,73 @@ except ImportError:
     )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_host(host: str) -> str:
+    if not host:
+        return ""
+    host = str(host).strip().lower()
+    if host.startswith("["):
+        end = host.find("]")
+        if end != -1:
+            return host[1:end]
+    if host.count(":") == 1:
+        host = host.split(":", 1)[0]
+    return host
+
+
+def _get_request_host(request: HttpRequest) -> str:
+    meta = getattr(request, "META", {}) or {}
+    host = meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or ""
+    if host:
+        return _normalize_host(host)
+    getter = getattr(request, "get_host", None)
+    if callable(getter):
+        try:
+            return _normalize_host(getter())
+        except Exception:
+            pass
+    return ""
+
+
+def _get_request_ip(request: HttpRequest) -> str:
+    meta = getattr(request, "META", {}) or {}
+    forwarded_for = meta.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return meta.get("REMOTE_ADDR", "") or ""
+
+
+def _host_allowed(request: HttpRequest, allowed_hosts: list[str]) -> bool:
+    if not allowed_hosts:
+        return True
+    normalized = {_normalize_host(host) for host in allowed_hosts if host}
+    if not normalized:
+        return True
+    host = _get_request_host(request)
+    if host in normalized:
+        return True
+    client_ip = _get_request_ip(request)
+    if client_ip and _normalize_host(client_ip) in normalized:
+        return True
+    return False
+
+
+def _get_authenticated_user(request: HttpRequest):
+    user = getattr(request, "user", None)
+    if user and getattr(user, "is_authenticated", False):
+        return user
+    try:
+        from django.contrib.auth import get_user
+    except Exception:
+        return None
+    try:
+        session_user = get_user(request)
+    except Exception:
+        return None
+    if session_user and getattr(session_user, "is_authenticated", False):
+        return session_user
+    return None
 
 
 class SchemaRegistryUnavailable(Exception):
@@ -85,11 +152,13 @@ class MultiSchemaGraphQLView(GraphQLView):
             if not hasattr(request, "COOKIES") or not isinstance(request.COOKIES, dict):
                 request.COOKIES = {}
 
+            request_is_batch = None
             if request.method == "POST" and request.body:
                 content_type = request.META.get("CONTENT_TYPE", "").lower()
                 if not content_type or content_type.startswith("application/json"):
                     try:
-                        json.loads(request.body.decode("utf-8"))
+                        parsed_body = json.loads(request.body.decode("utf-8"))
+                        request_is_batch = isinstance(parsed_body, list)
                     except Exception:
                         return JsonResponse(
                             {"errors": [{"message": "Invalid JSON in request body"}]},
@@ -109,6 +178,10 @@ class MultiSchemaGraphQLView(GraphQLView):
             # Check if schema is enabled
             if not getattr(schema_info, "enabled", True):
                 return self._schema_disabled_response(schema_name)
+
+            graphiql_access = self._check_graphiql_access(request, schema_name, schema_info)
+            if graphiql_access is not None:
+                return graphiql_access
 
             # Apply schema-specific configuration
             self._configure_for_schema(schema_info)
@@ -130,7 +203,13 @@ class MultiSchemaGraphQLView(GraphQLView):
             if request.method == "GET" and not self.graphiql and not request.GET.get("query"):
                 return HttpResponseNotAllowed(["POST"])
 
-            return super().dispatch(request, *args, **kwargs)
+            original_batch = self.batch
+            if request_is_batch is False and self.batch:
+                self.batch = False
+            try:
+                return super().dispatch(request, *args, **kwargs)
+            finally:
+                self.batch = original_batch
 
         except SchemaRegistryUnavailable:
             return JsonResponse(
@@ -166,9 +245,9 @@ class MultiSchemaGraphQLView(GraphQLView):
         """
         context = super().get_context(request)
 
-        existing_user = getattr(request, "user", None)
-        if existing_user is not None and getattr(existing_user, "is_authenticated", False):
-            context.user = existing_user
+        user = self._resolve_request_user(request)
+        if user and getattr(user, "is_authenticated", False):
+            context.user = user
         else:
             # Check for JWT token authentication (case-insensitive, robust parsing)
             raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
@@ -176,7 +255,9 @@ class MultiSchemaGraphQLView(GraphQLView):
             header_lower = auth_header.lower()
             if header_lower.startswith("bearer ") or header_lower.startswith("token "):
                 if self._validate_token(auth_header, {}, request=request):
-                    context.user = getattr(request, "user", None)
+                    user = self._resolve_request_user(request)
+                    if user and getattr(user, "is_authenticated", False):
+                        context.user = user
 
         # Add schema name to context for metadata hierarchy
         schema_match = getattr(request, "resolver_match", None)
@@ -184,6 +265,100 @@ class MultiSchemaGraphQLView(GraphQLView):
         context.schema_name = schema_name
 
         return context
+
+    def parse_body(self, request: HttpRequest):
+        """Allow both single and batch JSON payloads when batch mode is enabled."""
+        content_type = self.get_content_type(request)
+
+        if content_type == "application/graphql":
+            return {"query": request.body.decode()}
+
+        if content_type == "application/json":
+            try:
+                body = request.body.decode("utf-8")
+            except Exception as exc:
+                raise HttpError(HttpResponseBadRequest(str(exc)))
+
+            try:
+                request_json = json.loads(body)
+                if self.batch:
+                    if isinstance(request_json, list):
+                        if not request_json:
+                            raise HttpError(
+                                HttpResponseBadRequest(
+                                    "Received an empty list in the batch request."
+                                )
+                            )
+                        return request_json
+                    if isinstance(request_json, dict):
+                        return request_json
+                    raise HttpError(
+                        HttpResponseBadRequest(
+                            "Batch requests should receive a list or object payload."
+                        )
+                    )
+                if isinstance(request_json, dict):
+                    return request_json
+                raise HttpError(
+                    HttpResponseBadRequest(
+                        "The received data is not a valid JSON query."
+                    )
+                )
+            except HttpError:
+                raise
+            except (TypeError, ValueError):
+                raise HttpError(
+                    HttpResponseBadRequest("POST body sent invalid JSON.")
+                )
+
+        if content_type in [
+            "application/x-www-form-urlencoded",
+            "multipart/form-data",
+        ]:
+            return request.POST
+
+        return {}
+
+    def _resolve_request_user(self, request: HttpRequest):
+        user = _get_authenticated_user(request)
+        if user is not None:
+            try:
+                request.user = user
+            except Exception:
+                pass
+        return user
+
+    def _check_graphiql_access(
+        self,
+        request: HttpRequest,
+        schema_name: str,
+        schema_info: dict[str, Any],
+    ) -> Optional[JsonResponse]:
+        if str(schema_name).lower() != "graphiql":
+            return None
+
+        schema_settings = self._get_effective_schema_settings(schema_info)
+        allowed_hosts = schema_settings.get("graphiql_allowed_hosts") or []
+        if not isinstance(allowed_hosts, (list, tuple, set)):
+            allowed_hosts = [str(allowed_hosts)]
+        if not _host_allowed(request, list(allowed_hosts)):
+            return self._schema_not_found_response(schema_name)
+
+        if schema_settings.get("graphiql_superuser_only", False):
+            if not self._check_authentication(request, schema_info):
+                return JsonResponse(
+                    {
+                        "errors": [
+                            {
+                                "message": "Superuser access required",
+                                "extensions": {"code": "superuser_required"},
+                            }
+                        ]
+                    },
+                    status=403,
+                )
+
+        return None
 
     def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
         """
@@ -299,19 +474,29 @@ class MultiSchemaGraphQLView(GraphQLView):
         """
         schema_settings = self._get_effective_schema_settings(schema_info)
         auth_required = schema_settings.get("authentication_required", False)
+        superuser_only = bool(
+            schema_settings.get("graphiql_superuser_only", False)
+            and str(getattr(schema_info, "name", "")).lower() == "graphiql"
+        )
 
-        if not auth_required:
+        user = self._resolve_request_user(request)
+        if user and getattr(user, "is_authenticated", False):
+            if superuser_only and not getattr(user, "is_superuser", False):
+                return False
             return True
 
-        # Check if user is authenticated
-        if hasattr(request, "user") and request.user.is_authenticated:
+        if not auth_required and not superuser_only:
             return True
 
         # Check for API key or token authentication
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
             # Custom token validation logic can be added here
-            return self._validate_token(auth_header, schema_settings, request=request)
+            if self._validate_token(auth_header, schema_settings, request=request):
+                user = self._resolve_request_user(request)
+                if superuser_only and not (user and getattr(user, "is_superuser", False)):
+                    return False
+                return True
 
         return False
 
@@ -601,7 +786,7 @@ class SchemaListView(View):
             from ..core.registry import schema_registry
 
             schema_registry.discover_schemas()
-            schemas = self._serialize_schemas(schema_registry.list_schemas())
+            schemas = self._serialize_schemas(schema_registry.list_schemas(), request=request)
 
             if wants_html:
                 return render(
@@ -628,10 +813,16 @@ class SchemaListView(View):
 
             return JsonResponse({"error": "Failed to list schemas"}, status=500)
 
-    def _serialize_schemas(self, schema_list) -> list[dict[str, Any]]:
+    def _serialize_schemas(
+        self,
+        schema_list,
+        request: Optional[HttpRequest] = None,
+    ) -> list[dict[str, Any]]:
         schemas = []
         for schema_info in schema_list:
             if not schema_info:
+                continue
+            if request and not self._is_graphiql_visible(request, schema_info):
                 continue
             settings_dict = getattr(schema_info, "settings", {}) or {}
             schema_settings = settings_dict.get("schema_settings", {})
@@ -659,6 +850,37 @@ class SchemaListView(View):
             }
             schemas.append(public_info)
         return schemas
+
+    def _is_graphiql_visible(self, request: HttpRequest, schema_info: dict[str, Any]) -> bool:
+        if str(getattr(schema_info, "name", "")).lower() != "graphiql":
+            return True
+
+        schema_settings = self._get_effective_schema_settings(schema_info)
+        allowed_hosts = schema_settings.get("graphiql_allowed_hosts") or []
+        if not isinstance(allowed_hosts, (list, tuple, set)):
+            allowed_hosts = [str(allowed_hosts)]
+        if not _host_allowed(request, list(allowed_hosts)):
+            return False
+
+        if schema_settings.get("graphiql_superuser_only", False):
+            user = _get_authenticated_user(request)
+            if not user or not getattr(user, "is_superuser", False):
+                return False
+
+        return True
+
+    def _get_effective_schema_settings(
+        self, schema_info: dict[str, Any]
+    ) -> dict[str, Any]:
+        schema_settings = getattr(schema_info, "settings", {}) or {}
+        try:
+            from dataclasses import asdict
+            from ..core.settings import SchemaSettings
+
+            resolved_settings = asdict(SchemaSettings.from_schema(schema_info.name))
+            return {**resolved_settings, **schema_settings}
+        except Exception:
+            return schema_settings
 
     def _build_context(self, schemas: list[dict[str, Any]]) -> dict[str, Any]:
         total = len(schemas)

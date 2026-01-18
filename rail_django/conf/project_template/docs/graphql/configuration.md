@@ -64,6 +64,10 @@ Global GraphQL schema configuration.
     "enable_introspection": True,
     # Enables the GraphiQL interface
     "enable_graphiql": True,
+    # Restrict GraphiQL to superusers
+    "graphiql_superuser_only": False,
+    # Allowlist hosts that can access GraphiQL (empty = no restriction)
+    "graphiql_allowed_hosts": [],
     # Rebuild schema after save/delete model (dev only)
     "auto_refresh_on_model_change": False,
     # Rebuild after migrations

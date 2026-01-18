@@ -359,6 +359,23 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+If you need GraphiQL in production, keep it behind superuser auth and
+optionally restrict hosts:
+
+```python
+RAIL_DJANGO_GRAPHQL_SCHEMAS = {
+    "graphiql": {
+        "schema_settings": {
+            "enable_graphiql": True,
+            "enable_introspection": True,
+            "authentication_required": True,
+            "graphiql_superuser_only": True,
+            "graphiql_allowed_hosts": [],
+        }
+    }
+}
+```
+
 The `DjangoDebug` field is only exposed when `DEBUG=True`.
 
 When introspection is disabled, `security_settings.introspection_roles`

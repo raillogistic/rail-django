@@ -92,7 +92,10 @@ def _merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, 
 
 def _legacy_security_settings() -> dict[str, Any]:
     config = getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
-    return config.get("security_settings", {}) or {}
+    security_settings = config.get("security_settings")
+    if security_settings is None:
+        security_settings = config.get("SECURITY")
+    return security_settings or {}
 
 
 def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[dict[str, Any]]:
@@ -100,7 +103,14 @@ def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[d
         return None
     schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {}) or {}
     schema_config = schema_settings.get(schema_name, {}) if isinstance(schema_settings, dict) else {}
-    security_settings = schema_config.get("security_settings", {}) if isinstance(schema_config, dict) else {}
+    if isinstance(schema_config, dict):
+        security_settings = schema_config.get("security_settings")
+        if security_settings is None:
+            security_settings = schema_config.get("SECURITY")
+    else:
+        security_settings = {}
+    if not isinstance(security_settings, dict):
+        security_settings = {}
     rl = security_settings.get("rate_limiting")
     if isinstance(rl, dict):
         return rl
@@ -113,6 +123,8 @@ def _build_legacy_config(schema_name: Optional[str]) -> dict[str, Any]:
 
     security_settings = _legacy_security_settings()
     security_rl_enabled = bool(security_settings.get("enable_rate_limiting", False))
+    legacy_limit = security_settings.get("rate_limit_requests")
+    legacy_window = security_settings.get("rate_limit_window")
 
     graphql_rules: list[RateLimitRule] = []
     if security_rl_enabled:
@@ -131,6 +143,16 @@ def _build_legacy_config(schema_name: Optional[str]) -> dict[str, Any]:
                     window_seconds=3600,
                 ),
             ]
+        )
+
+    if legacy_limit is not None and legacy_window is not None:
+        graphql_rules.append(
+            RateLimitRule(
+                name="legacy_rule",
+                scope="user_or_ip",
+                limit=int(legacy_limit),
+                window_seconds=int(legacy_window),
+            )
         )
 
     graphql_auth_setting = getattr(settings, "GRAPHQL_ENABLE_AUTH_RATE_LIMITING", None)

@@ -14,13 +14,18 @@ ALLOWED_HOSTS = env.list(
     default=env.list('ALLOWED_HOSTS', default=[]),
 )
 
-# Lock down the GraphiQL schema in production.
+# Allow GraphiQL on localhost only for superusers in production.
 if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
-    RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault("schema_settings", {})
+    RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
+        "schema_settings", {}
+    )
     RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
         {
-            "enable_graphiql": False,
-            "enable_introspection": False,
+            "enable_graphiql": True,
+            "enable_introspection": True,
+            "authentication_required": True,
+            "graphiql_superuser_only": True,
+            "graphiql_allowed_hosts": [],
         }
     )
 
@@ -189,10 +194,14 @@ TWILIO_FROM_NUMBER = env('TWILIO_FROM_NUMBER', default='')
 # Use a shared cache backend in production so async exports and rate limiting
 # can coordinate across processes.
 CACHE_PATH = env('CACHE_PATH', default=str(BASE_DIR / 'cache'))
+CACHE_PATH = Path(CACHE_PATH)
+if not CACHE_PATH.is_absolute():
+    CACHE_PATH = BASE_DIR / CACHE_PATH
+CACHE_PATH = CACHE_PATH.resolve()
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-        'LOCATION': CACHE_PATH,
+        'LOCATION': str(CACHE_PATH),
         'KEY_PREFIX': 'rail_django',
         'TIMEOUT': 3600,
     }

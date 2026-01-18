@@ -25,6 +25,8 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "excluded_models": [],
         "enable_introspection": True,
         "enable_graphiql": True,
+        "graphiql_superuser_only": False,
+        "graphiql_allowed_hosts": [],
         "auto_refresh_on_model_change": False,
         "auto_refresh_on_migration": True,
         "prebuild_on_startup": True,

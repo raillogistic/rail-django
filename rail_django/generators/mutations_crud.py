@@ -750,7 +750,12 @@ def generate_delete_mutation(
                 )
 
                 def _perform_delete(info, target):
+                    target_pk = target.pk
                     target.delete()
+                    try:
+                        target.pk = target_pk
+                    except Exception:
+                        pass
                     return target
 
                 audited_delete = _wrap_with_audit(model, "delete", _perform_delete)

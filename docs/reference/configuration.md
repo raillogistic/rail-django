@@ -728,5 +728,8 @@ max_depth = get_setting("performance_settings.max_query_depth", 10)
 - `schema_settings.auto_camelcase` controls GraphQL field naming.
 - `schema_settings.enable_introspection` and `schema_settings.enable_graphiql`
   should be disabled in production.
+- Use `schema_settings.graphiql_superuser_only` and
+  `schema_settings.graphiql_allowed_hosts` on the `graphiql` schema to gate
+  GraphiQL in production. Leave the allowlist empty to permit any host.
 - Caching helpers were removed, but rate limiting uses Django cache; configure
   `CACHES` with a shared backend in production.

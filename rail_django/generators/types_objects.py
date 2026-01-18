@@ -12,6 +12,36 @@ from ..utils.history import serialize_history_changes
 from .inheritance import inheritance_handler
 from .introspector import ModelIntrospector
 
+try:
+    import graphql
+except Exception:
+    graphql = None
+
+try:
+    from promise import Promise
+except Exception:
+    Promise = None
+
+_GRAPHQL_MAJOR = 0
+if graphql is not None:
+    try:
+        _GRAPHQL_MAJOR = int(str(graphql.__version__).split(".")[0])
+    except Exception:
+        _GRAPHQL_MAJOR = 0
+
+
+def _resolve_promise(value):
+    if _GRAPHQL_MAJOR < 3:
+        return value
+    if Promise is None:
+        return value
+    if isinstance(value, Promise):
+        try:
+            return value.get()
+        except Exception:
+            return value
+    return value
+
 
 def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
     """
@@ -341,7 +371,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                         parent_id = getattr(self, "pk", None)
                         if parent_id is None:
                             return []
-                        return loader.load(parent_id)
+                        return _resolve_promise(loader.load(parent_id))
 
                 # Apply filters if provided
                 if filters:

@@ -40,9 +40,15 @@ TEST_GRAPHQL_SETTINGS = {
         "schema_settings": {
             "authentication_required": True,
             "permission_classes": [],
+            "auto_camelcase": True,
+        },
+        "type_generation_settings": {
+            "auto_camelcase": True,
         },
         "SECURITY": {
-            "enable_rate_limiting": False,
+            "enable_rate_limiting": True,
+            "rate_limit_requests": 10,
+            "rate_limit_window": 60,
         },
         "DEVELOPMENT": {
             "verbose_logging": False,
@@ -50,18 +56,36 @@ TEST_GRAPHQL_SETTINGS = {
     },
     "RAIL_DJANGO_GRAPHQL_SCHEMAS": {
         "gql": {
+            "batch": True,
             "schema_settings": {
                 "authentication_required": False,
                 "enable_graphiql": False,
+                "auto_camelcase": True,
             },
         },
         "secure": {
             "schema_settings": {
                 "authentication_required": True,
                 "enable_graphiql": False,
+                "auto_camelcase": True,
             },
         },
     },
+    "CORS_ALLOWED_ORIGINS": [
+        "http://localhost:3000",
+    ],
+    "CORS_ALLOW_METHODS": [
+        "GET",
+        "POST",
+        "OPTIONS",
+    ],
+    "CORS_ALLOW_HEADERS": [
+        "content-type",
+        "authorization",
+    ],
+    "SECURE_CONTENT_TYPE_NOSNIFF": True,
+    "X_FRAME_OPTIONS": "DENY",
+    "SECURE_BROWSER_XSS_FILTER": True,
 }
 
 
@@ -167,24 +191,30 @@ class TestAPIEndpointsIntegration(TestCase):
             """
         }
 
-        # Requête sans authentification
+        # Requête sans authentification sur l'endpoint sécurisé
         response = self.django_client.post(
-            self.graphql_url, data=json.dumps(query), content_type="application/json"
+            self.secure_graphql_url, data=json.dumps(query), content_type="application/json"
         )
 
         response_data = json.loads(response.content)
 
         # Vérifier que l'authentification est requise
-        if "errors" in response_data:
-            error_messages = [
-                error.get("message", "") for error in response_data["errors"]
-            ]
-            auth_required = any(
-                "authentication" in msg.lower() or "login" in msg.lower()
-                for msg in error_messages
-            )
-            if not auth_required:
-                self.skipTest("Authentication not yet implemented")
+        self.assertIn("errors", response_data, "Unauthenticated request should return errors")
+
+        error_messages = [
+            error.get("message", "") for error in response_data["errors"]
+        ]
+        auth_required = any(
+            "authentication" in msg.lower()
+            or "login" in msg.lower()
+            or "unauthorized" in msg.lower()
+            or "not authenticated" in msg.lower()
+            for msg in error_messages
+        )
+        self.assertTrue(
+            auth_required,
+            f"Expected authentication error, got: {error_messages}"
+        )
 
     def test_permission_based_access(self):
         """Test l'accès basé sur les permissions."""
@@ -214,8 +244,8 @@ class TestAPIEndpointsIntegration(TestCase):
 
         # La lecture doit être autorisée
         self.assertEqual(response.status_code, 200)
-        if "data" in response_data:
-            self.assertIsNotNone(response_data["data"])
+        self.assertIn("data", response_data, "Read query should return data")
+        self.assertIsNotNone(response_data["data"])
 
         # Mutation (doit nécessiter des permissions spéciales)
         mutation_query = {
@@ -226,12 +256,15 @@ class TestAPIEndpointsIntegration(TestCase):
                     email: "new@example.com"
                     password: "password123"
                 }) {
-                    user {
+                    ok
+                    object {
                         id
                         username
                     }
-                    success
-                    errors
+                    errors {
+                        field
+                        message
+                    }
                 }
             }
             """
@@ -246,13 +279,27 @@ class TestAPIEndpointsIntegration(TestCase):
         response_data = json.loads(response.content)
 
         # La mutation doit être refusée pour l'utilisateur en lecture seule
+        # Either we get GraphQL errors or the mutation returns success=False
         if "errors" in response_data:
             permission_denied = any(
                 "permission" in error.get("message", "").lower()
+                or "unauthorized" in error.get("message", "").lower()
+                or "forbidden" in error.get("message", "").lower()
+                or "not permitted" in error.get("message", "").lower()
                 for error in response_data["errors"]
             )
-            if not permission_denied:
-                self.skipTest("Permission system not yet implemented")
+            self.assertTrue(
+                permission_denied,
+                f"Expected permission denied error for readonly user, got: {response_data['errors']}"
+            )
+        elif "data" in response_data and response_data["data"]:
+            create_result = response_data["data"].get("createUser")
+            if create_result:
+                # Mutation should fail for readonly user
+                self.assertFalse(
+                    create_result.get("success", False),
+                    "Readonly user should not be able to create users"
+                )
 
     def test_input_validation_endpoint(self):
         """Test la validation des entrées sur l'endpoint."""
@@ -302,11 +349,14 @@ class TestAPIEndpointsIntegration(TestCase):
                     email: "invalid-email"
                     password: "123"
                 }) {
-                    user {
+                    ok
+                    object {
                         id
                     }
-                    success
-                    errors
+                    errors {
+                        field
+                        message
+                    }
                 }
             }
             """
@@ -349,11 +399,11 @@ class TestAPIEndpointsIntegration(TestCase):
             """
         }
 
-        self.django_client.login(username="regular_user", password="user_password")
+        self.django_client.login(username="user_test", password="user_password")
 
-        # Effectuer de nombreuses requêtes rapidement
+        # Effectuer de nombreuses requêtes rapidement (exceed the limit of 10)
         responses = []
-        for i in range(20):  # Plus que la limite normale
+        for i in range(15):
             response = self.django_client.post(
                 self.graphql_url,
                 data=json.dumps(query),
@@ -365,21 +415,24 @@ class TestAPIEndpointsIntegration(TestCase):
         rate_limited = any(response.status_code == 429 for response in responses)
 
         if not rate_limited:
-            # Vérifier dans les réponses GraphQL
+            # Vérifier dans les réponses GraphQL pour rate limit errors
             for response in responses:
                 if response.status_code == 200:
                     response_data = json.loads(response.content)
                     if "errors" in response_data:
                         rate_limit_error = any(
                             "rate limit" in error.get("message", "").lower()
+                            or "too many requests" in error.get("message", "").lower()
                             for error in response_data["errors"]
                         )
                         if rate_limit_error:
                             rate_limited = True
                             break
 
-        if not rate_limited:
-            self.skipTest("Rate limiting not yet implemented")
+        self.assertTrue(
+            rate_limited,
+            "Rate limiting should trigger after exceeding request limit"
+        )
 
     def test_cors_headers_endpoint(self):
         """Test les en-têtes CORS sur l'endpoint."""
@@ -404,21 +457,23 @@ class TestAPIEndpointsIntegration(TestCase):
         )
 
         # Vérifier les en-têtes CORS
-        cors_headers = [
-            "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Methods",
-            "Access-Control-Allow-Headers",
-        ]
+        # At least one CORS header should be present
+        cors_header_present = (
+            "Access-Control-Allow-Origin" in response
+            or "access-control-allow-origin" in {k.lower() for k in response.headers.keys()}
+        )
 
-        cors_configured = any(header in response for header in cors_headers)
+        self.assertTrue(
+            cors_header_present,
+            "CORS headers should be present in response"
+        )
 
-        if not cors_configured:
-            self.skipTest("CORS not yet configured")
-
-        # Vérifier que les en-têtes CORS sont corrects
+        # Vérifier que l'origine est autorisée
         if "Access-Control-Allow-Origin" in response:
             self.assertIn(
-                response["Access-Control-Allow-Origin"], ["*", "http://localhost:3000"]
+                response["Access-Control-Allow-Origin"],
+                ["*", "http://localhost:3000"],
+                "CORS should allow the configured origin"
             )
 
     def test_content_type_handling(self):
@@ -514,24 +569,34 @@ class TestAPIEndpointsIntegration(TestCase):
             content_type="application/json",
         )
 
-        # Vérifier si les requêtes en lot sont supportées
-        if response.status_code == 200:
-            response_data = json.loads(response.content)
+        self.assertEqual(
+            response.status_code, 200,
+            "Batch queries endpoint should return 200"
+        )
 
-            # La réponse doit être une liste pour les requêtes en lot
-            if isinstance(response_data, list):
-                self.assertEqual(len(response_data), 2)
+        response_data = json.loads(response.content)
 
-                # Chaque élément doit avoir une structure de réponse GraphQL
-                for item in response_data:
-                    self.assertTrue("data" in item or "errors" in item)
-        else:
-            self.skipTest("Batch queries not yet supported")
+        # La réponse doit être une liste pour les requêtes en lot
+        self.assertIsInstance(
+            response_data, list,
+            "Batch queries should return a list response"
+        )
+        self.assertEqual(
+            len(response_data), 2,
+            "Batch response should contain 2 results"
+        )
+
+        # Chaque élément doit avoir une structure de réponse GraphQL
+        for i, item in enumerate(response_data):
+            self.assertTrue(
+                "data" in item or "errors" in item,
+                f"Batch response item {i} should have 'data' or 'errors'"
+            )
 
     def test_websocket_subscriptions_endpoint(self):
         """Test les souscriptions WebSocket."""
-        # Ce test nécessite une configuration WebSocket spéciale
-        # Pour l'instant, on vérifie juste que l'endpoint est configuré
+        # Ce test vérifie que subscriptions via HTTP POST sont correctement rejetées
+        # et renvoient une erreur appropriée indiquant que WebSocket est requis
 
         subscription_query = {
             "query": """
@@ -545,7 +610,6 @@ class TestAPIEndpointsIntegration(TestCase):
             """
         }
 
-        # Tenter d'exécuter une souscription via HTTP (doit échouer)
         self.django_client.login(username="admin_test", password="admin_password")
 
         response = self.django_client.post(
@@ -557,16 +621,26 @@ class TestAPIEndpointsIntegration(TestCase):
         response_data = json.loads(response.content)
 
         # Les souscriptions ne doivent pas fonctionner via HTTP POST
-        if "errors" in response_data:
-            subscription_error = any(
-                "subscription" in error.get("message", "").lower()
-                for error in response_data["errors"]
-            )
-            if subscription_error:
-                # C'est le comportement attendu
-                pass
-        else:
-            self.skipTest("Subscriptions not yet implemented")
+        # Elles doivent retourner une erreur explicative
+        self.assertIn(
+            "errors", response_data,
+            "Subscriptions over HTTP should return an error"
+        )
+
+        # Vérifier que l'erreur mentionne les subscriptions ou WebSocket
+        error_messages = [
+            error.get("message", "").lower() for error in response_data["errors"]
+        ]
+        subscription_error = any(
+            "subscription" in msg
+            or "websocket" in msg
+            or "not supported" in msg
+            for msg in error_messages
+        )
+        self.assertTrue(
+            subscription_error,
+            f"Expected subscription/websocket error, got: {error_messages}"
+        )
 
     def test_endpoint_performance(self):
         """Test les performances de l'endpoint."""
@@ -629,27 +703,43 @@ class TestAPIEndpointsIntegration(TestCase):
         )
 
         # Vérifier les en-têtes de sécurité recommandés
-        security_headers = {
-            "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": ["DENY", "SAMEORIGIN"],
-            "X-XSS-Protection": "1; mode=block",
-            "Strict-Transport-Security": None,  # Valeur variable
-            "Content-Security-Policy": None,  # Valeur variable
-        }
+        security_headers_found = []
 
-        security_configured = False
+        # Check for X-Content-Type-Options
+        if "X-Content-Type-Options" in response:
+            self.assertEqual(
+                response["X-Content-Type-Options"], "nosniff",
+                "X-Content-Type-Options should be 'nosniff'"
+            )
+            security_headers_found.append("X-Content-Type-Options")
 
-        for header, expected_values in security_headers.items():
-            if header in response:
-                security_configured = True
+        # Check for X-Frame-Options
+        if "X-Frame-Options" in response:
+            self.assertIn(
+                response["X-Frame-Options"], ["DENY", "SAMEORIGIN"],
+                "X-Frame-Options should be DENY or SAMEORIGIN"
+            )
+            security_headers_found.append("X-Frame-Options")
 
-                if expected_values and isinstance(expected_values, list):
-                    self.assertIn(response[header], expected_values)
-                elif expected_values:
-                    self.assertEqual(response[header], expected_values)
+        # Check for X-XSS-Protection
+        if "X-XSS-Protection" in response:
+            security_headers_found.append("X-XSS-Protection")
 
-        if not security_configured:
-            self.skipTest("Security headers not yet configured")
+        # Check for Content-Security-Policy
+        if "Content-Security-Policy" in response:
+            security_headers_found.append("Content-Security-Policy")
+
+        # Check for Strict-Transport-Security
+        if "Strict-Transport-Security" in response:
+            security_headers_found.append("Strict-Transport-Security")
+
+        # At least some security headers should be present
+        self.assertGreater(
+            len(security_headers_found), 0,
+            "At least one security header should be configured. "
+            "Expected: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, "
+            "Content-Security-Policy, or Strict-Transport-Security"
+        )
 
 
 @pytest.mark.integration

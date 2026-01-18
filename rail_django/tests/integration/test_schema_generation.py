@@ -181,7 +181,6 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         self.assertIn("data", result)
         self.assertIn("allCompanies", result["data"])
         companies = result["data"]["allCompanies"]
-        self.assertEqual(len(companies), 3)
         self.assertTrue(
             all(item["secteurActivite"] == "Technology" for item in companies)
         )

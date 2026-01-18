@@ -12,7 +12,7 @@ import json
 import re
 import uuid
 from datetime import date, datetime, time
-from decimal import Decimal
+from decimal import Decimal as DecimalType
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
@@ -29,6 +29,59 @@ from graphql.language import ast
 
 from ..config_proxy import get_setting
 
+_AST_STRING_VALUE = getattr(ast, "StringValue", None)
+_AST_STRING_VALUE_NODE = getattr(ast, "StringValueNode", None)
+_AST_OBJECT_VALUE = getattr(ast, "ObjectValue", None)
+_AST_OBJECT_VALUE_NODE = getattr(ast, "ObjectValueNode", None)
+_AST_LIST_VALUE = getattr(ast, "ListValue", None)
+_AST_LIST_VALUE_NODE = getattr(ast, "ListValueNode", None)
+_AST_BOOLEAN_VALUE = getattr(ast, "BooleanValue", None)
+_AST_BOOLEAN_VALUE_NODE = getattr(ast, "BooleanValueNode", None)
+_AST_INT_VALUE = getattr(ast, "IntValue", None)
+_AST_INT_VALUE_NODE = getattr(ast, "IntValueNode", None)
+_AST_FLOAT_VALUE = getattr(ast, "FloatValue", None)
+_AST_FLOAT_VALUE_NODE = getattr(ast, "FloatValueNode", None)
+_AST_NULL_VALUE = getattr(ast, "NullValue", None)
+_AST_NULL_VALUE_NODE = getattr(ast, "NullValueNode", None)
+
+_STRING_VALUE_TYPES = tuple(
+    t for t in (_AST_STRING_VALUE, _AST_STRING_VALUE_NODE) if t
+)
+_OBJECT_VALUE_TYPES = tuple(
+    t for t in (_AST_OBJECT_VALUE, _AST_OBJECT_VALUE_NODE) if t
+)
+_LIST_VALUE_TYPES = tuple(
+    t for t in (_AST_LIST_VALUE, _AST_LIST_VALUE_NODE) if t
+)
+_BOOLEAN_VALUE_TYPES = tuple(
+    t for t in (_AST_BOOLEAN_VALUE, _AST_BOOLEAN_VALUE_NODE) if t
+)
+_INT_VALUE_TYPES = tuple(
+    t for t in (_AST_INT_VALUE, _AST_INT_VALUE_NODE) if t
+)
+_FLOAT_VALUE_TYPES = tuple(
+    t for t in (_AST_FLOAT_VALUE, _AST_FLOAT_VALUE_NODE) if t
+)
+_NULL_VALUE_TYPES = tuple(
+    t for t in (_AST_NULL_VALUE, _AST_NULL_VALUE_NODE) if t
+)
+
+try:
+    from graphene.types.decimal import Decimal as GrapheneDecimal
+except Exception:
+    GrapheneDecimal = None
+
+if GrapheneDecimal is not None:
+    _graphene_decimal_parse_literal = GrapheneDecimal.parse_literal
+
+    def _patched_graphene_decimal_parse_literal(cls, node, _variables=None):
+        if _FLOAT_VALUE_TYPES and isinstance(node, _FLOAT_VALUE_TYPES):
+            return cls.parse_value(node.value)
+        return _graphene_decimal_parse_literal(node, _variables)
+
+    GrapheneDecimal.parse_literal = classmethod(
+        _patched_graphene_decimal_parse_literal
+    )
 
 class DateTime(Scalar):
     """
@@ -51,9 +104,9 @@ class DateTime(Scalar):
         return dt.isoformat()
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> datetime:
+    def parse_literal(node: ast.Node, _variables=None) -> datetime:
         """Parse AST literal to datetime."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return DateTime.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as DateTime")
@@ -96,9 +149,9 @@ class Date(Scalar):
         return d.isoformat()
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> date:
+    def parse_literal(node: ast.Node, _variables=None) -> date:
         """Parse AST literal to date."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return Date.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Date")
@@ -136,9 +189,9 @@ class Time(Scalar):
         return t.isoformat()
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> time:
+    def parse_literal(node: ast.Node, _variables=None) -> time:
         """Parse AST literal to time."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return Time.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Time")
@@ -176,21 +229,21 @@ class JSON(Scalar):
             raise GraphQLError(f"Cannot serialize value as JSON: {e}")
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> Any:
+    def parse_literal(node: ast.Node, _variables=None) -> Any:
         """Parse AST literal to Python object."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return JSON.parse_value(node.value)
-        elif isinstance(node, ast.ObjectValue):
+        elif _OBJECT_VALUE_TYPES and isinstance(node, _OBJECT_VALUE_TYPES):
             return {field.name.value: JSON.parse_literal(field.value) for field in node.fields}
-        elif isinstance(node, ast.ListValue):
+        elif _LIST_VALUE_TYPES and isinstance(node, _LIST_VALUE_TYPES):
             return [JSON.parse_literal(value) for value in node.values]
-        elif isinstance(node, ast.BooleanValue):
+        elif _BOOLEAN_VALUE_TYPES and isinstance(node, _BOOLEAN_VALUE_TYPES):
             return node.value
-        elif isinstance(node, ast.IntValue):
+        elif _INT_VALUE_TYPES and isinstance(node, _INT_VALUE_TYPES):
             return int(node.value)
-        elif isinstance(node, ast.FloatValue):
+        elif _FLOAT_VALUE_TYPES and isinstance(node, _FLOAT_VALUE_TYPES):
             return float(node.value)
-        elif isinstance(node, ast.NullValue):
+        elif _NULL_VALUE_TYPES and isinstance(node, _NULL_VALUE_TYPES):
             return None
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as JSON")
@@ -224,9 +277,9 @@ class UUID(Scalar):
         return str(value)
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> uuid.UUID:
+    def parse_literal(node: ast.Node, _variables=None) -> uuid.UUID:
         """Parse AST literal to UUID."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return UUID.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as UUID")
@@ -265,9 +318,9 @@ class Email(Scalar):
         return value
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> str:
+    def parse_literal(node: ast.Node, _variables=None) -> str:
         """Parse AST literal to email string."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return Email.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Email")
@@ -304,9 +357,9 @@ class URL(Scalar):
         return value
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> str:
+    def parse_literal(node: ast.Node, _variables=None) -> str:
         """Parse AST literal to URL string."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return URL.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as URL")
@@ -356,9 +409,9 @@ class Phone(Scalar):
         return value
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> str:
+    def parse_literal(node: ast.Node, _variables=None) -> str:
         """Parse AST literal to phone string."""
-        if isinstance(node, ast.StringValue):
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return Phone.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Phone")
@@ -390,26 +443,30 @@ class Decimal(Scalar):
     """
 
     @staticmethod
-    def serialize(value: Decimal) -> str:
+    def serialize(value: DecimalType) -> str:
         """Serialize Decimal to string."""
-        if not isinstance(value, Decimal):
+        if not isinstance(value, DecimalType):
             raise GraphQLError(f"Value must be a Decimal object, got {type(value).__name__}")
 
         return str(value)
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> Decimal:
+    def parse_literal(node: ast.Node, _variables=None) -> DecimalType:
         """Parse AST literal to Decimal."""
-        if isinstance(node, (ast.StringValue, ast.IntValue, ast.FloatValue)):
+        if (
+            (_STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES))
+            or (_INT_VALUE_TYPES and isinstance(node, _INT_VALUE_TYPES))
+            or (_FLOAT_VALUE_TYPES and isinstance(node, _FLOAT_VALUE_TYPES))
+        ):
             return Decimal.parse_value(node.value)
 
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Decimal")
 
     @staticmethod
-    def parse_value(value: Union[str, int, float]) -> Decimal:
+    def parse_value(value: Union[str, int, float]) -> DecimalType:
         """Parse value to Decimal."""
         try:
-            return Decimal(str(value))
+            return DecimalType(str(value))
         except (ValueError, TypeError) as e:
             raise GraphQLError(f"Invalid Decimal format: {e}")
 
@@ -459,8 +516,8 @@ class Binary(Scalar):
         return Binary._build_url(filename)
 
     @staticmethod
-    def parse_literal(node: ast.Node) -> Optional[bytes]:
-        if isinstance(node, ast.StringValue):
+    def parse_literal(node: ast.Node, _variables=None) -> Optional[bytes]:
+        if _STRING_VALUE_TYPES and isinstance(node, _STRING_VALUE_TYPES):
             return Binary.parse_value(node.value)
         raise GraphQLError(f"Cannot parse {type(node).__name__} as Binary")
 

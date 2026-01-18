@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv311Scriptspython.exe -m pytest rail_django/tests/integration/test_api_endpoints.py -v)"
+    ]
+  }
+}

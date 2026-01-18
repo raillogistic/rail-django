@@ -449,6 +449,12 @@ class SchemaSettings:
     # Enable GraphiQL interface
     enable_graphiql: bool = True
 
+    # Restrict GraphiQL access to superusers (primarily for the graphiql schema)
+    graphiql_superuser_only: bool = False
+
+    # Allowlist of hostnames/IPs allowed to access GraphiQL
+    graphiql_allowed_hosts: list[str] = field(default_factory=list)
+
     # Auto-refresh schema when models change
     auto_refresh_on_model_change: bool = False
 
