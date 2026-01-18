@@ -58,6 +58,7 @@ fi
 
 if is_truthy "${RUN_MIGRATIONS:-true}"; then
     echo "Running migrations..."
+    python manage.py makemigrations
     python manage.py migrate
 fi
 

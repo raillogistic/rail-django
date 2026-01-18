@@ -23,11 +23,15 @@ nano .env
 - `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
+- `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
 
 **Optional runtime toggles:**
 - `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Disable if you prefer to run these manually.
 - `DJANGO_CHECK_DEPLOY`: Run `python manage.py check --deploy` on container start.
 - `MEDIA_PATH`: Host path for uploads (absolute or relative to `deploy/docker/`).
+
+**Optional deploy controls:**
+- `DEPLOY_REFRESH_DEPS`: Force base dependency rebuild during deploy (useful when `requirements/base.txt` changes).
 
 **Optional Gunicorn tuning:**
 - `GUNICORN_WORKERS`, `GUNICORN_THREADS`
@@ -48,8 +52,10 @@ certs exist, builds/starts containers, and runs migrations + collectstatic.
 
 ### Optional Flags
 ```bash
-bash deploy/deploy.sh --create-superuser --follow-logs
+bash deploy/deploy.sh --create-superuser --follow-logs --refresh-deps
 ```
+Use `--refresh-deps` to bust the base dependency layer; the `rail-django` Git
+install is refreshed on every build.
 
 ### Non-Interactive Superuser (CI/Automation)
 Set these in your `.env` and re-run the script:
@@ -78,6 +84,7 @@ EOF
 
 bash deploy/deploy.sh
 ```
+Add `DEPLOY_REFRESH_DEPS=1` if you need to rebuild base dependencies.
 
 ## 3. Manual Deployment Steps
 
@@ -118,6 +125,8 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml logs -f
 ```
+Log files are also written to `/home/app/web/logs` inside the container. If you
+set `LOG_PATH`, read them directly on the host.
 
 ### Stopping the Application
 ```bash
@@ -131,6 +140,9 @@ docker-compose -f deploy/docker/docker-compose.yml down
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
 ```
+Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
+need to rebuild base dependencies. The `rail-django` Git install is refreshed
+on every build.
 
 ## 6. Security Recommendations
 

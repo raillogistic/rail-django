@@ -1,2 +1,1 @@
 -r base.txt
-git+https://github.com/raillogistic/rail-django.git

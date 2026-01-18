@@ -54,6 +54,7 @@ class QueryAnalysisResult:
     field_count: int
     operation_count: int
     has_introspection: bool
+    introspection_only: bool
     has_mutations: bool
     execution_time_estimate: float
     threat_level: SecurityThreatLevel
@@ -143,6 +144,7 @@ class GraphQLSecurityAnalyzer:
             field_count=0,
             operation_count=0,
             has_introspection=False,
+            introspection_only=True,
             has_mutations=False,
             execution_time_estimate=0.0,
             threat_level=SecurityThreatLevel.LOW,
@@ -174,6 +176,9 @@ class GraphQLSecurityAnalyzer:
                     parent_type=schema.query_type if definition.operation.value == 'query' else schema.mutation_type,
                     fragments=fragments,
                 )
+
+        if not result.has_introspection:
+            result.introspection_only = False
 
         # Calculer le temps d'exécution estimé
         result.execution_time_estimate = time.time() - start_time
@@ -212,6 +217,8 @@ class GraphQLSecurityAnalyzer:
                 # Vérifier l'introspection
                 if selection.name.value in ['__schema', '__type', '__typename']:
                     result.has_introspection = True
+                elif depth == 1:
+                    result.introspection_only = False
 
                 # Calculer la complexité du champ
                 field_complexity = self._calculate_field_complexity(
@@ -392,7 +399,9 @@ class GraphQLSecurityAnalyzer:
                 )
     
         # Vérifier la profondeur
-        if self.config.enable_depth_limiting:
+        if self.config.enable_depth_limiting and not (
+            result.introspection_only and self.config.enable_introspection
+        ):
             if result.depth > self.config.max_query_depth:
                 result.blocked_reasons.append(
                     f"Profondeur de requête trop élevée: {result.depth} > {self.config.max_query_depth}"

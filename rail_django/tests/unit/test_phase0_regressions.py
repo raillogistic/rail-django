@@ -5,6 +5,7 @@ Targeted regression tests for Phase 0 stabilization.
 from types import SimpleNamespace
 
 import graphene
+from graphql import get_introspection_query, parse
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
@@ -15,6 +16,7 @@ from rail_django.extensions.optimization import optimize_query
 from rail_django.generators.queries import QueryGenerator
 from rail_django.generators.types import TypeGenerator
 from rail_django.security.graphql_security import (
+    GraphQLSecurityAnalyzer,
     SecurityConfig,
     create_security_middleware,
 )
@@ -95,6 +97,35 @@ class TestPhase0Regressions(TestCase):
 
         self.assertTrue(result.errors)
         self.assertIn("complex", result.errors[0].message.lower())
+
+    def test_graphql_security_allows_introspection_depth(self):
+        class Query(graphene.ObjectType):
+            ping = graphene.String()
+
+            def resolve_ping(root, info):
+                return "pong"
+
+        schema = graphene.Schema(query=Query)
+        analyzer = GraphQLSecurityAnalyzer(
+            SecurityConfig(
+                max_query_depth=10,
+                enable_introspection=True,
+                enable_depth_limiting=True,
+                enable_query_cost_analysis=False,
+            )
+        )
+        document = parse(get_introspection_query())
+
+        result = analyzer.analyze_query(document, schema.graphql_schema)
+
+        self.assertTrue(result.has_introspection)
+        self.assertTrue(result.introspection_only)
+        self.assertFalse(
+            any(
+                "Profondeur" in reason or "depth" in reason
+                for reason in result.blocked_reasons
+            )
+        )
 
     def test_schema_builder_respects_authentication_required_override(self):
         harness = build_schema(

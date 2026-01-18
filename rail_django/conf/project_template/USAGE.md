@@ -114,7 +114,9 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     ```bash
     python manage.py runserver
     ```
-    Access the GraphiQL playground at: `http://localhost:8000/graphql/graphiql/`
+    Access GraphiQL at: `http://localhost:8000/graphql/graphiql/`. In production,
+    GraphiQL is superuser-only; log in and use the auth cookies set by the
+    `login` mutation for requests.
 
 ### Dependency Management
 
@@ -122,12 +124,20 @@ Rail Django uses a split requirements system to separate development and product
 
 - `requirements/base.txt`: Core dependencies required for the application to run.
 - `requirements/dev.txt`: Extends `base.txt` with development tools (e.g., `black`) and installs `rail-django` from PyPI or locally.
-- `requirements/prod.txt`: Extends `base.txt` with production-specific settings and installs `rail-django` directly from the official GitHub repository.
+- `requirements/prod.txt`: Extends `base.txt` with production-specific settings.
+- `requirements/rail-django.txt`: Installs `rail-django` directly from the official GitHub repository (keep separate for frequent updates).
 
 To install dependencies for development:
 
 ```bash
 pip install -r requirements/dev.txt
+```
+
+To install dependencies for production (non-Docker):
+
+```bash
+pip install -r requirements/prod.txt
+pip install --upgrade --no-cache-dir -r requirements/rail-django.txt
 ```
 
 ### Project Structure
@@ -191,6 +201,10 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_introspection": True,
         # Disable in production to remove the UI
         "enable_graphiql": True,
+        # Restrict GraphiQL to superusers
+        "graphiql_superuser_only": False,
+        # Allowlist hosts for GraphiQL (empty = any host)
+        "graphiql_allowed_hosts": [],
         # Auto-rebuild on model saves/deletes (dev only)
         "auto_refresh_on_model_change": False,
         # Rebuild schema after migrations
@@ -1730,9 +1744,11 @@ Ensure these are set in production (see `.env.example`):
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `DATABASE_URL`: Connection string for PostgreSQL.
 - `CACHE_PATH`: Path for the shared cache backend (file-based).
+- `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
 - Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
 - Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
 - Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
+- Optional: `DEPLOY_REFRESH_DEPS` (force dependency rebuild on deploy).
 
 ### Production Checklist
 
@@ -1788,6 +1804,8 @@ nano .env
 - `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
+- `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
+- Optional: `DEPLOY_REFRESH_DEPS` (force dependency rebuild on deploy).
 
 ### 2. Deployment Steps
 
@@ -1836,6 +1854,8 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml logs -f
 ```
+Log files are also written to `/home/app/web/logs` inside the container. If you
+set `LOG_PATH`, read them directly on the host.
 
 #### Stopping the Application
 
@@ -1852,6 +1872,9 @@ docker-compose -f deploy/docker/docker-compose.yml down
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
 ```
+Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
+need to rebuild base dependencies. The `rail-django` Git install is refreshed
+on every build.
 
 ### 5. Security Recommendations
 

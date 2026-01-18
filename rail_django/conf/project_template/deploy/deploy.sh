@@ -28,6 +28,7 @@ CREATE_SUPERUSER=0
 FOLLOW_LOGS=0
 SKIP_MIGRATE=0
 SKIP_COLLECTSTATIC=0
+REFRESH_DEPS=0
 
 usage() {
   cat <<'EOF'
@@ -36,6 +37,7 @@ Usage: deploy.sh [options]
 Options:
   --create-superuser   Run Django createsuperuser (interactive).
   --follow-logs        Follow docker logs after deployment.
+  --refresh-deps       Rebuild dependency layer (useful for git-based deps).
   --skip-migrate       Skip running migrations after containers start.
   --skip-collectstatic Skip collectstatic after containers start.
   -h, --help           Show this help message.
@@ -45,6 +47,8 @@ Environment:
   DEPLOY_CREATE_SUPERUSER=1
                        Create a superuser non-interactively from .env values.
                        Requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD.
+  DEPLOY_REFRESH_DEPS=1
+                       Force dependency layer rebuild on deploy.
 EOF
 }
 
@@ -52,6 +56,7 @@ for arg in "$@"; do
   case "$arg" in
     --create-superuser) CREATE_SUPERUSER=1 ;;
     --follow-logs) FOLLOW_LOGS=1 ;;
+    --refresh-deps) REFRESH_DEPS=1 ;;
     --skip-migrate) SKIP_MIGRATE=1 ;;
     --skip-collectstatic) SKIP_COLLECTSTATIC=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -173,7 +178,18 @@ else
 fi
 
 note "Building and starting containers..."
-"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d --build
+build_args=()
+build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
+if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
+  build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
+fi
+
+if [ ${#build_args[@]} -gt 0 ]; then
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
+else
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d --build
+fi
 
 note "Waiting for web container..."
 attempts=30

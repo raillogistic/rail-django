@@ -27,6 +27,8 @@ RUN apt-get update && \
 COPY requirements/ requirements/
 RUN pip install --upgrade pip
 RUN mkdir -p /app/wheels
+ARG RAIL_DEP_CACHE_BUST=0
+RUN echo "Dependency cache bust: ${RAIL_DEP_CACHE_BUST}" > /app/.dep_cache_bust
 RUN if [ -d requirements/wheels ] && [ "$(ls -A requirements/wheels)" ]; then \
         cp -r requirements/wheels/. /app/wheels; \
     else \
@@ -58,6 +60,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1
 
+ARG RAIL_GIT_CACHE_BUST=0
+
 # create directory for the app user
 RUN mkdir -p /home/app
 
@@ -81,6 +85,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libffi-dev \
+    vim nano \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -88,6 +93,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements/ requirements/
 RUN pip install --no-cache-dir --no-index /wheels/*
+RUN echo "Rail git cache bust: ${RAIL_GIT_CACHE_BUST}" > $APP_HOME/.rail_git_cache_bust
+RUN pip install --no-cache-dir --upgrade --no-deps -r requirements/rail-django.txt
 
 # copy entrypoint.sh
 COPY deploy/docker/entrypoint.sh $APP_HOME/entrypoint.sh
