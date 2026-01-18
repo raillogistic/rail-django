@@ -14,6 +14,16 @@ ALLOWED_HOSTS = env.list(
     default=env.list('ALLOWED_HOSTS', default=[]),
 )
 
+# Prebuild schemas on startup in production to avoid first-request latency.
+if "RAIL_DJANGO_GRAPHQL" in globals():
+    RAIL_DJANGO_GRAPHQL.setdefault("schema_settings", {})
+    RAIL_DJANGO_GRAPHQL["schema_settings"]["prebuild_on_startup"] = True
+
+if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
+    for schema_config in RAIL_DJANGO_GRAPHQL_SCHEMAS.values():
+        schema_config.setdefault("schema_settings", {})
+        schema_config["schema_settings"]["prebuild_on_startup"] = True
+
 # Allow GraphiQL on localhost only for superusers in production.
 if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
     RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
