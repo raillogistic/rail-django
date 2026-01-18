@@ -240,6 +240,66 @@ query RecentProducts {
 }
 ```
 
+### Nested Filter Style (Prisma/Hasura)
+
+Rail Django also supports a nested filter syntax with typed per-field inputs:
+
+```graphql
+query NestedFilters {
+  products(
+    where: {
+      name: { icontains: "premium" }
+      price: { gte: 100, lte: 500 }
+      category_rel: { name: { eq: "Electronics" } }
+      AND: [
+        { is_active: { eq: true } }
+        { stock: { gt: 0 } }
+      ]
+    }
+  ) {
+    id
+    name
+    price
+  }
+}
+```
+
+Enable nested filters in settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "query_settings": {
+        "filter_input_style": "nested",  # Use nested style
+        # Or enable both:
+        "enable_dual_filter_styles": True,
+    },
+}
+```
+
+#### Relation Quantifiers
+
+For M2M and reverse relations:
+
+```graphql
+query ProductsWithTags {
+  products(
+    where: {
+      # At least one tag matches
+      tags_some: { name: { eq: "featured" } }
+
+      # Count-based filter
+      reviews_count: { gte: 5 }
+
+      # None match (exclusion)
+      tags_none: { name: { eq: "discontinued" } }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
 ---
 
 ## Pagination

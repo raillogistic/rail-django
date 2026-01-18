@@ -187,6 +187,9 @@ Common filter operators include:
 
 The filter set is generated from model fields and GraphQLMeta overrides.
 
+For advanced filtering with nested syntax (Prisma/Hasura style), see the
+[Filtering Guide](./filtering.md).
+
 ## Paginated query
 
 Paginated fields return `items` and `page_info`.

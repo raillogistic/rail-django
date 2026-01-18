@@ -73,3 +73,16 @@ class Profile(models.Model):
     class Meta:
         app_label = "test_app"
         verbose_name_plural = "profiles"
+
+
+class OrderItem(models.Model):
+    """Order item for testing reverse relation count fields."""
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="order_items"
+    )
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        app_label = "test_app"
+        verbose_name_plural = "order items"

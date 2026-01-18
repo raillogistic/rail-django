@@ -28,6 +28,10 @@ RAIL_DJANGO_GRAPHQL = {
         "additional_lookup_fields": {},
         "require_model_permissions": True,
         "model_permission_codename": "view",
+        # Filter input style: "nested" (default, Prisma/Hasura) or "flat" (Django __lookup)
+        "filter_input_style": "nested",
+        # Enable both filter styles (generates 'filters' and 'where' arguments)
+        "enable_dual_filter_styles": False,
     },
     "mutation_settings": {
         "enable_create": True,

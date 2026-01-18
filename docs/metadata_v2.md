@@ -280,7 +280,99 @@ type FSMTransition {
 }
 ```
 
-### 6. Model Permissions Matrix
+### 6. Filter Schema
+
+Rail Django supports two filter input styles. The metadata exposes filter information accordingly:
+
+```graphql
+type FilterSchema {
+  # Identity
+  name: String!
+  verbose_name: String!
+
+  # Style information
+  style: FilterStyle!              # FLAT or NESTED
+  argument_name: String!           # "filters" or "where"
+  input_type_name: String!         # e.g., "UserComplexFilter" or "UserWhereInput"
+
+  # Available operators (for nested style)
+  operators: [FilterOperator!]
+
+  # Field filters
+  field_filters: [FieldFilterSchema!]!
+
+  # Relation filters (nested style only)
+  relation_filters: [RelationFilterSchema!]
+
+  # Boolean operators available
+  supports_and: Boolean!
+  supports_or: Boolean!
+  supports_not: Boolean!
+}
+
+enum FilterStyle {
+  FLAT    # Django-style: field__lookup
+  NESTED  # Prisma/Hasura-style: field: { lookup: value }
+}
+
+type FilterOperator {
+  name: String!           # eq, neq, icontains, etc.
+  description: String!
+  graphql_type: String!   # String, Int, Boolean, etc.
+  is_list: Boolean!       # True for "in", "not_in", "between"
+}
+
+type FieldFilterSchema {
+  field_name: String!
+  field_type: String!           # CharField, IntegerField, etc.
+  filter_input_type: String!    # StringFilterInput, IntFilterInput, etc.
+  available_operators: [String!]!
+}
+
+type RelationFilterSchema {
+  relation_name: String!
+  relation_type: RelationType!
+
+  # Quantifier filters (for M2M and reverse relations)
+  supports_some: Boolean!       # {relation}_some
+  supports_every: Boolean!      # {relation}_every
+  supports_none: Boolean!       # {relation}_none
+  supports_count: Boolean!      # {relation}_count
+
+  # Nested filter type
+  nested_filter_type: String    # e.g., "CategoryWhereInput"
+}
+```
+
+#### Filter Style Configuration
+
+Configure the filter style in Django settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "query_settings": {
+        # "flat" (default Django-style) or "nested" (Prisma/Hasura-style)
+        "filter_input_style": "nested",
+
+        # Enable both styles simultaneously
+        "enable_dual_filter_styles": True,
+    }
+}
+```
+
+#### Nested Filter Operators by Type
+
+| Field Type | Operators |
+|------------|-----------|
+| String | `eq`, `neq`, `contains`, `icontains`, `starts_with`, `istarts_with`, `ends_with`, `iends_with`, `in`, `not_in`, `is_null`, `regex`, `iregex` |
+| Int/Float | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null` |
+| Boolean | `eq`, `is_null` |
+| Date | All numeric operators + `year`, `month`, `day`, `week_day`, `today`, `yesterday`, `this_week`, `past_week`, `this_month`, `past_month`, `this_year`, `past_year` |
+| DateTime | All Date operators + `hour`, `minute`, `date` |
+| ID/UUID | `eq`, `neq`, `in`, `not_in`, `is_null` |
+| JSON | `eq`, `is_null`, `has_key`, `has_keys`, `has_any_keys` |
+
+### 7. Model Permissions Matrix
 
 ```graphql
 type ModelPermissions {

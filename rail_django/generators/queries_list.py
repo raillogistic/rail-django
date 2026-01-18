@@ -20,6 +20,18 @@ from .queries_ordering import get_default_ordering
 
 logger = logging.getLogger(__name__)
 
+
+def _get_nested_filter_generator(schema_name: str):
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterInputGenerator
+    return NestedFilterInputGenerator(schema_name=schema_name)
+
+
+def _get_nested_filter_applicator():
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterApplicator
+    return NestedFilterApplicator()
+
 def generate_single_query(
     self, model: type[models.Model], manager_name: str = "objects"
 ) -> graphene.Field:
@@ -65,6 +77,10 @@ def generate_list_query(
     Generates a query field for retrieving a list of model instances using the specified manager.
     For polymorphic models, returns the base model type to allow querying all instances.
     Supports advanced filtering, pagination, and ordering.
+
+    Supports two filter styles based on settings.filter_input_style:
+    - "flat" (default): Django-style filters with __lookups (e.g., name__icontains)
+    - "nested": Prisma/Hasura-style with typed inputs (e.g., name: { icontains: "..." })
     """
     model_type = self.type_generator.generate_object_type(model)
     model_name = model.__name__.lower()
@@ -74,10 +90,30 @@ def generate_list_query(
         ordering_config = type(
             "OrderingConfig", (), {"allowed": [], "default": []}
         )()
+
+    # Get filter style setting
+    filter_style = getattr(self.settings, "filter_input_style", "flat")
+    enable_dual_styles = getattr(self.settings, "enable_dual_filter_styles", False)
+
+    # Generate filter classes based on style
     filter_class = self.filter_generator.generate_filter_set(model)
-    complex_filter_input = self.filter_generator.generate_complex_filter_input(
-        model
-    )
+    complex_filter_input = None
+    nested_where_input = None
+    nested_filter_applicator = None
+
+    # Always generate flat filter if style is flat or dual is enabled
+    if filter_style == "flat" or enable_dual_styles:
+        complex_filter_input = self.filter_generator.generate_complex_filter_input(model)
+
+    # Generate nested filter if style is nested or dual is enabled
+    if filter_style == "nested" or enable_dual_styles:
+        try:
+            nested_generator = _get_nested_filter_generator(self.schema_name)
+            nested_where_input = nested_generator.generate_where_input(model)
+            nested_filter_applicator = _get_nested_filter_applicator()
+        except Exception as e:
+            logger.warning(f"Could not generate nested filter for {model.__name__}: {e}")
+
     if self.settings.use_relay and DjangoFilterConnectionField is not None:
         # Use Relay connection for cursor-based pagination
         @optimize_query()
@@ -114,7 +150,14 @@ def generate_list_query(
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
-        # Apply advanced filtering
+        # Apply nested 'where' filtering (Prisma/Hasura style)
+        where = kwargs.get("where")
+        if where and nested_filter_applicator:
+            queryset = nested_filter_applicator.apply_where_filter(
+                queryset, where, model
+            )
+
+        # Apply advanced filtering (flat style)
         filters = kwargs.get("filters")
         if filters:
             queryset = self.filter_generator.apply_complex_filters(
@@ -125,7 +168,7 @@ def generate_list_query(
         basic_filters = {
             k: v
             for k, v in kwargs.items()
-            if k not in ["filters", "order_by", "offset", "limit", "include"]
+            if k not in ["filters", "where", "order_by", "offset", "limit", "include"]
         }
         if basic_filters and filter_class:
             filterset = filter_class(basic_filters, queryset)
@@ -189,10 +232,18 @@ def generate_list_query(
 
     arguments = {}
 
+    # Add flat-style filter argument
     if complex_filter_input:
         arguments["filters"] = graphene.Argument(
             complex_filter_input,
-            description="Advanced filtering with AND, OR, NOT operations",
+            description="Advanced filtering with AND, OR, NOT operations (flat Django-style lookups)",
+        )
+
+    # Add nested-style where argument (Prisma/Hasura style)
+    if nested_where_input:
+        arguments["where"] = graphene.Argument(
+            nested_where_input,
+            description="Nested filtering with typed field inputs (Prisma/Hasura style)",
         )
 
     # Add basic filtering arguments if filter class is available

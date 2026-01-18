@@ -11,6 +11,7 @@ The generators support:
 - Nested operations
 - Custom scalars
 - Model inheritance
+- Two filter styles: flat (Django-style) and nested (Prisma/Hasura-style)
 """
 
 from typing import TYPE_CHECKING
@@ -21,6 +22,18 @@ if TYPE_CHECKING:
     from .mutations import MutationGenerator
     from .queries import QueryGenerator
     from .types import TypeGenerator
+    from .filter_inputs import (
+        NestedFilterInputGenerator,
+        NestedFilterApplicator,
+        StringFilterInput,
+        IntFilterInput,
+        FloatFilterInput,
+        BooleanFilterInput,
+        DateFilterInput,
+        DateTimeFilterInput,
+        IDFilterInput,
+        CountFilterInput,
+    )
 
 __all__ = [
     "TypeGenerator",
@@ -31,6 +44,18 @@ __all__ = [
     "get_query_generator",
     "get_mutation_generator",
     "get_model_introspector",
+    # Nested filter inputs
+    "NestedFilterInputGenerator",
+    "NestedFilterApplicator",
+    "StringFilterInput",
+    "IntFilterInput",
+    "FloatFilterInput",
+    "BooleanFilterInput",
+    "DateFilterInput",
+    "DateTimeFilterInput",
+    "IDFilterInput",
+    "CountFilterInput",
+    "get_nested_filter_generator",
 ]
 
 
@@ -102,3 +127,22 @@ def get_model_introspector(model, schema_name: str | None = None):
     from .introspector import ModelIntrospector
 
     return ModelIntrospector.for_model(model, schema_name)
+
+
+def get_nested_filter_generator(schema_name: str = "default", max_depth: int = 3):
+    """
+    Get a NestedFilterInputGenerator instance for Prisma/Hasura-style filtering.
+
+    Args:
+        schema_name: Name of the schema (for multi-schema support)
+        max_depth: Maximum nesting depth for relation filters
+
+    Returns:
+        NestedFilterInputGenerator: Nested filter generator instance
+    """
+    from .filter_inputs import NestedFilterInputGenerator
+
+    return NestedFilterInputGenerator(
+        max_nested_depth=max_depth,
+        schema_name=schema_name,
+    )

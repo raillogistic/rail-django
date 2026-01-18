@@ -168,6 +168,13 @@ GraphQL query configuration.
     # Uses Relay connections instead of lists
     "use_relay": False,
 
+    # ─── Filter Input Style ───
+    # "nested": Prisma/Hasura style (where: { name: { icontains: "x" } }) - default
+    # "flat": Django-style __lookups (filters: { name__icontains: "x" })
+    "filter_input_style": "nested",
+    # Enable both filter styles simultaneously
+    "enable_dual_filter_styles": False,
+
     # ─── Pagination ───
     "default_page_size": 20,
     "max_page_size": 100,

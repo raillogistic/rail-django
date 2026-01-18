@@ -255,6 +255,14 @@ class QueryGeneratorSettings:
     # Permission codename required to query a model
     model_permission_codename: str = "view"
 
+    # Filter input style: "flat" (default, Django-style __lookups) or "nested" (Prisma/Hasura style)
+    # "flat" generates: filters: { name__icontains: "john", age__gte: 18 }
+    # "nested" generates: where: { name: { icontains: "john" }, age: { gte: 18 } }
+    filter_input_style: str = "nested"
+
+    # Enable both filter styles (generates both 'filters' and 'where' arguments)
+    enable_dual_filter_styles: bool = False
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "QueryGeneratorSettings":
         """

@@ -703,6 +703,66 @@ class FilterFieldType(graphene.ObjectType):
         description="Nested filter fields for related model attributes",
     )
 
+    # New fields for nested filter style support
+    filter_input_type = graphene.String(
+        description="Nested filter input type (e.g., StringFilterInput)"
+    )
+    available_operators = graphene.List(
+        graphene.String,
+        description="Available operators for nested filter style",
+    )
+
+
+class FilterStyleEnum(graphene.Enum):
+    """Filter input style enumeration."""
+
+    FLAT = "flat"
+    NESTED = "nested"
+
+
+class FilterConfigType(graphene.ObjectType):
+    """Filter configuration for a model."""
+
+    style = graphene.Field(
+        FilterStyleEnum, required=True, description="Filter input style"
+    )
+    argument_name = graphene.String(
+        required=True, description="GraphQL argument name ('filters' or 'where')"
+    )
+    input_type_name = graphene.String(
+        required=True, description="Filter input type name"
+    )
+    supports_and = graphene.Boolean(required=True, description="Supports AND operator")
+    supports_or = graphene.Boolean(required=True, description="Supports OR operator")
+    supports_not = graphene.Boolean(required=True, description="Supports NOT operator")
+    dual_mode_enabled = graphene.Boolean(
+        required=True, description="Both filter styles available"
+    )
+
+
+class RelationFilterType(graphene.ObjectType):
+    """Relation filter metadata for M2M and reverse relations."""
+
+    relation_name = graphene.String(required=True, description="Relation field name")
+    relation_type = graphene.String(
+        required=True, description="Type (MANY_TO_MANY, REVERSE_FK)"
+    )
+    supports_some = graphene.Boolean(
+        required=True, description="Supports _some quantifier"
+    )
+    supports_every = graphene.Boolean(
+        required=True, description="Supports _every quantifier"
+    )
+    supports_none = graphene.Boolean(
+        required=True, description="Supports _none quantifier"
+    )
+    supports_count = graphene.Boolean(
+        required=True, description="Supports _count filter"
+    )
+    nested_filter_type = graphene.String(
+        description="Nested filter input type for the related model"
+    )
+
 
 class InputFieldMetadataType(graphene.ObjectType):
     """GraphQL type for input field metadata."""

@@ -309,22 +309,69 @@ class MutationSchemaType(graphene.ObjectType):
 
 
 class FilterOptionSchemaType(graphene.ObjectType):
-    """Filter option schema."""
+    """Filter option/operator schema."""
 
     name = graphene.String(required=True)
     lookup = graphene.String(required=True)
     help_text = graphene.String()
     choices = graphene.List(ChoiceTypeV2)
+    graphql_type = graphene.String(description="GraphQL type for this operator")
+    is_list = graphene.Boolean(description="Whether this operator accepts a list")
+
+
+class FilterStyleEnum(graphene.Enum):
+    """Filter input style."""
+
+    FLAT = "flat"
+    NESTED = "nested"
+
+
+class RelationFilterSchemaType(graphene.ObjectType):
+    """Relation filter schema for M2M and reverse relations."""
+
+    relation_name = graphene.String(required=True)
+    relation_type = graphene.String(required=True)
+    supports_some = graphene.Boolean(required=True)
+    supports_every = graphene.Boolean(required=True)
+    supports_none = graphene.Boolean(required=True)
+    supports_count = graphene.Boolean(required=True)
+    nested_filter_type = graphene.String()
 
 
 class FilterSchemaType(graphene.ObjectType):
-    """Filter field schema."""
+    """Filter field schema with support for both flat and nested styles."""
 
     field_name = graphene.String(required=True)
     field_label = graphene.String(required=True)
     is_nested = graphene.Boolean(required=True)
     related_model = graphene.String()
     options = graphene.List(FilterOptionSchemaType, required=True)
+
+    # New fields for nested filter style
+    filter_input_type = graphene.String(
+        description="Filter input type (e.g., StringFilterInput)"
+    )
+    available_operators = graphene.List(
+        graphene.String, description="Available operators for nested style"
+    )
+
+
+class FilterConfigType(graphene.ObjectType):
+    """Overall filter configuration for a model."""
+
+    style = graphene.Field(FilterStyleEnum, required=True)
+    argument_name = graphene.String(
+        required=True, description="'filters' for flat, 'where' for nested"
+    )
+    input_type_name = graphene.String(
+        required=True, description="e.g., UserComplexFilter or UserWhereInput"
+    )
+    supports_and = graphene.Boolean(required=True)
+    supports_or = graphene.Boolean(required=True)
+    supports_not = graphene.Boolean(required=True)
+    dual_mode_enabled = graphene.Boolean(
+        required=True, description="Both filter styles available"
+    )
 
 
 class ModelPermissionsType(graphene.ObjectType):
@@ -389,6 +436,13 @@ class ModelSchemaType(graphene.ObjectType):
 
     # Filters
     filters = graphene.List(FilterSchemaType, required=True)
+    filter_config = graphene.Field(
+        FilterConfigType, description="Filter style configuration"
+    )
+    relation_filters = graphene.List(
+        RelationFilterSchemaType,
+        description="Relation filters for M2M and reverse relations (nested style)",
+    )
 
     # Mutations
     mutations = graphene.List(MutationSchemaType, required=True)
@@ -471,6 +525,8 @@ class ModelSchemaExtractor:
             "fields": self._extract_fields(model, user),
             "relationships": self._extract_relationships(model, user),
             "filters": self._extract_filters(model),
+            "filter_config": self._extract_filter_config(model),
+            "relation_filters": self._extract_relation_filters(model),
             "mutations": self._extract_mutations(model, user),
             "permissions": self._extract_permissions(model, user),
             "field_groups": self._extract_field_groups(model, graphql_meta),
@@ -737,8 +793,69 @@ class ModelSchemaExtractor:
             return None
 
     def _extract_filters(self, model: type[models.Model]) -> list[dict]:
-        """Extract available filters."""
+        """Extract available filters with support for both flat and nested styles."""
         filters = []
+        settings = get_core_schema_settings(self.schema_name)
+        filter_style = getattr(settings, "filter_input_style", "flat")
+
+        # Mapping from Django field types to nested filter input types
+        field_to_filter_input = {
+            "CharField": "StringFilterInput",
+            "TextField": "StringFilterInput",
+            "EmailField": "StringFilterInput",
+            "URLField": "StringFilterInput",
+            "SlugField": "StringFilterInput",
+            "IntegerField": "IntFilterInput",
+            "SmallIntegerField": "IntFilterInput",
+            "BigIntegerField": "IntFilterInput",
+            "PositiveIntegerField": "IntFilterInput",
+            "AutoField": "IntFilterInput",
+            "BigAutoField": "IntFilterInput",
+            "FloatField": "FloatFilterInput",
+            "DecimalField": "FloatFilterInput",
+            "BooleanField": "BooleanFilterInput",
+            "NullBooleanField": "BooleanFilterInput",
+            "DateField": "DateFilterInput",
+            "DateTimeField": "DateTimeFilterInput",
+            "UUIDField": "UUIDFilterInput",
+            "JSONField": "JSONFilterInput",
+            "ForeignKey": "IDFilterInput",
+            "OneToOneField": "IDFilterInput",
+        }
+
+        # Operators by filter input type
+        operators_by_type = {
+            "StringFilterInput": [
+                "eq", "neq", "contains", "icontains", "starts_with",
+                "istarts_with", "ends_with", "iends_with", "in", "not_in",
+                "is_null", "regex", "iregex"
+            ],
+            "IntFilterInput": [
+                "eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in",
+                "between", "is_null"
+            ],
+            "FloatFilterInput": [
+                "eq", "neq", "gt", "gte", "lt", "lte", "in", "not_in",
+                "between", "is_null"
+            ],
+            "BooleanFilterInput": ["eq", "is_null"],
+            "DateFilterInput": [
+                "eq", "neq", "gt", "gte", "lt", "lte", "between", "is_null",
+                "year", "month", "day", "week_day", "today", "yesterday",
+                "this_week", "past_week", "this_month", "past_month",
+                "this_year", "past_year"
+            ],
+            "DateTimeFilterInput": [
+                "eq", "neq", "gt", "gte", "lt", "lte", "between", "is_null",
+                "year", "month", "day", "week_day", "hour", "minute", "date",
+                "today", "yesterday", "this_week", "past_week", "this_month",
+                "past_month", "this_year", "past_year"
+            ],
+            "IDFilterInput": ["eq", "neq", "in", "not_in", "is_null"],
+            "UUIDFilterInput": ["eq", "neq", "in", "not_in", "is_null"],
+            "JSONFilterInput": ["eq", "is_null", "has_key", "has_keys", "has_any_keys"],
+        }
+
         for field in model._meta.get_fields():
             if not hasattr(field, "name"):
                 continue
@@ -749,6 +866,9 @@ class ModelSchemaExtractor:
             options = self._get_filter_options(field_type, field)
 
             if options:
+                filter_input_type = field_to_filter_input.get(field_type)
+                available_operators = operators_by_type.get(filter_input_type, [])
+
                 filters.append(
                     {
                         "field_name": field.name,
@@ -758,9 +878,78 @@ class ModelSchemaExtractor:
                         if field.is_relation and hasattr(field, "related_model")
                         else None,
                         "options": options,
+                        "filter_input_type": filter_input_type,
+                        "available_operators": available_operators,
                     }
                 )
         return filters
+
+    def _extract_filter_config(self, model: type[models.Model]) -> dict:
+        """Extract filter configuration for the model."""
+        settings = get_core_schema_settings(self.schema_name)
+        filter_style = getattr(settings, "filter_input_style", "flat")
+        dual_mode = getattr(settings, "enable_dual_filter_styles", False)
+
+        model_name = model.__name__
+
+        if filter_style == "nested":
+            return {
+                "style": "NESTED",
+                "argument_name": "where",
+                "input_type_name": f"{model_name}WhereInput",
+                "supports_and": True,
+                "supports_or": True,
+                "supports_not": True,
+                "dual_mode_enabled": dual_mode,
+            }
+        else:
+            return {
+                "style": "FLAT",
+                "argument_name": "filters",
+                "input_type_name": f"{model_name}ComplexFilter",
+                "supports_and": True,
+                "supports_or": True,
+                "supports_not": True,
+                "dual_mode_enabled": dual_mode,
+            }
+
+    def _extract_relation_filters(self, model: type[models.Model]) -> list[dict]:
+        """Extract relation filter metadata for M2M and reverse relations."""
+        settings = get_core_schema_settings(self.schema_name)
+        filter_style = getattr(settings, "filter_input_style", "flat")
+
+        # Only relevant for nested style
+        if filter_style != "nested":
+            return []
+
+        relation_filters = []
+        for field in model._meta.get_fields():
+            if not hasattr(field, "name"):
+                continue
+
+            is_m2m = isinstance(field, models.ManyToManyField)
+            is_reverse = hasattr(field, "related_model") and not hasattr(field, "remote_field")
+            is_reverse_m2m = hasattr(field, "many_to_many") and field.many_to_many
+            is_reverse_fk = hasattr(field, "one_to_many") and field.one_to_many
+
+            if is_m2m or is_reverse_m2m or is_reverse_fk:
+                related_model = getattr(field, "related_model", None)
+                if not related_model:
+                    continue
+
+                relation_type = "MANY_TO_MANY" if (is_m2m or is_reverse_m2m) else "REVERSE_FK"
+
+                relation_filters.append({
+                    "relation_name": field.name,
+                    "relation_type": relation_type,
+                    "supports_some": True,
+                    "supports_every": True,
+                    "supports_none": True,
+                    "supports_count": True,
+                    "nested_filter_type": f"{related_model.__name__}WhereInput",
+                })
+
+        return relation_filters
 
     def _get_filter_options(self, field_type: str, field: models.Field) -> list[dict]:
         """Get filter options for a field type."""
@@ -1050,6 +1239,10 @@ __all__ = [
     "RelationshipSchemaType",
     "MutationSchemaType",
     "FilterSchemaType",
+    "FilterConfigType",
+    "FilterStyleEnum",
+    "FilterOptionSchemaType",
+    "RelationFilterSchemaType",
     "ModelPermissionsType",
     "ModelSchemaExtractor",
     "invalidate_metadata_v2_cache",

@@ -24,7 +24,7 @@ from graphene_django import DjangoObjectType
 
 from rail_django.core.meta import get_model_graphql_meta
 from rail_django.security.field_permissions import field_permission_manager
-from rail_django.security.rbac import role_manager
+from rail_django.security.rbac import PermissionContext, role_manager
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser

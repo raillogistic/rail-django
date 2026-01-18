@@ -4,11 +4,13 @@ This document describes a safe, repeatable testing strategy for rail-django and
 the helpers available in `rail_django.testing`.
 
 ## Goals
+
 - Catch security and correctness regressions early.
 - Keep the test suite fast enough for daily iteration.
 - Provide clear coverage for core GraphQL generation, security, and performance.
 
 ## Test Pyramid
+
 1. Unit tests (fast, no DB):
    - Settings resolution, error handling, and query analysis.
    - Type/query/mutation generators with lightweight model fixtures.
@@ -20,6 +22,7 @@ the helpers available in `rail_django.testing`.
    - Known security edge cases (depth, complexity, input validation).
 
 ## What to Cover
+
 - Schema build flow: discovery, registry, schema settings overrides.
 - Query generation: filters, ordering, pagination, grouping.
 - Mutation generation: validation, nested ops, error mapping.
@@ -28,13 +31,16 @@ the helpers available in `rail_django.testing`.
 - Error handling: correct mapping of Django and GraphQL errors.
 
 ## Using the Testing Module
+
 The `rail_django.testing` package provides:
+
 - `build_schema(...)` to build a schema with a local registry.
 - `RailGraphQLTestClient` to execute GraphQL queries with a request context.
 - `build_request(...)` and `build_context(...)` for middleware-compatible contexts.
 - `override_rail_settings(...)` to isolate settings in a test scope.
 
 Example:
+
 ```python
 from rail_django.testing import build_schema, RailGraphQLTestClient
 
@@ -57,21 +63,24 @@ Speed tip: register a schema with explicit `apps`/`models` (even for the
 apps.
 
 ## Organization and Markers
+
 - `rail_django/tests/unit`: pure unit tests, no DB.
 - `rail_django/tests/integration`: DB and schema execution tests.
 - Use pytest markers: `@pytest.mark.unit`, `@pytest.mark.integration`.
-Pytest defaults to `rail_django.conf.test_settings`, which uses SQLite via
-`rail_django/conf/framework_settings.py`. Override `DJANGO_SETTINGS_MODULE` if
-you need another database backend.
+  Pytest defaults to `rail_django.conf.test_settings`, which uses SQLite via
+  `rail_django/conf/framework_settings.py`. Override `DJANGO_SETTINGS_MODULE` if
+  you need another database backend.
 
 ## Test status
 
 See CI for the latest test results.
 
 ## Full test inventory
+
 This is the full map of every test module and its focus.
 
 ### Unit tests
+
 - `rail_django/tests/unit/test_auth_decorators.py`: JWT view decorators, optional auth, permission enforcement.
 - `rail_django/tests/unit/test_decorators.py`: schema registration decorators and mutation/business decorator metadata.
 - `rail_django/tests/unit/test_exporting.py`: ModelExporter allowlists, formula sanitization, field formatters, filter and ordering validation, csv/xlsx outputs.
@@ -103,6 +112,9 @@ This is the full map of every test module and its focus.
 - `rail_django/tests/unit/test_virus_scanner.py`: mock scanner clean vs threat, quarantine list/delete.
 
 ### Integration tests
+
+run using integration tests using .venv311\Scripts\python with DJANGO_SETTINGS_MODULE=rail_django.conf.test_settings
+
 - `rail_django/tests/integration/test_api_endpoints.py`: API endpoints for GraphQL/REST, auth/permissions, rate limiting, CORS, batching, subscriptions (contains skips where features are toggled off).
 - `rail_django/tests/integration/test_database_operations.py`: CRUD operations, relationships, transactions, constraints, concurrency, validation.
 - `rail_django/tests/integration/test_export_view.py`: export endpoint CSV response with JWT auth and allowlists.
@@ -115,9 +127,11 @@ This is the full map of every test module and its focus.
 - `rail_django/tests/integration/test_schema_generation.py`: schema build, introspection, query/mutation execution, filtering/pagination, error handling, concurrency/perf (business method mutation remains skipped).
 
 ### Health system tests
+
 - `rail_django/tests/test_health_system.py`: health checks, metrics, dashboard/API endpoints, caching, load/perf behaviors.
 
 ## Running Tests
+
 ```bash
 pytest -m unit
 pytest -m integration
@@ -125,17 +139,20 @@ pytest -m "not integration"
 ```
 
 For the Django test runner (used in CI):
+
 ```bash
 DJANGO_SETTINGS_MODULE=rail_django.conf.framework_settings \
 python -m django test rail_django.tests.unit
 ```
 
 Lint check used in CI:
+
 ```bash
 python -m black --check rail_django/testing rail_django/tests/unit/test_phase0_regressions.py
 ```
 
 ## Regression Checklist (before release)
+
 - Run unit + integration tests.
 - Validate schema build in production settings (no debug fields).
 - Verify security limits (depth/complexity/introspection).

@@ -21,7 +21,7 @@ from graphene import Boolean, DateTime, Int
 from graphene import List as GrapheneList
 from graphene import ObjectType, String
 from graphene_django import DjangoObjectType
-from test_app.models import Category, Post, Tag
+from test_app.models import Category, Post, Tag, Product, OrderItem, Comment
 
 from rail_django.generators.introspector import FieldInfo, ModelIntrospector
 from rail_django.generators.types import TypeGenerator
@@ -313,3 +313,61 @@ class TestAdvancedTypeGeneration(TestCase):
         fields = extended_type._meta.fields
         self.assertIn("name", fields)  # Champ hérité
         self.assertIn("niveau_experience", fields)  # Nouveau champ
+
+
+class TestReverseRelationCountFields(TestCase):
+    """Tests for reverse relation count field generation."""
+
+    def setUp(self):
+        """Set up the type generator."""
+        self.type_generator = TypeGenerator()
+
+    def test_reverse_relation_count_field_generated(self):
+        """Test that _count fields are generated for reverse relations."""
+        # Product has a reverse relation from OrderItem (order_items)
+        product_type = self.type_generator.generate_object_type(Product)
+        fields = product_type._meta.fields
+
+        # Should have the order_items_count field
+        self.assertIn("order_items_count", fields)
+
+    def test_reverse_relation_count_field_is_int(self):
+        """Test that _count fields are Int type."""
+        product_type = self.type_generator.generate_object_type(Product)
+        fields = product_type._meta.fields
+
+        count_field = fields.get("order_items_count")
+        self.assertIsNotNone(count_field)
+        # The field type should resolve to Int
+        field_type = count_field.type
+        if hasattr(field_type, "of_type"):
+            # NonNull wrapper
+            self.assertEqual(field_type.of_type, graphene.Int)
+        else:
+            self.assertEqual(field_type, graphene.Int)
+
+    def test_reverse_relation_list_field_generated(self):
+        """Test that reverse relation list fields are generated."""
+        product_type = self.type_generator.generate_object_type(Product)
+        fields = product_type._meta.fields
+
+        # Should have the order_items field (list)
+        self.assertIn("order_items", fields)
+
+    def test_category_posts_count_field(self):
+        """Test count field for Category -> Post relation."""
+        category_type = self.type_generator.generate_object_type(Category)
+        fields = category_type._meta.fields
+
+        # Category has posts reverse relation
+        self.assertIn("posts_count", fields)
+        self.assertIn("posts", fields)
+
+    def test_post_comments_count_field(self):
+        """Test count field for Post -> Comment relation."""
+        post_type = self.type_generator.generate_object_type(Post)
+        fields = post_type._meta.fields
+
+        # Post has comments reverse relation
+        self.assertIn("comments_count", fields)
+        self.assertIn("comments", fields)
