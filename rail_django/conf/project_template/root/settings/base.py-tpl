@@ -219,7 +219,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Auto-refresh schema after migrations are applied
         "auto_refresh_on_migration": True,
         # Build schema immediately on server startup
-        "prebuild_on_startup": False,
+        "prebuild_on_startup": True,
         # Require authentication for all queries by default
         "authentication_required": True,
         # Enable pagination globally for list queries

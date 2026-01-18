@@ -7,6 +7,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpRequest, HttpResponseNotAllowed, JsonResponse
 from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import render
@@ -25,7 +26,12 @@ except ImportError:
         "Install it with: pip install graphene-django"
     )
 
+from graphql import ExecutionResult, parse
+from graphql.language.ast import FieldNode, OperationDefinitionNode
+
 logger = logging.getLogger(__name__)
+
+_INTROSPECTION_FIELDS = {"__schema", "__type", "__typename"}
 
 
 def _normalize_host(host: str) -> str:
@@ -136,6 +142,7 @@ class MultiSchemaGraphQLView(GraphQLView):
             schema_name: Name of the schema to use (from URL)
         """
         schema_name = kwargs.get("schema_name", "gql")
+        self._schema_name = schema_name
 
         try:
             if not hasattr(request, "META") or not isinstance(request.META, dict):
@@ -229,6 +236,39 @@ class MultiSchemaGraphQLView(GraphQLView):
                 )
             logger.error(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
+
+    def execute_graphql_request(
+        self, request, data, query, variables, operation_name, show_graphiql=False
+    ):
+        if not query:
+            return super().execute_graphql_request(
+                request, data, query, variables, operation_name, show_graphiql
+            )
+
+        cache_key = None
+        if self._should_cache_introspection(request, query):
+            schema_name = self._get_schema_name(request)
+            if schema_name:
+                cache_key = self._get_introspection_cache_key(schema_name)
+                try:
+                    cached = cache.get(cache_key)
+                except Exception as exc:
+                    logger.debug("Failed to read introspection cache: %s", exc)
+                    cached = None
+                if cached is not None:
+                    return ExecutionResult(data=cached, errors=None)
+
+        result = super().execute_graphql_request(
+            request, data, query, variables, operation_name, show_graphiql
+        )
+
+        if cache_key and result and not result.errors and result.data is not None:
+            try:
+                cache.set(cache_key, result.data)
+            except Exception as exc:
+                logger.debug("Failed to store introspection cache: %s", exc)
+
+        return result
 
     def get(self, request: HttpRequest, *args, **kwargs):
         return super().get(request, *args, **kwargs)
@@ -327,6 +367,77 @@ class MultiSchemaGraphQLView(GraphQLView):
             except Exception:
                 pass
         return user
+
+    def _get_schema_name(self, request: HttpRequest) -> str:
+        schema_name = getattr(self, "_schema_name", None)
+        if schema_name:
+            return schema_name
+        schema_match = getattr(request, "resolver_match", None)
+        if schema_match:
+            return getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
+        return "gql"
+
+    def _is_introspection_query(self, query: str) -> bool:
+        try:
+            document = parse(query)
+        except Exception:
+            return False
+
+        found_operation = False
+        for definition in document.definitions:
+            if not isinstance(definition, OperationDefinitionNode):
+                continue
+            found_operation = True
+            selections = getattr(definition.selection_set, "selections", None) or []
+            if not selections:
+                return False
+            for selection in selections:
+                if isinstance(selection, FieldNode):
+                    if selection.name.value not in _INTROSPECTION_FIELDS:
+                        return False
+                else:
+                    return False
+        return found_operation
+
+    def _should_cache_introspection(self, request: HttpRequest, query: str) -> bool:
+        if getattr(settings, "DEBUG", False):
+            return False
+        if not self._is_introspection_query(query):
+            return False
+
+        schema_name = self._get_schema_name(request)
+        if not schema_name:
+            return False
+        try:
+            from ..core.security import is_introspection_allowed
+            from ..core.settings import SchemaSettings
+        except Exception:
+            return False
+
+        schema_settings = SchemaSettings.from_schema(schema_name)
+        user = self._resolve_request_user(request)
+        if schema_settings.authentication_required:
+            if not user or not getattr(user, "is_authenticated", False):
+                return False
+        if not is_introspection_allowed(
+            user,
+            schema_name,
+            enable_introspection=schema_settings.enable_introspection,
+        ):
+            return False
+
+        return True
+
+    def _get_introspection_cache_key(self, schema_name: str) -> str:
+        version = "0"
+        try:
+            from ..core.registry import schema_registry
+
+            builder = schema_registry.get_schema_builder(schema_name)
+            version = str(builder.get_schema_version())
+        except Exception:
+            version = "0"
+        return f"rail_django:introspection:{schema_name}:{version}"
 
     def _check_graphiql_access(
         self,
