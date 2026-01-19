@@ -72,6 +72,11 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "fts_config": "english",
         "fts_search_type": "websearch",
         "fts_rank_threshold": None,
+        # Security & Complexity Limits
+        "max_filter_depth": 5,
+        "max_filter_clauses": 50,
+        "max_regex_length": 500,
+        "reject_unsafe_regex": True,
     },
     "mutation_settings": {
         "generate_create": True,

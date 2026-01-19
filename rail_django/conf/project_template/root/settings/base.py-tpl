@@ -282,6 +282,16 @@ RAIL_DJANGO_GRAPHQL = {
         # Permission codename required to query a model
         "model_permission_codename": "view",
     },
+    "filtering_settings": {
+        "enable_full_text_search": True,
+        "fts_config": "english",
+        "fts_search_type": "websearch",
+        "fts_rank_threshold": None,
+        "max_filter_depth": 5,
+        "max_filter_clauses": 50,
+        "max_regex_length": 500,
+        "reject_unsafe_regex": True,
+    },
     "mutation_settings": {
         # Auto-generate create mutations for models
         "generate_create": True,

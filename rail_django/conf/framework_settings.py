@@ -173,6 +173,11 @@ CORS_ALLOWED_ORIGINS = (
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)
+
+# Environment overrides for limits
+if os.environ.get("RAIL_MAX_FILTER_DEPTH"):
+    RAIL_DJANGO_GRAPHQL.setdefault("filtering_settings", {})["max_filter_depth"] = int(os.environ["RAIL_MAX_FILTER_DEPTH"])
+
 if DEBUG:
     RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[
         "enable_query_depth_limiting"
