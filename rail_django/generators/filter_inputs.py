@@ -380,7 +380,7 @@ class NestedFilterInputGenerator:
         try:
             from ..core.settings import FilteringSettings
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
-        except Exception:
+        except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
 
     def generate_where_input(
@@ -514,7 +514,7 @@ class NestedFilterInputGenerator:
                     nested_where,
                     description=f"Filter by {field_name} fields"
                 )
-            except Exception as e:
+            except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(f"Could not generate nested filter for {field_name}: {e}")
 
         return filters
@@ -564,7 +564,7 @@ class NestedFilterInputGenerator:
                     nested_where,
                     description=f"No {field_name} matches"
                 )
-            except Exception as e:
+            except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(f"Could not generate nested M2M filter for {field_name}: {e}")
 
         return filters
@@ -616,7 +616,7 @@ class NestedFilterInputGenerator:
                     nested_where,
                     description=f"No {accessor_name} matches"
                 )
-            except Exception as e:
+            except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(f"Could not generate reverse filter for {accessor_name}: {e}")
 
         return filters
@@ -667,7 +667,7 @@ class NestedFilterInputGenerator:
         try:
             name = getattr(model, "__name__", "")
             module = getattr(model, "__module__", "")
-        except Exception:
+        except (AttributeError, TypeError):
             return False
 
         if name.startswith("Historical"):
@@ -695,7 +695,7 @@ class NestedFilterInputGenerator:
                     graphene.List(graphene.NonNull(graphene.String)),
                     description="Filter by history type (create, update, delete)"
                 )
-        except Exception:
+        except FieldDoesNotExist:
             pass
 
         return filters
@@ -723,7 +723,7 @@ class NestedFilterApplicator:
         try:
             from ..core.settings import FilteringSettings
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
-        except Exception:
+        except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
 
     def _get_quick_mixin(self):
@@ -1005,7 +1005,7 @@ class NestedFilterApplicator:
                             )
 
                             return Q(Exists(has_children)) & ~Q(Exists(non_matching))
-            except Exception as e:
+            except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
 
             # Fallback: use simple approach (may have edge cases with empty sets)
@@ -1031,7 +1031,7 @@ class NestedFilterApplicator:
             try:
                 model._meta.get_field(field_name)
                 is_real_field = True
-            except Exception:
+            except FieldDoesNotExist:
                 pass
 
             if not is_real_field:
@@ -1181,7 +1181,7 @@ class NestedFilterApplicator:
                     q &= Q(_search_rank__gte=rank_threshold)
 
                 return q, annotations
-            except Exception as e:
+            except (ImportError, TypeError, ValueError) as e:
                 logger.debug(f"Full-text search setup failed, falling back: {e}")
 
         fallback_q = Q()
@@ -1474,7 +1474,7 @@ class NestedFilterApplicator:
         """
         try:
             return model._meta.get_field(field_name)
-        except Exception:
+        except FieldDoesNotExist:
             pass
 
         # Check reverse relations by accessor name
@@ -1482,7 +1482,7 @@ class NestedFilterApplicator:
             for rel in model._meta.related_objects:
                 if rel.get_accessor_name() == field_name:
                     return rel
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         return None
@@ -1504,7 +1504,7 @@ class NestedFilterApplicator:
             for field in related_model._meta.get_fields():
                 if hasattr(field, 'related_model') and field.related_model == parent_model:
                     return field.name
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         return None
@@ -1556,7 +1556,7 @@ class NestedFilterApplicator:
                     try:
                         model._meta.get_field(key)
                         is_real_field = True
-                    except Exception:
+                    except FieldDoesNotExist:
                         pass
                 
                 if not is_real_field:
@@ -1681,7 +1681,7 @@ class QuickFilterMixin:
                             q_objects |= Q(**{field_path: True})
                         elif search_value.lower() in ["false", "0", "no", "off"]:
                             q_objects |= Q(**{field_path: False})
-            except Exception as e:
+            except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Error processing quick filter field {field_path}: {e}")
                 continue
 
@@ -1727,7 +1727,7 @@ class IncludeFilterMixin:
                         sanitized_ids.append(int(v))
                     else:
                         sanitized_ids.append(v)
-                except Exception:
+                except (ValueError, TypeError):
                     sanitized_ids.append(v)
 
             model_cls = queryset.model
@@ -1744,7 +1744,7 @@ class IncludeFilterMixin:
                     tenant_path, tenant_id = tenant_filter
                     if tenant_path and tenant_id is not None:
                         combined_qs = combined_qs.filter(**{tenant_path: tenant_id})
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     pass
 
             # Deterministic ordering: included IDs first
@@ -1758,7 +1758,7 @@ class IncludeFilterMixin:
 
             return combined_qs
 
-        except Exception as e:
+        except (FieldDoesNotExist, TypeError, ValueError, AttributeError) as e:
             logger.warning(f"Failed to apply include filter: {e}")
             return queryset
 
@@ -1816,7 +1816,7 @@ class HistoricalModelMixin:
                     graphene.List(graphene.NonNull(graphene.String)),
                     description="Filter by history type (create, update, delete)"
                 )
-        except Exception:
+        except FieldDoesNotExist:
             pass
 
         return filters
@@ -1885,7 +1885,7 @@ class GraphQLMetaIntegrationMixin:
         try:
             field_config = graphql_meta.filtering.fields.get(field_name)
             return field_config
-        except Exception:
+        except AttributeError:
             return None
 
     def get_custom_filters(self, model: Type[models.Model]) -> Dict[str, Any]:
@@ -1905,7 +1905,7 @@ class GraphQLMetaIntegrationMixin:
         try:
             if graphql_meta.custom_filters:
                 return graphql_meta.get_custom_filters()
-        except Exception:
+        except AttributeError:
             pass
 
         return {}
@@ -1926,7 +1926,7 @@ class GraphQLMetaIntegrationMixin:
                 quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
                 if quick_fields:
                     return quick_fields
-            except Exception:
+            except (TypeError, AttributeError):
                 pass
 
         # Fall back to auto-detection
@@ -1963,7 +1963,7 @@ class SchemaSettingsMixin:
         try:
             from ..core.settings import SchemaSettings
             settings = SchemaSettings.from_schema(self.schema_name)
-        except Exception:
+        except (ImportError, AttributeError, KeyError):
             return False
 
         app_label = getattr(model._meta, "app_label", "")
@@ -2135,13 +2135,13 @@ class PerformanceAnalyzer:
         if analysis["select_related_suggestions"]:
             try:
                 queryset = queryset.select_related(*analysis["select_related_suggestions"])
-            except Exception as e:
+            except (FieldDoesNotExist, TypeError, ValueError) as e:
                 logger.debug(f"Could not apply select_related: {e}")
 
         if analysis["prefetch_related_suggestions"]:
             try:
                 queryset = queryset.prefetch_related(*analysis["prefetch_related_suggestions"])
-            except Exception as e:
+            except (FieldDoesNotExist, TypeError, ValueError) as e:
                 logger.debug(f"Could not apply prefetch_related: {e}")
 
         return queryset

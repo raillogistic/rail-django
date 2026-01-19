@@ -6,6 +6,7 @@ import logging
 from typing import Any, Optional, Type
 
 import graphene
+from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 from django.db.models import Count, ForeignKey, ManyToManyField, OneToOneField
 
@@ -39,7 +40,8 @@ def _resolve_group_by_field(
     for segment in path.split("__"):
         try:
             final_field = current_model._meta.get_field(segment)
-        except Exception:
+        except FieldDoesNotExist:
+            logger.debug(f"Field '{segment}' not found on {current_model.__name__}")
             return None
         if isinstance(final_field, ManyToManyField):
             return None
@@ -83,8 +85,24 @@ def generate_grouping_query(
         nested_generator = _get_nested_filter_generator(self.schema_name)
         nested_where_input = nested_generator.generate_where_input(model)
         nested_filter_applicator = _get_nested_filter_applicator(self.schema_name)
+    except (FieldDoesNotExist, ImproperlyConfigured, AttributeError) as e:
+        # Expected errors during filter generation (missing fields, bad config)
+        logger.warning(
+            f"Could not generate nested filter for {model.__name__}: {e}",
+            extra={"model": model.__name__, "schema": self.schema_name},
+        )
+    except RecursionError:
+        # Circular reference in model relationships
+        logger.error(
+            f"Circular reference detected generating filter for {model.__name__}",
+            extra={"model": model.__name__},
+        )
     except Exception as e:
-        logger.warning(f"Could not generate nested filter for {model.__name__}: {e}")
+        # Unexpected error - log with traceback for debugging
+        logger.exception(
+            f"Unexpected error generating nested filter for {model.__name__}",
+            extra={"model": model.__name__, "schema": self.schema_name},
+        )
 
     max_buckets = getattr(self.settings, "max_grouping_buckets", 200) or 200
 
@@ -104,7 +122,7 @@ def generate_grouping_query(
         limit = kwargs.get("limit") or max_buckets
         try:
             limit = int(limit)
-        except Exception:
+        except (ValueError, TypeError):
             limit = max_buckets
         limit = max(1, min(limit, max_buckets))
 
@@ -173,7 +191,11 @@ def generate_grouping_query(
                     related_map = related_model._default_manager.using(queryset.db).in_bulk(
                         related_ids
                     )
-                except Exception:
+                except (AttributeError, TypeError) as e:
+                    # Missing remote_field or invalid model access
+                    logger.debug(
+                        f"Could not fetch related objects for {field.name}: {e}"
+                    )
                     related_map = {}
 
         buckets = []

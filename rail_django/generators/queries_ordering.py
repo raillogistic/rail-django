@@ -2,13 +2,16 @@
 Ordering helpers for query generation.
 """
 
+import logging
 from typing import Any, List, Optional, Tuple, Type
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import Count
 
 from .introspector import ModelIntrospector
 
+logger = logging.getLogger(__name__)
 
 DEFAULT_ORDERING_FALLBACK = ["-id"]
 
@@ -67,7 +70,7 @@ def apply_count_annotations_for_ordering(
                             is_m2m = isinstance(f, ManyToManyField) or isinstance(
                                 f, ManyToManyRel
                             )
-                        except Exception:
+                        except (ImportError, TypeError):
                             pass
                         break
                 else:
@@ -81,7 +84,7 @@ def apply_count_annotations_for_ordering(
                             if rel.get_accessor_name() == base:
                                 is_m2m = isinstance(rel, ManyToManyRel)
                                 break
-            except Exception:
+            except (FieldDoesNotExist, AttributeError):
                 # If introspection fails, default to non-distinct
                 is_m2m = False
 
@@ -91,12 +94,14 @@ def apply_count_annotations_for_ordering(
                         **{alias: Count(base, distinct=is_m2m)}
                     )
                     annotated_aliases.add(alias)
-                except Exception:
+                except (FieldDoesNotExist, ValueError, TypeError):
+                    # Field doesn't exist or invalid count target
                     try:
                         queryset = queryset.annotate(**{alias: Count(base)})
                         annotated_aliases.add(alias)
-                    except Exception:
+                    except (FieldDoesNotExist, ValueError, TypeError) as e:
                         # If annotation fails, fall back to original spec
+                        logger.debug(f"Could not annotate count for {base}: {e}")
                         alias = None
 
             if alias:
@@ -141,7 +146,8 @@ def split_order_specs(
     try:
         introspector = ModelIntrospector.for_model(model)
         prop_names = set(introspector.properties.keys())
-    except Exception:
+    except (AttributeError, TypeError) as e:
+        logger.debug(f"Could not introspect model {model.__name__} for properties: {e}")
         prop_names = set()
     db_specs: list[str] = []
     prop_specs: list[str] = []
@@ -158,7 +164,7 @@ def safe_prop_value(obj: Any, prop_name: str):
     """Return a comparable key for property sorting, nulls last."""
     try:
         val = getattr(obj, prop_name)
-    except Exception:
+    except AttributeError:
         val = None
     if val is None:
         return (1, None)
@@ -166,7 +172,7 @@ def safe_prop_value(obj: Any, prop_name: str):
     try:
         _ = val < val  # type check to ensure comparable
         return (0, val)
-    except Exception:
+    except TypeError:
         return (0, str(val))
 
 
@@ -182,7 +188,8 @@ def apply_property_ordering(
         name = spec[1:] if desc else spec
         try:
             items.sort(key=lambda o: safe_prop_value(o, name), reverse=desc)
-        except Exception:
-            # If sorting fails, skip this spec
+        except TypeError as e:
+            # If sorting fails due to incompatible types, skip this spec
+            logger.debug(f"Property ordering failed for '{name}': {e}")
             continue
     return items

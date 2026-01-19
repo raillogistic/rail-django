@@ -157,3 +157,146 @@ class TestPaginatedFeatures:
             assert data["pageInfo"]["totalCount"] == 2
             names = sorted([p["name"] for p in data["items"]])
             assert names == ["B", "D"]
+
+    def test_empty_results_pagination(self, gql_client):
+        """Test pagination with empty results returns consistent page info."""
+        # Query for non-existent products
+        query = """
+        query {
+            productsPages(
+                where: { name: { eq: "NonExistent" } }
+                page: 1
+                perPage: 10
+            ) {
+                items {
+                    name
+                }
+                pageInfo {
+                    totalCount
+                    pageCount
+                    currentPage
+                    hasNextPage
+                    hasPreviousPage
+                }
+            }
+        }
+        """
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        data = result["data"]["productsPages"]
+
+        # Should return consistent pagination for empty results
+        assert data["pageInfo"]["totalCount"] == 0
+        assert data["pageInfo"]["pageCount"] == 0
+        assert data["pageInfo"]["currentPage"] == 1  # Always page 1 for empty
+        assert data["pageInfo"]["hasNextPage"] is False
+        assert data["pageInfo"]["hasPreviousPage"] is False
+        assert data["items"] == []
+
+    def test_page_beyond_range_clamps_to_last(self, gql_client):
+        """Test that requesting page beyond range returns last valid page."""
+        # Create exactly 3 products
+        _create_product("P1", 10.00)
+        _create_product("P2", 20.00)
+        _create_product("P3", 30.00)
+
+        # Request page 100 with 2 per page (only 2 pages exist)
+        query = """
+        query {
+            productsPages(
+                page: 100
+                perPage: 2
+            ) {
+                items {
+                    name
+                }
+                pageInfo {
+                    totalCount
+                    pageCount
+                    currentPage
+                }
+            }
+        }
+        """
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        data = result["data"]["productsPages"]
+
+        # Should clamp to last page (page 2)
+        assert data["pageInfo"]["totalCount"] == 3
+        assert data["pageInfo"]["pageCount"] == 2
+        assert data["pageInfo"]["currentPage"] == 2  # Clamped to last page
+        assert len(data["items"]) == 1  # Last page has 1 item
+
+    def test_combined_presets_and_where(self, gql_client):
+        """Test combining presets with where filter."""
+        _create_product("Expensive Phone", 100.00)
+        _create_product("Expensive Laptop", 80.00)
+        _create_product("Cheap Phone", 10.00)
+
+        # Combine "expensive" preset (>= 50) with additional where filter
+        query = """
+        query {
+            productsPages(
+                presets: ["expensive"]
+                where: { name: { icontains: "Phone" } }
+                page: 1
+                perPage: 10
+            ) {
+                items {
+                    name
+                    price
+                }
+                pageInfo {
+                    totalCount
+                }
+            }
+        }
+        """
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        data = result["data"]["productsPages"]
+
+        # Should only return expensive items with "Phone" in name
+        # "Expensive Phone" matches both (price >= 50 AND name contains "Phone")
+        # "Expensive Laptop" matches preset but not where (no "Phone")
+        # "Cheap Phone" matches where but not preset (price < 50)
+        assert data["pageInfo"]["totalCount"] == 1
+        assert data["items"][0]["name"] == "Expensive Phone"
+
+    def test_include_ids_with_filters(self, gql_client):
+        """Test include IDs union with other filters."""
+        p1 = _create_product("Cheap", 10.00)
+        p2 = _create_product("Expensive", 100.00)
+        p3 = _create_product("Another Expensive", 150.00)
+
+        # Filter for expensive but include the cheap one
+        query = f"""
+        query {{
+            productsPages(
+                where: {{ price: {{ gte: 50.00 }} }}
+                include: ["{p1.id}"]
+                page: 1
+                perPage: 10
+            ) {{
+                items {{
+                    id
+                    name
+                }}
+                pageInfo {{
+                    totalCount
+                }}
+            }}
+        }}
+        """
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        data = result["data"]["productsPages"]
+
+        # Should return expensive items PLUS the included cheap one
+        assert data["pageInfo"]["totalCount"] == 3
+        names = sorted([p["name"] for p in data["items"]])
+        assert "Cheap" in names
+        assert "Expensive" in names
+        assert "Another Expensive" in names
+
