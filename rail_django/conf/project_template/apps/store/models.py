@@ -6,7 +6,8 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
-from django.db.models import F
+from django.db.models import F, ExpressionWrapper, FloatField
+from django.db.models.functions import Now, Extract
 from django.utils import timezone
 
 from rail_django.extensions.templating import model_pdf_template
@@ -154,6 +155,21 @@ class Product(models.Model):
                 "low_stock": {"inventory_count": {"lt": 10}},
             },
         )
+        computed_filters = {
+            "profit_margin": {
+                "expression": ExpressionWrapper(
+                    F("price") - F("cost_price"),
+                    output_field=FloatField()
+                ),
+                "filter_type": "float",
+                "description": "Profit margin (price - cost)",
+            },
+            "age_days": {
+                "expression": Extract(Now() - F("created_at"), "day"),
+                "filter_type": "int",
+                "description": "Days since product creation",
+            },
+        }
 
     @property
     def order_items_count(self) -> int:

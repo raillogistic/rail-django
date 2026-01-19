@@ -466,7 +466,58 @@ query {
 }
 ```
 
+    total
+  }
+}
+```
+
+## Computed / Expression Filters
+
+Filter by database expressions and computed values without storing them in the database.
+Define these in your model's `GraphQLMeta`.
+
+```python
+from django.db.models import F, ExpressionWrapper, FloatField
+from django.db.models.functions import Now, Extract
+
+class Product(models.Model):
+    # ... fields ...
+
+    class GraphQLMeta:
+        computed_filters = {
+            "profit_margin": {
+                "expression": ExpressionWrapper(
+                    F("price") - F("cost_price"),
+                    output_field=FloatField()
+                ),
+                "filter_type": "float",
+                "description": "Profit margin (price - cost)",
+            },
+            "age_days": {
+                "expression": Extract(Now() - F("created_at"), "day"),
+                "filter_type": "int",
+                "description": "Days since creation",
+            }
+        }
+```
+
+Usage in GraphQL:
+
+```graphql
+query {
+  products(where: {
+    profit_margin: { gte: 50.0 }
+    age_days: { lte: 30 }
+  }) {
+    id
+    name
+    price
+  }
+}
+```
+
 ## Quick Search
+
 
 The `quick` argument provides simple text search across configured fields:
 

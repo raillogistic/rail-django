@@ -288,6 +288,13 @@ class GraphQLMeta(GraphQLMetaConfig):
                 ]
             },
         },
+        computed_filters={
+            "profit_margin": {
+                "expression": "expression_object", # Django Expression
+                "filter_type": "float",
+                "description": "Calculated profit margin"
+            }
+        },
     )
 
     @staticmethod

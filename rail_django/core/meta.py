@@ -278,6 +278,7 @@ class GraphQLMeta:
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom
         self.filter_presets = self.filtering.presets
+        self.computed_filters = getattr(self._meta_config, "computed_filters", {})
         self.custom_resolvers = self.resolvers.queries
         self.quick_filter_fields = list(self.filtering.quick)
         self.filters = {"quick": self.quick_filter_fields}

@@ -762,6 +762,9 @@ class NestedFilterInputGenerator:
             if self._is_historical_model(model):
                 fields.update(self._generate_historical_filters(model))
 
+            # Add computed filters if defined in GraphQLMeta
+            fields.update(self._generate_computed_filters(model))
+
             # Create the where input type with boolean operators
             where_input = self._create_where_input_type(model_name, fields, depth)
 
@@ -772,6 +775,40 @@ class NestedFilterInputGenerator:
 
         finally:
             self._generation_stack.discard(cache_key)
+
+    def _generate_computed_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """Generate inputs for computed/expression filters."""
+        fields = {}
+        try:
+            from ..core.meta import get_model_graphql_meta
+            graphql_meta = get_model_graphql_meta(model)
+            computed_defs = getattr(graphql_meta, "computed_filters", {})
+            
+            for field_name, definition in computed_defs.items():
+                filter_type_name = definition.get("filter_type", "string")
+                description = definition.get("description", f"Filter by computed {field_name}")
+                
+                filter_type_map = {
+                    "string": StringFilterInput,
+                    "int": IntFilterInput,
+                    "float": FloatFilterInput,
+                    "boolean": BooleanFilterInput,
+                    "date": DateFilterInput,
+                    "datetime": DateTimeFilterInput,
+                    "id": IDFilterInput,
+                    "uuid": UUIDFilterInput,
+                }
+                
+                input_type = filter_type_map.get(filter_type_name.lower(), StringFilterInput)
+                fields[field_name] = graphene.InputField(input_type, description=description)
+                
+        except Exception as e:
+            logger.debug(f"Error generating computed filters for {model.__name__}: {e}")
+            pass
+            
+        return fields
 
     def _generate_fk_filter(
         self,
@@ -1149,6 +1186,9 @@ class NestedFilterApplicator:
         # Then, prepare queryset with count annotations if needed
         queryset = self.prepare_queryset_for_count_filters(queryset, where_input)
 
+        # Then, prepare queryset with computed filters annotations if needed
+        queryset = self.prepare_queryset_for_computed_filters(queryset, where_input, model)
+
         # Build and apply main Q object
         q_object = self._build_q_from_where(where_input, model)
 
@@ -1184,6 +1224,62 @@ class NestedFilterApplicator:
         # Apply include filter last (unions IDs into results)
         if include_ids:
             queryset = self._get_include_mixin().apply_include_filter(queryset, include_ids)
+
+        return queryset
+
+    def prepare_queryset_for_computed_filters(
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+        model: Type[models.Model],
+    ) -> models.QuerySet:
+        """
+        Prepare queryset with annotations for computed fields.
+
+        Args:
+            queryset: Django queryset
+            where_input: Where input dictionary
+            model: Django model
+
+        Returns:
+            Queryset with necessary computed annotations
+        """
+        try:
+            from ..core.meta import get_model_graphql_meta
+            graphql_meta = get_model_graphql_meta(model)
+            computed_defs = getattr(graphql_meta, "computed_filters", {})
+        except Exception:
+            return queryset
+
+        if not computed_defs:
+            return queryset
+
+        annotations = {}
+        
+        # Flatten input to find all keys used
+        # This is a bit simplistic, ideally we'd traverse properly
+        # But for annotation purposes, we just need to know if the key exists
+        def collect_keys(d, keys):
+            for k, v in d.items():
+                keys.add(k)
+                if isinstance(v, dict):
+                    collect_keys(v, keys)
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            collect_keys(item, keys)
+        
+        used_keys = set()
+        collect_keys(where_input, used_keys)
+
+        for field_name, definition in computed_defs.items():
+            if field_name in used_keys:
+                expression = definition.get("expression")
+                if expression:
+                    annotations[field_name] = expression
+
+        if annotations:
+            queryset = queryset.annotate(**annotations)
 
         return queryset
 
