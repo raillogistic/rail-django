@@ -373,11 +373,11 @@ class Order(models.Model):
             quick=["reference", "customer__name"],  # Quick search
             fields={
                 "status": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "in"],
+                    lookups=["eq", "in"],
                     choices=["draft", "pending", "completed"],
                 ),
                 "total": GraphQLMetaConfig.FilterField(
-                    lookups=["gt", "lt", "range"],
+                    lookups=["gt", "lt", "between"],
                 ),
                 "created_at": GraphQLMetaConfig.FilterField(
                     lookups=["gte", "lte", "date"],
@@ -469,7 +469,7 @@ models:
       fields:
         status:
           lookups:
-            - exact
+            - eq
             - in
           choices:
             - draft
@@ -477,7 +477,7 @@ models:
         price:
           - gt
           - lt
-          - range
+          - between
     ordering:
       allowed:
         - name

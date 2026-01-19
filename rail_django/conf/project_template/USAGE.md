@@ -649,9 +649,9 @@ class Product(models.Model):
         filtering = GraphQLMetaConfig.Filtering(
             quick=["name", "sku"],
             fields={
-                "price": GraphQLMetaConfig.FilterField(lookups=["gt", "lt", "range"]),
+                "price": GraphQLMetaConfig.FilterField(lookups=["gt", "lt", "between"]),
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["icontains", "istartswith"]
+                    lookups=["icontains", "istarts_with"]
                 ),
             },
         )
@@ -700,19 +700,20 @@ query {
 
 ### Advanced Filtering
 
-The library includes a powerful filtering engine derived from `django-filter`.
+Rail Django uses a nested filter syntax (Prisma/Hasura style) with typed
+per-field inputs.
 
 **Exact Match:**
-`products(is_active: true)`
+`products(where: { is_active: { eq: true } })`
 
 **String Search (Case-Insensitive):**
-`products(name_Icontains: "phone")`
+`products(where: { name: { icontains: "phone" } })`
 
 **Range Filters:**
-`products(price_Gt: 100, price_Lt: 500)`
+`products(where: { price: { between: [100, 500] } })`
 
 **Related Fields:**
-`products(category_Name_Icontains: "Electronics")`
+`products(where: { category_rel: { name: { icontains: "Electronics" } } })`
 
 ### Pagination Strategies
 
@@ -740,7 +741,7 @@ _To enable Relay-style (Cursor) pagination, update `query_settings` in `settings
 ### Ordering
 
 Sort results by any field.
-`products(ordering: ["-price", "name"])` (High to low price, then A-Z)
+`products(order_by: ["-price", "name"])` (High to low price, then A-Z)
 
 ---
 
@@ -944,7 +945,7 @@ models:
       fields:
         status:
           lookups:
-            - exact
+            - eq
             - in
           choices:
             - draft
@@ -1532,7 +1533,7 @@ query {
       isNested
       relatedModel
       options {
-        name # Filter argument name (e.g., "price__gte")
+        name # Filter operator name (e.g., "gte")
         lookup # Lookup type (e.g., "gte")
         helpText # French help text
         choices {

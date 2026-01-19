@@ -55,9 +55,10 @@ class FilterFieldConfig:
     Declarative configuration for a single filterable field.
 
     Attributes:
-        lookups: List of Django lookup expressions allowed for the field.
-                 When empty, the generator keeps its default lookup set.
-        choices: Optional iterable of allowed values (for __in filters, enums, etc.).
+        lookups: List of allowed filter operators (for example: eq, in, between,
+                 is_null, icontains). When empty, the generator keeps its
+                 default operator set.
+        choices: Optional iterable of allowed values (for in filters, enums, etc.).
         help_text: Optional help text to describe the filter when generating docs.
     """
 
@@ -217,8 +218,8 @@ class GraphQLMeta:
                 filtering = GraphQLMeta.Filtering(
                     quick=["name", "email"],
                     fields={
-                        "name": GraphQLMeta.FilterField(lookups=["icontains", "exact"]),
-                        "status": GraphQLMeta.FilterField(lookups=["exact", "in"]),
+                        "name": GraphQLMeta.FilterField(lookups=["icontains", "eq"]),
+                        "status": GraphQLMeta.FilterField(lookups=["eq", "in"]),
                     },
                 )
                 fields = GraphQLMeta.Fields(

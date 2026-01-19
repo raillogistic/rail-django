@@ -120,7 +120,7 @@ class Customer(models.Model):
             quick=["name", "email"],
             fields={
                 "status": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "in"],
+                    lookups=["eq", "in"],
                     choices=["active", "paused"],
                 ),
             },
@@ -144,13 +144,13 @@ query GetUser {
 
 ## List query with filters and ordering
 
-The list field accepts `filters`, `order_by`, and optional pagination fields
+The list field accepts `where`, `order_by`, and optional pagination fields
 `offset` and `limit` when enabled.
 
 ```graphql
-query ListUsers($filters: UserComplexFilter!) {
+query ListUsers($where: UserWhereInput!) {
   users(
-    filters: $filters
+    where: $where
     order_by: ["-date_joined"]
     offset: 0
     limit: 20
@@ -162,33 +162,33 @@ query ListUsers($filters: UserComplexFilter!) {
 }
 ```
 
-Variables example (complex filter input supports AND/OR/NOT):
+Variables example (nested filter input supports AND/OR/NOT):
 
 ```json
 {
-  "filters": {
+  "where": {
     "AND": [
-      {"is_active__exact": true},
-      {"username__icontains": "admin"}
+      {"is_active": {"eq": true}},
+      {"username": {"icontains": "admin"}}
     ],
     "OR": [
-      {"email__icontains": "example.com"},
-      {"email__icontains": "corp.com"}
+      {"email": {"icontains": "example.com"}},
+      {"email": {"icontains": "corp.com"}}
     ],
-    "NOT": {"last_login__isnull": true}
+    "NOT": {"last_login": {"is_null": true}}
   }
 }
 ```
 
 Common filter operators include:
-- `__exact`, `__icontains`, `__startswith`, `__endswith`
-- `__in`, `__isnull`, `__range`, `__gt`, `__gte`, `__lt`, `__lte`
-- Date helpers: `<field>_today`, `<field>_this_week`, `<field>_past_month`
+- `eq`, `neq`, `icontains`, `starts_with`, `ends_with`
+- `in`, `not_in`, `is_null`, `between`, `gt`, `gte`, `lt`, `lte`
+- Date helpers: `today`, `this_week`, `past_month`
 
-The filter set is generated from model fields and GraphQLMeta overrides.
+If you enable Relay or legacy flat filters, you can also use the `filters`
+argument with django-filter lookups like `status__in` or `created_at__gte`.
 
-For advanced filtering with nested syntax (Prisma/Hasura style), see the
-[Filtering Guide](./filtering.md).
+For advanced filtering details, see the [Filtering Guide](./filtering.md).
 
 ## Paginated query
 

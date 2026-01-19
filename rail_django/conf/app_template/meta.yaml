@@ -38,7 +38,7 @@
 #       fields:
 #         status:
 #           lookups:
-#             - exact
+#             - eq
 #             - in
 #           choices:
 #             - draft

@@ -36,7 +36,7 @@ For each model, Rail Django generates:
 type Query {
   product(id: ID!): ProductType
   products(
-    filters: ProductFilter
+    where: ProductWhereInput
     order_by: [String]
     limit: Int
     offset: Int
@@ -44,7 +44,7 @@ type Query {
   products_pages(
     page: Int
     per_page: Int
-    filters: ProductFilter
+    where: ProductWhereInput
   ): ProductPageType
   products_groups(group_by: String!, limit: Int): [GroupBucketType]
 }
@@ -441,7 +441,7 @@ query ProductsByCategory {
 query ActiveProductsByCategory {
   products_groups(
     group_by: "category__name"
-    filters: { is_active__exact: true }
+    where: { is_active: { eq: true } }
     limit: 5
   ) {
     key
@@ -502,13 +502,13 @@ class Product(models.Model):
             # Detailed configuration by field
             fields={
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "icontains", "istartswith"],
+                    lookups=["eq", "icontains", "istarts_with"],
                 ),
                 "price": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "gt", "lt", "range"],
+                    lookups=["eq", "gt", "lt", "between"],
                 ),
                 "is_active": GraphQLMetaConfig.FilterField(
-                    lookups=["exact"],
+                    lookups=["eq"],
                 ),
                 "category__name": GraphQLMetaConfig.FilterField(
                     lookups=["icontains"],

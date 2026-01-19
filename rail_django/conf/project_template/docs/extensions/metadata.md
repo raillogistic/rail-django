@@ -418,7 +418,7 @@ class Product(models.Model):
             quick=["name", "sku"],
             fields={
                 "price": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "gt", "lt", "range"],
+                    lookups=["eq", "gt", "lt", "between"],
                 ),
             },
         )

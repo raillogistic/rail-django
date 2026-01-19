@@ -68,10 +68,10 @@ class Category(models.Model):
             quick=["name"],
             fields={
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "icontains"],
+                    lookups=["eq", "icontains"],
                 ),
                 "is_active": GraphQLMetaConfig.FilterField(
-                    lookups=["exact"],
+                    lookups=["eq"],
                 ),
             },
         )
@@ -127,19 +127,19 @@ class Product(models.Model):
             quick=["name", "sku"],
             fields={
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "icontains", "istartswith"],
+                    lookups=["eq", "icontains", "istarts_with"],
                 ),
                 "sku": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "istartswith"],
+                    lookups=["eq", "istarts_with"],
                 ),
                 "price": GraphQLMetaConfig.FilterField(
-                    lookups=["exact", "gt", "lt", "range"],
+                    lookups=["eq", "gt", "lt", "between"],
                 ),
                 "category": GraphQLMetaConfig.FilterField(
-                    lookups=["exact"],
+                    lookups=["eq"],
                 ),
                 "is_active": GraphQLMetaConfig.FilterField(
-                    lookups=["exact"],
+                    lookups=["eq"],
                 ),
             },
         )
@@ -263,7 +263,7 @@ mutation {
 ```graphql
 query {
   products(
-    filters: { is_active__exact: true }
+    where: { is_active: { eq: true } }
     order_by: ["-price"]
     limit: 10
   ) {
@@ -283,10 +283,9 @@ query {
 ```graphql
 query {
   products(
-    filters: {
-      price__gte: 100
-      price__lte: 500
-      category__name__icontains: "electronics"
+    where: {
+      price: { gte: 100, lte: 500 }
+      category_rel: { name: { icontains: "electronics" } }
     }
   ) {
     id

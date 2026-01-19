@@ -171,7 +171,7 @@ subscription OnOrderCreated {
 
 ```graphql
 subscription OrdersByStatus {
-  order_updated(filters: { status: { exact: "pending" } }) {
+  order_updated(filters: { status: { eq: "pending" } }) {
     event
     node {
       id
@@ -185,7 +185,7 @@ subscription OrdersByStatus {
 
 | Operator    | Example                              |
 | ----------- | ------------------------------------ |
-| `exact`     | `status: { exact: "pending" }`       |
+| `eq`        | `status: { eq: "pending" }`          |
 | `in`        | `status: { in: ["pending", "new"] }` |
 | `contains`  | `name: { contains: "urgent" }`       |
 | `gt`, `gte` | `total: { gte: 1000 }`               |
@@ -195,7 +195,7 @@ subscription OrdersByStatus {
 
 ```graphql
 subscription CustomerOrders($customer_id: ID!) {
-  order_created(filters: { customer: { id: { exact: $customer_id } } }) {
+  order_created(filters: { customer: { id: { eq: $customer_id } } }) {
     node {
       id
       reference
@@ -210,7 +210,7 @@ subscription CustomerOrders($customer_id: ID!) {
 subscription HighValuePendingOrders {
   order_changed(
     filters: {
-      AND: [{ status: { exact: "pending" } }, { total: { gte: 1000 } }]
+      AND: [{ status: { eq: "pending" } }, { total: { gte: 1000 } }]
     }
   ) {
     event

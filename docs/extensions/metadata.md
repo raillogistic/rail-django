@@ -18,15 +18,15 @@ Rail Django supports two filter input styles:
 
 | Style | Argument | Type Pattern | Example |
 |-------|----------|--------------|---------|
-| Flat (default) | `filters` | `{Model}ComplexFilter` | `filters: { name__icontains: "x" }` |
-| Nested | `where` | `{Model}WhereInput` | `where: { name: { icontains: "x" } }` |
+| Nested (default) | `where` | `{Model}WhereInput` | `where: { name: { icontains: "x" } }` |
+| Flat (legacy/relay) | `filters` | `{Model}ComplexFilter` | `filters: { name__icontains: "x" }` |
 
 Configure in settings:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "query_settings": {
-        # "flat" (default) or "nested"
+        # "nested" (default) or "flat"
         "filter_input_style": "nested",
         # Or enable both styles
         "enable_dual_filter_styles": True,

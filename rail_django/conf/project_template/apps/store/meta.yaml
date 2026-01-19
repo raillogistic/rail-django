@@ -103,12 +103,12 @@ models:
           lookups:
             - gte
             - lte
-            - range
+            - between
           help_text: Filter by list price.
         category__name:
           lookups:
             - icontains
-            - exact
+            - eq
           help_text: Filter by category name.
         tags__name:
           lookups:
@@ -116,7 +116,7 @@ models:
           help_text: Filter by tag name.
         is_active:
           lookups:
-            - exact
+            - eq
           help_text: Filter active products.
     ordering:
       allowed:
@@ -184,7 +184,7 @@ models:
       fields:
         status:
           lookups:
-            - exact
+            - eq
             - in
           choices:
             - - draft
@@ -204,24 +204,24 @@ models:
           lookups:
             - gte
             - lte
-            - range
+            - between
           help_text: Filter by order totals.
         placed_at:
           lookups:
             - date
             - gte
             - lte
-            - range
+            - between
           help_text: Filter by placement date.
         customer__email:
           lookups:
             - icontains
-            - exact
+            - eq
           help_text: Filter by customer email.
         shipping_address__city:
           lookups:
             - icontains
-            - exact
+            - eq
           help_text: Filter by shipping city.
       custom:
         overdue: filter_overdue

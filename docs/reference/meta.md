@@ -118,7 +118,7 @@ models:
       fields:
         status:
           lookups:
-            - exact
+            - eq
             - in
           choices:
             - draft
@@ -256,7 +256,7 @@ Field rules:
 ## Filtering and quick search
 
 Filtering settings live under `GraphQLMetaConfig.Filtering`. Use `fields` to
-limit lookups per field, and `quick` to define a text search across fields.
+limit operators per field, and `quick` to define a text search across fields.
 
 ```python
 from django.utils import timezone
@@ -269,7 +269,7 @@ class GraphQLMeta(GraphQLMetaConfig):
         auto_detect_quick=False,
         fields={
             "status": GraphQLMetaConfig.FilterField(
-                lookups=["exact", "in"],
+                lookups=["eq", "in"],
                 choices=["draft", "active", "archived"],
                 help_text="Project status",
             ),
@@ -291,10 +291,15 @@ class GraphQLMeta(GraphQLMetaConfig):
 ```
 
 Filtering notes:
-- Custom filter callables must accept `(queryset, name, value)`.
+- Custom filter callables must accept `(queryset, name, value)` for legacy
+  django-filter inputs (Relay or flat filter style).
 - Use `@staticmethod` (or a standalone function) for custom filters.
-- Filter input names follow django-filter naming such as `status__in` or
-  `created_at__gte`.
+- The default `where` input uses nested operators (for example:
+  `status: { in: [...] }`, `created_at: { gte: ... }`).
+- The legacy `filters` input (when enabled) follows django-filter naming such as
+  `status__in` or `created_at__gte`.
+- The `lookups` list accepts nested operator names and is mapped to django
+  lookups when using the legacy flat filters.
 - The quick filter is exposed as the `quick` argument on list queries.
 
 ## Ordering

@@ -486,11 +486,30 @@ class TypeGenerator:
                 getattr(graphql_meta, "filtering").fields if graphql_meta else {}
             )
             if configured_fields:
+                operator_map = {
+                    "eq": "exact",
+                    "is_null": "isnull",
+                    "between": "range",
+                    "starts_with": "startswith",
+                    "istarts_with": "istartswith",
+                    "ends_with": "endswith",
+                    "iends_with": "iendswith",
+                }
+
+                def normalize_lookups(lookups: list[str]) -> list[str]:
+                    normalized = []
+                    for lookup in lookups:
+                        if lookup is None:
+                            continue
+                        key = str(lookup)
+                        normalized.append(operator_map.get(key, key))
+                    return normalized
+
                 for fname in list(filter_fields.keys()):
                     cfg = configured_fields.get(fname)
                     if cfg and cfg.lookups:
                         # Only keep the explicitly allowed lookups for this field
-                        allowed = list(cfg.lookups)
+                        allowed = normalize_lookups(list(cfg.lookups))
                         # Ensure we only include lookups that actually exist for the field type
                         existing = set(filter_fields.get(fname, []))
                         filter_fields[fname] = [lk for lk in allowed if lk in existing]

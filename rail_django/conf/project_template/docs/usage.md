@@ -142,7 +142,7 @@ RAIL_DJANGO_GRAPHQL = {
 Define your Django models, Rail Django automatically generates:
 
 - GraphQL Types (`DjangoObjectType`)
-- Advanced Filters (`FilterSet`)
+- Nested Filters (`WhereInput`)
 - List/retrieve queries
 - Create/update/delete mutations
 
@@ -167,7 +167,7 @@ class Product(models.Model):
 ```graphql
 query {
   products(
-    filters: { is_active__exact: true, price__gt: 50 }
+    where: { is_active: { eq: true }, price: { gt: 50 } }
     order_by: ["-price"]
   ) {
     id
@@ -257,7 +257,7 @@ RAIL_DJANGO_WEBHOOKS = {
 
 ```graphql
 subscription {
-  order_created(filters: { status: { exact: "pending" } }) {
+  order_created(filters: { status: { eq: "pending" } }) {
     event
     node {
       id
