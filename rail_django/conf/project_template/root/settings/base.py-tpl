@@ -293,8 +293,6 @@ RAIL_DJANGO_GRAPHQL = {
         "reject_unsafe_regex": True,
     },
     "mutation_settings": {
-        # Mutation backend: "legacy" (closure-based) or "pipeline" (new architecture)
-        "mutation_backend": "pipeline",
         # Auto-generate create mutations for models
         "generate_create": True,
         # Auto-generate update mutations for models

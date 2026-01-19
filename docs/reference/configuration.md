@@ -40,7 +40,6 @@ RAIL_DJANGO_GRAPHQL = {
         "fts_rank_threshold": None,
     },
     "mutation_settings": {
-        "mutation_backend": "pipeline",  # "legacy" or "pipeline"
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,
@@ -137,27 +136,9 @@ and can be overridden per model/field via `nested_relations_config` and
 `nested_field_config`. When disabled, `nested_*` inputs are not generated and
 nested payloads are rejected during mutation execution.
 
-## Mutation backends
-
-Rail Django supports two mutation backends:
-
-- **`legacy`** (default): The original closure-based mutation generation. This is
-  stable and battle-tested but harder to customize and debug.
-
-- **`pipeline`**: A new pipeline-based architecture that provides composable,
-  testable mutation handling. Each mutation step is a separate class that can be
-  customized, skipped, or reordered. See `docs/reference/meta.md` for pipeline
-  configuration.
-
-To switch backends:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "mutation_settings": {
-        "mutation_backend": "pipeline",  # or "legacy"
-    }
-}
-```
+Rail Django uses a pipeline-based architecture for mutation handling. Each mutation
+step is a separate class that can be customized, skipped, or reordered. See
+`docs/reference/meta.md` for pipeline configuration.
 
 ## Query permissions
 

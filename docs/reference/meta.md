@@ -458,18 +458,6 @@ See `docs/reference/security.md` for policy configuration.
 Use `GraphQLMetaConfig.Pipeline` to customize the mutation pipeline for a model.
 The pipeline architecture provides composable, testable mutation handling.
 
-### Enabling the Pipeline Backend
-
-First, enable the pipeline backend in your settings:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "mutation_settings": {
-        "mutation_backend": "pipeline",  # "legacy" for closure-based (default)
-    }
-}
-```
-
 ### Customizing the Pipeline
 
 You can customize the pipeline per-model using GraphQLMeta:

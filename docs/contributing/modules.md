@@ -26,11 +26,11 @@ This reference maps the main modules to their responsibilities.
 - `generators/queries_grouping.py`: grouping query builders
 - `generators/queries_ordering.py`: ordering helpers for list and paginated queries
 - `generators/mutations.py`: mutation generator entrypoint and shared helpers
-- `generators/mutations_crud.py`: create/update/delete mutation builders
 - `generators/mutations_bulk.py`: bulk mutation builders
 - `generators/mutations_methods.py`: method mutation builders and audit helpers
 - `generators/mutations_errors.py`: mutation error helpers
 - `generators/mutations_limits.py`: nested input validation limits
+- `generators/pipeline/`: mutation pipeline architecture (steps, factories, context)
 - `generators/nested_operations.py`: nested create/update/delete helpers
 - `generators/inheritance.py`: model inheritance resolution helpers
 - `generators/filters.py`: advanced filter input generation

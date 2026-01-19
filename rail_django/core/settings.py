@@ -403,9 +403,6 @@ class MutationGeneratorSettings:
     # NEW: Per-field configuration for nested relations (model.field -> bool)
     nested_field_config: dict[str, dict[str, bool]] = field(default_factory=dict)
 
-    # Mutation backend: "legacy" (closure-based) or "pipeline" (new architecture)
-    mutation_backend: str = "pipeline"
-
     @classmethod
     def from_schema(cls, schema_name: str) -> "MutationGeneratorSettings":
         """

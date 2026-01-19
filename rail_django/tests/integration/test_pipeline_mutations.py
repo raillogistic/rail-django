@@ -24,9 +24,8 @@ class TestPipelineMutationGenerator(TestCase):
 
         self.type_generator = TypeGenerator()
 
-        # Create settings with pipeline backend
+        # Create settings for the mutation generator
         self.settings = MutationGeneratorSettings(
-            mutation_backend="pipeline",
             enable_create=True,
             enable_update=True,
             enable_delete=True,
@@ -75,24 +74,6 @@ class TestPipelineMutationGenerator(TestCase):
         self.assertIn("sanitization", step_names)
         self.assertIn("create_execution", step_names)
 
-    def test_backend_switch_to_legacy(self):
-        """Test that legacy backend can be used."""
-        from rail_django.core.settings import MutationGeneratorSettings
-
-        legacy_settings = MutationGeneratorSettings(
-            mutation_backend="legacy",
-        )
-
-        generator = MutationGenerator(
-            self.type_generator,
-            settings=legacy_settings,
-        )
-
-        mutation = generator.generate_create_mutation(Category)
-
-        # Legacy mutations don't have pipeline attribute
-        self.assertIsNotNone(mutation)
-
 
 @pytest.mark.integration
 class TestPipelineCreateMutation(TestCase):
@@ -114,7 +95,7 @@ class TestPipelineCreateMutation(TestCase):
         from rail_django.generators.mutations import MutationGenerator
         from rail_django.core.settings import MutationGeneratorSettings
 
-        settings = MutationGeneratorSettings(mutation_backend="pipeline")
+        settings = MutationGeneratorSettings()
         type_generator = TypeGenerator()
         mutation_generator = MutationGenerator(type_generator, settings=settings)
 
@@ -142,7 +123,7 @@ class TestPipelineCreateMutation(TestCase):
         from rail_django.generators.mutations import MutationGenerator
         from rail_django.core.settings import MutationGeneratorSettings
 
-        settings = MutationGeneratorSettings(mutation_backend="pipeline")
+        settings = MutationGeneratorSettings()
         type_generator = TypeGenerator()
         mutation_generator = MutationGenerator(type_generator, settings=settings)
 
@@ -187,7 +168,7 @@ class TestPipelineUpdateMutation(TestCase):
         from rail_django.generators.mutations import MutationGenerator
         from rail_django.core.settings import MutationGeneratorSettings
 
-        settings = MutationGeneratorSettings(mutation_backend="pipeline")
+        settings = MutationGeneratorSettings()
         type_generator = TypeGenerator()
         mutation_generator = MutationGenerator(type_generator, settings=settings)
 
@@ -216,7 +197,7 @@ class TestPipelineUpdateMutation(TestCase):
         from rail_django.generators.mutations import MutationGenerator
         from rail_django.core.settings import MutationGeneratorSettings
 
-        settings = MutationGeneratorSettings(mutation_backend="pipeline")
+        settings = MutationGeneratorSettings()
         type_generator = TypeGenerator()
         mutation_generator = MutationGenerator(type_generator, settings=settings)
 
@@ -260,7 +241,7 @@ class TestPipelineDeleteMutation(TestCase):
         from rail_django.generators.mutations import MutationGenerator
         from rail_django.core.settings import MutationGeneratorSettings
 
-        settings = MutationGeneratorSettings(mutation_backend="pipeline")
+        settings = MutationGeneratorSettings()
         type_generator = TypeGenerator()
         mutation_generator = MutationGenerator(type_generator, settings=settings)
 

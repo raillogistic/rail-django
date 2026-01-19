@@ -4,16 +4,7 @@ Mutation Generation System for Django GraphQL Auto-Generation
 This module provides the MutationGenerator class, which is responsible for creating
 GraphQL mutations for Django models, including CRUD operations and custom method mutations.
 
-The generator supports two backends:
-- "legacy": The original closure-based generation (default for backward compatibility)
-- "pipeline": New pipeline-based architecture for improved testability and customization
-
-Set the backend via settings:
-    RAIL_DJANGO_GRAPHQL = {
-        "mutation_settings": {
-            "mutation_backend": "pipeline",  # or "legacy"
-        }
-    }
+The generator uses a pipeline-based architecture for improved testability and customization.
 """
 
 from typing import Any, Dict, Optional, Type, Union, get_origin
@@ -28,11 +19,6 @@ from .mutations_bulk import (
     generate_bulk_create_mutation as _generate_bulk_create_mutation,
     generate_bulk_delete_mutation as _generate_bulk_delete_mutation,
     generate_bulk_update_mutation as _generate_bulk_update_mutation,
-)
-from .mutations_crud import (
-    generate_create_mutation as _generate_create_mutation,
-    generate_delete_mutation as _generate_delete_mutation,
-    generate_update_mutation as _generate_update_mutation,
 )
 from .mutations_errors import (  # noqa: F401
     MutationError,
@@ -67,17 +53,9 @@ class MutationGenerator:
     - Input validation and error handling
     - Performance optimization
 
-    The generator supports two backends:
-    - "legacy": Original closure-based generation (default)
-    - "pipeline": New pipeline-based architecture
-
-    Configure via settings:
-        mutation_backend: "pipeline" or "legacy"
+    The generator uses a pipeline-based architecture for improved testability
+    and customization.
     """
-
-    # Backend options
-    BACKEND_LEGACY = "legacy"
-    BACKEND_PIPELINE = "pipeline"
 
     def __init__(
         self,
@@ -116,14 +94,8 @@ class MutationGenerator:
             self.settings, schema_name=self.schema_name
         )
 
-        # Determine backend
-        self._backend = getattr(self.settings, "mutation_backend", self.BACKEND_LEGACY)
-
-        # Initialize pipeline components if using pipeline backend
-        self._pipeline_builder = None
-        self._tenant_applicator = None
-        if self._backend == self.BACKEND_PIPELINE:
-            self._init_pipeline_backend()
+        # Initialize pipeline components
+        self._init_pipeline_backend()
 
     def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
         guards = getattr(graphql_meta, "_operation_guards", None) or {}
@@ -259,16 +231,8 @@ class MutationGenerator:
 
     def generate_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         """
-        Generate a create mutation for a model.
-
-        Uses either pipeline or legacy backend based on configuration.
+        Generate a create mutation for a model using the pipeline backend.
         """
-        if self._backend == self.BACKEND_PIPELINE:
-            return self._generate_create_mutation_pipeline(model)
-        return _generate_create_mutation(self, model)
-
-    def _generate_create_mutation_pipeline(self, model: type[models.Model]) -> type[graphene.Mutation]:
-        """Generate create mutation using pipeline backend."""
         from .pipeline.factories import create_mutation_factory
 
         model_type = self.type_generator.generate_object_type(model)
@@ -288,16 +252,8 @@ class MutationGenerator:
 
     def generate_update_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         """
-        Generate an update mutation for a model.
-
-        Uses either pipeline or legacy backend based on configuration.
+        Generate an update mutation for a model using the pipeline backend.
         """
-        if self._backend == self.BACKEND_PIPELINE:
-            return self._generate_update_mutation_pipeline(model)
-        return _generate_update_mutation(self, model)
-
-    def _generate_update_mutation_pipeline(self, model: type[models.Model]) -> type[graphene.Mutation]:
-        """Generate update mutation using pipeline backend."""
         from .pipeline.factories import update_mutation_factory
 
         model_type = self.type_generator.generate_object_type(model)
@@ -319,16 +275,8 @@ class MutationGenerator:
 
     def generate_delete_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
         """
-        Generate a delete mutation for a model.
-
-        Uses either pipeline or legacy backend based on configuration.
+        Generate a delete mutation for a model using the pipeline backend.
         """
-        if self._backend == self.BACKEND_PIPELINE:
-            return self._generate_delete_mutation_pipeline(model)
-        return _generate_delete_mutation(self, model)
-
-    def _generate_delete_mutation_pipeline(self, model: type[models.Model]) -> type[graphene.Mutation]:
-        """Generate delete mutation using pipeline backend."""
         from .pipeline.factories import delete_mutation_factory
 
         model_type = self.type_generator.generate_object_type(model)

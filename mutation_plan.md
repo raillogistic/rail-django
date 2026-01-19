@@ -1502,8 +1502,8 @@ class TestCreateMutationPipeline:
 - [x] Implemented `delete_mutation_factory`
 
 #### Phase 5: MutationGenerator Integration
-- [x] Added `mutation_backend` setting ("legacy" or "pipeline")
-- [x] Updated `MutationGenerator` to support both backends
+- [x] ~~Added `mutation_backend` setting (removed in favor of pipeline-only)~~
+- [x] Updated `MutationGenerator` to use pipeline-only architecture
 - [x] Created `TenantApplicator` wrapper for pipeline
 
 #### Phase 6: GraphQLMeta Integration
@@ -1518,8 +1518,15 @@ class TestCreateMutationPipeline:
 
 #### Documentation
 - [x] Updated `docs/reference/meta.md` with Pipeline section
-- [x] Updated `docs/reference/configuration.md` with mutation_backend setting
+- [x] Updated `docs/reference/configuration.md` (legacy backend references removed)
 - [x] Added documentation for custom steps and pipeline customization
+
+#### Phase 7: Legacy Removal (Completed)
+- [x] Removed `mutation_backend` setting from all configuration files
+- [x] Removed legacy backend code from `MutationGenerator`
+- [x] Deleted `mutations_crud.py` (legacy implementation)
+- [x] Updated tests to remove legacy backend references
+- [x] Updated documentation to remove legacy backend references
 
 ### 📁 Files Created
 
@@ -1555,13 +1562,17 @@ rail_django/generators/pipeline/
 
 ### 📁 Files Modified
 
-- `rail_django/generators/mutations.py` - Added pipeline backend support
-- `rail_django/core/settings.py` - Added `mutation_backend` setting
+- `rail_django/generators/mutations.py` - Pipeline-only architecture (legacy code removed)
+- `rail_django/core/settings.py` - Removed `mutation_backend` setting
 - `rail_django/core/meta.py` - Added `PipelineConfig` and integration
-- `rail_django/defaults.py` - Added `mutation_backend` to LIBRARY_DEFAULTS
-- `rail_django/conf/project_template/root/settings/base.py-tpl` - Added `mutation_backend` setting
-- `docs/reference/meta.md` - Pipeline documentation
-- `docs/reference/configuration.md` - Mutation backend documentation
+- `rail_django/defaults.py` - Removed `mutation_backend` from LIBRARY_DEFAULTS
+- `rail_django/conf/project_template/root/settings/base.py-tpl` - Removed `mutation_backend` setting
+- `docs/reference/meta.md` - Pipeline documentation (legacy references removed)
+- `docs/reference/configuration.md` - Mutation documentation (legacy references removed)
+
+### 📁 Files Deleted
+
+- `rail_django/generators/mutations_crud.py` - Legacy closure-based mutation implementation
 
 ### 🧪 Tests Created
 
@@ -1570,18 +1581,8 @@ rail_django/generators/pipeline/
 
 ---
 
-## Next Steps (Not Yet Implemented)
+## Migration Complete ✅
 
-### Step 2: Feature Flag Testing
-- [ ] Run both backends in parallel tests to verify parity
-- [ ] Add performance benchmarks comparing backends
-
-### Step 3: Gradual Rollout
-- [ ] Enable pipeline for new models first
-- [ ] Monitor for issues in staging environment
-- [ ] Fix any edge cases discovered
-
-### Step 4: Full Migration
-- [ ] Switch default to pipeline after validation
-- [ ] Deprecate legacy code with warnings
-- [ ] Eventually remove `mutations_crud.py`
+The mutation pipeline architecture is now the only implementation. The legacy closure-based
+backend has been fully removed. All mutations now use the composable, testable pipeline
+architecture with discrete steps that can be customized per-model via `GraphQLMeta.Pipeline`.
