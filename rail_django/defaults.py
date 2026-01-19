@@ -67,6 +67,12 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "require_model_permissions": True,
         "model_permission_codename": "view",
     },
+    "filtering_settings": {
+        "enable_full_text_search": True,
+        "fts_config": "english",
+        "fts_search_type": "websearch",
+        "fts_rank_threshold": None,
+    },
     "mutation_settings": {
         "generate_create": True,
         "generate_update": True,

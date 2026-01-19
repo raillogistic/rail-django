@@ -33,6 +33,12 @@ RAIL_DJANGO_GRAPHQL = {
         # Enable both filter styles (generates 'filters' and 'where' arguments)
         "enable_dual_filter_styles": False,
     },
+    "filtering_settings": {
+        "enable_full_text_search": False,
+        "fts_config": "english",
+        "fts_search_type": "websearch",
+        "fts_rank_threshold": None,
+    },
     "mutation_settings": {
         "enable_create": True,
         "enable_update": True,
@@ -139,6 +145,19 @@ permission codename (default: `view`), and the permission string is built as
 override the default model permission check. Set
 `query_settings.require_model_permissions` to `False` to disable the default
 check. Use `model_permission_codename: "add"` if you prefer create permissions.
+
+## Filtering settings
+
+Full-text search is configured under `filtering_settings`. It is opt-in and uses
+Postgres full-text search when available, falling back to `icontains` on other
+databases.
+
+Key options:
+
+- `enable_full_text_search`: master toggle.
+- `fts_config`: Postgres text search config (default: `english`).
+- `fts_search_type`: `plain`, `phrase`, `websearch`, or `raw`.
+- `fts_rank_threshold`: minimum rank filter for Postgres (optional).
 
 ## Mutation permissions
 

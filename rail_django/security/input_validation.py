@@ -759,6 +759,9 @@ class InputValidator:
     def _sanitize_value(
         self, value: Any, issues: list[ValidationIssue], path: Optional[str]
     ) -> Any:
+        if isinstance(value, Enum):
+            return value.value
+
         if hasattr(value, "__dict__") and not isinstance(value, dict):
             return self._sanitize_value(dict(value.__dict__), issues, path)
 

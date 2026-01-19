@@ -22,10 +22,10 @@ def _get_nested_filter_generator(schema_name: str):
     return NestedFilterInputGenerator(schema_name=schema_name)
 
 
-def _get_nested_filter_applicator():
+def _get_nested_filter_applicator(schema_name: str):
     """Lazy import to avoid circular dependencies."""
     from .filter_inputs import NestedFilterApplicator
-    return NestedFilterApplicator()
+    return NestedFilterApplicator(schema_name=schema_name)
 
 
 class PaginationInfo(graphene.ObjectType):
@@ -230,7 +230,7 @@ def generate_paginated_query(
     try:
         nested_generator = _get_nested_filter_generator(self.schema_name)
         nested_where_input = nested_generator.generate_where_input(filter_model)
-        nested_filter_applicator = _get_nested_filter_applicator()
+        nested_filter_applicator = _get_nested_filter_applicator(self.schema_name)
     except Exception as e:
         logger.warning(f"Could not generate nested filter for {filter_model.__name__}: {e}")
 

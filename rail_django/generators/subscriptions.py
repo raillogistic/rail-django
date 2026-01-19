@@ -543,7 +543,7 @@ class SubscriptionGenerator:
         )
         self.filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
         self.nested_filter_generator = NestedFilterInputGenerator(schema_name=schema_name)
-        self.nested_filter_applicator = NestedFilterApplicator()
+        self.nested_filter_applicator = NestedFilterApplicator(schema_name=schema_name)
 
     def _ensure_authentication(self, info: graphene.ResolveInfo) -> None:
         # Determine effective schema name (priority: context > generator default)

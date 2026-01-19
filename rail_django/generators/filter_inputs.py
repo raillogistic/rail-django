@@ -249,6 +249,32 @@ class AggregationFilterInput(graphene.InputObjectType):
     count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
 
 
+class FullTextSearchTypeEnum(graphene.Enum):
+    """Supported full-text search query modes."""
+    PLAIN = "plain"
+    PHRASE = "phrase"
+    WEBSEARCH = "websearch"
+    RAW = "raw"
+
+
+class FullTextSearchInput(graphene.InputObjectType):
+    """
+    Full-text search configuration.
+    """
+    query = graphene.String(required=True, description="Search query")
+    fields = graphene.List(
+        graphene.NonNull(graphene.String),
+        description="Fields to search (supports relations: 'author__name')",
+    )
+    config = graphene.String(description="Text search configuration (Postgres only)")
+    rank_threshold = graphene.Float(description="Minimum search rank (0.0-1.0)")
+    search_type = graphene.Field(
+        lambda: FullTextSearchTypeEnum,
+        description="Search type: plain, phrase, websearch, raw",
+        default_value=FullTextSearchTypeEnum.WEBSEARCH,
+    )
+
+
 # =============================================================================
 # Filter Input Type Registry
 # =============================================================================
@@ -351,6 +377,11 @@ class NestedFilterInputGenerator:
         self.max_nested_depth = max_nested_depth
         self.enable_count_filters = enable_count_filters
         self.schema_name = schema_name or "default"
+        try:
+            from ..core.settings import FilteringSettings
+            self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
+        except Exception:
+            self.filtering_settings = None
 
     def generate_where_input(
         self,
@@ -427,6 +458,16 @@ class NestedFilterInputGenerator:
                 graphene.String,
                 description="Quick search across multiple text fields"
             )
+
+            # Add full-text search filter if enabled
+            if (
+                self.filtering_settings
+                and getattr(self.filtering_settings, "enable_full_text_search", False)
+            ):
+                fields["search"] = graphene.InputField(
+                    FullTextSearchInput,
+                    description="Full-text search (Postgres) with icontains fallback",
+                )
 
             # Add include filter for ID union
             fields["include"] = graphene.InputField(
@@ -673,11 +714,17 @@ class NestedFilterApplicator:
     filter, and historical model filters.
     """
 
-    def __init__(self):
+    def __init__(self, schema_name: str = "default"):
+        self.schema_name = schema_name
         # Lazy-initialized mixins to avoid circular reference
         self._quick_mixin = None
         self._include_mixin = None
         self._historical_mixin = None
+        try:
+            from ..core.settings import FilteringSettings
+            self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
+        except Exception:
+            self.filtering_settings = None
 
     def _get_quick_mixin(self):
         if self._quick_mixin is None:
@@ -721,6 +768,7 @@ class NestedFilterApplicator:
         # Extract special filters before processing
         include_ids = where_input.pop("include", None)
         quick_value = where_input.pop("quick", None)
+        search_input = where_input.pop("search", None)
 
         # Handle historical filters
         instance_in = where_input.pop("instance_in", None)
@@ -734,6 +782,20 @@ class NestedFilterApplicator:
 
         # Build and apply main Q object
         q_object = self._build_q_from_where(where_input, model)
+
+        # Apply full-text search
+        if (
+            search_input
+            and self.filtering_settings
+            and self.filtering_settings.enable_full_text_search
+        ):
+            if isinstance(search_input, str):
+                search_input = {"query": search_input}
+            search_q, search_annotations = self._build_fts_q(search_input, model)
+            if search_annotations:
+                queryset = queryset.annotate(**search_annotations)
+            if search_q:
+                q_object &= search_q
 
         # Apply quick filter
         if quick_value:
@@ -944,6 +1006,71 @@ class NestedFilterApplicator:
             q &= self._build_numeric_q(annotation_name, agg_value)
 
         return q
+
+    def _build_fts_q(
+        self,
+        search_input: Dict[str, Any],
+        model: Type[models.Model],
+    ) -> tuple[Q, Dict[str, Any]]:
+        """Build full-text search Q object and annotations."""
+        from django.db import connection
+
+        query_text = search_input.get("query") if isinstance(search_input, dict) else None
+        if not query_text:
+            return Q(), {}
+
+        fields = search_input.get("fields") if isinstance(search_input, dict) else None
+        if isinstance(fields, str):
+            fields = [fields]
+        if not fields:
+            fields = self._get_quick_mixin().get_default_quick_filter_fields(model)
+        fields = [f for f in fields if isinstance(f, str) and f]
+        if not fields:
+            return Q(), {}
+
+        config = (
+            search_input.get("config")
+            or (self.filtering_settings.fts_config if self.filtering_settings else "english")
+        )
+        search_type = (
+            search_input.get("search_type")
+            or (self.filtering_settings.fts_search_type if self.filtering_settings else "websearch")
+        )
+        if search_type is not None and not isinstance(search_type, str):
+            search_type = getattr(search_type, "value", str(search_type))
+        rank_threshold = search_input.get("rank_threshold")
+        if rank_threshold is None and self.filtering_settings:
+            rank_threshold = self.filtering_settings.fts_rank_threshold
+
+        if connection.vendor == "postgresql":
+            try:
+                from django.contrib.postgres.search import (
+                    SearchVector, SearchQuery, SearchRank,
+                )
+
+                vector = SearchVector(*fields, config=config)
+                query = SearchQuery(query_text, config=config, search_type=search_type)
+
+                annotations = {
+                    "_search_vector": vector,
+                    "_search_rank": SearchRank(vector, query),
+                }
+
+                q = Q(_search_vector=query)
+                if rank_threshold is not None:
+                    q &= Q(_search_rank__gte=rank_threshold)
+
+                return q, annotations
+            except Exception as e:
+                logger.debug(f"Full-text search setup failed, falling back: {e}")
+
+        fallback_q = Q()
+        for field_path in fields:
+            field = self._get_quick_mixin()._get_field_from_path(model, field_path)
+            if field and isinstance(field, (models.CharField, models.TextField, models.EmailField)):
+                fallback_q |= Q(**{f"{field_path}__icontains": query_text})
+
+        return fallback_q, {}
 
     def _build_count_q(
         self,
@@ -2065,6 +2192,7 @@ def generate_where_input_for_model(
 def apply_where_filter(
     queryset: models.QuerySet,
     where_input: Dict[str, Any],
+    schema_name: str = "default",
 ) -> models.QuerySet:
     """
     Apply a where filter to a queryset.
@@ -2076,7 +2204,7 @@ def apply_where_filter(
     Returns:
         Filtered queryset
     """
-    applicator = NestedFilterApplicator()
+    applicator = NestedFilterApplicator(schema_name=schema_name)
 
     # Prepare count annotations if needed
     queryset = applicator.prepare_queryset_for_count_filters(queryset, where_input)
@@ -2115,7 +2243,7 @@ class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQL
             enable_count_filters=True,
             schema_name=self.schema_name,
         )
-        self._filter_applicator = NestedFilterApplicator()
+        self._filter_applicator = NestedFilterApplicator(schema_name=self.schema_name)
         self._metadata_generator = FilterMetadataGenerator(schema_name=self.schema_name)
 
     def generate_filter_set(

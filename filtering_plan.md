@@ -23,7 +23,11 @@ The filtering system (`rail_django/generators/filter_inputs.py`) currently suppo
 **Estimated Complexity:** Medium
 **Files to modify:**
 - `rail_django/generators/filter_inputs.py`
-- `rail_django/generators/queries_list.py`
+- `rail_django/tests/unit/test_nested_filters.py`
+- `rail_django/tests/integration/test_nested_filters.py`
+- `docs/guides/filtering.md`
+
+**Status:** Completed
 
 ### Description
 
@@ -31,10 +35,17 @@ Allow filtering by aggregated values on related objects (SUM, AVG, MIN, MAX, COU
 
 ### Implementation Steps
 
-1. Create `AggregationFilterInput` types for each aggregate function
-2. Add `{relation}_agg` fields to WhereInput for reverse relations
-3. Implement `_build_aggregation_q()` method in `NestedFilterApplicator`
-4. Add required annotations to queryset before filtering
+1. Create `AggregationFilterInput` types for each aggregate function (done)
+2. Add `{relation}_agg` fields to WhereInput for reverse relations (done)
+3. Implement `_build_aggregation_q()` method in `NestedFilterApplicator` (done)
+4. Add required annotations to queryset before filtering (done)
+
+### Delivered Work
+
+- Added `AggregationFilterInput` and `{relation}_agg` fields for reverse and M2M relations.
+- Implemented aggregation annotations and numeric filter handling in `NestedFilterApplicator`.
+- Added unit and integration coverage for aggregation filters.
+- Documented aggregation filter usage in the filtering guide.
 
 ### New Input Types
 
@@ -144,6 +155,17 @@ def _build_aggregation_q(
 **Files to modify:**
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/core/settings.py` (add FTS settings)
+- `rail_django/defaults.py`
+- `rail_django/generators/queries_list.py`
+- `rail_django/generators/queries_grouping.py`
+- `rail_django/generators/queries_pagination.py`
+- `rail_django/generators/subscriptions.py`
+- `rail_django/tests/unit/test_nested_filters.py`
+- `rail_django/tests/integration/test_nested_filters.py`
+- `docs/guides/filtering.md`
+- `docs/reference/configuration.md`
+
+**Status:** Completed
 
 ### Description
 
@@ -151,11 +173,18 @@ Leverage database full-text search capabilities for efficient text searching wit
 
 ### Implementation Steps
 
-1. Create `FullTextSearchInput` type
-2. Add `search` field to WhereInput
-3. Implement `_build_fts_q()` method with Postgres `SearchVector`/`SearchQuery`
-4. Add fallback to `icontains` for non-Postgres databases
-5. Support search across multiple fields including relations
+1. Create `FullTextSearchInput` type (done)
+2. Add `search` field to WhereInput (done)
+3. Implement `_build_fts_q()` method with Postgres `SearchVector`/`SearchQuery` (done)
+4. Add fallback to `icontains` for non-Postgres databases (done)
+5. Support search across multiple fields including relations (done)
+
+### Delivered Work
+
+- Added `FullTextSearchInput` and schema-gated `search` field generation.
+- Implemented FTS query building with Postgres annotations and fallback behavior.
+- Wired schema-scoped filtering settings and defaults for FTS configuration.
+- Added unit/integration coverage and documentation updates.
 
 ### New Input Types
 

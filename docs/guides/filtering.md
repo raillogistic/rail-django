@@ -343,6 +343,58 @@ class User(models.Model):
         )
 ```
 
+## Full-Text Search
+
+Full-text search is opt-in and uses Postgres `SearchVector`/`SearchQuery` when
+available. Other databases fall back to `icontains` across the selected fields.
+
+Enable it in schema settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_full_text_search": True,
+        "fts_config": "english",
+        "fts_search_type": "websearch",
+        "fts_rank_threshold": None,
+    }
+}
+```
+
+Usage example:
+
+```graphql
+query {
+  articles(where: {
+    search: {
+      query: "django graphql api"
+      fields: ["title", "body"]
+      search_type: WEBSEARCH
+    }
+  }) {
+    id
+    title
+  }
+}
+```
+
+Optional rank threshold (Postgres only):
+
+```graphql
+query {
+  products(where: {
+    search: {
+      query: "wireless headphones"
+      fields: ["name", "description"]
+      rank_threshold: 0.1
+    }
+  }) {
+    id
+    name
+  }
+}
+```
+
 ## Performance Considerations
 
 1. **Indexed fields**: Filter on indexed database fields for best performance

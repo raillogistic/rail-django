@@ -40,6 +40,9 @@ def _normalize_legacy_settings(config: dict[str, Any]) -> dict[str, Any]:
     if "TYPE_SETTINGS" in config and "type_generation_settings" not in config:
         normalized["type_generation_settings"] = config["TYPE_SETTINGS"]
 
+    if "FILTERING" in config and "filtering_settings" not in config:
+        normalized["filtering_settings"] = config["FILTERING"]
+
     if "PERFORMANCE" in config and "performance_settings" not in config:
         normalized["performance_settings"] = config["PERFORMANCE"]
 
@@ -97,6 +100,7 @@ def _get_global_settings(schema_name: str) -> dict[str, Any]:
         "mutation_settings",
         "subscription_settings",
         "persisted_query_settings",
+        "filtering_settings",
         "TYPE_SETTINGS",
         "FILTERING",
         "PAGINATION",
@@ -284,6 +288,49 @@ class QueryGeneratorSettings:
         )
 
         # Filter to only include valid fields for this dataclass
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+
+        return cls(**filtered_settings)
+
+
+@dataclass
+class FilteringSettings:
+    """Settings for advanced filtering features."""
+
+    enable_full_text_search: bool = False
+    fts_config: str = "english"
+    fts_search_type: str = "websearch"
+    fts_rank_threshold: Optional[float] = None
+
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "FilteringSettings":
+        """
+        Create FilteringSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            FilteringSettings: Configured settings instance
+        """
+        defaults = _get_library_defaults().get("filtering_settings", {})
+        global_settings = _get_global_settings(schema_name).get("filtering_settings", {})
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "filtering_settings", {}
+        )
+
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings
+        )
+
         valid_fields = set(cls.__dataclass_fields__.keys())
         filtered_settings = {
             k: v for k, v in merged_settings.items() if k in valid_fields

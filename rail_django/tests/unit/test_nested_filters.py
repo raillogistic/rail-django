@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import graphene
 from django.db.models import Q
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.utils import timezone
 
 from rail_django.generators.filter_inputs import (
@@ -22,6 +23,7 @@ from rail_django.generators.filter_inputs import (
     DateFilterInput,
     DateTimeFilterInput,
     FloatFilterInput,
+    FullTextSearchInput,
     IDFilterInput,
     IntFilterInput,
     JSONFilterInput,
@@ -164,6 +166,16 @@ class TestBaseFilterInputTypes(TestCase):
         self.assertIn("min", fields)
         self.assertIn("max", fields)
         self.assertIn("count", fields)
+
+    def test_full_text_search_input_fields(self):
+        """FullTextSearchInput should expose search configuration fields."""
+        fields = FullTextSearchInput._meta.fields
+
+        self.assertIn("query", fields)
+        self.assertIn("fields", fields)
+        self.assertIn("config", fields)
+        self.assertIn("rank_threshold", fields)
+        self.assertIn("search_type", fields)
 
 
 class TestFieldTypeMapping(TestCase):
@@ -361,6 +373,19 @@ class TestNestedFilterInputGenerator(TestCase):
 
         # They should be separate types
         self.assertIsNot(where_input1, where_input2)
+
+    @override_settings(
+        RAIL_DJANGO_GRAPHQL={
+            "fts_test": {"filtering_settings": {"enable_full_text_search": True}}
+        }
+    )
+    def test_where_input_has_search_field_when_enabled(self):
+        """Generated WhereInput should include search when FTS is enabled."""
+        generator = NestedFilterInputGenerator(schema_name="fts_test")
+        where_input = generator.generate_where_input(Category)
+        fields = where_input._meta.fields
+
+        self.assertIn("search", fields)
 
 
 class TestNestedFilterApplicator(TestCase):
@@ -1228,3 +1253,17 @@ class TestNestedFilterApplicatorNewFeatures(TestCase):
         # Should not raise even with special filters
         result = self.applicator.apply_where_filter(queryset, where_input.copy(), Category)
         self.assertIsNotNone(result)
+
+    @override_settings(
+        RAIL_DJANGO_GRAPHQL={
+            "fts_test": {"filtering_settings": {"enable_full_text_search": True}}
+        }
+    )
+    def test_build_fts_q_fallback(self):
+        """FTS should fall back to icontains on non-Postgres databases."""
+        applicator = NestedFilterApplicator(schema_name="fts_test")
+        search_input = {"query": "electron", "fields": ["name"]}
+        q, annotations = applicator._build_fts_q(search_input, Category)
+
+        self.assertIsInstance(q, Q)
+        self.assertEqual(annotations, {})

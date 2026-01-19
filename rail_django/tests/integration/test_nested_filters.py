@@ -27,6 +27,27 @@ def gql_client_nested():
     yield RailGraphQLTestClient(harness.schema, schema_name="test_nested", user=user)
 
 
+@pytest.fixture
+def gql_client_nested_fts():
+    """GraphQL client with full-text search enabled."""
+    harness = build_schema(
+        schema_name="test_nested_fts",
+        apps=["test_app"],
+        settings={
+            "filtering_settings": {"enable_full_text_search": True},
+        },
+    )
+    User = get_user_model()
+    user = User.objects.create_superuser(
+        username="nested_admin_fts",
+        email="nested_admin_fts@example.com",
+        password="pass12345",
+    )
+    yield RailGraphQLTestClient(
+        harness.schema, schema_name="test_nested_fts", user=user
+    )
+
+
 def _create_category(name="General", description=""):
     return Category.objects.create(name=name, description=description)
 
@@ -64,7 +85,7 @@ class TestNestedStringFilters:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where) {
+            categories(where: $where) {
                 name
             }
         }
@@ -73,7 +94,7 @@ class TestNestedStringFilters:
             query, variables={"where": {"name": {"eq": "Electronics"}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert names == ["Electronics"]
 
     def test_icontains_filter(self, gql_client_nested):
@@ -84,7 +105,7 @@ class TestNestedStringFilters:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -93,7 +114,7 @@ class TestNestedStringFilters:
             query, variables={"where": {"name": {"icontains": "electron"}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Electronics" in names
         assert "Electronic Games" in names
         assert "Books" not in names
@@ -106,7 +127,7 @@ class TestNestedStringFilters:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -115,7 +136,7 @@ class TestNestedStringFilters:
             query, variables={"where": {"name": {"starts_with": "Python"}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert names == ["Python Programming"]
 
     def test_in_filter(self, gql_client_nested):
@@ -127,7 +148,7 @@ class TestNestedStringFilters:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -136,7 +157,7 @@ class TestNestedStringFilters:
             query, variables={"where": {"name": {"in": ["A", "C"]}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert names == ["A", "C"]
 
     def test_not_in_filter(self, gql_client_nested):
@@ -147,7 +168,7 @@ class TestNestedStringFilters:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -156,7 +177,7 @@ class TestNestedStringFilters:
             query, variables={"where": {"name": {"not_in": ["A", "C"]}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert names == ["B"]
 
 
@@ -171,7 +192,7 @@ class TestNestedNumericFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, order_by: ["price"]) {
+            products(where: $where, orderBy: ["price"]) {
                 name
                 price
             }
@@ -195,7 +216,7 @@ class TestNestedNumericFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, order_by: ["price"]) {
+            products(where: $where, orderBy: ["price"]) {
                 name
             }
         }
@@ -216,7 +237,7 @@ class TestNestedNumericFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, order_by: ["price"]) {
+            products(where: $where, orderBy: ["price"]) {
                 name
             }
         }
@@ -242,7 +263,7 @@ class TestNestedBooleanOperators:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -271,7 +292,7 @@ class TestNestedBooleanOperators:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -297,7 +318,7 @@ class TestNestedBooleanOperators:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -321,7 +342,7 @@ class TestNestedBooleanOperators:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -411,7 +432,7 @@ class TestNestedM2MFilters:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -437,7 +458,7 @@ class TestNestedM2MFilters:
 
         query = """
         query($where: PostWhereInput) {
-            posts(where: $where, order_by: ["title"]) {
+            posts(where: $where, orderBy: ["title"]) {
                 title
             }
         }
@@ -466,7 +487,7 @@ class TestNestedAggregationFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, order_by: ["name"]) {
+            products(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -497,7 +518,7 @@ class TestNestedAggregationFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, order_by: ["name"]) {
+            products(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -528,7 +549,7 @@ class TestNestedIsNullFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -537,7 +558,7 @@ class TestNestedIsNullFilter:
             query, variables={"where": {"description": {"eq": ""}}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "No Desc" in names
 
 
@@ -552,7 +573,7 @@ class TestQuickFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -561,7 +582,7 @@ class TestQuickFilter:
             query, variables={"where": {"quick": "electron"}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Electronics" in names
         assert "Books" not in names
 
@@ -572,7 +593,7 @@ class TestQuickFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -581,7 +602,7 @@ class TestQuickFilter:
             query, variables={"where": {"quick": "electronics"}}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Category A" in names
         assert "Category B" not in names
 
@@ -593,7 +614,7 @@ class TestQuickFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where, order_by: ["name"]) {
+            categories(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -605,9 +626,43 @@ class TestQuickFilter:
             }}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Electronic Games" in names
         assert "Electronics" not in names
+
+
+class TestFullTextSearch:
+    """Test full-text search functionality with fallback."""
+
+    def test_search_filters_results(self, gql_client_nested_fts):
+        """Search should match configured fields."""
+        _create_category("Electronics", "Devices and gadgets")
+        _create_category("Books", "Reading materials")
+        _create_category("Electronic Games", "Gaming")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categories(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested_fts.execute(
+            query,
+            variables={
+                "where": {
+                    "search": {
+                        "query": "electron",
+                        "fields": ["name", "description"],
+                    }
+                }
+            },
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categories"]]
+        assert "Electronics" in names
+        assert "Electronic Games" in names
+        assert "Books" not in names
 
 
 class TestIncludeFilter:
@@ -621,7 +676,7 @@ class TestIncludeFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where) {
+            categories(where: $where) {
                 id
                 name
             }
@@ -635,7 +690,7 @@ class TestIncludeFilter:
             }}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Category 1" in names
         assert "Category 3" in names
         assert "Category 2" not in names
@@ -647,7 +702,7 @@ class TestIncludeFilter:
 
         query = """
         query($where: CategoryWhereInput) {
-            categorys(where: $where) {
+            categories(where: $where) {
                 id
                 name
             }
@@ -661,5 +716,5 @@ class TestIncludeFilter:
             }}
         )
         assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
+        names = [c["name"] for c in result["data"]["categories"]]
         assert "Alpha" in names
