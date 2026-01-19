@@ -79,6 +79,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "reject_unsafe_regex": True,
     },
     "mutation_settings": {
+        "mutation_backend": "pipeline",  # "legacy" or "pipeline"
         "generate_create": True,
         "generate_update": True,
         "generate_delete": True,

@@ -453,6 +453,138 @@ class GraphQLMeta(GraphQLMetaConfig):
 
 See `docs/reference/security.md` for policy configuration.
 
+## Mutation Pipeline
+
+Use `GraphQLMetaConfig.Pipeline` to customize the mutation pipeline for a model.
+The pipeline architecture provides composable, testable mutation handling.
+
+### Enabling the Pipeline Backend
+
+First, enable the pipeline backend in your settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "mutation_settings": {
+        "mutation_backend": "pipeline",  # "legacy" for closure-based (default)
+    }
+}
+```
+
+### Customizing the Pipeline
+
+You can customize the pipeline per-model using GraphQLMeta:
+
+```python
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+from rail_django.generators.pipeline.base import MutationStep
+
+
+class InventoryCheckStep(MutationStep):
+    """Custom step to check inventory before order creation."""
+    order = 75  # After validation, before execution
+    name = "inventory_check"
+
+    def execute(self, ctx):
+        # Check inventory availability
+        product_id = ctx.input_data.get("product")
+        quantity = ctx.input_data.get("quantity", 1)
+        # ... validation logic ...
+        return ctx
+
+
+class Order(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField()
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        pipeline = GraphQLMetaConfig.Pipeline(
+            # Add custom steps to all mutation types
+            extra_steps=[InventoryCheckStep],
+
+            # Skip specific steps by name
+            skip_steps=["audit"],
+
+            # Custom step ordering
+            step_order={"validation": 50},
+
+            # Operation-specific steps
+            create_steps=[OrderNumberGenerationStep],
+            update_steps=[],
+            delete_steps=[RefundProcessingStep],
+        )
+```
+
+### Available Pipeline Steps
+
+The default pipeline includes these steps (in order):
+
+| Order | Step Name | Description |
+|-------|-----------|-------------|
+| 10 | `authentication` | Verify user is authenticated |
+| 20 | `model_permission` | Check Django model permissions |
+| 25 | `operation_guard` | Check GraphQLMeta operation guards |
+| 30 | `sanitization` | Sanitize input data |
+| 35 | `instance_lookup` | Look up instance (update/delete only) |
+| 40 | `enum_normalization` | Convert GraphQL enums to Django values |
+| 45 | `dual_field_processing` | Handle nested_X vs X field priority |
+| 48 | `read_only_filter` | Remove read-only fields from input |
+| 49 | `created_by` | Auto-populate created_by field (create only) |
+| 50 | `tenant_injection` | Inject tenant fields |
+| 60 | `input_validation` | Run input validator |
+| 65 | `nested_limit_validation` | Validate nested operation limits |
+| 70 | `nested_data_validation` | Validate nested data structure |
+| 80 | `create_execution` / `update_execution` / `delete_execution` | Execute mutation |
+| 90 | `audit` | Log to audit system |
+
+### Creating Custom Steps
+
+Create custom steps by extending `MutationStep`:
+
+```python
+from rail_django.generators.pipeline.base import MutationStep
+from rail_django.generators.pipeline.context import MutationContext
+
+
+class NotificationStep(MutationStep):
+    """Send notification after successful mutation."""
+    order = 85  # After execution, before audit
+    name = "notification"
+
+    def should_run(self, ctx: MutationContext) -> bool:
+        # Only run for successful operations
+        return super().should_run(ctx) and ctx.result is not None
+
+    def execute(self, ctx: MutationContext) -> MutationContext:
+        from myapp.notifications import send_notification
+
+        send_notification(
+            user=ctx.user,
+            action=ctx.operation,
+            model=ctx.model_name,
+            instance=ctx.result,
+        )
+        return ctx
+```
+
+### Operation-Filtered Steps
+
+For steps that only apply to specific operations:
+
+```python
+from rail_django.generators.pipeline.base import OperationFilteredStep
+
+
+class OrderConfirmationStep(OperationFilteredStep):
+    """Send order confirmation on create only."""
+    allowed_operations = ("create",)
+    order = 85
+    name = "order_confirmation"
+
+    def execute(self, ctx):
+        # Send confirmation email
+        return ctx
+```
+
 ## Legacy names
 
 GraphQLMeta still accepts legacy attribute names:

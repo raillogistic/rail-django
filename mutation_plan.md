@@ -1457,3 +1457,131 @@ class TestCreateMutationPipeline:
 2. **Step registration**: Should custom steps be registered globally or per-model?
 3. **Async support**: Should steps support async execution for future compatibility?
 4. **Error accumulation**: Should pipeline continue after non-critical errors or fail fast?
+
+---
+
+## Implementation Status
+
+### ✅ Completed
+
+#### Phase 1: Foundation (No Breaking Changes)
+- [x] Created `rail_django/generators/pipeline/` directory structure
+- [x] Implemented `MutationContext` dataclass (`context.py`)
+- [x] Implemented `MutationStep` base class and `MutationPipeline` (`base.py`)
+- [x] Extracted shared utilities (`utils.py`)
+
+#### Phase 2: Pipeline Steps
+- [x] `AuthenticationStep` - Verify user authentication
+- [x] `ModelPermissionStep` - Check Django model permissions
+- [x] `OperationGuardStep` - Check GraphQLMeta operation guards
+- [x] `InputSanitizationStep` - Sanitize input data
+- [x] `EnumNormalizationStep` - Convert GraphQL enums
+- [x] `DualFieldProcessingStep` - Handle nested_X vs X fields
+- [x] `ReadOnlyFieldFilterStep` - Remove read-only fields
+- [x] `CreatedByStep` - Auto-populate created_by
+- [x] `TenantInjectionStep` - Inject tenant fields
+- [x] `InputValidationStep` - Run input validator
+- [x] `NestedLimitValidationStep` - Validate nested limits
+- [x] `NestedDataValidationStep` - Validate nested structure
+- [x] `InstanceLookupStep` - Look up instance for update/delete
+- [x] `CreateExecutionStep` - Execute create operation
+- [x] `UpdateExecutionStep` - Execute update operation
+- [x] `DeleteExecutionStep` - Execute delete operation
+- [x] `AuditStep` - Audit logging
+
+#### Phase 3: Pipeline Builder
+- [x] Implemented `PipelineBuilder` class
+- [x] Support for custom steps
+- [x] Support for skipping steps
+- [x] Support for configuring authentication/permission requirements
+
+#### Phase 4: Mutation Factories
+- [x] Implemented `BasePipelineMutation` class
+- [x] Implemented `create_mutation_factory`
+- [x] Implemented `update_mutation_factory`
+- [x] Implemented `delete_mutation_factory`
+
+#### Phase 5: MutationGenerator Integration
+- [x] Added `mutation_backend` setting ("legacy" or "pipeline")
+- [x] Updated `MutationGenerator` to support both backends
+- [x] Created `TenantApplicator` wrapper for pipeline
+
+#### Phase 6: GraphQLMeta Integration
+- [x] Added `PipelineConfig` dataclass
+- [x] Added `Pipeline` alias to GraphQLMeta
+- [x] Added `_build_pipeline_config` method
+- [x] Added `pipeline_config` attribute to GraphQLMeta instances
+
+#### Testing
+- [x] Created unit tests for pipeline components (`test_mutation_pipeline.py`)
+- [x] Created integration tests (`test_pipeline_mutations.py`)
+
+#### Documentation
+- [x] Updated `docs/reference/meta.md` with Pipeline section
+- [x] Updated `docs/reference/configuration.md` with mutation_backend setting
+- [x] Added documentation for custom steps and pipeline customization
+
+### 📁 Files Created
+
+```
+rail_django/generators/pipeline/
+├── __init__.py                    # Package exports
+├── context.py                     # MutationContext dataclass
+├── base.py                        # MutationStep, MutationPipeline, ConditionalStep
+├── builder.py                     # PipelineBuilder
+├── utils.py                       # Shared utility functions
+├── tenant_applicator.py           # Tenant operations wrapper
+│
+├── steps/                         # Individual pipeline steps
+│   ├── __init__.py
+│   ├── authentication.py
+│   ├── permissions.py
+│   ├── sanitization.py
+│   ├── normalization.py
+│   ├── validation.py
+│   ├── tenant.py
+│   ├── lookup.py
+│   ├── execution.py
+│   ├── audit.py
+│   └── created_by.py
+│
+└── factories/                     # Mutation class factories
+    ├── __init__.py
+    ├── base.py
+    ├── create.py
+    ├── update.py
+    └── delete.py
+```
+
+### 📁 Files Modified
+
+- `rail_django/generators/mutations.py` - Added pipeline backend support
+- `rail_django/core/settings.py` - Added `mutation_backend` setting
+- `rail_django/core/meta.py` - Added `PipelineConfig` and integration
+- `rail_django/defaults.py` - Added `mutation_backend` to LIBRARY_DEFAULTS
+- `rail_django/conf/project_template/root/settings/base.py-tpl` - Added `mutation_backend` setting
+- `docs/reference/meta.md` - Pipeline documentation
+- `docs/reference/configuration.md` - Mutation backend documentation
+
+### 🧪 Tests Created
+
+- `rail_django/tests/unit/test_mutation_pipeline.py` - Unit tests
+- `rail_django/tests/integration/test_pipeline_mutations.py` - Integration tests
+
+---
+
+## Next Steps (Not Yet Implemented)
+
+### Step 2: Feature Flag Testing
+- [ ] Run both backends in parallel tests to verify parity
+- [ ] Add performance benchmarks comparing backends
+
+### Step 3: Gradual Rollout
+- [ ] Enable pipeline for new models first
+- [ ] Monitor for issues in staging environment
+- [ ] Fix any edge cases discovered
+
+### Step 4: Full Migration
+- [ ] Switch default to pipeline after validation
+- [ ] Deprecate legacy code with warnings
+- [ ] Eventually remove `mutations_crud.py`

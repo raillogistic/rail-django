@@ -205,6 +205,31 @@ class ClassificationConfig:
     fields: dict[str, list[str]] = field(default_factory=dict)
 
 
+@dataclass
+class PipelineConfig:
+    """
+    Configuration for mutation pipeline customization.
+
+    Allows models to customize the mutation pipeline by adding, removing,
+    or reordering steps.
+
+    Attributes:
+        extra_steps: List of extra step classes to add to all pipelines
+        skip_steps: List of step names to skip
+        step_order: Dict mapping step names to custom order values
+        create_steps: List of extra step classes for create mutations only
+        update_steps: List of extra step classes for update mutations only
+        delete_steps: List of extra step classes for delete mutations only
+    """
+
+    extra_steps: list[type] = field(default_factory=list)
+    skip_steps: list[str] = field(default_factory=list)
+    step_order: dict[str, int] = field(default_factory=dict)
+    create_steps: list[type] = field(default_factory=list)
+    update_steps: list[type] = field(default_factory=list)
+    delete_steps: list[type] = field(default_factory=list)
+
+
 class GraphQLMeta:
     """
     Meta helper for configuring GraphQL behavior on Django models.
@@ -246,6 +271,7 @@ class GraphQLMeta:
     OperationGuard = OperationGuardConfig
     AccessControl = AccessControlConfig
     Classification = ClassificationConfig
+    Pipeline = PipelineConfig
 
     def __init__(self, model_class: type[models.Model]):
         """
@@ -274,6 +300,7 @@ class GraphQLMeta:
         self.classification_config: ClassificationConfig = (
             self._build_classification_config()
         )
+        self.pipeline_config: PipelineConfig = self._build_pipeline_config()
 
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom
@@ -612,6 +639,38 @@ class GraphQLMeta:
             )
 
         return ClassificationConfig()
+
+    def _build_pipeline_config(self) -> PipelineConfig:
+        """Construct mutation pipeline configuration for the model."""
+
+        if not self._meta_config:
+            return PipelineConfig()
+
+        raw = getattr(self._meta_config, "pipeline", None)
+        if raw is None:
+            return PipelineConfig()
+
+        if isinstance(raw, PipelineConfig):
+            return PipelineConfig(
+                extra_steps=list(raw.extra_steps),
+                skip_steps=list(raw.skip_steps),
+                step_order=dict(raw.step_order),
+                create_steps=list(raw.create_steps),
+                update_steps=list(raw.update_steps),
+                delete_steps=list(raw.delete_steps),
+            )
+
+        if isinstance(raw, dict):
+            return PipelineConfig(
+                extra_steps=list(raw.get("extra_steps", [])),
+                skip_steps=list(raw.get("skip_steps", [])),
+                step_order=dict(raw.get("step_order", {})),
+                create_steps=list(raw.get("create_steps", [])),
+                update_steps=list(raw.get("update_steps", [])),
+                delete_steps=list(raw.get("delete_steps", [])),
+            )
+
+        return PipelineConfig()
 
     def _coerce_role_config(self, name: str, value: Any) -> RoleConfig:
         if isinstance(value, RoleConfig):
