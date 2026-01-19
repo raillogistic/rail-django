@@ -278,6 +278,16 @@ class GraphQLMeta(GraphQLMetaConfig):
         custom={
             "has_overdue_tasks": "filter_has_overdue_tasks",
         },
+        presets={
+            "overdue": {"has_overdue_tasks": True},
+            "active": {"status": {"eq": "active"}},
+            "priority": {
+                "AND": [
+                    {"status": {"eq": "active"}},
+                    {"has_overdue_tasks": True}
+                ]
+            },
+        },
     )
 
     @staticmethod

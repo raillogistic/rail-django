@@ -140,7 +140,24 @@ def generate_list_query(
 
         # Apply nested 'where' filtering (Prisma/Hasura style)
         where = kwargs.get("where")
+        presets = kwargs.get("presets")
         include_ids = kwargs.get("include")
+
+        if presets and nested_filter_applicator:
+            # Apply presets if available
+            if where is None:
+                where = {}
+            # Ensure where is a dict
+            if not isinstance(where, dict):
+                 try:
+                    where = dict(where)
+                 except Exception:
+                     # This might happen if 'where' is a Graphene InputObjectType that hasn't been converted to dict yet?
+                     # Graphene usually passes dicts for inputs.
+                     pass
+            
+            where = nested_filter_applicator.apply_presets(where, presets, model)
+
         if include_ids:
             if where is None:
                 where = {}
@@ -239,6 +256,12 @@ def generate_list_query(
         arguments["where"] = graphene.Argument(
             nested_where_input,
             description="Nested filtering with typed field inputs (Prisma/Hasura style)",
+        )
+        
+        # Add presets argument
+        arguments["presets"] = graphene.Argument(
+            graphene.List(graphene.String),
+            description="List of filter presets to apply",
         )
 
     # Add basic filtering arguments if filter class is available

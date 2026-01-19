@@ -57,9 +57,22 @@ class Product(models.Model):
     name = models.CharField(max_length=120)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     date_creation = models.DateTimeField(auto_now_add=True)
+    inventory_count = models.PositiveIntegerField(default=0)
 
     class GraphQLMeta(RailGraphQLMeta):
         fields = RailGraphQLMeta.Fields(read_only=["date_creation"])
+        filter_presets = {
+            "expensive": {"price": {"gte": 50.0}},
+            "cheap": {"price": {"lt": 50.0}},
+            "mid_range": {"price": {"between": [20.0, 80.0]}},
+            "complex_preset": {
+                "AND": [
+                     {"name": {"icontains": "pro"}},
+                     {"price": {"gte": 100.0}}
+                ]
+            },
+            "out_of_stock": {"inventory_count": {"eq": 0}},
+        }
 
     class Meta:
         app_label = "test_app"

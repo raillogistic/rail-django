@@ -86,6 +86,7 @@ class FilteringConfig:
     auto_detect_quick: bool = True
     fields: dict[str, FilterFieldConfig] = field(default_factory=dict)
     custom: dict[str, Union[str, Callable]] = field(default_factory=dict)
+    presets: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -276,6 +277,7 @@ class GraphQLMeta:
 
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom
+        self.filter_presets = self.filtering.presets
         self.custom_resolvers = self.resolvers.queries
         self.quick_filter_fields = list(self.filtering.quick)
         self.filters = {"quick": self.quick_filter_fields}
@@ -342,6 +344,7 @@ class GraphQLMeta:
                     for name, value in raw.fields.items()
                 },
                 custom=dict(raw.custom),
+                presets=dict(raw.presets),
             )
         elif isinstance(raw, dict):
             config = FilteringConfig(
@@ -353,9 +356,15 @@ class GraphQLMeta:
                     for name, value in raw.get("fields", {}).items()
                 },
                 custom=dict(raw.get("custom", {})),
+                presets=dict(raw.get("presets", {})),
             )
         else:
             config = FilteringConfig()
+
+        if not config.presets:
+            legacy_presets = getattr(self._meta_config, "filter_presets", {})
+            if isinstance(legacy_presets, dict):
+                config.presets = dict(legacy_presets)
 
         if not config.custom:
             legacy_custom = getattr(self._meta_config, "custom_filters", {})

@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -145,6 +145,16 @@ class Product(models.Model):
     def __str__(self) -> str:
         return f"{self.sku} - {self.name}"
 
+    class GraphQLMeta(RailGraphQLMeta):
+        filtering = RailGraphQLMeta.Filtering(
+            quick=["sku", "name", "description"],
+            presets={
+                "active": {"is_active": {"eq": True}},
+                "out_of_stock": {"inventory_count": {"eq": 0}},
+                "low_stock": {"inventory_count": {"lt": 10}},
+            },
+        )
+
     @property
     def order_items_count(self) -> int:
         return self.order_items.count()
@@ -219,6 +229,41 @@ class Order(models.Model):
             ("view_risk_score", "Can view order risk scores"),
             ("view_customer_pii", "Can view customer PII"),
         ]
+
+    class GraphQLMeta(RailGraphQLMeta):
+        filtering = RailGraphQLMeta.Filtering(
+            quick=["order_number", "contact_email", "contact_phone"],
+            custom={
+                "overdue": "filter_overdue",
+                "high_value_custom": "filter_high_value",
+                "has_balance": "filter_has_balance",
+            },
+            presets={
+                "recent": {"placed_at": {"this_month": True}},
+                "high_value": {"total_amount": {"gte": 1000}},
+                "pending": {"status": {"in_": ["placed", "paid"]}},
+                "priority": {"is_priority": {"eq": True}},
+            },
+        )
+        resolvers = RailGraphQLMeta.Resolvers(
+            queries={
+                "priority_queue": "resolve_priority_queue",
+            },
+            mutations={
+                "mark_paid": "resolve_mark_paid",
+            },
+        )
+        access = RailGraphQLMeta.AccessControl(
+            operations={
+                "retrieve": RailGraphQLMeta.OperationGuard(
+                    condition="can_access_order",
+                    deny_message="You do not have permission to view this order.",
+                ),
+                "update": RailGraphQLMeta.OperationGuard(
+                    condition="can_modify_order",
+                ),
+            }
+        )
 
     def __str__(self) -> str:
         return str(self.order_number)

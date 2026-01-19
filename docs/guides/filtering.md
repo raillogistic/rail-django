@@ -243,6 +243,77 @@ query {
 }
 ```
 
+## Filter Presets
+
+Presets allow you to define reusable filter configurations in your model's
+`GraphQLMeta` class. They can be combined with other presets and custom
+filters.
+
+### Defining Presets
+
+Define presets in your model's `GraphQLMeta`:
+
+```python
+class Order(models.Model):
+    # ...
+
+    class GraphQLMeta:
+        filter_presets = {
+            "recent": {
+                "created_at": {"this_month": True}
+            },
+            "high_value": {
+                "total": {"gte": 1000}
+            },
+            "pending": {
+                "status": {"in_": ["pending", "processing"]}
+            }
+        }
+```
+
+### Using Presets in Queries
+
+Use the `presets` argument to apply one or more presets:
+
+```graphql
+query {
+  # Apply a single preset
+  orders(presets: ["recent"]) {
+    id
+    created_at
+  }
+}
+```
+
+Combine multiple presets (AND logic):
+
+```graphql
+query {
+  orders(presets: ["recent", "high_value"]) {
+    id
+    total
+    created_at
+  }
+}
+```
+
+Mix presets with custom filters:
+
+```graphql
+query {
+  orders(
+    presets: ["high_value"]
+    where: {
+      customer_rel: { country: { eq: "US" } }
+    }
+  ) {
+    id
+    total
+    customer { name }
+  }
+}
+```
+
 ## Complex Query Examples
 
 ### Multi-condition Filter

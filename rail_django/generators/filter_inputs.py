@@ -741,6 +741,71 @@ class NestedFilterApplicator:
             self._historical_mixin = HistoricalModelMixin()
         return self._historical_mixin
 
+    def apply_presets(
+        self,
+        where_input: Dict[str, Any],
+        presets: List[str],
+        model: Type[models.Model],
+    ) -> Dict[str, Any]:
+        """
+        Merge preset filters with user-provided filters.
+
+        Args:
+            where_input: User provided where input
+            presets: List of preset names to apply
+            model: Django model class
+
+        Returns:
+            Merged where input dictionary
+        """
+        if not presets:
+            return where_input
+
+        # Lazy import to avoid circular dependency
+        from ..core.meta import get_model_graphql_meta
+
+        graphql_meta = get_model_graphql_meta(model)
+        if not graphql_meta or not graphql_meta.filter_presets:
+            return where_input
+
+        merged = {}
+
+        # Apply presets in order
+        for preset_name in presets:
+            preset_def = graphql_meta.filter_presets.get(preset_name)
+            if preset_def:
+                merged = self._deep_merge(merged, preset_def)
+
+        # User filters override presets
+        if where_input:
+            merged = self._deep_merge(merged, where_input)
+
+        return merged
+
+    def _deep_merge(self, dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Deep merge two dictionaries.
+        
+        Args:
+            dict1: Base dictionary
+            dict2: Override dictionary (takes precedence)
+
+        Returns:
+            Merged dictionary
+        """
+        result = dict1.copy()
+        
+        for key, value in dict2.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            elif key == "AND" and key in result and isinstance(result[key], list) and isinstance(value, list):
+                # For AND lists, we combine them
+                result[key] = result[key] + value
+            else:
+                result[key] = value
+        
+        return result
+
     def apply_where_filter(
         self,
         queryset: models.QuerySet,
@@ -915,9 +980,18 @@ class NestedFilterApplicator:
             return self._build_aggregation_q(base_field, filter_value)
 
         if field_name.endswith("_count"):
-            # Count filter
-            base_field = field_name[:-6]
-            return self._build_count_q(base_field, filter_value)
+            # Check if this is a real field first (e.g. inventory_count)
+            is_real_field = False
+            try:
+                model._meta.get_field(field_name)
+                is_real_field = True
+            except Exception:
+                pass
+
+            if not is_real_field:
+                # Count filter
+                base_field = field_name[:-6]
+                return self._build_count_q(base_field, filter_value)
 
         # Regular field filter
         for op, op_value in filter_value.items():
@@ -1352,7 +1426,7 @@ class NestedFilterApplicator:
         Returns:
             Queryset with necessary count annotations
         """
-        annotations = self._collect_count_annotations(where_input)
+        annotations = self._collect_count_annotations(where_input, model=queryset.model)
 
         for annotation_name, field_name in annotations.items():
             queryset = queryset.annotate(**{annotation_name: Count(field_name)})
@@ -1363,6 +1437,7 @@ class NestedFilterApplicator:
         self,
         where_input: Dict[str, Any],
         annotations: Optional[Dict[str, str]] = None,
+        model: Optional[Type[models.Model]] = None,
     ) -> Dict[str, str]:
         """Collect all count annotations needed."""
         if annotations is None:
@@ -1372,14 +1447,24 @@ class NestedFilterApplicator:
             if key == "AND" or key == "OR":
                 if isinstance(value, list):
                     for item in value:
-                        self._collect_count_annotations(item, annotations)
+                        self._collect_count_annotations(item, annotations, model)
             elif key == "NOT":
                 if isinstance(value, dict):
-                    self._collect_count_annotations(value, annotations)
+                    self._collect_count_annotations(value, annotations, model)
             elif key.endswith("_count") and isinstance(value, dict):
-                base_field = key[:-6]
-                annotation_name = f"{base_field}_count_annotation"
-                annotations[annotation_name] = base_field
+                # Check if this is a real field first (e.g. inventory_count)
+                is_real_field = False
+                if model:
+                    try:
+                        model._meta.get_field(key)
+                        is_real_field = True
+                    except Exception:
+                        pass
+                
+                if not is_real_field:
+                    base_field = key[:-6]
+                    annotation_name = f"{base_field}_count_annotation"
+                    annotations[annotation_name] = base_field
 
         return annotations
 
