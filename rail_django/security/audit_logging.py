@@ -22,7 +22,7 @@ from django.contrib.auth import get_user_model
 
 # from django.contrib.contenttypes.models import ContentType
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone as django_timezone
 from graphql import GraphQLError, GraphQLResolveInfo
 
@@ -751,7 +751,12 @@ def audit_data_modification(model_class: type, operation: str):
                     details=error_details,
                 )
 
-                audit_logger.log_event(event)
+                try:
+                    # Skip logging if transaction is aborted to avoid masking the original error
+                    if not transaction.get_connection().needs_rollback:
+                        audit_logger.log_event(event)
+                except Exception:
+                    pass
 
                 raise
 

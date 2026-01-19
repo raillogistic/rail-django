@@ -138,8 +138,53 @@ def generate_list_query(
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
-        # Apply nested 'where' filtering (Prisma/Hasura style)
+        # Apply saved filter
+        saved_filter_name_or_id = kwargs.get("savedFilter")
         where = kwargs.get("where")
+        
+        if saved_filter_name_or_id and nested_filter_applicator:
+            try:
+                from ..saved_filter import SavedFilter
+                # Try to find by ID first, then name
+                saved = None
+                if str(saved_filter_name_or_id).isdigit():
+                    saved = SavedFilter.objects.filter(pk=saved_filter_name_or_id).first()
+                if not saved:
+                    # Filter by name, model_name and owner/public
+                    user = info.context.user if hasattr(info.context, "user") else None
+                    q = models.Q(name=saved_filter_name_or_id, model_name=model.__name__)
+                    if user and user.is_authenticated:
+                        q &= (models.Q(is_shared=True) | models.Q(created_by=user))
+                    else:
+                        q &= models.Q(is_shared=True)
+                    saved = SavedFilter.objects.filter(q).first()
+
+                if saved:
+                    # Update usage stats
+                    SavedFilter.objects.filter(pk=saved.pk).update(
+                        use_count=models.F("use_count") + 1,
+                        last_used_at=models.functions.Now()
+                    )
+                    
+                    saved_where = saved.filter_json
+                    if saved_where:
+                        # User provided 'where' overrides saved filter
+                        if where:
+                            if where is None:
+                                where = {}
+                            if not isinstance(where, dict):
+                                try:
+                                    where = dict(where)
+                                except Exception:
+                                    pass
+                            # Use apply_presets logic which merges deep
+                            where = nested_filter_applicator._deep_merge(saved_where, where)
+                        else:
+                            where = saved_where
+            except Exception as e:
+                logger.warning(f"Failed to apply saved filter '{saved_filter_name_or_id}': {e}")
+
+        # Apply nested 'where' filtering (Prisma/Hasura style)
         presets = kwargs.get("presets")
         include_ids = kwargs.get("include")
 
@@ -262,6 +307,12 @@ def generate_list_query(
         arguments["presets"] = graphene.Argument(
             graphene.List(graphene.String),
             description="List of filter presets to apply",
+        )
+
+        # Add savedFilter argument
+        arguments["savedFilter"] = graphene.Argument(
+            graphene.String,
+            description="Name or ID of a saved filter to apply",
         )
 
     # Add basic filtering arguments if filter class is available

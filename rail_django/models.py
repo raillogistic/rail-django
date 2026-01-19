@@ -23,6 +23,7 @@ from rail_django.extensions.reporting import (
     ReportingVisualization,
 )
 from rail_django.extensions.tasks import TaskExecution
+from rail_django.saved_filter import SavedFilter
 from rail_django.validation.schema_validator import SchemaValidator
 
 
@@ -259,4 +260,5 @@ __all__ = [
     "TaskExecution",
     "SchemaRegistryModel",
     "SchemaSnapshotModel",
+    "SavedFilter",
 ]

@@ -75,6 +75,16 @@ def generate_create_mutation(
                         if key not in read_only_fields
                     }
 
+                # Auto-populate created_by if missing and available on model
+                if "created_by" not in input:
+                    try:
+                        field = model._meta.get_field("created_by")
+                        user = info.context.user if hasattr(info.context, "user") else None
+                        if user and user.is_authenticated and field:
+                            input["created_by"] = user.id
+                    except Exception:
+                        pass
+
                 input = self._apply_tenant_input(
                     input, info, model, operation="create"
                 )
