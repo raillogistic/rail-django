@@ -53,6 +53,72 @@ logger = logging.getLogger(__name__)
 # Configuration constants
 DEFAULT_MAX_NESTED_DEPTH = 3
 MAX_ALLOWED_NESTED_DEPTH = 5
+DEFAULT_CACHE_MAX_SIZE = 100
+
+# =============================================================================
+# Singleton Registries for Filter Generators and Applicators
+# =============================================================================
+
+_filter_applicator_registry: Dict[str, "NestedFilterApplicator"] = {}
+_filter_generator_registry: Dict[str, "NestedFilterInputGenerator"] = {}
+
+
+def get_nested_filter_applicator(schema_name: str = "default") -> "NestedFilterApplicator":
+    """
+    Get or create a filter applicator for the schema (singleton pattern).
+
+    This ensures filter applicators are reused across requests, avoiding
+    repeated initialization overhead.
+
+    Args:
+        schema_name: Schema name for multi-schema support
+
+    Returns:
+        NestedFilterApplicator instance for the schema
+    """
+    if schema_name not in _filter_applicator_registry:
+        _filter_applicator_registry[schema_name] = NestedFilterApplicator(schema_name)
+    return _filter_applicator_registry[schema_name]
+
+
+def get_nested_filter_generator(schema_name: str = "default") -> "NestedFilterInputGenerator":
+    """
+    Get or create a filter generator for the schema (singleton pattern).
+
+    This ensures filter generators are reused across requests, avoiding
+    repeated initialization and cache misses.
+
+    Args:
+        schema_name: Schema name for multi-schema support
+
+    Returns:
+        NestedFilterInputGenerator instance for the schema
+    """
+    if schema_name not in _filter_generator_registry:
+        _filter_generator_registry[schema_name] = NestedFilterInputGenerator(schema_name=schema_name)
+    return _filter_generator_registry[schema_name]
+
+
+def clear_filter_caches(schema_name: Optional[str] = None) -> None:
+    """
+    Clear filter caches. Call on schema reload or in tests.
+
+    Args:
+        schema_name: Specific schema to clear, or None for all schemas
+    """
+    if schema_name:
+        # Clear specific schema
+        applicator = _filter_applicator_registry.pop(schema_name, None)
+        generator = _filter_generator_registry.pop(schema_name, None)
+        # Clear instance caches if they exist
+        if generator:
+            generator.clear_cache()
+    else:
+        # Clear all schemas
+        for generator in _filter_generator_registry.values():
+            generator.clear_cache()
+        _filter_applicator_registry.clear()
+        _filter_generator_registry.clear()
 
 
 # =============================================================================
@@ -354,17 +420,17 @@ class NestedFilterInputGenerator:
             OR: [ProductWhereInput!]
             NOT: ProductWhereInput
         }
-    """
 
-    # Cache for generated filter input types
-    _filter_input_cache: Dict[str, Type[graphene.InputObjectType]] = {}
-    _generation_stack: Set[str] = set()  # Prevent infinite recursion
+    Note: Use get_nested_filter_generator() to obtain singleton instances
+    for better cache reuse across requests.
+    """
 
     def __init__(
         self,
         max_nested_depth: int = 3,
         enable_count_filters: bool = True,
         schema_name: Optional[str] = None,
+        cache_max_size: int = DEFAULT_CACHE_MAX_SIZE,
     ):
         """
         Initialize the nested filter input generator.
@@ -373,15 +439,38 @@ class NestedFilterInputGenerator:
             max_nested_depth: Maximum depth for nested relationship filters
             enable_count_filters: Whether to generate count filters for relations
             schema_name: Schema name for multi-schema support
+            cache_max_size: Maximum number of cached filter input types
         """
         self.max_nested_depth = max_nested_depth
         self.enable_count_filters = enable_count_filters
         self.schema_name = schema_name or "default"
+        self.cache_max_size = cache_max_size
+
+        # Instance-level cache (not class-level) for better isolation
+        self._filter_input_cache: Dict[str, Type[graphene.InputObjectType]] = {}
+        self._generation_stack: Set[str] = set()  # Prevent infinite recursion
+
         try:
             from ..core.settings import FilteringSettings
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
         except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
+
+    def clear_cache(self) -> None:
+        """Clear the filter input cache for this generator."""
+        self._filter_input_cache.clear()
+        self._generation_stack.clear()
+
+    def _evict_cache_if_needed(self) -> None:
+        """Evict oldest cache entries if cache exceeds max size."""
+        if len(self._filter_input_cache) >= self.cache_max_size:
+            # Remove first 10% of entries (oldest due to insertion order in Python 3.7+)
+            keys_to_remove = list(self._filter_input_cache.keys())[: self.cache_max_size // 10 or 1]
+            for key in keys_to_remove:
+                del self._filter_input_cache[key]
+            logger.debug(
+                f"Evicted {len(keys_to_remove)} cache entries from {self.schema_name} filter generator"
+            )
 
     def generate_where_input(
         self,
@@ -404,6 +493,9 @@ class NestedFilterInputGenerator:
         # Return cached type if available
         if cache_key in self._filter_input_cache:
             return self._filter_input_cache[cache_key]
+
+        # Evict old entries if cache is full
+        self._evict_cache_if_needed()
 
         # Prevent infinite recursion for self-referential models
         if cache_key in self._generation_stack:

@@ -1275,13 +1275,22 @@ def _is_historical_model(self, model: Type[models.Model]) -> bool:
 - `rail_django/generators/filter_inputs.py` - Bug fixes + improved exception handling
 - `rail_django/tests/integration/test_pagination_features.py` - Additional tests
 
-### Phase 4: Performance (Medium Priority) ⏳ PENDING
+### Phase 4: Performance (Medium Priority) ✅ COMPLETED
 
-13. ⏳ Implement singleton pattern for filter generators
-14. ⏳ Add bounded cache for filter inputs
-15. ⏳ Optimize distinct count query
+13. ✅ Implement singleton pattern for filter generators
+14. ✅ Add bounded cache for filter inputs
+15. ✅ Optimize distinct count query (verified already optimized)
 
-**Status:** Not started. Recommended for next iteration.
+**Status:** All performance optimizations implemented.
+
+**Changes:**
+- Added `get_nested_filter_generator()` and `get_nested_filter_applicator()` singleton functions
+- Added `clear_filter_caches()` for cache management in tests and schema reloads
+- Moved `_filter_input_cache` from class-level to instance-level with bounded size
+- Added `cache_max_size` parameter and `_evict_cache_if_needed()` method
+- Updated all query generators to use singleton functions
+- Added unit tests in `test_filter_singleton.py`
+- Updated `docs/guides/filtering.md` with performance documentation
 
 ### Phase 5: Security Hardening (Lower Priority) ⏳ PENDING
 
@@ -1306,8 +1315,8 @@ After implementing fixes, verify:
 - [x] Grouping query shows "Not specified" for null values
 - [ ] Regex filters reject dangerous patterns
 - [ ] Deeply nested filters are rejected
-- [ ] Filter generators are reused across requests
-- [ ] Filter caches don't grow unbounded
+- [x] Filter generators are reused across requests
+- [x] Filter caches don't grow unbounded
 
 ---
 

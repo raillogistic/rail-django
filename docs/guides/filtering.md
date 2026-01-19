@@ -553,6 +553,53 @@ query {
 3. **Nested depth**: Deep relation filtering (`a_rel.b_rel.c_rel`) may result in complex JOINs
 4. **Large `in` lists**: Very large `in` lists may hit database limits
 
+### Filter Generator Caching
+
+Rail Django uses singleton instances for filter generators and applicators, ensuring:
+
+- **Instance reuse**: The same filter generator/applicator instance is reused across all requests for a given schema
+- **Bounded cache**: Generated filter input types are cached with automatic eviction when the cache exceeds its configured size (default: 100 entries)
+- **Schema isolation**: Multi-schema setups have independent caches per schema
+
+For testing or development, you can clear filter caches:
+
+```python
+from rail_django.generators.filter_inputs import clear_filter_caches
+
+# Clear all caches
+clear_filter_caches()
+
+# Clear specific schema
+clear_filter_caches("my_schema")
+```
+
+### Programmatic Access
+
+If you need direct access to filter generators (e.g., for custom schema building):
+
+```python
+from rail_django.generators.filter_inputs import (
+    get_nested_filter_generator,
+    get_nested_filter_applicator,
+)
+
+# Get singleton instances
+generator = get_nested_filter_generator("default")
+applicator = get_nested_filter_applicator("default")
+
+# Generate where input for a model
+from myapp.models import Product
+where_input = generator.generate_where_input(Product)
+
+# Apply filters to queryset
+from django.db.models import Q
+filtered_qs = applicator.apply_where_filter(
+    Product.objects.all(),
+    {"price": {"gte": 100}},
+    Product
+)
+```
+
 ## See Also
 
 - [GraphQL API Guide](./graphql.md) - General API documentation

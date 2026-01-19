@@ -59,15 +59,15 @@ def _resolve_group_by_field(
 
 
 def _get_nested_filter_generator(schema_name: str):
-    """Lazy import to avoid circular dependencies."""
-    from .filter_inputs import NestedFilterInputGenerator
-    return NestedFilterInputGenerator(schema_name=schema_name)
+    """Lazy import to avoid circular dependencies. Returns singleton instance."""
+    from .filter_inputs import get_nested_filter_generator
+    return get_nested_filter_generator(schema_name)
 
 
 def _get_nested_filter_applicator(schema_name: str):
-    """Lazy import to avoid circular dependencies."""
-    from .filter_inputs import NestedFilterApplicator
-    return NestedFilterApplicator(schema_name=schema_name)
+    """Lazy import to avoid circular dependencies. Returns singleton instance."""
+    from .filter_inputs import get_nested_filter_applicator
+    return get_nested_filter_applicator(schema_name)
 
 
 def generate_grouping_query(
