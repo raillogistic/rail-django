@@ -55,6 +55,197 @@ DEFAULT_MAX_NESTED_DEPTH = 3
 MAX_ALLOWED_NESTED_DEPTH = 5
 DEFAULT_CACHE_MAX_SIZE = 100
 
+# Security constants (defaults, can be overridden via FilteringSettings)
+DEFAULT_MAX_REGEX_LENGTH = 500
+DEFAULT_MAX_FILTER_DEPTH = 10
+DEFAULT_MAX_FILTER_CLAUSES = 50
+
+
+# =============================================================================
+# Security Validation Functions
+# =============================================================================
+
+
+class FilterSecurityError(ValueError):
+    """Raised when a filter violates security constraints."""
+    pass
+
+
+def validate_regex_pattern(
+    pattern: str,
+    max_length: int = DEFAULT_MAX_REGEX_LENGTH,
+    check_redos: bool = True,
+) -> str:
+    """
+    Validate regex pattern for safety.
+
+    Checks for:
+    - Pattern length limits
+    - Valid regex syntax
+    - Known ReDoS (Regular Expression Denial of Service) patterns
+
+    Args:
+        pattern: The regex pattern to validate
+        max_length: Maximum allowed pattern length
+        check_redos: Whether to check for ReDoS patterns
+
+    Returns:
+        The validated pattern (unchanged if valid)
+
+    Raises:
+        FilterSecurityError: If pattern is invalid or potentially dangerous
+    """
+    import re
+
+    if not pattern:
+        return pattern
+
+    # Length limit
+    if len(pattern) > max_length:
+        raise FilterSecurityError(
+            f"Regex pattern too long: {len(pattern)} chars (max {max_length})"
+        )
+
+    # Try to compile to check validity
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise FilterSecurityError(f"Invalid regex pattern: {e}")
+
+    # Check for known ReDoS patterns (catastrophic backtracking)
+    # These patterns can cause exponential time complexity
+    if check_redos:
+        redos_patterns = [
+            r'\(\.\*\)\+',      # (.*)+
+            r'\(\.\+\)\+',      # (.+)+
+            r'\(\[^\]]*\]\+\)\+',  # ([abc]+)+
+            r'\(.*\|.*\)\+',    # (a|b)+ with complex alternatives
+            r'\(\.\*\)\*',      # (.*)*
+            r'\(\.\+\)\*',      # (.+)*
+        ]
+
+        for dangerous in redos_patterns:
+            if re.search(dangerous, pattern):
+                raise FilterSecurityError(
+                    "Regex pattern contains potentially dangerous constructs that could cause "
+                    "catastrophic backtracking. Avoid nested quantifiers like (.*)+, (.+)+, etc."
+                )
+
+    return pattern
+
+
+def validate_filter_depth(
+    where_input: Dict,
+    current_depth: int = 0,
+    max_allowed_depth: int = DEFAULT_MAX_FILTER_DEPTH,
+) -> int:
+    """
+    Validate that filter nesting depth doesn't exceed the limit.
+
+    Args:
+        where_input: The where filter dictionary
+        current_depth: Current nesting depth
+        max_allowed_depth: Maximum allowed nesting depth
+
+    Returns:
+        Maximum depth found
+
+    Raises:
+        FilterSecurityError: If depth exceeds max_allowed_depth
+    """
+    if current_depth > max_allowed_depth:
+        raise FilterSecurityError(
+            f"Filter nesting too deep: depth {current_depth} exceeds maximum {max_allowed_depth}"
+        )
+
+    found_max_depth = current_depth
+
+    for key, value in where_input.items():
+        if value is None:
+            continue
+
+        if key in ("AND", "OR") and isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    depth = validate_filter_depth(item, current_depth + 1, max_allowed_depth)
+                    found_max_depth = max(found_max_depth, depth)
+
+        elif key == "NOT" and isinstance(value, dict):
+            depth = validate_filter_depth(value, current_depth + 1, max_allowed_depth)
+            found_max_depth = max(found_max_depth, depth)
+
+        elif isinstance(value, dict):
+            # Nested field filter or relation filter
+            depth = validate_filter_depth(value, current_depth + 1, max_allowed_depth)
+            found_max_depth = max(found_max_depth, depth)
+
+    return found_max_depth
+
+
+def count_filter_clauses(where_input: Dict) -> int:
+    """
+    Count the total number of filter clauses in a where input.
+
+    Args:
+        where_input: The where filter dictionary
+
+    Returns:
+        Total number of filter clauses
+    """
+    count = 0
+
+    for key, value in where_input.items():
+        if value is None:
+            continue
+
+        count += 1
+
+        if key in ("AND", "OR") and isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    count += count_filter_clauses(item)
+
+        elif key == "NOT" and isinstance(value, dict):
+            count += count_filter_clauses(value)
+
+        elif isinstance(value, dict):
+            count += count_filter_clauses(value)
+
+    return count
+
+
+def validate_filter_complexity(
+    where_input: Dict,
+    max_depth: int = DEFAULT_MAX_FILTER_DEPTH,
+    max_clauses: int = DEFAULT_MAX_FILTER_CLAUSES,
+) -> None:
+    """
+    Validate that filter complexity doesn't exceed limits.
+
+    Checks both depth and total clause count.
+
+    Args:
+        where_input: The where filter dictionary
+        max_depth: Maximum allowed nesting depth
+        max_clauses: Maximum allowed filter clauses
+
+    Raises:
+        FilterSecurityError: If filter exceeds complexity limits
+    """
+    if not where_input:
+        return
+
+    # Check depth
+    validate_filter_depth(where_input, max_allowed_depth=max_depth)
+
+    # Check clause count
+    clause_count = count_filter_clauses(where_input)
+    if clause_count > max_clauses:
+        raise FilterSecurityError(
+            f"Filter too complex: {clause_count} clauses (max {max_clauses})"
+        )
+
+
 # =============================================================================
 # Singleton Registries for Filter Generators and Applicators
 # =============================================================================
@@ -922,6 +1113,24 @@ class NestedFilterApplicator:
 
         model = model or queryset.model
 
+        # Security validation: check filter depth and complexity
+        # Use configurable limits from FilteringSettings
+        max_depth = DEFAULT_MAX_FILTER_DEPTH
+        max_clauses = DEFAULT_MAX_FILTER_CLAUSES
+        if self.filtering_settings:
+            max_depth = getattr(self.filtering_settings, "max_filter_depth", max_depth)
+            max_clauses = getattr(self.filtering_settings, "max_filter_clauses", max_clauses)
+
+        try:
+            validate_filter_complexity(where_input, max_depth=max_depth, max_clauses=max_clauses)
+        except FilterSecurityError as e:
+            logger.warning(
+                f"Rejected filter due to security constraints: {e}",
+                extra={"model": model.__name__ if model else "unknown"},
+            )
+            # Return empty queryset for security violations
+            return queryset.none()
+
         # Work on a copy to avoid mutating caller's dictionary
         where_input = dict(where_input)
 
@@ -1138,6 +1347,29 @@ class NestedFilterApplicator:
 
             lookup = self._get_lookup_for_operator(op)
             if lookup:
+                # Validate regex patterns for security
+                if lookup in ("regex", "iregex"):
+                    # Get configurable limits from settings
+                    max_regex_len = DEFAULT_MAX_REGEX_LENGTH
+                    reject_unsafe = True
+                    if self.filtering_settings:
+                        max_regex_len = getattr(
+                            self.filtering_settings, "max_regex_length", max_regex_len
+                        )
+                        reject_unsafe = getattr(
+                            self.filtering_settings, "reject_unsafe_regex", True
+                        )
+
+                    try:
+                        op_value = validate_regex_pattern(
+                            op_value,
+                            max_length=max_regex_len,
+                            check_redos=reject_unsafe,
+                        )
+                    except FilterSecurityError as e:
+                        logger.warning(f"Rejected unsafe regex filter: {e}")
+                        continue  # Skip this filter clause
+
                 if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
                     q &= Q(**{f"{full_field_path}__gte": op_value[0]})
                     q &= Q(**{f"{full_field_path}__lte": op_value[1]})

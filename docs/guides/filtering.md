@@ -546,6 +546,65 @@ query {
 }
 ```
 
+## Security
+
+Rail Django includes built-in security features to protect against malicious or overly complex filters.
+
+### Filter Depth Limiting
+
+Filters are limited to a maximum nesting depth to prevent denial-of-service attacks via
+deeply nested boolean operators. The default limit is 10 levels.
+
+```python
+# This would be rejected (too deep):
+where = {"AND": [{"AND": [{"AND": [...]}]}]}  # 15+ levels deep
+```
+
+### Filter Complexity Limiting
+
+The total number of filter clauses is limited to prevent excessively complex queries.
+The default limit is 50 clauses.
+
+```python
+# This would be rejected (too many clauses):
+where = {"AND": [{"field1": {"eq": 1}}, {"field2": {"eq": 2}}, ...]}  # 60+ clauses
+```
+
+### Regex Validation
+
+Regex patterns (`regex` and `iregex` operators) are validated for:
+
+1. **Length limits**: Patterns exceeding 500 characters are rejected
+2. **Syntax validation**: Invalid regex syntax is rejected
+3. **ReDoS protection**: Known dangerous patterns that could cause exponential backtracking
+   are rejected by default
+
+Dangerous patterns that are blocked include:
+- `(.*)+` - Evil regex with nested quantifiers
+- `(.+)+` - Variant of evil regex
+- `(.*)*` - Nested quantifiers causing catastrophic backtracking
+
+### Security Configuration
+
+Configure security limits in your settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        # Filter complexity limits
+        "max_filter_depth": 10,      # Maximum nesting depth
+        "max_filter_clauses": 50,    # Maximum total filter clauses
+
+        # Regex security
+        "max_regex_length": 500,     # Maximum regex pattern length
+        "reject_unsafe_regex": True, # Enable ReDoS pattern detection
+    }
+}
+```
+
+When a filter violates security constraints, the query returns an empty result set and
+logs a warning. This prevents information leakage about the security limits.
+
 ## Performance Considerations
 
 1. **Indexed fields**: Filter on indexed database fields for best performance

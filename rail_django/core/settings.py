@@ -305,6 +305,12 @@ class FilteringSettings:
     fts_search_type: str = "websearch"
     fts_rank_threshold: Optional[float] = None
 
+    # Security settings for filter validation
+    max_filter_depth: int = 10
+    max_filter_clauses: int = 50
+    max_regex_length: int = 500
+    reject_unsafe_regex: bool = True
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "FilteringSettings":
         """

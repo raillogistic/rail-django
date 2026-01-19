@@ -1292,13 +1292,29 @@ def _is_historical_model(self, model: Type[models.Model]) -> bool:
 - Added unit tests in `test_filter_singleton.py`
 - Updated `docs/guides/filtering.md` with performance documentation
 
-### Phase 5: Security Hardening (Lower Priority) ⏳ PENDING
+### Phase 5: Security Hardening (Lower Priority) ✅ COMPLETED
 
-16. ⏳ Add regex validation
-17. ⏳ Add filter depth limiting
-18. ⏳ Add filter complexity limiting
+16. ✅ Add regex validation
+17. ✅ Add filter depth limiting
+18. ✅ Add filter complexity limiting
 
-**Status:** Not started. Recommended after performance phase.
+**Status:** All security features implemented.
+
+**Changes:**
+- Added `FilterSecurityError` exception class for security-related filter rejections
+- Added `validate_regex_pattern()` function with length, syntax, and ReDoS pattern detection
+- Added `validate_filter_depth()` function to limit nesting depth
+- Added `count_filter_clauses()` function to count total filter clauses
+- Added `validate_filter_complexity()` function combining depth and clause validation
+- Integrated security validation into `apply_where_filter()` method
+- Added regex validation in `_build_field_q()` method
+- Added security settings to `FilteringSettings` dataclass:
+  - `max_filter_depth: int = 10`
+  - `max_filter_clauses: int = 50`
+  - `max_regex_length: int = 500`
+  - `reject_unsafe_regex: bool = True`
+- Added comprehensive tests in `test_filter_security.py`
+- Updated `docs/guides/filtering.md` with security documentation
 
 ---
 
@@ -1313,8 +1329,8 @@ After implementing fixes, verify:
 - [x] Pagination shows correct total_count with property ordering
 - [x] Empty results show page=1, page_count=0 consistently
 - [x] Grouping query shows "Not specified" for null values
-- [ ] Regex filters reject dangerous patterns
-- [ ] Deeply nested filters are rejected
+- [x] Regex filters reject dangerous patterns
+- [x] Deeply nested filters are rejected
 - [x] Filter generators are reused across requests
 - [x] Filter caches don't grow unbounded
 
