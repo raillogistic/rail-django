@@ -170,13 +170,12 @@ def generate_list_query(
                     if saved_where:
                         # User provided 'where' overrides saved filter
                         if where:
-                            if where is None:
-                                where = {}
+                            # Ensure where is a dict before merging
                             if not isinstance(where, dict):
                                 try:
                                     where = dict(where)
                                 except Exception:
-                                    pass
+                                    where = {}
                             # Use apply_presets logic which merges deep
                             where = nested_filter_applicator._deep_merge(saved_where, where)
                         else:

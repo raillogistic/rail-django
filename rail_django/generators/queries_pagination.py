@@ -87,6 +87,19 @@ def generate_paginated_query(
             "OrderingConfig", (), {"allowed": [], "default": []}
         )()
 
+    # Generate filter class and nested filter components BEFORE resolver
+    # so they are available in the resolver's closure scope
+    filter_class = self.filter_generator.generate_filter_set(filter_model)
+
+    nested_where_input = None
+    nested_filter_applicator = None
+    try:
+        nested_generator = _get_nested_filter_generator(self.schema_name)
+        nested_where_input = nested_generator.generate_where_input(filter_model)
+        nested_filter_applicator = _get_nested_filter_applicator(self.schema_name)
+    except Exception as e:
+        logger.warning(f"Could not generate nested filter for {filter_model.__name__}: {e}")
+
     @optimize_query()
     def resolver(
         root: Any, info: graphene.ResolveInfo, **kwargs
@@ -146,13 +159,12 @@ def generate_paginated_query(
                     if saved_where:
                         # User provided 'where' overrides saved filter
                         if where:
-                            if where is None:
-                                where = {}
+                            # Ensure where is a dict before merging
                             if not isinstance(where, dict):
                                 try:
                                     where = dict(where)
                                 except Exception:
-                                    pass
+                                    where = {}
                             # Use apply_presets logic which merges deep
                             where = nested_filter_applicator._deep_merge(saved_where, where)
                         else:
@@ -232,6 +244,7 @@ def generate_paginated_query(
 
         # Apply ordering (same as list queries)
         items: Optional[list[Any]] = None
+        uncapped_total: Optional[int] = None  # Track true total before property ordering cap
         order_by = self._normalize_ordering_specs(
             kwargs.get("order_by"), ordering_config
         )
@@ -242,13 +255,16 @@ def generate_paginated_query(
                 queryset, model, order_by
             )
             db_specs, prop_specs = self._split_order_specs(model, order_by)
-            
+
             if distinct_on:
                 queryset = self._apply_distinct_on(queryset, distinct_on, db_specs)
             elif db_specs:
                 queryset = queryset.order_by(*db_specs)
 
             if prop_specs:
+                # Get true count BEFORE capping for accurate pagination
+                uncapped_total = queryset.count()
+
                 prop_limit = getattr(
                     self.settings, "max_property_ordering_results", None
                 )
@@ -257,12 +273,12 @@ def generate_paginated_query(
                 )
                 if prop_limit:
                     max_items = min(prop_limit, page * per_page)
-                    if warn_on_cap and (page * per_page) > prop_limit:
+                    if warn_on_cap and uncapped_total > prop_limit:
                         logger.warning(
-                            "Property ordering on %s capped at %s results for page %s.",
+                            "Property ordering on %s capped at %s results (total: %s).",
                             model.__name__,
                             max_items,
-                            page,
+                            uncapped_total,
                         )
                     queryset = queryset[:max_items]
                 items = list(queryset)
@@ -272,14 +288,26 @@ def generate_paginated_query(
              queryset = self._apply_distinct_on(queryset, distinct_on, [])
 
         # Calculate pagination values
-        if items is not None:
+        # Use uncapped_total if property ordering was applied, otherwise count normally
+        if uncapped_total is not None:
+            total_count = uncapped_total
+        elif items is not None:
             total_count = len(items)
         else:
             total_count = queryset.count()
-        page_count = (total_count + per_page - 1) // per_page
+
+        # Calculate page count, handling empty results
+        if total_count > 0:
+            page_count = (total_count + per_page - 1) // per_page
+        else:
+            page_count = 0
 
         # Ensure page is within valid range
-        page = max(1, min(page, page_count))
+        # For empty results, keep page=1 for consistent UX
+        if page_count == 0:
+            page = 1
+        else:
+            page = max(1, min(page, page_count))
 
         # Apply pagination
         start = (page - 1) * per_page
@@ -311,19 +339,7 @@ def generate_paginated_query(
         ),
     }
 
-    # Add complex filtering argument (same as list queries)
-    filter_class = self.filter_generator.generate_filter_set(filter_model)
-
-    # Generate nested filter input (Prisma/Hasura style)
-    nested_where_input = None
-    nested_filter_applicator = None
-    try:
-        nested_generator = _get_nested_filter_generator(self.schema_name)
-        nested_where_input = nested_generator.generate_where_input(filter_model)
-        nested_filter_applicator = _get_nested_filter_applicator(self.schema_name)
-    except Exception as e:
-        logger.warning(f"Could not generate nested filter for {filter_model.__name__}: {e}")
-
+    # Use nested_where_input generated earlier (before resolver)
     if nested_where_input:
         arguments["where"] = graphene.Argument(
             nested_where_input,

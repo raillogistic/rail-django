@@ -830,6 +830,9 @@ class NestedFilterApplicator:
 
         model = model or queryset.model
 
+        # Work on a copy to avoid mutating caller's dictionary
+        where_input = dict(where_input)
+
         # Extract special filters before processing
         include_ids = where_input.pop("include", None)
         quick_value = where_input.pop("quick", None)
@@ -962,11 +965,54 @@ class NestedFilterApplicator:
             return sub_q
 
         if field_name.endswith("_every"):
-            # All must match - use ~Exists(~Q(...))
+            """
+            _every means: ALL related objects must match the condition.
+            Implementation: Exclude records where ANY related object does NOT match.
+
+            SQL equivalent:
+                NOT EXISTS (
+                    SELECT 1 FROM related_table
+                    WHERE related_table.fk = main.id
+                    AND NOT (condition)
+                )
+            """
             base_field = field_name[:-6]
+
+            # Try to build proper subquery-based filter
+            try:
+                from django.db.models import Exists, OuterRef
+
+                # Get the relation field to find the related model
+                relation_field = self._get_relation_field(model, base_field)
+                if relation_field is not None:
+                    related_model = getattr(relation_field, 'related_model', None)
+                    if related_model is not None:
+                        # Build condition that matches the filter
+                        matching_q = self._build_q_from_where(filter_value, related_model, "")
+
+                        # Find the FK field pointing back to parent
+                        fk_field = self._get_fk_to_parent(related_model, model)
+                        if fk_field:
+                            # Build subquery for non-matching related objects
+                            non_matching = related_model.objects.filter(
+                                **{fk_field: OuterRef('pk')}
+                            ).exclude(matching_q)
+
+                            # Exclude parents that have ANY non-matching children
+                            # Also ensure parent has at least one child (empty set vacuously matches "every")
+                            has_children = related_model.objects.filter(
+                                **{fk_field: OuterRef('pk')}
+                            )
+
+                            return Q(Exists(has_children)) & ~Q(Exists(non_matching))
+            except Exception as e:
+                logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
+
+            # Fallback: use simple approach (may have edge cases with empty sets)
+            # This matches records where at least one child matches
             sub_q = self._build_q_from_where(filter_value, model, f"{base_field}__")
-            # For "every", we need to exclude records that have any non-matching items
-            return sub_q  # Simplified - full implementation would use subqueries
+            logger.debug(f"_every filter for {base_field} using fallback implementation")
+            return sub_q
 
         if field_name.endswith("_none"):
             # None should match
@@ -1410,6 +1456,58 @@ class NestedFilterApplicator:
             "past_year": "past_year",
         }
         return operator_map.get(op)
+
+    def _get_relation_field(
+        self, model: Type[models.Model], field_name: str
+    ) -> Optional[models.Field]:
+        """
+        Get the relation field from model by name.
+
+        Checks both forward relations and reverse relations.
+
+        Args:
+            model: Django model class
+            field_name: Name of the relation field
+
+        Returns:
+            Django field instance or None if not found
+        """
+        try:
+            return model._meta.get_field(field_name)
+        except Exception:
+            pass
+
+        # Check reverse relations by accessor name
+        try:
+            for rel in model._meta.related_objects:
+                if rel.get_accessor_name() == field_name:
+                    return rel
+        except Exception:
+            pass
+
+        return None
+
+    def _get_fk_to_parent(
+        self, related_model: Type[models.Model], parent_model: Type[models.Model]
+    ) -> Optional[str]:
+        """
+        Find the FK field in related_model pointing to parent_model.
+
+        Args:
+            related_model: The related model to search in
+            parent_model: The parent model to find FK to
+
+        Returns:
+            Field name of the FK, or None if not found
+        """
+        try:
+            for field in related_model._meta.get_fields():
+                if hasattr(field, 'related_model') and field.related_model == parent_model:
+                    return field.name
+        except Exception:
+            pass
+
+        return None
 
     def prepare_queryset_for_count_filters(
         self,
