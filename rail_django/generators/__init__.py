@@ -33,6 +33,13 @@ if TYPE_CHECKING:
         DateTimeFilterInput,
         IDFilterInput,
         CountFilterInput,
+        # Legacy compatibility
+        AdvancedFilterGenerator,
+        EnhancedFilterGenerator,
+        FilterMetadataGenerator,
+        PerformanceAnalyzer,
+        FilterOperation,
+        GroupedFieldFilter,
     )
 
 __all__ = [
@@ -56,6 +63,13 @@ __all__ = [
     "IDFilterInput",
     "CountFilterInput",
     "get_nested_filter_generator",
+    # Legacy compatibility (from old filters.py)
+    "AdvancedFilterGenerator",
+    "EnhancedFilterGenerator",
+    "FilterMetadataGenerator",
+    "PerformanceAnalyzer",
+    "FilterOperation",
+    "GroupedFieldFilter",
 ]
 
 

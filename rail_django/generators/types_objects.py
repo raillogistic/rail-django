@@ -240,7 +240,7 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
                     # Apply filters if provided
                     if filters:
-                        from .filters import AdvancedFilterGenerator
+                        from .filter_inputs import AdvancedFilterGenerator
 
                         filter_generator = AdvancedFilterGenerator()
                         filter_set_class = filter_generator.generate_filter_set(

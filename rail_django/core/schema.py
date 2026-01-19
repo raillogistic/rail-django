@@ -221,6 +221,15 @@ class SchemaBuilder:
         # Fallback to raw settings for backward compatibility
         return self._raw_settings.get(key, default)
 
+    def _pluralize_name(self, name: str) -> str:
+        value = str(name or "").strip()
+        if not value:
+            return value
+        if value.endswith("y") and len(value) > 1:
+            if value[-2].lower() not in "aeiou":
+                return f"{value[:-1]}ies"
+        return f"{value}s"
+
     def _get_list_alias(self, model: type[models.Model]) -> Optional[str]:
         plural = getattr(model._meta, "verbose_name_plural", None)
         if not plural:
@@ -228,6 +237,11 @@ class SchemaBuilder:
         alias = str(plural).strip()
         if not alias:
             return None
+        original_attrs = getattr(model._meta, "original_attrs", {}) or {}
+        if "verbose_name_plural" not in original_attrs:
+            singular = str(getattr(model._meta, "verbose_name", "")).strip()
+            if singular and alias == f"{singular}s":
+                alias = self._pluralize_name(singular)
         alias = unicodedata.normalize("NFKD", alias)
         alias = alias.encode("ascii", "ignore").decode("ascii")
         alias = alias.replace(" ", "_").replace("-", "_")
@@ -404,6 +418,7 @@ class SchemaBuilder:
 
         for model in models:
             model_name = model.__name__.lower()
+            plural_name = self._pluralize_name(model_name)
             # skip HistoricalModel
             # if model_name.startswith("historical"):
             #     continue
@@ -450,7 +465,7 @@ class SchemaBuilder:
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{model_name}s"] = list_query
+                        self._query_fields[plural_name] = list_query
                         alias_name = self._get_list_alias(model)
                         if alias_name and alias_name not in self._query_fields:
                             self._query_fields[alias_name] = list_query
@@ -458,7 +473,7 @@ class SchemaBuilder:
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{model_name}s_groups"] = grouping_query
+                        self._query_fields[f"{plural_name}_groups"] = grouping_query
 
                     # Paginated query
                     if self.settings.enable_pagination:
@@ -470,7 +485,7 @@ class SchemaBuilder:
                             if is_history_manager
                             else "paginated",
                         )
-                        self._query_fields[f"{model_name}s_pages"] = paginated_query
+                        self._query_fields[f"{plural_name}_pages"] = paginated_query
                 else:
                     # Custom managers use new naming convention
                     # Single object query: modelname__custommanager
@@ -486,13 +501,13 @@ class SchemaBuilder:
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{model_name}s__{manager_name}"] = (
+                        self._query_fields[f"{plural_name}__{manager_name}"] = (
                             list_query
                         )
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{model_name}s_groups_{manager_name}"] = (
+                        self._query_fields[f"{plural_name}_groups_{manager_name}"] = (
                             grouping_query
                         )
 
@@ -506,7 +521,7 @@ class SchemaBuilder:
                             if is_history_manager
                             else "paginated",
                         )
-                        self._query_fields[f"{model_name}s_pages_{manager_name}"] = (
+                        self._query_fields[f"{plural_name}_pages_{manager_name}"] = (
                             paginated_query
                         )
 
@@ -1400,10 +1415,11 @@ class SchemaBuilder:
                 # Remove existing app-related fields
                 for model in models:
                     model_name = model.__name__.lower()
+                    plural_name = self._pluralize_name(model_name)
                     # Remove queries
                     self._query_fields.pop(model_name, None)
-                    self._query_fields.pop(f"{model_name}s", None)
-                    self._query_fields.pop(f"{model_name}_pages", None)
+                    self._query_fields.pop(plural_name, None)
+                    self._query_fields.pop(f"{plural_name}_pages", None)
 
                     # Remove mutations
                     mutations = self.mutation_generator.generate_all_mutations(model)

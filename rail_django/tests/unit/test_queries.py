@@ -23,7 +23,7 @@ from graphene import ObjectType, String
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 
-from rail_django.generators.filters import AdvancedFilterGenerator
+from rail_django.generators.filter_inputs import AdvancedFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.queries import QueryGenerator
 from rail_django.generators.types import TypeGenerator

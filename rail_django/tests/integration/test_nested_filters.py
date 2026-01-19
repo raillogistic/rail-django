@@ -465,3 +465,127 @@ class TestNestedIsNullFilter:
         assert result.get("errors") is None
         names = [c["name"] for c in result["data"]["categorys"]]
         assert "No Desc" in names
+
+
+class TestQuickFilter:
+    """Test quick filter (multi-field search) functionality."""
+
+    def test_quick_filter_finds_in_name(self, gql_client_nested):
+        """Quick filter should search across text fields."""
+        _create_category("Electronics", "Devices and gadgets")
+        _create_category("Books", "Reading materials")
+        _create_category("Music", "Audio and sound")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categorys(where: $where, order_by: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested.execute(
+            query, variables={"where": {"quick": "electron"}}
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categorys"]]
+        assert "Electronics" in names
+        assert "Books" not in names
+
+    def test_quick_filter_finds_in_description(self, gql_client_nested):
+        """Quick filter should search in description field."""
+        _create_category("Category A", "Contains electronics info")
+        _create_category("Category B", "Contains books info")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categorys(where: $where, order_by: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested.execute(
+            query, variables={"where": {"quick": "electronics"}}
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categorys"]]
+        assert "Category A" in names
+        assert "Category B" not in names
+
+    def test_quick_filter_combined_with_other_filters(self, gql_client_nested):
+        """Quick filter should work with other filters."""
+        _create_category("Electronics", "Gadgets")
+        _create_category("Electronic Games", "Gaming")
+        _create_category("Books", "Reading")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categorys(where: $where, order_by: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested.execute(
+            query, variables={"where": {
+                "quick": "electron",
+                "name": {"ends_with": "Games"}
+            }}
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categorys"]]
+        assert "Electronic Games" in names
+        assert "Electronics" not in names
+
+
+class TestIncludeFilter:
+    """Test include filter (ID union) functionality."""
+
+    def test_include_filter_adds_specific_ids(self, gql_client_nested):
+        """Include filter should add specific IDs to results."""
+        cat1 = _create_category("Category 1", "First")
+        cat2 = _create_category("Category 2", "Second")
+        cat3 = _create_category("Category 3", "Third")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categorys(where: $where) {
+                id
+                name
+            }
+        }
+        """
+        # Filter for Category 1 but include Category 3
+        result = gql_client_nested.execute(
+            query, variables={"where": {
+                "name": {"eq": "Category 1"},
+                "include": [str(cat3.id)]
+            }}
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categorys"]]
+        assert "Category 1" in names
+        assert "Category 3" in names
+        assert "Category 2" not in names
+
+    def test_include_filter_with_empty_base_results(self, gql_client_nested):
+        """Include should work even when base filter returns nothing."""
+        cat1 = _create_category("Alpha", "A")
+        cat2 = _create_category("Beta", "B")
+
+        query = """
+        query($where: CategoryWhereInput) {
+            categorys(where: $where) {
+                id
+                name
+            }
+        }
+        """
+        # Filter for non-existent category but include cat1
+        result = gql_client_nested.execute(
+            query, variables={"where": {
+                "name": {"eq": "NonExistent"},
+                "include": [str(cat1.id)]
+            }}
+        )
+        assert result.get("errors") is None
+        names = [c["name"] for c in result["data"]["categorys"]]
+        assert "Alpha" in names

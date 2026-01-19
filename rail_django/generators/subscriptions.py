@@ -24,8 +24,7 @@ from ..core.meta import get_model_graphql_meta
 from ..core.settings import SchemaSettings, SubscriptionGeneratorSettings
 from ..security.field_permissions import mask_sensitive_fields
 from ..subscriptions.registry import register_subscription
-from .filters import AdvancedFilterGenerator
-from .filter_inputs import NestedFilterInputGenerator, NestedFilterApplicator
+from .filter_inputs import AdvancedFilterGenerator, NestedFilterInputGenerator, NestedFilterApplicator
 from .types import TypeGenerator
 
 logger = logging.getLogger(__name__)

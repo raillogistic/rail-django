@@ -2296,7 +2296,7 @@ class ModelMetadataExtractor:
         """
         try:
             # Import the enhanced filter generator
-            from ..generators.filters import (
+            from ..generators.filter_inputs import (
                 AdvancedFilterGenerator,
                 EnhancedFilterGenerator,
             )
@@ -4931,7 +4931,7 @@ class ModelTableExtractor:
         filters: list[dict[str, Any]] = []
         if include_filters:
             try:
-                from ..generators.filters import AdvancedFilterGenerator
+                from ..generators.filter_inputs import AdvancedFilterGenerator
 
                 filter_generator = AdvancedFilterGenerator(
                     enable_nested_filters=True, schema_name=self.schema_name

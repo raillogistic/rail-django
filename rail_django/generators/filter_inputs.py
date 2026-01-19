@@ -2,8 +2,19 @@
 Nested Filter Input Types for GraphQL (Prisma/Hasura Style)
 
 This module provides typed GraphQL InputObjectTypes for filtering with nested
-per-field filter inputs. This is an alternative to the flat lookup pattern
-in filters.py, offering better schema organization and type reusability.
+per-field filter inputs following the Prisma/Hasura pattern, offering better
+schema organization and type reusability.
+
+Features:
+- Typed filter inputs (StringFilterInput, IntFilterInput, etc.)
+- Boolean operators (AND, OR, NOT)
+- Relationship quantifiers (_some, _every, _none)
+- Count filters for relationships
+- Quick filter (multi-field search)
+- Include filter (ID union)
+- Historical model support (django-simple-history)
+- GraphQLMeta integration
+- Performance analysis and optimization suggestions
 
 Example GraphQL query:
     query {
@@ -15,6 +26,8 @@ Example GraphQL query:
           { is_active: { eq: true } }
           { created_at: { thisMonth: true } }
         ]
+        quick: "search term"
+        include: ["1", "2", "3"]
       }) {
         id
         name
@@ -27,14 +40,19 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
 from django.db import models
-from django.db.models import Count, Q
+from django.db.models import Case, Count, F, Q, Value, When
+from django.db.models.fields import IntegerField
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Configuration constants
+DEFAULT_MAX_NESTED_DEPTH = 3
+MAX_ALLOWED_NESTED_DEPTH = 5
 
 
 # =============================================================================
@@ -390,6 +408,22 @@ class NestedFilterInputGenerator:
                 description="Filter by ID"
             )
 
+            # Add quick filter for multi-field search
+            fields["quick"] = graphene.InputField(
+                graphene.String,
+                description="Quick search across multiple text fields"
+            )
+
+            # Add include filter for ID union
+            fields["include"] = graphene.InputField(
+                graphene.List(graphene.NonNull(graphene.ID)),
+                description="Include specific IDs regardless of other filters"
+            )
+
+            # Add historical filters if applicable
+            if self._is_historical_model(model):
+                fields.update(self._generate_historical_filters(model))
+
             # Create the where input type with boolean operators
             where_input = self._create_where_input_type(model_name, fields, depth)
 
@@ -561,6 +595,44 @@ class NestedFilterInputGenerator:
             {"id": graphene.InputField(IDFilterInput)},
         )
 
+    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+        """Check if model is from django-simple-history."""
+        try:
+            name = getattr(model, "__name__", "")
+            module = getattr(model, "__module__", "")
+        except Exception:
+            return False
+
+        if name.startswith("Historical"):
+            return True
+        return "simple_history" in module
+
+    def _generate_historical_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """Generate filters specific to historical models."""
+        filters = {}
+
+        # Instance filter - filter by original instance IDs
+        filters["instance_in"] = graphene.InputField(
+            graphene.List(graphene.NonNull(graphene.ID)),
+            description="Filter by original instance IDs"
+        )
+
+        # History type filter
+        try:
+            history_field = model._meta.get_field("history_type")
+            choices = getattr(history_field, "choices", None)
+            if choices:
+                filters["history_type_in"] = graphene.InputField(
+                    graphene.List(graphene.NonNull(graphene.String)),
+                    description="Filter by history type (create, update, delete)"
+                )
+        except Exception:
+            pass
+
+        return filters
+
 
 # =============================================================================
 # Filter Application (Q Object Builder)
@@ -571,14 +643,37 @@ class NestedFilterApplicator:
     Applies nested filter inputs to Django querysets.
 
     Converts the nested filter input structure into Django Q objects
-    for queryset filtering.
+    for queryset filtering. Includes support for quick filter, include
+    filter, and historical model filters.
     """
+
+    def __init__(self):
+        # Lazy-initialized mixins to avoid circular reference
+        self._quick_mixin = None
+        self._include_mixin = None
+        self._historical_mixin = None
+
+    def _get_quick_mixin(self):
+        if self._quick_mixin is None:
+            self._quick_mixin = QuickFilterMixin()
+        return self._quick_mixin
+
+    def _get_include_mixin(self):
+        if self._include_mixin is None:
+            self._include_mixin = IncludeFilterMixin()
+        return self._include_mixin
+
+    def _get_historical_mixin(self):
+        if self._historical_mixin is None:
+            self._historical_mixin = HistoricalModelMixin()
+        return self._historical_mixin
 
     def apply_where_filter(
         self,
         queryset: models.QuerySet,
         where_input: Dict[str, Any],
         model: Optional[Type[models.Model]] = None,
+        quick_filter_fields: Optional[List[str]] = None,
     ) -> models.QuerySet:
         """
         Apply a where filter to a queryset.
@@ -587,6 +682,7 @@ class NestedFilterApplicator:
             queryset: Django queryset to filter
             where_input: Parsed where input dictionary
             model: Optional model class for context
+            quick_filter_fields: Optional list of fields for quick search
 
         Returns:
             Filtered queryset
@@ -594,13 +690,40 @@ class NestedFilterApplicator:
         if not where_input:
             return queryset
 
+        model = model or queryset.model
+
+        # Extract special filters before processing
+        include_ids = where_input.pop("include", None)
+        quick_value = where_input.pop("quick", None)
+
+        # Handle historical filters
+        instance_in = where_input.pop("instance_in", None)
+        history_type_in = where_input.pop("history_type_in", None)
+
         # First, prepare queryset with count annotations if needed
         queryset = self.prepare_queryset_for_count_filters(queryset, where_input)
 
-        q_object = self._build_q_from_where(where_input, model or queryset.model)
+        # Build and apply main Q object
+        q_object = self._build_q_from_where(where_input, model)
+
+        # Apply quick filter
+        if quick_value:
+            quick_q = self._get_quick_mixin().build_quick_filter_q(model, quick_value, quick_filter_fields)
+            if quick_q:
+                q_object &= quick_q
+
+        # Apply historical filters
+        if instance_in:
+            q_object &= self._get_historical_mixin().build_historical_filter_q("instance_in", instance_in)
+        if history_type_in:
+            q_object &= self._get_historical_mixin().build_historical_filter_q("history_type_in", history_type_in)
 
         if q_object:
             queryset = queryset.filter(q_object)
+
+        # Apply include filter last (unions IDs into results)
+        if include_ids:
+            queryset = self._get_include_mixin().apply_include_filter(queryset, include_ids)
 
         return queryset
 
@@ -909,6 +1032,784 @@ class NestedFilterApplicator:
 
 
 # =============================================================================
+# Quick Filter Support
+# =============================================================================
+
+class QuickFilterMixin:
+    """
+    Mixin for quick filter (multi-field search) functionality.
+
+    Provides the ability to search across multiple text fields with a single
+    search term, similar to a search box in a UI.
+    """
+
+    def _get_field_from_path(
+        self, model: Type[models.Model], field_path: str
+    ) -> Optional[models.Field]:
+        """
+        Get Django field from a field path (e.g., 'user__profile__name').
+
+        Args:
+            model: Starting model
+            field_path: Field path with double underscores for relationships
+
+        Returns:
+            Django field instance or None if not found
+        """
+        try:
+            current_model = model
+            field_parts = field_path.split("__")
+
+            for i, part in enumerate(field_parts):
+                field = current_model._meta.get_field(part)
+
+                if i == len(field_parts) - 1:
+                    return field
+
+                if hasattr(field, "related_model"):
+                    current_model = field.related_model
+                else:
+                    return None
+
+            return None
+        except Exception:
+            return None
+
+    def get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
+        """
+        Get default searchable fields for quick filter.
+
+        Args:
+            model: Django model to get searchable fields for
+
+        Returns:
+            List of field names suitable for quick search
+        """
+        searchable_fields = []
+
+        for field in model._meta.get_fields():
+            if hasattr(field, "name"):
+                if isinstance(field, (models.CharField, models.TextField)):
+                    # Skip very short fields and sensitive fields
+                    if (
+                        (hasattr(field, "max_length") and field.max_length and field.max_length < 10)
+                        or "password" in field.name.lower()
+                        or "token" in field.name.lower()
+                        or "secret" in field.name.lower()
+                    ):
+                        continue
+                    searchable_fields.append(field.name)
+                elif isinstance(field, models.EmailField):
+                    searchable_fields.append(field.name)
+
+        return searchable_fields
+
+    def build_quick_filter_q(
+        self,
+        model: Type[models.Model],
+        search_value: str,
+        quick_filter_fields: Optional[List[str]] = None,
+    ) -> Q:
+        """
+        Build a Q object for quick filter search.
+
+        Args:
+            model: Django model to search
+            search_value: Search term
+            quick_filter_fields: Optional list of fields to search
+
+        Returns:
+            Django Q object for the search
+        """
+        if not search_value:
+            return Q()
+
+        if quick_filter_fields is None:
+            quick_filter_fields = self.get_default_quick_filter_fields(model)
+
+        q_objects = Q()
+        for field_path in quick_filter_fields:
+            try:
+                field = self._get_field_from_path(model, field_path)
+                if field:
+                    if isinstance(field, (models.CharField, models.TextField, models.EmailField)):
+                        q_objects |= Q(**{f"{field_path}__icontains": search_value})
+                    elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                        try:
+                            numeric_value = float(search_value)
+                            q_objects |= Q(**{field_path: numeric_value})
+                        except (ValueError, TypeError):
+                            continue
+                    elif isinstance(field, models.BooleanField):
+                        if search_value.lower() in ["true", "1", "yes", "on"]:
+                            q_objects |= Q(**{field_path: True})
+                        elif search_value.lower() in ["false", "0", "no", "off"]:
+                            q_objects |= Q(**{field_path: False})
+            except Exception as e:
+                logger.debug(f"Error processing quick filter field {field_path}: {e}")
+                continue
+
+        return q_objects
+
+
+# =============================================================================
+# Include Filter Support
+# =============================================================================
+
+class IncludeFilterMixin:
+    """
+    Mixin for include filter (ID union) functionality.
+
+    Allows including specific IDs in results regardless of other filters,
+    useful for ensuring selected items always appear in results.
+    """
+
+    def apply_include_filter(
+        self,
+        queryset: models.QuerySet,
+        include_ids: List[Any],
+    ) -> models.QuerySet:
+        """
+        Apply include filter to union specified IDs into results.
+
+        Args:
+            queryset: The current filtered queryset
+            include_ids: List of IDs to include
+
+        Returns:
+            Combined queryset with included IDs
+        """
+        if not include_ids:
+            return queryset
+
+        try:
+            # Sanitize IDs
+            sanitized_ids = []
+            for v in include_ids:
+                try:
+                    if isinstance(v, str) and v.isdigit():
+                        sanitized_ids.append(int(v))
+                    else:
+                        sanitized_ids.append(v)
+                except Exception:
+                    sanitized_ids.append(v)
+
+            model_cls = queryset.model
+
+            # Build combined queryset
+            combined_qs = model_cls.objects.filter(
+                Q(pk__in=sanitized_ids) | Q(pk__in=queryset.values("pk"))
+            ).distinct()
+
+            # Preserve tenant filter if present
+            tenant_filter = getattr(queryset, "_rail_tenant_filter", None)
+            if tenant_filter:
+                try:
+                    tenant_path, tenant_id = tenant_filter
+                    if tenant_path and tenant_id is not None:
+                        combined_qs = combined_qs.filter(**{tenant_path: tenant_id})
+                except Exception:
+                    pass
+
+            # Deterministic ordering: included IDs first
+            combined_qs = combined_qs.annotate(
+                _include_priority=Case(
+                    When(pk__in=sanitized_ids, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by("_include_priority", "pk")
+
+            return combined_qs
+
+        except Exception as e:
+            logger.warning(f"Failed to apply include filter: {e}")
+            return queryset
+
+
+# =============================================================================
+# Historical Model Support
+# =============================================================================
+
+class HistoricalModelMixin:
+    """
+    Mixin for django-simple-history model support.
+
+    Provides special filters for historical models including
+    instance filtering and history type filtering.
+    """
+
+    def is_historical_model(self, model: Type[models.Model]) -> bool:
+        """Check if model is from django-simple-history."""
+        try:
+            name = getattr(model, "__name__", "")
+            module = getattr(model, "__module__", "")
+        except Exception:
+            return False
+
+        if name.startswith("Historical"):
+            return True
+        return "simple_history" in module
+
+    def generate_historical_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """
+        Generate filters specific to historical models.
+
+        Args:
+            model: Historical model class
+
+        Returns:
+            Dictionary of historical filter fields
+        """
+        filters = {}
+
+        # Instance filter - filter by original instance IDs
+        filters["instance_in"] = graphene.InputField(
+            graphene.List(graphene.NonNull(graphene.ID)),
+            description="Filter by original instance IDs"
+        )
+
+        # History type filter
+        try:
+            history_field = model._meta.get_field("history_type")
+            choices = getattr(history_field, "choices", None)
+            if choices:
+                filters["history_type_in"] = graphene.InputField(
+                    graphene.List(graphene.NonNull(graphene.String)),
+                    description="Filter by history type (create, update, delete)"
+                )
+        except Exception:
+            pass
+
+        return filters
+
+    def build_historical_filter_q(
+        self,
+        filter_name: str,
+        filter_value: Any,
+    ) -> Q:
+        """
+        Build Q object for historical model filters.
+
+        Args:
+            filter_name: Name of the historical filter
+            filter_value: Filter value
+
+        Returns:
+            Django Q object
+        """
+        if filter_name == "instance_in" and filter_value:
+            return Q(id__in=filter_value)
+        elif filter_name == "history_type_in" and filter_value:
+            return Q(history_type__in=filter_value)
+        return Q()
+
+
+# =============================================================================
+# GraphQLMeta Integration
+# =============================================================================
+
+class GraphQLMetaIntegrationMixin:
+    """
+    Mixin for GraphQLMeta integration.
+
+    Reads filter configuration from model's GraphQLMeta class to
+    customize filter generation.
+    """
+
+    def get_graphql_meta(self, model: Type[models.Model]) -> Optional[Any]:
+        """Get GraphQLMeta for a model."""
+        try:
+            from ..core.meta import get_model_graphql_meta
+            return get_model_graphql_meta(model)
+        except ImportError:
+            return None
+
+    def apply_field_config_overrides(
+        self,
+        field_name: str,
+        model: Type[models.Model],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get field-specific filter configuration from GraphQLMeta.
+
+        Args:
+            field_name: Name of the field
+            model: Django model class
+
+        Returns:
+            Field configuration dictionary or None
+        """
+        graphql_meta = self.get_graphql_meta(model)
+        if not graphql_meta:
+            return None
+
+        try:
+            field_config = graphql_meta.filtering.fields.get(field_name)
+            return field_config
+        except Exception:
+            return None
+
+    def get_custom_filters(self, model: Type[models.Model]) -> Dict[str, Any]:
+        """
+        Get custom filters defined in GraphQLMeta.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            Dictionary of custom filter definitions
+        """
+        graphql_meta = self.get_graphql_meta(model)
+        if not graphql_meta:
+            return {}
+
+        try:
+            if graphql_meta.custom_filters:
+                return graphql_meta.get_custom_filters()
+        except Exception:
+            pass
+
+        return {}
+
+    def get_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
+        """
+        Get quick filter fields from GraphQLMeta or auto-detect.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            List of field names for quick filter
+        """
+        graphql_meta = self.get_graphql_meta(model)
+        if graphql_meta:
+            try:
+                quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
+                if quick_fields:
+                    return quick_fields
+            except Exception:
+                pass
+
+        # Fall back to auto-detection
+        return QuickFilterMixin().get_default_quick_filter_fields(model)
+
+
+# =============================================================================
+# Schema Settings Integration
+# =============================================================================
+
+class SchemaSettingsMixin:
+    """
+    Mixin for schema settings integration.
+
+    Checks if models/apps are excluded from the schema.
+    """
+
+    def __init__(self, schema_name: str = "default"):
+        self.schema_name = schema_name
+
+    def is_model_excluded(self, model: Type[models.Model]) -> bool:
+        """
+        Check if model is excluded from schema.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            True if model should be excluded
+        """
+        if model is None or not hasattr(model, "_meta"):
+            return False
+
+        try:
+            from ..core.settings import SchemaSettings
+            settings = SchemaSettings.from_schema(self.schema_name)
+        except Exception:
+            return False
+
+        app_label = getattr(model._meta, "app_label", "")
+        if app_label in (settings.excluded_apps or []):
+            return True
+
+        excluded_models = set(settings.excluded_models or [])
+        if not excluded_models:
+            return False
+
+        model_name = getattr(model, "__name__", "")
+        model_label = getattr(model._meta, "model_name", "")
+        full_model_name = f"{app_label}.{model_name}" if app_label else model_name
+
+        return (
+            model_name in excluded_models
+            or model_label in excluded_models
+            or full_model_name in excluded_models
+        )
+
+
+# =============================================================================
+# Performance Analysis
+# =============================================================================
+
+class PerformanceAnalyzer:
+    """
+    Analyzes filter queries for performance and suggests optimizations.
+
+    Provides recommendations for select_related and prefetch_related
+    based on the filters being applied.
+    """
+
+    def analyze_query_performance(
+        self,
+        model: Type[models.Model],
+        where_input: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Analyze the performance implications of applied filters.
+
+        Args:
+            model: Django model being filtered
+            where_input: Where input dictionary
+
+        Returns:
+            Dictionary containing performance analysis and suggestions
+        """
+        analysis = {
+            "model": model.__name__,
+            "total_filters": 0,
+            "nested_filters": 0,
+            "max_depth": 0,
+            "select_related_suggestions": set(),
+            "prefetch_related_suggestions": set(),
+            "potential_n_plus_one_risks": [],
+            "performance_score": "good",
+            "recommendations": [],
+        }
+
+        self._analyze_where_input(model, where_input, analysis, depth=0)
+
+        # Calculate performance score
+        if analysis["max_depth"] > 3 or analysis["nested_filters"] > 10:
+            analysis["performance_score"] = "poor"
+        elif analysis["max_depth"] > 2 or analysis["nested_filters"] > 5:
+            analysis["performance_score"] = "moderate"
+
+        # Generate recommendations
+        if analysis["select_related_suggestions"]:
+            select_list = sorted(analysis["select_related_suggestions"])
+            analysis["recommendations"].append(
+                f"Use select_related({', '.join(repr(s) for s in select_list)}) "
+                f"to optimize forward relationship queries"
+            )
+
+        if analysis["prefetch_related_suggestions"]:
+            prefetch_list = sorted(analysis["prefetch_related_suggestions"])
+            analysis["recommendations"].append(
+                f"Use prefetch_related({', '.join(repr(p) for p in prefetch_list)}) "
+                f"to optimize reverse relationship queries"
+            )
+
+        if analysis["potential_n_plus_one_risks"]:
+            analysis["recommendations"].append(
+                f"Potential N+1 query risks: {', '.join(analysis['potential_n_plus_one_risks'])}"
+            )
+
+        # Convert sets to lists for JSON serialization
+        analysis["select_related_suggestions"] = list(analysis["select_related_suggestions"])
+        analysis["prefetch_related_suggestions"] = list(analysis["prefetch_related_suggestions"])
+
+        return analysis
+
+    def _analyze_where_input(
+        self,
+        model: Type[models.Model],
+        where_input: Dict[str, Any],
+        analysis: Dict[str, Any],
+        depth: int,
+        prefix: str = "",
+    ):
+        """Recursively analyze where input for performance implications."""
+        for key, value in where_input.items():
+            if value is None:
+                continue
+
+            analysis["total_filters"] += 1
+
+            if key in ("AND", "OR"):
+                if isinstance(value, list):
+                    for item in value:
+                        self._analyze_where_input(model, item, analysis, depth, prefix)
+            elif key == "NOT":
+                if isinstance(value, dict):
+                    self._analyze_where_input(model, value, analysis, depth, prefix)
+            elif key.endswith("_rel"):
+                # Nested relation filter
+                base_field = key[:-4]
+                analysis["nested_filters"] += 1
+                analysis["max_depth"] = max(analysis["max_depth"], depth + 1)
+
+                # Add to select_related suggestions
+                field_path = f"{prefix}{base_field}" if prefix else base_field
+                analysis["select_related_suggestions"].add(field_path)
+
+                if isinstance(value, dict):
+                    self._analyze_where_input(
+                        model, value, analysis, depth + 1, f"{field_path}__"
+                    )
+            elif key.endswith(("_some", "_every", "_none")):
+                # Reverse relation filter
+                base_field = key.rsplit("_", 1)[0]
+                analysis["nested_filters"] += 1
+                analysis["max_depth"] = max(analysis["max_depth"], depth + 1)
+
+                field_path = f"{prefix}{base_field}" if prefix else base_field
+                analysis["prefetch_related_suggestions"].add(field_path)
+                analysis["potential_n_plus_one_risks"].append(field_path)
+                if isinstance(value, dict):
+                    self._analyze_where_input(
+                        model, value, analysis, depth + 1, f"{field_path}__"
+                    )
+
+    def get_optimized_queryset(
+        self,
+        model: Type[models.Model],
+        where_input: Dict[str, Any],
+        base_queryset: Optional[models.QuerySet] = None,
+    ) -> models.QuerySet:
+        """
+        Get an optimized queryset based on filters being applied.
+
+        Args:
+            model: Django model
+            where_input: Where input dictionary
+            base_queryset: Optional base queryset
+
+        Returns:
+            Optimized queryset with select_related/prefetch_related
+        """
+        if base_queryset is None:
+            queryset = model.objects.all()
+        else:
+            queryset = base_queryset
+
+        analysis = self.analyze_query_performance(model, where_input)
+
+        if analysis["select_related_suggestions"]:
+            try:
+                queryset = queryset.select_related(*analysis["select_related_suggestions"])
+            except Exception as e:
+                logger.debug(f"Could not apply select_related: {e}")
+
+        if analysis["prefetch_related_suggestions"]:
+            try:
+                queryset = queryset.prefetch_related(*analysis["prefetch_related_suggestions"])
+            except Exception as e:
+                logger.debug(f"Could not apply prefetch_related: {e}")
+
+        return queryset
+
+
+# =============================================================================
+# Filter Metadata (for UI generation)
+# =============================================================================
+
+class FilterOperation:
+    """
+    Represents a single filter operation for a field.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        filter_type: str,
+        lookup_expr: str = None,
+        description: str = None,
+        is_array: bool = False,
+    ):
+        self.name = name
+        self.filter_type = filter_type
+        self.lookup_expr = lookup_expr or "exact"
+        self.description = description
+        self.is_array = is_array
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "filter_type": self.filter_type,
+            "lookup_expr": self.lookup_expr,
+            "description": self.description,
+            "is_array": self.is_array,
+        }
+
+
+class GroupedFieldFilter:
+    """
+    Represents a grouped filter for a single field with multiple operations.
+    """
+
+    def __init__(
+        self, field_name: str, field_type: str, operations: List[FilterOperation]
+    ):
+        self.field_name = field_name
+        self.field_type = field_type
+        self.operations = operations
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "field_name": self.field_name,
+            "field_type": self.field_type,
+            "operations": [op.to_dict() for op in self.operations],
+        }
+
+
+class FilterMetadataGenerator:
+    """
+    Generates filter metadata for UI builders and introspection.
+
+    Provides structured information about available filters for each model,
+    useful for dynamically building filter UIs.
+    """
+
+    def __init__(self, schema_name: str = "default"):
+        self.schema_name = schema_name
+        self._cache: Dict[str, List[GroupedFieldFilter]] = {}
+
+    def get_grouped_filters(
+        self, model: Type[models.Model]
+    ) -> List[GroupedFieldFilter]:
+        """
+        Get grouped filters for a model.
+
+        Args:
+            model: Django model
+
+        Returns:
+            List of GroupedFieldFilter objects
+        """
+        cache_key = f"{self.schema_name}_{model.__name__}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        grouped_filters = []
+
+        for field in model._meta.get_fields():
+            if not hasattr(field, "name"):
+                continue
+            if field.name in ("polymorphic_ctype",) or "_ptr" in field.name:
+                continue
+
+            operations = self._generate_field_operations(field)
+            if operations:
+                grouped_filter = GroupedFieldFilter(
+                    field_name=field.name,
+                    field_type=field.__class__.__name__,
+                    operations=operations,
+                )
+                grouped_filters.append(grouped_filter)
+
+        self._cache[cache_key] = grouped_filters
+        return grouped_filters
+
+    def _generate_field_operations(
+        self, field: models.Field
+    ) -> List[FilterOperation]:
+        """Generate filter operations for a field type."""
+        operations = []
+        field_name = field.name
+
+        if isinstance(field, models.CharField) and getattr(field, "choices", None):
+            operations.extend(self._get_choice_operations(field_name))
+        elif isinstance(field, (models.CharField, models.TextField)):
+            operations.extend(self._get_text_operations(field_name))
+        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+            operations.extend(self._get_numeric_operations(field_name))
+        elif isinstance(field, (models.DateField, models.DateTimeField)):
+            operations.extend(self._get_date_operations(field_name))
+        elif isinstance(field, models.BooleanField):
+            operations.extend(self._get_boolean_operations(field_name))
+        elif isinstance(field, models.ForeignKey):
+            operations.extend(self._get_fk_operations(field_name))
+        elif isinstance(field, models.ManyToManyField):
+            operations.extend(self._get_m2m_operations(field_name))
+
+        return operations
+
+    def _get_text_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "String", "exact", f"Exact match for {field_name}"),
+            FilterOperation("neq", "String", "neq", f"Not equal to {field_name}"),
+            FilterOperation("contains", "String", "contains", f"Contains in {field_name}"),
+            FilterOperation("icontains", "String", "icontains", f"Contains (case-insensitive)"),
+            FilterOperation("starts_with", "String", "startswith", f"Starts with"),
+            FilterOperation("ends_with", "String", "endswith", f"Ends with"),
+            FilterOperation("in", "StringList", "in", f"In list", is_array=True),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+            FilterOperation("regex", "String", "regex", f"Regex match"),
+        ]
+
+    def _get_numeric_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "Number", "exact", f"Equal to"),
+            FilterOperation("neq", "Number", "neq", f"Not equal to"),
+            FilterOperation("gt", "Number", "gt", f"Greater than"),
+            FilterOperation("gte", "Number", "gte", f"Greater than or equal"),
+            FilterOperation("lt", "Number", "lt", f"Less than"),
+            FilterOperation("lte", "Number", "lte", f"Less than or equal"),
+            FilterOperation("in", "NumberList", "in", f"In list", is_array=True),
+            FilterOperation("between", "NumberRange", "range", f"Between [min, max]"),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+        ]
+
+    def _get_date_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "Date", "exact", f"Exact date"),
+            FilterOperation("gt", "Date", "gt", f"After date"),
+            FilterOperation("gte", "Date", "gte", f"On or after"),
+            FilterOperation("lt", "Date", "lt", f"Before date"),
+            FilterOperation("lte", "Date", "lte", f"On or before"),
+            FilterOperation("between", "DateRange", "range", f"Date range"),
+            FilterOperation("year", "Int", "year", f"Filter by year"),
+            FilterOperation("month", "Int", "month", f"Filter by month"),
+            FilterOperation("today", "Boolean", "today", f"Is today"),
+            FilterOperation("this_week", "Boolean", "this_week", f"This week"),
+            FilterOperation("this_month", "Boolean", "this_month", f"This month"),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+        ]
+
+    def _get_boolean_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "Boolean", "exact", f"Equal to"),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+        ]
+
+    def _get_choice_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "String", "exact", f"Exact choice"),
+            FilterOperation("in", "StringList", "in", f"In choices", is_array=True),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+        ]
+
+    def _get_fk_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "ID", "exact", f"Exact ID"),
+            FilterOperation("in", "IDList", "in", f"In IDs", is_array=True),
+            FilterOperation("is_null", "Boolean", "isnull", f"Is null"),
+        ]
+
+    def _get_m2m_operations(self, field_name: str) -> List[FilterOperation]:
+        return [
+            FilterOperation("eq", "ID", "exact", f"Has ID"),
+            FilterOperation("in", "IDList", "in", f"Has any of IDs", is_array=True),
+            FilterOperation("is_null", "Boolean", "isnull", f"Has none"),
+            FilterOperation("count_eq", "Int", "count", f"Count equals"),
+            FilterOperation("count_gt", "Int", "count_gt", f"Count greater than"),
+            FilterOperation("count_lt", "Int", "count_lt", f"Count less than"),
+        ]
+
+
+# =============================================================================
 # Convenience Functions
 # =============================================================================
 
@@ -955,3 +1856,234 @@ def apply_where_filter(
     queryset = applicator.prepare_queryset_for_count_filters(queryset, where_input)
 
     return applicator.apply_where_filter(queryset, where_input)
+
+
+# =============================================================================
+# Legacy Compatibility Layer
+# =============================================================================
+
+class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQLMetaIntegrationMixin):
+    """
+    Legacy-compatible filter generator that provides the same API as the old
+    filters.py AdvancedFilterGenerator, but uses the new nested filter system.
+
+    This class is provided for backwards compatibility with code that imports
+    AdvancedFilterGenerator. New code should use NestedFilterInputGenerator directly.
+    """
+
+    def __init__(
+        self,
+        max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
+        enable_nested_filters: bool = True,
+        schema_name: Optional[str] = None,
+    ):
+        self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
+        self.enable_nested_filters = enable_nested_filters
+        self.schema_name = schema_name or "default"
+        self._filter_cache: Dict[str, Any] = {}
+        self._visited_models: Set = set()
+
+        # Create the nested generator
+        self._nested_generator = NestedFilterInputGenerator(
+            max_nested_depth=self.max_nested_depth,
+            enable_count_filters=True,
+            schema_name=self.schema_name,
+        )
+        self._filter_applicator = NestedFilterApplicator()
+        self._metadata_generator = FilterMetadataGenerator(schema_name=self.schema_name)
+
+    def generate_filter_set(
+        self, model: Type[models.Model], current_depth: int = 0
+    ) -> Type:
+        """
+        Generate a FilterSet-like class for the given Django model.
+
+        For backwards compatibility, this returns a class that can be used
+        with django-filter's DjangoFilterConnectionField.
+
+        Args:
+            model: Django model to generate filters for
+            current_depth: Current nesting depth
+
+        Returns:
+            FilterSet class (uses django_filters if available)
+        """
+        cache_key = f"{model.__name__}_{current_depth}"
+
+        if cache_key in self._filter_cache:
+            return self._filter_cache[cache_key]
+
+        # Try to create a real django-filter FilterSet for Relay compatibility
+        try:
+            import django_filters
+            from django_filters import FilterSet
+
+            # Generate basic filters for the model
+            filters = {}
+            for field in model._meta.get_fields():
+                if not hasattr(field, "name"):
+                    continue
+
+                field_name = field.name
+                if field_name in ("polymorphic_ctype",) or "_ptr" in field_name:
+                    continue
+
+                # Add basic filters based on field type
+                if isinstance(field, (models.CharField, models.TextField)):
+                    filters[field_name] = django_filters.CharFilter(
+                        field_name=field_name,
+                        lookup_expr="icontains",
+                    )
+                    filters[f"{field_name}__exact"] = django_filters.CharFilter(
+                        field_name=field_name,
+                        lookup_expr="exact",
+                    )
+                elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                    filters[field_name] = django_filters.NumberFilter(field_name=field_name)
+                    filters[f"{field_name}__gt"] = django_filters.NumberFilter(
+                        field_name=field_name, lookup_expr="gt"
+                    )
+                    filters[f"{field_name}__lt"] = django_filters.NumberFilter(
+                        field_name=field_name, lookup_expr="lt"
+                    )
+                elif isinstance(field, (models.DateField, models.DateTimeField)):
+                    filters[field_name] = django_filters.DateFilter(field_name=field_name)
+                    filters[f"{field_name}__gt"] = django_filters.DateFilter(
+                        field_name=field_name, lookup_expr="gt"
+                    )
+                    filters[f"{field_name}__lt"] = django_filters.DateFilter(
+                        field_name=field_name, lookup_expr="lt"
+                    )
+                elif isinstance(field, models.BooleanField):
+                    filters[field_name] = django_filters.BooleanFilter(field_name=field_name)
+                elif isinstance(field, models.ForeignKey):
+                    filters[field_name] = django_filters.NumberFilter(field_name=field_name)
+
+            filter_set_class = type(
+                f"{model.__name__}FilterSet",
+                (FilterSet,),
+                {
+                    **filters,
+                    "Meta": type(
+                        "Meta",
+                        (),
+                        {
+                            "model": model,
+                            "fields": list(filters.keys()),
+                            "strict": False,
+                        },
+                    ),
+                },
+            )
+
+            self._filter_cache[cache_key] = filter_set_class
+            return filter_set_class
+
+        except ImportError:
+            # django-filter not available, return a placeholder
+            logger.warning("django-filter not available, returning placeholder FilterSet")
+            return type(f"{model.__name__}FilterSet", (), {"Meta": type("Meta", (), {"model": model})})
+
+    def generate_where_input(self, model: Type[models.Model]) -> Type[graphene.InputObjectType]:
+        """
+        Generate a WhereInput type for GraphQL filtering.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            GraphQL InputObjectType for filtering
+        """
+        return self._nested_generator.generate_where_input(model)
+
+    def apply_filters(
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+        model: Optional[Type[models.Model]] = None,
+    ) -> models.QuerySet:
+        """
+        Apply filters to a queryset.
+
+        Args:
+            queryset: Django queryset
+            where_input: Filter input dictionary
+            model: Optional model class
+
+        Returns:
+            Filtered queryset
+        """
+        return self._filter_applicator.apply_where_filter(queryset, where_input, model)
+
+    def analyze_query_performance(
+        self, model: Type[models.Model], filters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Analyze the performance implications of applied filters.
+
+        Args:
+            model: Django model being filtered
+            filters: Dictionary of applied filters
+
+        Returns:
+            Performance analysis dictionary
+        """
+        analyzer = PerformanceAnalyzer()
+        return analyzer.analyze_query_performance(model, filters)
+
+    def get_optimized_queryset(
+        self,
+        model: Type[models.Model],
+        filters: Dict[str, Any],
+        base_queryset: Optional[models.QuerySet] = None,
+    ) -> models.QuerySet:
+        """
+        Get an optimized queryset based on the filters being applied.
+
+        Args:
+            model: Django model
+            filters: Dictionary of filters
+            base_queryset: Optional base queryset
+
+        Returns:
+            Optimized queryset
+        """
+        analyzer = PerformanceAnalyzer()
+        return analyzer.get_optimized_queryset(model, filters, base_queryset)
+
+
+class EnhancedFilterGenerator:
+    """
+    Legacy-compatible enhanced filter generator for metadata generation.
+
+    This class provides the same API as the old filters.py EnhancedFilterGenerator,
+    but uses the new FilterMetadataGenerator under the hood.
+    """
+
+    def __init__(
+        self,
+        max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
+        enable_nested_filters: bool = True,
+        schema_name: Optional[str] = None,
+        enable_quick_filter: bool = False,
+    ):
+        self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
+        self.enable_nested_filters = enable_nested_filters
+        self.schema_name = schema_name or "default"
+        self.enable_quick_filter = enable_quick_filter
+        self._metadata_generator = FilterMetadataGenerator(schema_name=self.schema_name)
+        self._grouped_filter_cache: Dict[Type[models.Model], List[GroupedFieldFilter]] = {}
+
+    def get_grouped_filters(
+        self, model: Type[models.Model]
+    ) -> List[GroupedFieldFilter]:
+        """
+        Get grouped filters for a model.
+
+        Args:
+            model: Django model
+
+        Returns:
+            List of GroupedFieldFilter objects
+        """
+        return self._metadata_generator.get_grouped_filters(model)

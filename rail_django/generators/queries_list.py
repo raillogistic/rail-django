@@ -140,6 +140,27 @@ def generate_list_query(
 
         # Apply nested 'where' filtering (Prisma/Hasura style)
         where = kwargs.get("where")
+        include_ids = kwargs.get("include")
+        if include_ids:
+            if where is None:
+                where = {}
+            elif not isinstance(where, dict):
+                try:
+                    where = dict(where)
+                except Exception:
+                    where = {"AND": [where]}
+            merged_include = []
+            existing_include = where.get("include")
+            if existing_include:
+                if isinstance(existing_include, (list, tuple, set)):
+                    merged_include.extend(existing_include)
+                else:
+                    merged_include.append(existing_include)
+            if isinstance(include_ids, (list, tuple, set)):
+                merged_include.extend(include_ids)
+            else:
+                merged_include.append(include_ids)
+            where["include"] = merged_include
         if where and nested_filter_applicator:
             queryset = nested_filter_applicator.apply_where_filter(
                 queryset, where, model
@@ -262,6 +283,12 @@ def generate_list_query(
                 field_type,
                 description=getattr(field, "help_text", f"Filter by {name}"),
             )
+
+    if "include" not in arguments:
+        arguments["include"] = graphene.Argument(
+            graphene.List(graphene.ID),
+            description="Include specific IDs regardless of other filters",
+        )
 
     # Add pagination arguments
     if self.settings.enable_pagination:

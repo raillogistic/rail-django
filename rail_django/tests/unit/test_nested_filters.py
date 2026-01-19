@@ -32,6 +32,16 @@ from rail_django.generators.filter_inputs import (
     generate_where_input_for_model,
     apply_where_filter,
     FIELD_TYPE_TO_FILTER_INPUT,
+    # New features
+    AdvancedFilterGenerator,
+    EnhancedFilterGenerator,
+    FilterMetadataGenerator,
+    PerformanceAnalyzer,
+    FilterOperation,
+    GroupedFieldFilter,
+    QuickFilterMixin,
+    IncludeFilterMixin,
+    HistoricalModelMixin,
 )
 from test_app.models import Category, Post, Tag, Product, Comment, Profile, OrderItem
 
@@ -824,3 +834,359 @@ class TestSchemaIntegration(TestCase):
         self.assertNotEqual(category_where.__name__, post_where.__name__)
         self.assertEqual(category_where.__name__, "CategoryWhereInput")
         self.assertEqual(post_where.__name__, "PostWhereInput")
+
+
+# =============================================================================
+# Tests for New Features (Quick Filter, Include Filter, Performance, etc.)
+# =============================================================================
+
+class TestQuickFilterMixin(TestCase):
+    """Test the QuickFilterMixin functionality."""
+
+    def setUp(self):
+        from rail_django.generators.filter_inputs import QuickFilterMixin
+        self.mixin = QuickFilterMixin()
+
+    def test_get_default_quick_filter_fields_returns_text_fields(self):
+        """Should return CharField and TextField names."""
+        fields = self.mixin.get_default_quick_filter_fields(Category)
+
+        # Category has name (CharField) and description (TextField)
+        self.assertIn("name", fields)
+        self.assertIn("description", fields)
+
+    def test_get_default_quick_filter_fields_excludes_short_fields(self):
+        """Should exclude fields with max_length < 10."""
+        from django.db import models
+
+        # Create a mock model with a short field
+        class MockModel:
+            class _meta:
+                @staticmethod
+                def get_fields():
+                    short_field = models.CharField(max_length=5)
+                    short_field.name = "code"
+                    long_field = models.CharField(max_length=100)
+                    long_field.name = "name"
+                    return [short_field, long_field]
+
+        fields = self.mixin.get_default_quick_filter_fields(MockModel)
+
+        self.assertNotIn("code", fields)
+        self.assertIn("name", fields)
+
+    def test_get_default_quick_filter_fields_excludes_sensitive_fields(self):
+        """Should exclude password, token, secret fields."""
+        from django.db import models
+
+        class MockModel:
+            class _meta:
+                @staticmethod
+                def get_fields():
+                    password = models.CharField(max_length=100)
+                    password.name = "password"
+                    token = models.CharField(max_length=100)
+                    token.name = "api_token"
+                    secret = models.CharField(max_length=100)
+                    secret.name = "secret_key"
+                    name = models.CharField(max_length=100)
+                    name.name = "name"
+                    return [password, token, secret, name]
+
+        fields = self.mixin.get_default_quick_filter_fields(MockModel)
+
+        self.assertNotIn("password", fields)
+        self.assertNotIn("api_token", fields)
+        self.assertNotIn("secret_key", fields)
+        self.assertIn("name", fields)
+
+    def test_build_quick_filter_q_empty_value(self):
+        """Empty search value should return empty Q."""
+        q = self.mixin.build_quick_filter_q(Category, "")
+
+        self.assertEqual(q, Q())
+
+    def test_build_quick_filter_q_returns_q_object(self):
+        """Should return a Q object for valid search."""
+        q = self.mixin.build_quick_filter_q(Category, "test")
+
+        self.assertIsInstance(q, Q)
+
+    def test_build_quick_filter_q_with_custom_fields(self):
+        """Should use custom fields when provided."""
+        q = self.mixin.build_quick_filter_q(Category, "test", quick_filter_fields=["name"])
+
+        self.assertIsInstance(q, Q)
+
+
+class TestIncludeFilterMixin(TestCase):
+    """Test the IncludeFilterMixin functionality."""
+
+    def setUp(self):
+        from rail_django.generators.filter_inputs import IncludeFilterMixin
+        self.mixin = IncludeFilterMixin()
+
+    def test_apply_include_filter_empty_ids(self):
+        """Empty include_ids should return unchanged queryset."""
+        queryset = Category.objects.all()
+        result = self.mixin.apply_include_filter(queryset, [])
+
+        # Should return the same queryset
+        self.assertEqual(str(result.query), str(queryset.query))
+
+    def test_apply_include_filter_none_ids(self):
+        """None include_ids should return unchanged queryset."""
+        queryset = Category.objects.all()
+        result = self.mixin.apply_include_filter(queryset, None)
+
+        self.assertEqual(str(result.query), str(queryset.query))
+
+    def test_apply_include_filter_sanitizes_string_ids(self):
+        """String IDs that are digits should be converted to int."""
+        queryset = Category.objects.none()
+        result = self.mixin.apply_include_filter(queryset, ["1", "2", "3"])
+
+        # Should not raise an error
+        self.assertIsNotNone(result)
+
+
+class TestHistoricalModelMixin(TestCase):
+    """Test the HistoricalModelMixin functionality."""
+
+    def setUp(self):
+        from rail_django.generators.filter_inputs import HistoricalModelMixin
+        self.mixin = HistoricalModelMixin()
+
+    def test_is_historical_model_false_for_regular_model(self):
+        """Regular models should not be detected as historical."""
+        self.assertFalse(self.mixin.is_historical_model(Category))
+        self.assertFalse(self.mixin.is_historical_model(Post))
+
+    def test_is_historical_model_true_for_historical_prefix(self):
+        """Models starting with 'Historical' should be detected."""
+        class HistoricalCategory:
+            __name__ = "HistoricalCategory"
+            __module__ = "test_app.models"
+
+        self.assertTrue(self.mixin.is_historical_model(HistoricalCategory))
+
+    def test_build_historical_filter_q_instance_in(self):
+        """instance_in filter should create Q object."""
+        q = self.mixin.build_historical_filter_q("instance_in", [1, 2, 3])
+
+        self.assertIsInstance(q, Q)
+
+    def test_build_historical_filter_q_history_type_in(self):
+        """history_type_in filter should create Q object."""
+        q = self.mixin.build_historical_filter_q("history_type_in", ["+", "~"])
+
+        self.assertIsInstance(q, Q)
+
+    def test_build_historical_filter_q_unknown_filter(self):
+        """Unknown filter should return empty Q."""
+        q = self.mixin.build_historical_filter_q("unknown", "value")
+
+        self.assertEqual(q, Q())
+
+
+class TestPerformanceAnalyzer(TestCase):
+    """Test the PerformanceAnalyzer functionality."""
+
+    def setUp(self):
+        from rail_django.generators.filter_inputs import PerformanceAnalyzer
+        self.analyzer = PerformanceAnalyzer()
+
+    def test_analyze_simple_filter(self):
+        """Simple filter should have good performance score."""
+        where_input = {"name": {"eq": "test"}}
+        analysis = self.analyzer.analyze_query_performance(Category, where_input)
+
+        self.assertEqual(analysis["model"], "Category")
+        self.assertEqual(analysis["performance_score"], "good")
+        self.assertEqual(analysis["total_filters"], 1)
+        self.assertEqual(analysis["nested_filters"], 0)
+
+    def test_analyze_nested_filter_suggests_select_related(self):
+        """Nested _rel filter should suggest select_related."""
+        where_input = {"category_rel": {"name": {"eq": "Electronics"}}}
+        analysis = self.analyzer.analyze_query_performance(Post, where_input)
+
+        self.assertIn("category", analysis["select_related_suggestions"])
+        self.assertEqual(analysis["nested_filters"], 1)
+
+    def test_analyze_reverse_filter_suggests_prefetch_related(self):
+        """Reverse _some filter should suggest prefetch_related."""
+        where_input = {"tags_some": {"name": {"eq": "Python"}}}
+        analysis = self.analyzer.analyze_query_performance(Post, where_input)
+
+        self.assertIn("tags", analysis["prefetch_related_suggestions"])
+
+    def test_analyze_deeply_nested_has_poor_score(self):
+        """Deeply nested filters should have poor performance score."""
+        where_input = {
+            "category_rel": {
+                "posts_some": {
+                    "tags_some": {
+                        "posts_some": {"title": {"eq": "test"}}
+                    }
+                }
+            }
+        }
+        analysis = self.analyzer.analyze_query_performance(Post, where_input)
+
+        self.assertIn(analysis["performance_score"], ["moderate", "poor"])
+
+    def test_get_optimized_queryset(self):
+        """Should return a queryset with optimizations applied."""
+        where_input = {"category_rel": {"name": {"eq": "test"}}}
+        queryset = self.analyzer.get_optimized_queryset(Post, where_input)
+
+        self.assertIsNotNone(queryset)
+
+
+class TestFilterMetadataGenerator(TestCase):
+    """Test the FilterMetadataGenerator functionality."""
+
+    def setUp(self):
+        from rail_django.generators.filter_inputs import FilterMetadataGenerator
+        self.generator = FilterMetadataGenerator()
+
+    def test_get_grouped_filters_returns_list(self):
+        """Should return a list of GroupedFieldFilter objects."""
+        filters = self.generator.get_grouped_filters(Category)
+
+        self.assertIsInstance(filters, list)
+        self.assertGreater(len(filters), 0)
+
+    def test_grouped_filter_has_field_info(self):
+        """Each GroupedFieldFilter should have field_name and operations."""
+        filters = self.generator.get_grouped_filters(Category)
+
+        for gf in filters:
+            self.assertIsNotNone(gf.field_name)
+            self.assertIsNotNone(gf.field_type)
+            self.assertIsInstance(gf.operations, list)
+
+    def test_grouped_filter_to_dict(self):
+        """to_dict should return serializable dictionary."""
+        filters = self.generator.get_grouped_filters(Category)
+
+        for gf in filters:
+            d = gf.to_dict()
+            self.assertIn("field_name", d)
+            self.assertIn("field_type", d)
+            self.assertIn("operations", d)
+
+    def test_caches_results(self):
+        """Should cache results for the same model."""
+        filters1 = self.generator.get_grouped_filters(Category)
+        filters2 = self.generator.get_grouped_filters(Category)
+
+        self.assertIs(filters1, filters2)
+
+
+class TestLegacyCompatibility(TestCase):
+    """Test legacy AdvancedFilterGenerator and EnhancedFilterGenerator compatibility."""
+
+    def setUp(self):
+        NestedFilterInputGenerator._filter_input_cache.clear()
+        NestedFilterInputGenerator._generation_stack.clear()
+
+    def test_advanced_filter_generator_exists(self):
+        """AdvancedFilterGenerator should be importable."""
+        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+        self.assertIsNotNone(AdvancedFilterGenerator)
+
+    def test_advanced_filter_generator_generate_filter_set(self):
+        """generate_filter_set should return a FilterSet-like class."""
+        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+
+        generator = AdvancedFilterGenerator()
+        filter_set = generator.generate_filter_set(Category)
+
+        self.assertIsNotNone(filter_set)
+        self.assertTrue(hasattr(filter_set, "Meta"))
+
+    def test_advanced_filter_generator_generate_where_input(self):
+        """generate_where_input should return InputObjectType."""
+        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+
+        generator = AdvancedFilterGenerator()
+        where_input = generator.generate_where_input(Category)
+
+        self.assertTrue(issubclass(where_input, graphene.InputObjectType))
+
+    def test_enhanced_filter_generator_exists(self):
+        """EnhancedFilterGenerator should be importable."""
+        from rail_django.generators.filter_inputs import EnhancedFilterGenerator
+        self.assertIsNotNone(EnhancedFilterGenerator)
+
+    def test_enhanced_filter_generator_get_grouped_filters(self):
+        """get_grouped_filters should return list of GroupedFieldFilter."""
+        from rail_django.generators.filter_inputs import EnhancedFilterGenerator
+
+        generator = EnhancedFilterGenerator()
+        filters = generator.get_grouped_filters(Category)
+
+        self.assertIsInstance(filters, list)
+
+
+class TestWhereInputNewFields(TestCase):
+    """Test that new fields (quick, include) are generated in WhereInput."""
+
+    def setUp(self):
+        NestedFilterInputGenerator._filter_input_cache.clear()
+        NestedFilterInputGenerator._generation_stack.clear()
+        self.generator = NestedFilterInputGenerator()
+
+    def test_where_input_has_quick_field(self):
+        """Generated WhereInput should have quick filter field."""
+        where_input = self.generator.generate_where_input(Category)
+        fields = where_input._meta.fields
+
+        self.assertIn("quick", fields)
+
+    def test_where_input_has_include_field(self):
+        """Generated WhereInput should have include filter field."""
+        where_input = self.generator.generate_where_input(Category)
+        fields = where_input._meta.fields
+
+        self.assertIn("include", fields)
+
+
+class TestNestedFilterApplicatorNewFeatures(TestCase):
+    """Test NestedFilterApplicator with new features."""
+
+    def setUp(self):
+        self.applicator = NestedFilterApplicator()
+
+    def test_apply_where_filter_with_quick(self):
+        """Quick filter should be applied."""
+        queryset = Category.objects.all()
+        where_input = {"quick": "test", "name": {"icontains": "cat"}}
+
+        result = self.applicator.apply_where_filter(queryset, where_input, Category)
+
+        self.assertIsNotNone(result)
+
+    def test_apply_where_filter_with_include(self):
+        """Include filter should be applied."""
+        queryset = Category.objects.none()
+        where_input = {"include": ["1", "2"], "name": {"eq": "test"}}
+
+        result = self.applicator.apply_where_filter(queryset, where_input, Category)
+
+        self.assertIsNotNone(result)
+
+    def test_apply_where_filter_extracts_special_filters(self):
+        """Special filters should be extracted before processing."""
+        queryset = Category.objects.all()
+        where_input = {
+            "quick": "search",
+            "include": ["1"],
+            "name": {"eq": "test"}
+        }
+
+        # Should not raise even with special filters
+        result = self.applicator.apply_where_filter(queryset, where_input.copy(), Category)
+        self.assertIsNotNone(result)
