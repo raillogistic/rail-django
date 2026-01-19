@@ -114,8 +114,89 @@ def generate_paginated_query(
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
-        # Apply nested 'where' filtering (Prisma/Hasura style)
+        # Apply saved filter
+        saved_filter_name_or_id = kwargs.get("savedFilter")
         where = kwargs.get("where")
+        
+        if saved_filter_name_or_id and nested_filter_applicator:
+            try:
+                from ..saved_filter import SavedFilter
+                # Try to find by ID first, then name
+                saved = None
+                if str(saved_filter_name_or_id).isdigit():
+                    saved = SavedFilter.objects.filter(pk=saved_filter_name_or_id).first()
+                if not saved:
+                    # Filter by name, model_name and owner/public
+                    user = info.context.user if hasattr(info.context, "user") else None
+                    q = models.Q(name=saved_filter_name_or_id, model_name=model.__name__)
+                    if user and user.is_authenticated:
+                        q &= (models.Q(is_shared=True) | models.Q(created_by=user))
+                    else:
+                        q &= models.Q(is_shared=True)
+                    saved = SavedFilter.objects.filter(q).first()
+
+                if saved:
+                    # Update usage stats
+                    SavedFilter.objects.filter(pk=saved.pk).update(
+                        use_count=models.F("use_count") + 1,
+                        last_used_at=models.functions.Now()
+                    )
+                    
+                    saved_where = saved.filter_json
+                    if saved_where:
+                        # User provided 'where' overrides saved filter
+                        if where:
+                            if where is None:
+                                where = {}
+                            if not isinstance(where, dict):
+                                try:
+                                    where = dict(where)
+                                except Exception:
+                                    pass
+                            # Use apply_presets logic which merges deep
+                            where = nested_filter_applicator._deep_merge(saved_where, where)
+                        else:
+                            where = saved_where
+            except Exception as e:
+                logger.warning(f"Failed to apply saved filter '{saved_filter_name_or_id}': {e}")
+
+        # Apply nested 'where' filtering (Prisma/Hasura style)
+        presets = kwargs.get("presets")
+        include_ids = kwargs.get("include")
+
+        if presets and nested_filter_applicator:
+            # Apply presets if available
+            if where is None:
+                where = {}
+            # Ensure where is a dict
+            if not isinstance(where, dict):
+                 try:
+                    where = dict(where)
+                 except Exception:
+                     pass
+            where = nested_filter_applicator.apply_presets(where, presets, model)
+
+        if include_ids:
+            if where is None:
+                where = {}
+            elif not isinstance(where, dict):
+                try:
+                    where = dict(where)
+                except Exception:
+                    where = {"AND": [where]}
+            merged_include = []
+            existing_include = where.get("include")
+            if existing_include:
+                if isinstance(existing_include, (list, tuple, set)):
+                    merged_include.extend(existing_include)
+                else:
+                    merged_include.append(existing_include)
+            if isinstance(include_ids, (list, tuple, set)):
+                merged_include.extend(include_ids)
+            else:
+                merged_include.append(include_ids)
+            where["include"] = merged_include
+
         if where and nested_filter_applicator:
             queryset = nested_filter_applicator.apply_where_filter(
                 queryset, where, model
@@ -154,13 +235,19 @@ def generate_paginated_query(
         order_by = self._normalize_ordering_specs(
             kwargs.get("order_by"), ordering_config
         )
+        distinct_on = kwargs.get("distinct_on")
+
         if order_by:
             queryset, order_by = self._apply_count_annotations_for_ordering(
                 queryset, model, order_by
             )
             db_specs, prop_specs = self._split_order_specs(model, order_by)
-            if db_specs:
+            
+            if distinct_on:
+                queryset = self._apply_distinct_on(queryset, distinct_on, db_specs)
+            elif db_specs:
                 queryset = queryset.order_by(*db_specs)
+
             if prop_specs:
                 prop_limit = getattr(
                     self.settings, "max_property_ordering_results", None
@@ -180,6 +267,9 @@ def generate_paginated_query(
                     queryset = queryset[:max_items]
                 items = list(queryset)
                 items = self._apply_property_ordering(items, prop_specs)
+        elif distinct_on:
+             # Distinct on without explicit ordering - requires implicit ordering to match distinct fields
+             queryset = self._apply_distinct_on(queryset, distinct_on, [])
 
         # Calculate pagination values
         if items is not None:
@@ -239,6 +329,18 @@ def generate_paginated_query(
             nested_where_input,
             description="Nested filtering with typed field inputs (Prisma/Hasura style)",
         )
+        
+        # Add presets argument
+        arguments["presets"] = graphene.Argument(
+            graphene.List(graphene.String),
+            description="List of filter presets to apply",
+        )
+
+        # Add savedFilter argument
+        arguments["savedFilter"] = graphene.Argument(
+            graphene.String,
+            description="Name or ID of a saved filter to apply",
+        )
 
     # Add basic filtering arguments if filter class is available (same as list queries)
     if filter_class:
@@ -292,6 +394,11 @@ def generate_paginated_query(
             graphene.String,
             description=order_desc,
             default_value=get_default_ordering(ordering_config),
+        )
+
+        arguments["distinct_on"] = graphene.List(
+            graphene.String,
+            description="Distinct by fields (Postgres DISTINCT ON). Must match prefix of order_by.",
         )
 
     return graphene.Field(
