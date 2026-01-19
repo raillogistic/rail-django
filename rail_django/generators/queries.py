@@ -88,6 +88,20 @@ class QueryGenerator:
         self.optimizer = get_optimizer(schema_name)
         self.performance_monitor = get_performance_monitor(schema_name)
 
+    def generate_introspection_queries(self) -> Dict[str, graphene.Field]:
+        """Generate introspection queries like __filterSchema."""
+        from ..extensions.metadata import FilterSchemaType, resolve_filter_schema
+        
+        return {
+            "filterSchema": graphene.Field(
+                FilterSchemaType,
+                model=graphene.String(required=True),
+                depth=graphene.Int(default_value=1),
+                resolver=resolve_filter_schema,
+                description="Introspect available filters for a model"
+            )
+        }
+
     @property
     def filter_generator(self):
         """Access to the filter generator instance."""

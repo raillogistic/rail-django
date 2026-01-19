@@ -10,6 +10,7 @@ Philosophy: Expose rich data, let the frontend decide how to render it.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import time
 import uuid
@@ -338,6 +339,13 @@ class RelationFilterSchemaType(graphene.ObjectType):
     nested_filter_type = graphene.String()
 
 
+class FilterPresetType(graphene.ObjectType):
+    """Filter preset metadata."""
+    name = graphene.String(required=True)
+    description = graphene.String()
+    filter_json = graphene.JSONString(required=True)
+
+
 class FilterSchemaType(graphene.ObjectType):
     """Filter field schema with support for both flat and nested styles."""
 
@@ -356,6 +364,13 @@ class FilterSchemaType(graphene.ObjectType):
     )
 
 
+class ComputedFilterSchemaType(graphene.ObjectType):
+    """Computed filter schema."""
+    name = graphene.String(required=True)
+    filter_type = graphene.String(required=True)
+    description = graphene.String()
+
+
 class FilterConfigType(graphene.ObjectType):
     """Overall filter configuration for a model."""
 
@@ -372,6 +387,11 @@ class FilterConfigType(graphene.ObjectType):
     dual_mode_enabled = graphene.Boolean(
         required=True, description="Both filter styles available"
     )
+    # Advanced filtering capabilities
+    supports_fts = graphene.Boolean(required=True, description="Full-text search supported")
+    supports_aggregation = graphene.Boolean(required=True, description="Aggregation filters supported")
+    presets = graphene.List(FilterPresetType, description="Available filter presets")
+    computed_filters = graphene.List(ComputedFilterSchemaType, description="Available computed filters")
 
 
 class ModelPermissionsType(graphene.ObjectType):
@@ -885,6 +905,41 @@ class ModelSchemaExtractor:
     def _extract_filter_config(self, model: type[models.Model]) -> dict:
         """Extract filter configuration for the model."""
         model_name = model.__name__
+        
+        # Get presets and computed filters from GraphQLMeta
+        presets = []
+        computed_filters = []
+        supports_fts = False
+        
+        try:
+            graphql_meta = get_model_graphql_meta(model)
+            if graphql_meta:
+                if graphql_meta.filter_presets:
+                    for name, definition in graphql_meta.filter_presets.items():
+                        presets.append({
+                            "name": name,
+                            "description": f"Preset: {name}",
+                            "filter_json": json.dumps(definition)
+                        })
+                
+                if hasattr(graphql_meta, "computed_filters") and graphql_meta.computed_filters:
+                    for name, definition in graphql_meta.computed_filters.items():
+                        computed_filters.append({
+                            "name": name,
+                            "filter_type": definition.get("filter_type", "string"),
+                            "description": definition.get("description", "")
+                        })
+            
+            # Check FTS support (from schema settings)
+            try:
+                from ..core.settings import FilteringSettings
+                filtering_settings = FilteringSettings.from_schema(self.schema_name)
+                supports_fts = getattr(filtering_settings, "enable_full_text_search", False)
+            except Exception:
+                pass
+
+        except Exception:
+            pass
 
         return {
             "style": "NESTED",
@@ -894,6 +949,10 @@ class ModelSchemaExtractor:
             "supports_or": True,
             "supports_not": True,
             "dual_mode_enabled": False,
+            "supports_fts": supports_fts,
+            "supports_aggregation": True, # Supported by default in new engine
+            "presets": presets,
+            "computed_filters": computed_filters,
         }
 
     def _extract_relation_filters(self, model: type[models.Model]) -> list[dict]:

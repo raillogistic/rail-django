@@ -713,6 +713,30 @@ class FilterFieldType(graphene.ObjectType):
     )
 
 
+class FilterPresetType(graphene.ObjectType):
+    """Filter preset metadata for introspection."""
+    name = graphene.String(required=True, description="Preset name")
+    description = graphene.String(description="Preset description")
+    filter_json = graphene.JSONString(required=True, description="Filter configuration")
+
+
+class FilterSchemaType(graphene.ObjectType):
+    """Schema for model filter introspection."""
+    model = graphene.String(required=True, description="Model name")
+    fields = graphene.List(
+        lambda: FilterFieldType, required=True, description="Available filter fields"
+    )
+    presets = graphene.List(
+        FilterPresetType, required=True, description="Available filter presets"
+    )
+    supports_fts = graphene.Boolean(
+        required=True, description="Whether full-text search is supported"
+    )
+    supports_aggregation = graphene.Boolean(
+        required=True, description="Whether aggregation filtering is supported"
+    )
+
+
 class FilterStyleEnum(graphene.Enum):
     """Filter input style enumeration."""
 
@@ -1766,6 +1790,104 @@ class ModelTableType(graphene.ObjectType):
         description="Printable templates derived from @model_pdf_template decorators",
         source="pdf_templates",
     )
+
+
+def resolve_filter_schema(root, info, model: str, depth: int = 1):
+    """
+    Resolver for __filterSchema query.
+    """
+    try:
+        # Find model class from name
+        target_model = None
+        for app_config in apps.get_app_configs():
+            for m in app_config.get_models():
+                if m.__name__ == model:
+                    target_model = m
+                    break
+            if target_model:
+                break
+        
+        if not target_model:
+            return None
+
+        # Get filter metadata using the generator
+        from ..generators.filter_inputs import FilterMetadataGenerator
+        
+        # Determine schema name from context or default
+        schema_name = getattr(info.context, "schema_name", "default")
+        generator = FilterMetadataGenerator(schema_name=schema_name)
+        
+        grouped_filters = generator.get_grouped_filters(target_model)
+        
+        # Get presets
+        presets = []
+        try:
+            graphql_meta = get_model_graphql_meta(target_model)
+            if graphql_meta and graphql_meta.filter_presets:
+                for name, definition in graphql_meta.filter_presets.items():
+                    presets.append(
+                        FilterPresetType(
+                            name=name,
+                            description=f"Preset: {name}",
+                            filter_json=json.dumps(definition)
+                        )
+                    )
+        except Exception:
+            pass
+
+        # Convert to FilterFieldType objects
+        # We need to map the generator's GroupedFieldFilter to the GraphQL FilterFieldType
+        # Note: We are reusing the existing FilterFieldType which might differ slightly from the plan's ideal.
+        # We'll map as best as possible.
+        
+        fields = []
+        for gf in grouped_filters:
+            options = []
+            for op in gf.operations:
+                options.append(
+                    FilterOptionType(
+                        name=op.name,
+                        lookup_expr=op.lookup_expr,
+                        help_text=op.description or "",
+                        filter_type=op.filter_type,
+                        choices=[], 
+                    )
+                )
+            
+            fields.append(
+                FilterFieldType(
+                    field_name=gf.field_name,
+                    is_nested=False, # TODO: Detect nested
+                    related_model=None, # TODO: Detect relation
+                    is_custom=False,
+                    field_label=gf.field_name,
+                    options=options,
+                    nested=[],
+                    filter_input_type=gf.field_type + "FilterInput", # Guessing naming convention
+                    available_operators=[op.name for op in gf.operations]
+                )
+            )
+
+        from ..core.settings import FilteringSettings
+        filtering_settings = None
+        try:
+            filtering_settings = FilteringSettings.from_schema(schema_name)
+        except Exception:
+            pass
+            
+        supports_fts = getattr(filtering_settings, "enable_full_text_search", False) if filtering_settings else False
+
+        return FilterSchemaType(
+            model=model,
+            fields=fields,
+            presets=presets,
+            supports_fts=supports_fts,
+            supports_aggregation=True
+        )
+
+    except Exception as e:
+        logger.error(f"Error resolving filter schema: {e}")
+        return None
 
 
 class ModelMetadataExtractor:

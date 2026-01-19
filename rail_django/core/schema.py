@@ -741,6 +741,10 @@ class SchemaBuilder:
                     query_attrs["debug"] = graphene.Field(DjangoDebug, name="_debug")
                 query_attrs.update(self._query_fields)
 
+                # Add introspection queries (e.g. __filterSchema)
+                if hasattr(self.query_generator, "generate_introspection_queries"):
+                    query_attrs.update(self.query_generator.generate_introspection_queries())
+
                 custom_query_classes = self._load_query_extensions()
                 for query_class in custom_query_classes:
                     self._attach_query_class_fields(query_attrs, query_class)

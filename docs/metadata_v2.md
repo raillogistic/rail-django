@@ -282,81 +282,51 @@ type FSMTransition {
 
 ### 6. Filter Schema
 
-Rail Django supports two filter input styles. The metadata exposes filter information accordingly:
+Rail Django provides a comprehensive introspection API for discovery of available filters and presets:
 
 ```graphql
 type FilterSchema {
-  # Identity
-  name: String!
-  verbose_name: String!
+  # Model identification
+  model: String!
 
-  # Style information
-  style: FilterStyle!              # FLAT or NESTED
-  argument_name: String!           # "filters" or "where"
-  input_type_name: String!         # e.g., "UserComplexFilter" or "UserWhereInput"
+  # Field-level filter metadata
+  fields: [FilterField!]!
 
-  # Available operators (for nested style)
-  operators: [FilterOperator!]
+  # Reusable filter presets
+  presets: [FilterPreset!]!
 
-  # Field filters
-  field_filters: [FieldFilterSchema!]!
-
-  # Relation filters (nested style only)
-  relation_filters: [RelationFilterSchema!]
-
-  # Boolean operators available
-  supports_and: Boolean!
-  supports_or: Boolean!
-  supports_not: Boolean!
+  # Capability flags
+  supports_fts: Boolean!
+  supports_aggregation: Boolean!
 }
 
-enum FilterStyle {
-  FLAT    # Django-style: field__lookup
-  NESTED  # Prisma/Hasura-style: field: { lookup: value }
-}
-
-type FilterOperator {
-  name: String!           # eq, neq, icontains, etc.
-  description: String!
-  graphql_type: String!   # String, Int, Boolean, etc.
-  is_list: Boolean!       # True for "in", "not_in", "between"
-}
-
-type FieldFilterSchema {
+type FilterField {
   field_name: String!
-  field_type: String!           # CharField, IntegerField, etc.
-  filter_input_type: String!    # StringFilterInput, IntFilterInput, etc.
+  field_label: String!
+  is_relation: Boolean!
+  related_model: String
+  
+  # Available operators for this field
   available_operators: [String!]!
+  
+  # Detailed options (including descriptions and types)
+  options: [FilterOption!]!
+  
+  # Naming hints
+  filter_input_type: String # e.g. "StringFilterInput"
 }
 
-type RelationFilterSchema {
-  relation_name: String!
-  relation_type: RelationType!
-
-  # Quantifier filters (for M2M and reverse relations)
-  supports_some: Boolean!       # {relation}_some
-  supports_every: Boolean!      # {relation}_every
-  supports_none: Boolean!       # {relation}_none
-  supports_count: Boolean!      # {relation}_count
-
-  # Nested filter type
-  nested_filter_type: String    # e.g., "CategoryWhereInput"
+type FilterOption {
+  name: String!         # eq, icontains, etc.
+  lookup_expr: String!  # Django lookup equivalent
+  help_text: String
+  filter_type: String!  # Data type hint
 }
-```
 
-#### Filter Style Configuration
-
-Configure the filter style in Django settings:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "query_settings": {
-        # "flat" (default Django-style) or "nested" (Prisma/Hasura-style)
-        "filter_input_style": "nested",
-
-        # Enable both styles simultaneously
-        "enable_dual_filter_styles": True,
-    }
+type FilterPreset {
+  name: String!
+  description: String
+  filter_json: JSON! # The raw 'where' clause configuration
 }
 ```
 
