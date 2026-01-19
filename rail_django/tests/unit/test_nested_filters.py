@@ -16,6 +16,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from rail_django.generators.filter_inputs import (
+    AggregationFilterInput,
     BooleanFilterInput,
     CountFilterInput,
     DateFilterInput,
@@ -152,6 +153,17 @@ class TestBaseFilterInputTypes(TestCase):
         self.assertIn("gte", fields)
         self.assertIn("lt", fields)
         self.assertIn("lte", fields)
+
+    def test_aggregation_filter_input_fields(self):
+        """AggregationFilterInput should expose aggregate operations."""
+        fields = AggregationFilterInput._meta.fields
+
+        self.assertIn("field", fields)
+        self.assertIn("sum", fields)
+        self.assertIn("avg", fields)
+        self.assertIn("min", fields)
+        self.assertIn("max", fields)
+        self.assertIn("count", fields)
 
 
 class TestFieldTypeMapping(TestCase):
@@ -290,6 +302,7 @@ class TestNestedFilterInputGenerator(TestCase):
 
         # Post has tags M2M
         self.assertIn("tags", fields)  # ID filter
+        self.assertIn("tags_agg", fields)  # Aggregation filter
         self.assertIn("tags_count", fields)  # Count filter
         self.assertIn("tags_some", fields)  # Some match
         self.assertIn("tags_every", fields)  # All match
@@ -301,6 +314,7 @@ class TestNestedFilterInputGenerator(TestCase):
         fields = where_input._meta.fields
 
         # Category has posts reverse FK
+        self.assertIn("posts_agg", fields)
         self.assertIn("posts_count", fields)
         self.assertIn("posts_some", fields)
         self.assertIn("posts_every", fields)
@@ -519,6 +533,18 @@ class TestNestedFilterApplicator(TestCase):
 
         self.assertIsInstance(q, Q)
 
+    def test_aggregation_filter_builds_q(self):
+        """_agg filter should build Q for aggregation annotations."""
+        where_input = {
+            "order_items_agg": {
+                "field": "unit_price",
+                "sum": {"gte": 100},
+            }
+        }
+        q = self.applicator._build_q_from_where(where_input, Product)
+
+        self.assertIsInstance(q, Q)
+
     def test_null_values_skipped(self):
         """Null values in filter input should be skipped."""
         where_input = {
@@ -658,6 +684,18 @@ class TestCountAnnotations(TestCase):
 
         self.assertIn("tags_count_annotation", annotations)
         self.assertEqual(annotations["tags_count_annotation"], "tags")
+
+    def test_collect_aggregation_annotations_simple(self):
+        """Should collect aggregation annotations for simple _agg filter."""
+        where_input = {
+            "order_items_agg": {
+                "field": "unit_price",
+                "sum": {"gte": 100},
+            }
+        }
+        annotations = self.applicator._collect_aggregation_annotations(where_input)
+
+        self.assertIn("order_items_agg_unit_price_sum", annotations)
 
     def test_collect_count_annotations_nested_in_and(self):
         """Should collect count annotations nested in AND."""

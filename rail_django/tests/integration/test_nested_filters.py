@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
-from test_app.models import Category, Post, Tag, Product, Comment
+from test_app.models import Category, Post, Tag, Product, Comment, OrderItem
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
@@ -44,6 +44,14 @@ def _create_tag(name):
 
 def _create_product(name, price):
     return Product.objects.create(name=name, price=Decimal(str(price)))
+
+
+def _create_order_item(product, quantity, unit_price):
+    return OrderItem.objects.create(
+        product=product,
+        quantity=quantity,
+        unit_price=Decimal(str(unit_price)),
+    )
 
 
 class TestNestedStringFilters:
@@ -442,6 +450,72 @@ class TestNestedM2MFilters:
         assert "Old Post" not in titles
         assert "New Post" in titles
         assert "No Tags" in titles
+
+
+class TestNestedAggregationFilters:
+    """Test aggregation filters on related objects."""
+
+    def test_sum_aggregation_filter(self, gql_client_nested):
+        """Filter by SUM over related objects."""
+        product_a = _create_product("Bulk", 10.00)
+        product_b = _create_product("Single", 20.00)
+
+        _create_order_item(product_a, 1, 600.00)
+        _create_order_item(product_a, 1, 450.00)
+        _create_order_item(product_b, 1, 50.00)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, order_by: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested.execute(
+            query,
+            variables={
+                "where": {
+                    "order_items_agg": {
+                        "field": "unit_price",
+                        "sum": {"gte": 1000.0},
+                    }
+                }
+            },
+        )
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert names == ["Bulk"]
+
+    def test_count_aggregation_filter(self, gql_client_nested):
+        """Filter by COUNT over related objects."""
+        product_a = _create_product("WithMany", 5.00)
+        product_b = _create_product("WithOne", 8.00)
+
+        _create_order_item(product_a, 1, 25.00)
+        _create_order_item(product_a, 2, 30.00)
+        _create_order_item(product_b, 1, 15.00)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, order_by: ["name"]) {
+                name
+            }
+        }
+        """
+        result = gql_client_nested.execute(
+            query,
+            variables={
+                "where": {
+                    "order_items_agg": {
+                        "field": "id",
+                        "count": {"gte": 2},
+                    }
+                }
+            },
+        )
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert names == ["WithMany"]
 
 
 class TestNestedIsNullFilter:

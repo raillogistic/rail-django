@@ -209,6 +209,40 @@ query {
 | `lt` | Fewer than N | `{ comments_count: { lt: 100 } }` |
 | `lte` | N or fewer | `{ comments_count: { lte: 50 } }` |
 
+## Aggregation Filters
+
+Use `{relation}_agg` to filter by aggregated values on related objects. Provide the
+field to aggregate and one or more aggregate filters (`sum`, `avg`, `min`, `max`,
+`count`).
+
+```graphql
+query {
+  products(where: {
+    order_items_agg: {
+      field: "unit_price"
+      sum: { gte: 1000 }
+    }
+  }) {
+    id
+    name
+  }
+}
+```
+
+```graphql
+query {
+  products(where: {
+    order_items_agg: {
+      field: "id"
+      count: { gte: 2 }
+    }
+  }) {
+    id
+    name
+  }
+}
+```
+
 ## Complex Query Examples
 
 ### Multi-condition Filter

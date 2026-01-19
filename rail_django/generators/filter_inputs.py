@@ -44,7 +44,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
 from django.db import models
-from django.db.models import Case, Count, F, Q, Value, When
+from django.db.models import Avg, Case, Count, F, Max, Min, Q, Sum, Value, When
 from django.db.models.fields import IntegerField
 from django.utils import timezone
 
@@ -233,6 +233,20 @@ class CountFilterInput(graphene.InputObjectType):
     gte = graphene.Int(description="Count greater than or equal to")
     lt = graphene.Int(description="Count less than")
     lte = graphene.Int(description="Count less than or equal to")
+
+
+class AggregationFilterInput(graphene.InputObjectType):
+    """
+    Filter input for aggregated values on related objects.
+
+    Supports SUM, AVG, MIN, MAX, and COUNT on a selected field.
+    """
+    field = graphene.String(required=True, description="Field to aggregate")
+    sum = graphene.InputField(FloatFilterInput, description="Filter by SUM")
+    avg = graphene.InputField(FloatFilterInput, description="Filter by AVG")
+    min = graphene.InputField(FloatFilterInput, description="Filter by MIN")
+    max = graphene.InputField(FloatFilterInput, description="Filter by MAX")
+    count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
 
 
 # =============================================================================
@@ -480,6 +494,12 @@ class NestedFilterInputGenerator:
             description=f"Filter by any {field_name} ID"
         )
 
+        # Aggregation filter
+        filters[f"{field_name}_agg"] = graphene.InputField(
+            AggregationFilterInput,
+            description=f"Filter by aggregated {field_name} values"
+        )
+
         # Count filter
         if self.enable_count_filters:
             filters[f"{field_name}_count"] = graphene.InputField(
@@ -525,6 +545,12 @@ class NestedFilterInputGenerator:
         related_model = getattr(field, "related_model", None)
         if not related_model:
             return filters
+
+        # Aggregation filter
+        filters[f"{accessor_name}_agg"] = graphene.InputField(
+            AggregationFilterInput,
+            description=f"Filter by aggregated {accessor_name} values"
+        )
 
         # Count filter
         if self.enable_count_filters:
@@ -700,7 +726,10 @@ class NestedFilterApplicator:
         instance_in = where_input.pop("instance_in", None)
         history_type_in = where_input.pop("history_type_in", None)
 
-        # First, prepare queryset with count annotations if needed
+        # First, prepare queryset with aggregation annotations if needed
+        queryset = self.prepare_queryset_for_aggregation_filters(queryset, where_input)
+
+        # Then, prepare queryset with count annotations if needed
         queryset = self.prepare_queryset_for_count_filters(queryset, where_input)
 
         # Build and apply main Q object
@@ -818,6 +847,11 @@ class NestedFilterApplicator:
             sub_q = self._build_q_from_where(filter_value, model, f"{base_field}__")
             return ~sub_q
 
+        if field_name.endswith("_agg"):
+            # Aggregation filter
+            base_field = full_field_path[:-4]
+            return self._build_aggregation_q(base_field, filter_value)
+
         if field_name.endswith("_count"):
             # Count filter
             base_field = field_name[:-6]
@@ -850,6 +884,67 @@ class NestedFilterApplicator:
 
         return q
 
+    def _build_numeric_q(
+        self,
+        field_path: str,
+        filter_value: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for numeric-like filters on a field or annotation."""
+        q = Q()
+
+        for op, op_value in filter_value.items():
+            if op_value is None:
+                continue
+
+            lookup = self._get_lookup_for_operator(op)
+            if not lookup:
+                continue
+
+            if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
+                q &= Q(**{f"{field_path}__gte": op_value[0]})
+                q &= Q(**{f"{field_path}__lte": op_value[1]})
+            elif lookup == "in":
+                q &= Q(**{f"{field_path}__in": op_value})
+            elif lookup == "not_in":
+                q &= ~Q(**{f"{field_path}__in": op_value})
+            elif lookup == "neq":
+                q &= ~Q(**{f"{field_path}__exact": op_value})
+            else:
+                q &= Q(**{f"{field_path}__{lookup}": op_value})
+
+        return q
+
+    def _aggregation_annotation_name(
+        self,
+        relation_path: str,
+        target_field: str,
+        agg_type: str,
+    ) -> str:
+        """Build a stable annotation name for aggregation filters."""
+        safe_relation = relation_path.replace("__", "_")
+        safe_target = (target_field or "id").replace("__", "_")
+        return f"{safe_relation}_agg_{safe_target}_{agg_type}"
+
+    def _build_aggregation_q(
+        self,
+        field_path: str,
+        agg_filter: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for aggregation filters."""
+        q = Q()
+        target_field = agg_filter.get("field") or "id"
+
+        for agg_type in ("sum", "avg", "min", "max", "count"):
+            agg_value = agg_filter.get(agg_type)
+            if not isinstance(agg_value, dict):
+                continue
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, agg_type
+            )
+            q &= self._build_numeric_q(annotation_name, agg_value)
+
+        return q
+
     def _build_count_q(
         self,
         field_name: str,
@@ -879,6 +974,137 @@ class NestedFilterApplicator:
                 q &= Q(**{f"{annotation_name}__lte": op_value})
 
         return q
+
+    def prepare_queryset_for_aggregation_filters(
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+    ) -> models.QuerySet:
+        """
+        Prepare queryset with annotations for aggregation filters.
+
+        Args:
+            queryset: Django queryset
+            where_input: Where input dictionary
+
+        Returns:
+            Queryset with necessary aggregation annotations
+        """
+        annotations = self._collect_aggregation_annotations(where_input)
+
+        if annotations:
+            queryset = queryset.annotate(**annotations)
+
+        return queryset
+
+    def _collect_aggregation_annotations(
+        self,
+        where_input: Dict[str, Any],
+        annotations: Optional[Dict[str, Any]] = None,
+        prefix: str = "",
+    ) -> Dict[str, Any]:
+        """Collect all aggregation annotations needed."""
+        if annotations is None:
+            annotations = {}
+
+        for key, value in where_input.items():
+            if value is None:
+                continue
+
+            if key in ("AND", "OR") and isinstance(value, list):
+                for item in value:
+                    self._collect_aggregation_annotations(item, annotations, prefix)
+                continue
+
+            if key == "NOT" and isinstance(value, dict):
+                self._collect_aggregation_annotations(value, annotations, prefix)
+                continue
+
+            if not isinstance(value, dict):
+                continue
+
+            if key.endswith("_rel"):
+                base_field = key[:-4]
+                self._collect_aggregation_annotations(
+                    value, annotations, f"{prefix}{base_field}__"
+                )
+                continue
+
+            if key.endswith("_some"):
+                base_field = key[:-5]
+                self._collect_aggregation_annotations(
+                    value, annotations, f"{prefix}{base_field}__"
+                )
+                continue
+
+            if key.endswith("_every"):
+                base_field = key[:-6]
+                self._collect_aggregation_annotations(
+                    value, annotations, f"{prefix}{base_field}__"
+                )
+                continue
+
+            if key.endswith("_none"):
+                base_field = key[:-5]
+                self._collect_aggregation_annotations(
+                    value, annotations, f"{prefix}{base_field}__"
+                )
+                continue
+
+            if key.endswith("_agg"):
+                base_field = key[:-4]
+                full_field_path = f"{prefix}{base_field}" if prefix else base_field
+                annotations.update(
+                    self._build_aggregation_annotations(full_field_path, value)
+                )
+
+        return annotations
+
+    def _build_aggregation_annotations(
+        self,
+        field_path: str,
+        agg_filter: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build annotations for aggregation filters."""
+        annotations: Dict[str, Any] = {}
+        target_field = agg_filter.get("field") or "id"
+
+        if target_field:
+            lookup_path = f"{field_path}__{target_field}"
+        else:
+            lookup_path = field_path
+
+        if agg_filter.get("sum") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "sum"
+            )
+            annotations[annotation_name] = Sum(lookup_path)
+
+        if agg_filter.get("avg") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "avg"
+            )
+            annotations[annotation_name] = Avg(lookup_path)
+
+        if agg_filter.get("min") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "min"
+            )
+            annotations[annotation_name] = Min(lookup_path)
+
+        if agg_filter.get("max") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "max"
+            )
+            annotations[annotation_name] = Max(lookup_path)
+
+        if agg_filter.get("count") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "count"
+            )
+            annotations[annotation_name] = Count(lookup_path)
+
+        return annotations
 
     def _build_temporal_q(
         self,
