@@ -1237,9 +1237,9 @@ def _is_historical_model(self, model: Type[models.Model]) -> bool:
 
 5. ✅ Fix `_every` filter implementation
 6. ✅ Fix empty page edge case in pagination
-7. ⏳ Fix encoding issue in grouping query (pending)
+7. ✅ Fix encoding issue in grouping query
 
-**Status:** Critical fixes implemented. Encoding fix deferred.
+**Status:** All correctness fixes implemented.
 
 ### Phase 3: Code Quality (Medium Priority) ✅ COMPLETED
 
@@ -1303,7 +1303,7 @@ After implementing fixes, verify:
 - [x] `_every` filter correctly excludes non-matching records
 - [x] Pagination shows correct total_count with property ordering
 - [x] Empty results show page=1, page_count=0 consistently
-- [ ] Grouping query shows "Not specified" for null values
+- [x] Grouping query shows "Not specified" for null values
 - [ ] Regex filters reject dangerous patterns
 - [ ] Deeply nested filters are rejected
 - [ ] Filter generators are reused across requests

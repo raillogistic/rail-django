@@ -9,8 +9,12 @@ import graphene
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 from django.db.models import Count, ForeignKey, ManyToManyField, OneToOneField
+from django.utils.translation import gettext_lazy as _
 
 from ..core.meta import get_model_graphql_meta
+
+# Translatable label for empty/null group values
+EMPTY_GROUP_LABEL = _("Not specified")
 from ..extensions.optimization import optimize_query
 
 logger = logging.getLogger(__name__)
@@ -205,7 +209,7 @@ def generate_grouping_query(
             if getattr(field, "choices", None):
                 label_value = dict(field.flatchoices).get(raw_value, raw_value)
             if raw_value is None:
-                label_value = "Non renseignǸ"
+                label_value = str(EMPTY_GROUP_LABEL)
             elif isinstance(field, (ForeignKey, OneToOneField)) and raw_value is not None:
                 related_obj = related_map.get(raw_value)
                 if related_obj:
@@ -216,7 +220,7 @@ def generate_grouping_query(
                     key="__EMPTY__" if raw_value is None else str(raw_value),
                     label=str(label_value)
                     if label_value is not None
-                    else "Non renseignǸ",
+                    else str(EMPTY_GROUP_LABEL),
                     count=int(entry.get("total", 0) or 0),
                 )
             )
