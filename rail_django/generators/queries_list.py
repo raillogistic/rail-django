@@ -247,13 +247,19 @@ def generate_list_query(
         order_by = self._normalize_ordering_specs(
             kwargs.get("order_by"), ordering_config
         )
+        distinct_on = kwargs.get("distinct_on")
+
         if order_by:
             queryset, order_by = self._apply_count_annotations_for_ordering(
                 queryset, model, order_by
             )
             db_specs, prop_specs = self._split_order_specs(model, order_by)
-            if db_specs:
+            
+            if distinct_on:
+                queryset = self._apply_distinct_on(queryset, distinct_on, db_specs)
+            elif db_specs:
                 queryset = queryset.order_by(*db_specs)
+                
             if prop_specs:
                 prop_limit = getattr(
                     self.settings, "max_property_ordering_results", None
@@ -278,6 +284,9 @@ def generate_list_query(
                     queryset = queryset[:max_items]
                 items = list(queryset)
                 items = self._apply_property_ordering(items, prop_specs)
+        elif distinct_on:
+             # Distinct on without explicit ordering - requires implicit ordering to match distinct fields
+             queryset = self._apply_distinct_on(queryset, distinct_on, [])
 
         # Apply pagination
         if self.settings.enable_pagination:
@@ -384,6 +393,11 @@ def generate_list_query(
             graphene.String,
             description=order_desc,
             default_value=get_default_ordering(ordering_config),
+        )
+
+        arguments["distinct_on"] = graphene.List(
+            graphene.String,
+            description="Distinct by fields (Postgres DISTINCT ON). Must match prefix of order_by.",
         )
 
     return graphene.List(

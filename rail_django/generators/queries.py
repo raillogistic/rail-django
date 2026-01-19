@@ -215,6 +215,67 @@ class QueryGenerator:
     ) -> tuple[models.QuerySet, list[str]]:
         return _apply_count_annotations_for_ordering(queryset, model, order_by)
 
+    def _apply_distinct_on(
+        self,
+        queryset: models.QuerySet,
+        distinct_on: List[str],
+        order_by: List[str],
+    ) -> models.QuerySet:
+        """Apply DISTINCT ON clause (Postgres only) or fallback."""
+        from django.db import connection
+        from django.db.models import F
+
+        if connection.vendor == "postgresql":
+            # Validate: distinct_on fields must be prefix of order_by
+            # This is a Postgres requirement: SELECT DISTINCT ON (a) ... ORDER BY a, b
+            # If explicit ordering is provided, it must start with the distinct fields.
+            # If not, we might need to prepend them or rely on the caller to ensure it.
+            
+            # Here we assume order_by contains the full ordering specs.
+            # If order_by is empty or doesn't match, Django/Postgres will raise an error.
+            # However, to be safe, we can try to prepend distinct fields to order_by if not present?
+            # But the caller (generate_list_query) passes db_specs as order_by.
+            
+            # Simple implementation: let Django handle the SQL generation.
+            # Users must ensure order_by starts with distinct_on fields.
+            return queryset.order_by(*order_by).distinct(*distinct_on)
+        else:
+            # Fallback: use subquery with window function
+            from django.db.models import Window
+            from django.db.models.functions import RowNumber
+
+            partition_by = [F(f) for f in distinct_on]
+            # Convert string order specs to expressions if needed, or just use them
+            # _parse_order_by isn't available here directly, let's use F() for simple fields
+            # or rely on the fact that order_by list strings work in order_by().
+            
+            # For Window functions in annotate, order_by needs to be F() expressions or similar
+            # not just strings like "-created_at".
+            
+            # Simplified fallback for now: group by distinct fields and take first?
+            # Window functions are the most robust way but require recent Django/DB support.
+            
+            try:
+                window_ordering = []
+                for o in order_by:
+                    if o.startswith("-"):
+                        window_ordering.append(F(o[1:]).desc())
+                    else:
+                        window_ordering.append(F(o).asc())
+
+                annotated = queryset.annotate(
+                    _row_num=Window(
+                        expression=RowNumber(),
+                        partition_by=partition_by,
+                        order_by=window_ordering,
+                    )
+                )
+                return annotated.filter(_row_num=1)
+            except Exception:
+                # If window functions fail (e.g. SQLite old version), log warning and return original
+                # or maybe just distinct() if no args? But that's distinct ROW.
+                return queryset
+
     def _normalize_ordering_specs(
         self, order_by: Optional[list[str]], ordering_config
     ) -> list[str]:

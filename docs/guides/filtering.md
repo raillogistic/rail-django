@@ -429,6 +429,43 @@ query {
 }
 ```
 
+## Distinct On
+
+Deduplicate results by specific fields (Postgres `DISTINCT ON` equivalent). This is
+useful for queries like "latest order per customer".
+
+**Note:** On Postgres, the `distinct_on` fields must match the beginning of your `order_by` list.
+
+```graphql
+# Get the single latest product per brand
+query {
+  products(
+    distinct_on: ["brand"]
+    order_by: ["brand", "-created_at"]
+  ) {
+    id
+    brand
+    name
+    created_at
+  }
+}
+```
+
+```graphql
+# Get the most recent order for each customer
+query {
+  orders(
+    distinct_on: ["customer_id"]
+    order_by: ["customer_id", "-created_at"]
+  ) {
+    id
+    customer { name }
+    created_at
+    total_amount
+  }
+}
+```
+
 ## Quick Search
 
 The `quick` argument provides simple text search across configured fields:
