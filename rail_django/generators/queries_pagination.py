@@ -15,6 +15,19 @@ from .queries_ordering import get_default_ordering
 
 logger = logging.getLogger(__name__)
 
+
+def _get_nested_filter_generator(schema_name: str):
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterInputGenerator
+    return NestedFilterInputGenerator(schema_name=schema_name)
+
+
+def _get_nested_filter_applicator():
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterApplicator
+    return NestedFilterApplicator()
+
+
 class PaginationInfo(graphene.ObjectType):
     """Pagination metadata for paginated queries."""
 
@@ -101,18 +114,18 @@ def generate_paginated_query(
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
-        # Apply advanced filtering (same as list queries)
-        filters = kwargs.get("filters")
-        if filters:
-            queryset = self.filter_generator.apply_complex_filters(
-                queryset, filters
+        # Apply nested 'where' filtering (Prisma/Hasura style)
+        where = kwargs.get("where")
+        if where and nested_filter_applicator:
+            queryset = nested_filter_applicator.apply_where_filter(
+                queryset, where, model
             )
 
         # Apply basic filtering (same as list queries)
         basic_filters = {
             k: v
             for k, v in kwargs.items()
-            if k not in ["filters", "order_by", "page", "per_page", "include"]
+            if k not in ["where", "order_by", "page", "per_page", "include"]
         }
         if basic_filters and filter_class:
             filterset = filter_class(basic_filters, queryset)
@@ -210,14 +223,22 @@ def generate_paginated_query(
 
     # Add complex filtering argument (same as list queries)
     filter_class = self.filter_generator.generate_filter_set(filter_model)
-    complex_filter_input = self.filter_generator.generate_complex_filter_input(
-        filter_model
-    )
 
-    arguments["filters"] = graphene.Argument(
-        complex_filter_input,
-        description="Advanced filtering with AND, OR, NOT operations",
-    )
+    # Generate nested filter input (Prisma/Hasura style)
+    nested_where_input = None
+    nested_filter_applicator = None
+    try:
+        nested_generator = _get_nested_filter_generator(self.schema_name)
+        nested_where_input = nested_generator.generate_where_input(filter_model)
+        nested_filter_applicator = _get_nested_filter_applicator()
+    except Exception as e:
+        logger.warning(f"Could not generate nested filter for {filter_model.__name__}: {e}")
+
+    if nested_where_input:
+        arguments["where"] = graphene.Argument(
+            nested_where_input,
+            description="Nested filtering with typed field inputs (Prisma/Hasura style)",
+        )
 
     # Add basic filtering arguments if filter class is available (same as list queries)
     if filter_class:

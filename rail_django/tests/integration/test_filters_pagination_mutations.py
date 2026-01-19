@@ -72,23 +72,26 @@ def test_simple_quick_filter(gql_client):
     assert titles == ["Alpha Post"]
 
 
-def test_complex_filters_and_or_not(gql_client):
+def test_nested_filters_and_or_not(gql_client):
     category = _create_category()
     Post.objects.create(title="Alpha", category=category)
     Post.objects.create(title="Beta", category=category)
     Post.objects.create(title="Gamma", category=category)
 
     query = """
-    query($filters: PostComplexFilter) {
-        posts(filters: $filters, orderBy: ["title"]) {
+    query($where: PostWhereInput) {
+        posts(where: $where, orderBy: ["title"]) {
             title
         }
     }
     """
     variables = {
-        "filters": {
-            "OR": [{"title": "Alpha"}, {"title": "Beta"}],
-            "NOT": {"title": "Gamma"},
+        "where": {
+            "OR": [
+                {"title": {"eq": "Alpha"}},
+                {"title": {"eq": "Beta"}}
+            ],
+            "NOT": {"title": {"eq": "Gamma"}},
         }
     }
     result = gql_client.execute(query, variables=variables)

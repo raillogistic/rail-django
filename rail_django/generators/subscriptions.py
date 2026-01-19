@@ -25,6 +25,7 @@ from ..core.settings import SchemaSettings, SubscriptionGeneratorSettings
 from ..security.field_permissions import mask_sensitive_fields
 from ..subscriptions.registry import register_subscription
 from .filters import AdvancedFilterGenerator
+from .filter_inputs import NestedFilterInputGenerator, NestedFilterApplicator
 from .types import TypeGenerator
 
 logger = logging.getLogger(__name__)
@@ -493,7 +494,7 @@ def _matches_filters(
     instance: models.Model,
     model: type[models.Model],
     filters: Optional[dict[str, Any]],
-    filter_generator: AdvancedFilterGenerator,
+    nested_filter_applicator: NestedFilterApplicator,
     *,
     use_db: bool,
 ) -> bool:
@@ -505,7 +506,7 @@ def _matches_filters(
             queryset = model._default_manager.filter(pk=instance.pk)
             payload = _copy_filter_payload(filters)
             if payload:
-                queryset = filter_generator.apply_complex_filters(queryset, payload)
+                queryset = nested_filter_applicator.apply_where_filter(queryset, payload, model)
             return queryset.exists()
         except Exception as exc:
             logger.warning(
@@ -542,6 +543,8 @@ class SubscriptionGenerator:
             settings if settings is not None else SubscriptionGeneratorSettings.from_schema(schema_name)
         )
         self.filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
+        self.nested_filter_generator = NestedFilterInputGenerator(schema_name=schema_name)
+        self.nested_filter_applicator = NestedFilterApplicator()
 
     def _ensure_authentication(self, info: graphene.ResolveInfo) -> None:
         # Determine effective schema name (priority: context > generator default)
@@ -668,7 +671,7 @@ class SubscriptionGenerator:
                 instance,
                 model,
                 filters,
-                self.filter_generator,
+                self.nested_filter_applicator,
                 use_db=use_db_filters,
             ):
                 return _skip()
@@ -759,7 +762,7 @@ class SubscriptionGenerator:
                  event_config["deleted"] = True
 
         model_type = self.type_generator.generate_object_type(model)
-        filter_input = self.filter_generator.generate_complex_filter_input(model)
+        filter_input = self.nested_filter_generator.generate_where_input(model)
         subscriptions: dict[str, graphene.Field] = {}
 
         for event, enabled in event_config.items():

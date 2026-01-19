@@ -1,12 +1,8 @@
 # Filtering Guide
 
-Rail Django provides two filter input styles for GraphQL queries: the **nested** style (Prisma/Hasura-style typed inputs, default) and the optional **flat** style (Django-style `__lookup` syntax).
+Rail Django provides a nested filter style (Prisma/Hasura-style typed inputs) for GraphQL queries with typed per-field filter inputs, excellent IDE support, and schema introspection.
 
-## Filter Styles
-
-### Nested Style (Default)
-
-The nested filter style provides typed per-field filter inputs with better IDE support and schema introspection:
+## Basic Usage
 
 ```graphql
 query {
@@ -23,84 +19,16 @@ query {
 
 Filter input type: `UserWhereInput`
 
-### Flat Style (Django-style)
-
-The flat filter style uses Django's familiar double-underscore lookup syntax:
-
-```graphql
-query {
-  users(filters: {
-    username__icontains: "john"
-    age__gte: 18
-    is_active__exact: true
-  }) {
-    id
-    username
-  }
-}
-```
-
-Filter input type: `UserComplexFilter`
-
-## Configuration
-
-Configure filter style in your Django settings:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "query_settings": {
-        # Choose one: "nested" (default) or "flat"
-        "filter_input_style": "flat",  # Switch to flat style
-
-        # Or enable both styles simultaneously
-        "enable_dual_filter_styles": True,
-    }
-}
-```
-
-### Style Comparison
-
-| Feature | Nested Style (Default) | Flat Style |
-|---------|------------------------|-----------|
-| Argument name | `where` | `filters` |
-| Type name | `{Model}WhereInput` | `{Model}ComplexFilter` |
-| Syntax | `field: { lookup: value }` | `field__lookup: value` |
-| IDE support | Excellent (typed inputs) | Limited |
-| Schema introspection | Per-field operators visible | Generic |
-
 ## Boolean Operators
 
-Both styles support AND, OR, and NOT operators for complex queries.
-
-### Flat Style Boolean Operators
-
-```graphql
-query {
-  posts(filters: {
-    AND: [
-      { title__icontains: "python" }
-      { category__name: "Programming" }
-    ]
-    OR: [
-      { status: "published" }
-      { status: "featured" }
-    ]
-    NOT: { is_draft: true }
-  }) {
-    id
-    title
-  }
-}
-```
-
-### Nested Style Boolean Operators
+Use AND, OR, and NOT operators for complex queries:
 
 ```graphql
 query {
   posts(where: {
     AND: [
       { title: { icontains: "python" } }
-      { category: { name: { eq: "Programming" } } }
+      { category_rel: { name: { eq: "Programming" } } }
     ]
     OR: [
       { status: { eq: "published" } }
@@ -216,8 +144,6 @@ Same operators as ID filters, but accepts UUID strings.
 | `has_any_keys` | Has any key | `{ meta: { has_any_keys: ["x", "y"] } }` |
 
 ## Relation Filters
-
-The nested filter style provides powerful relation filtering.
 
 ### Foreign Key Filters
 
@@ -359,27 +285,9 @@ query {
 }
 ```
 
-## Dual Filter Mode
-
-When `enable_dual_filter_styles` is enabled, both `filters` and `where` arguments are available. They apply with AND logic:
-
-```graphql
-query {
-  posts(
-    filters: { status: "published" }
-    where: { category_rel: { name: { eq: "Tech" } } }
-  ) {
-    id
-    title
-  }
-}
-```
-
-This returns posts where `status = "published"` AND `category.name = "Tech"`.
-
 ## Quick Search
 
-Both styles support the `quick` argument for simple text search across configured fields:
+The `quick` argument provides simple text search across configured fields:
 
 ```graphql
 query {

@@ -806,9 +806,7 @@ class AdvancedFilterGenerator:
                             tenant_path = None
                             tenant_id = None
                         if tenant_path and tenant_id is not None:
-                            combined_qs = combined_qs.filter(
-                                **{tenant_path: tenant_id}
-                            )
+                            combined_qs = combined_qs.filter(**{tenant_path: tenant_id})
 
                     # Deterministic ordering:
                     # 1) Included IDs first (priority = 0)
@@ -1079,7 +1077,7 @@ class AdvancedFilterGenerator:
             next_month_start = today.replace(month=today.month + 1, day=1)
         this_month_end = next_month_start - timedelta(days=1)
         return queryset.filter(
-            **{f"{field_name}__dat__range": [this_month_start, this_month_end]}
+            **{f"{field_name}__date__range": [this_month_start, this_month_end]}
         )
 
     def _filter_date_past_month(self, queryset, field_name: str, value):
@@ -1113,7 +1111,7 @@ class AdvancedFilterGenerator:
         this_year_start = today.replace(month=1, day=1)
         this_year_end = today.replace(month=12, day=31)
         return queryset.filter(
-            **{f"{field_name}__dat__range": [this_year_start, this_year_end]}
+            **{f"{field_name}__date__range": [this_year_start, this_year_end]}
         )
 
     def _filter_date_past_year(self, queryset, field_name: str, value):
@@ -2262,7 +2260,6 @@ class AdvancedFilterGenerator:
                     queryset, field_name, value
                 ),
                 help_text=f"Filtrer {field_name} pour aujourd'hui",
-                
             ),
             f"{field_name}_yesterday": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_yesterday(
@@ -2492,180 +2489,6 @@ class AdvancedFilterGenerator:
             return ["exact", "in"]
         else:
             return ["exact"]
-
-    def generate_complex_filter_input(
-        self, model: type[models.Model]
-    ) -> type[graphene.InputObjectType]:
-        """
-        Purpose: Build a typed GraphQL InputObjectType to express complex filters with AND/OR/NOT.
-
-        This uses a self-referential, nested InputObjectType instead of a GenericScalar to preserve
-        strong typing, autocompletion, and validation. Nested JSON-like structures are naturally
-        supported in GraphQL input objects, so callers can pass hierarchies of AND/OR lists and a
-        single NOT object.
-
-        Args:
-            model (Type[models.Model]): Django model class the filter targets.
-
-        Returns:
-            Type[graphene.InputObjectType]: A generated "<ModelName>ComplexFilter" input type with
-            typed field filters and AND/OR/NOT recursion for composing logical expressions.
-
-        Raises:
-            Exception: If the underlying filter set generation fails for the provided model.
-
-        Example:
-            >>> # Example GraphQL variables for a UniteMesure list query
-            >>> variables = {
-            ...     "filters": {
-            ...         "AND": [
-            ...             {"code__icontains": "G"},
-            ...             {"nom__icontains": "unité"}
-            ...         ],
-            ...         "OR": [
-            ...             {"nom__startswith": "K"},
-            ...             {"code__exact": "KG"}
-            ...         ],
-            ...         "NOT": {"nom__endswith": "zzz"}
-            ...     },
-            ...     "limit": 5
-            ... }
-            >>> # The input type name will be "UniteMesureComplexFilter"
-        """
-        model_name = model.__name__
-        filter_set = self.generate_filter_set(model)
-
-        # Create basic filter fields
-        filter_fields = {}
-        for field_name, filter_instance in filter_set.base_filters.items():
-            if isinstance(filter_instance, CharFilter):
-                filter_fields[field_name] = graphene.String()
-            elif isinstance(filter_instance, NumberFilter):
-                filter_fields[field_name] = graphene.Float()
-            elif isinstance(filter_instance, DateFilter):
-                filter_fields[field_name] = graphene.Date()
-            elif isinstance(filter_instance, BooleanFilter):
-                filter_fields[field_name] = graphene.Boolean()
-            elif isinstance(filter_instance, ChoiceFilter):
-                filter_fields[field_name] = graphene.String()
-            elif isinstance(
-                filter_instance,
-                (
-                    ModelMultipleChoiceFilter,
-                    django_filters.MultipleChoiceFilter,
-                    django_filters.BaseInFilter,
-                ),
-            ):
-                # __in filters rely on multiple choice lists
-                list_type = graphene.String
-
-                if isinstance(filter_instance, ModelMultipleChoiceFilter):
-                    list_type = graphene.ID
-                elif isinstance(filter_instance, django_filters.BaseInFilter):
-                    # BaseInFilter is typically used for numeric arrays in this generator
-                    list_type = graphene.Float
-
-                if (
-                    "Number" in filter_instance.__class__.__name__
-                    or "Integer" in filter_instance.__class__.__name__
-                ):
-                    list_type = graphene.Float
-
-                filter_fields[field_name] = graphene.List(graphene.NonNull(list_type))
-            else:
-                # Fallback for other filter types
-                filter_fields[field_name] = graphene.String()
-
-        # Create the complex filter input type
-        complex_filter_class = type(
-            f"{model_name}ComplexFilter",
-            (graphene.InputObjectType,),
-            {
-                **filter_fields,
-                "AND": graphene.List(lambda: complex_filter_class),
-                "OR": graphene.List(lambda: complex_filter_class),
-                "NOT": graphene.Field(lambda: complex_filter_class),
-            },
-        )
-
-        return complex_filter_class
-
-    def apply_complex_filters(
-        self, queryset: models.QuerySet, filter_input: dict[str, Any]
-    ) -> models.QuerySet:
-        """
-        Purpose: Apply a nested AND/OR/NOT filter tree to a queryset using Django Q objects.
-
-        Args:
-            queryset (models.QuerySet): Base queryset to filter.
-            filter_input (Dict[str, Any]): Parsed complex filter input (matching the generated
-                <ModelName>ComplexFilter structure). Keys for regular filters use the standard
-                "field__lookup" convention.
-
-        Returns:
-            models.QuerySet: A queryset filtered by the composed logical expression.
-
-        Raises:
-            ValueError: If filter_input contains unsupported structures or types.
-
-        Example:
-            >>> # Given variables['filters'] built like in the generate_complex_filter_input example,
-            >>> # the resolver passes it into apply_complex_filters(queryset, filters).
-            >>> # This method translates the logical tree into Q() objects and returns queryset.filter(Q(...)).
-        """
-        if not filter_input:
-            return queryset
-
-        q_objects = Q()
-
-        # Handle AND operations
-        if "AND" in filter_input:
-            and_filters = filter_input.pop("AND")
-            for and_filter in and_filters:
-                and_q = self._build_q_object(and_filter)
-                q_objects &= and_q
-
-        # Handle OR operations
-        if "OR" in filter_input:
-            or_filters = filter_input.pop("OR")
-            or_q = Q()
-            for or_filter in or_filters:
-                or_q |= self._build_q_object(or_filter)
-            q_objects &= or_q
-
-        # Handle NOT operations
-        if "NOT" in filter_input:
-            not_filter = filter_input.pop("NOT")
-            not_q = self._build_q_object(not_filter)
-            q_objects &= ~not_q
-
-        # Handle regular field filters
-        regular_q = self._build_q_object(filter_input)
-        q_objects &= regular_q
-
-        return queryset.filter(q_objects)
-
-    def _build_q_object(self, filter_dict: dict[str, Any]) -> Q:
-        """
-        Builds a Django Q object from a filter dictionary.
-
-        Args:
-            filter_dict: Dictionary containing filter criteria
-
-        Returns:
-            Django Q object
-        """
-        q_object = Q()
-
-        if filter_dict:
-            for key, value in filter_dict.items():
-                if key in ["AND", "OR", "NOT"]:
-                    continue  # These are handled separately
-
-                if value is not None:
-                    q_object &= Q(**{key: value})
-
-        return q_object
 
     def _generate_property_filters(
         self, model: type[models.Model]

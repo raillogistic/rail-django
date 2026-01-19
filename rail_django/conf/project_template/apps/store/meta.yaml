@@ -75,6 +75,7 @@ models:
         - description
         - category
         - tags
+        - order_items_count
         - price
         - currency
         - inventory_count

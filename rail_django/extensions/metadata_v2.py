@@ -361,10 +361,10 @@ class FilterConfigType(graphene.ObjectType):
 
     style = graphene.Field(FilterStyleEnum, required=True)
     argument_name = graphene.String(
-        required=True, description="'filters' for flat, 'where' for nested"
+        required=True, description="'where' for nested filtering"
     )
     input_type_name = graphene.String(
-        required=True, description="e.g., UserComplexFilter or UserWhereInput"
+        required=True, description="e.g., UserWhereInput"
     )
     supports_and = graphene.Boolean(required=True)
     supports_or = graphene.Boolean(required=True)
@@ -793,10 +793,8 @@ class ModelSchemaExtractor:
             return None
 
     def _extract_filters(self, model: type[models.Model]) -> list[dict]:
-        """Extract available filters with support for both flat and nested styles."""
+        """Extract available filters with nested style."""
         filters = []
-        settings = get_core_schema_settings(self.schema_name)
-        filter_style = getattr(settings, "filter_input_style", "flat")
 
         # Mapping from Django field types to nested filter input types
         field_to_filter_input = {
@@ -886,42 +884,20 @@ class ModelSchemaExtractor:
 
     def _extract_filter_config(self, model: type[models.Model]) -> dict:
         """Extract filter configuration for the model."""
-        settings = get_core_schema_settings(self.schema_name)
-        filter_style = getattr(settings, "filter_input_style", "flat")
-        dual_mode = getattr(settings, "enable_dual_filter_styles", False)
-
         model_name = model.__name__
 
-        if filter_style == "nested":
-            return {
-                "style": "NESTED",
-                "argument_name": "where",
-                "input_type_name": f"{model_name}WhereInput",
-                "supports_and": True,
-                "supports_or": True,
-                "supports_not": True,
-                "dual_mode_enabled": dual_mode,
-            }
-        else:
-            return {
-                "style": "FLAT",
-                "argument_name": "filters",
-                "input_type_name": f"{model_name}ComplexFilter",
-                "supports_and": True,
-                "supports_or": True,
-                "supports_not": True,
-                "dual_mode_enabled": dual_mode,
-            }
+        return {
+            "style": "NESTED",
+            "argument_name": "where",
+            "input_type_name": f"{model_name}WhereInput",
+            "supports_and": True,
+            "supports_or": True,
+            "supports_not": True,
+            "dual_mode_enabled": False,
+        }
 
     def _extract_relation_filters(self, model: type[models.Model]) -> list[dict]:
         """Extract relation filter metadata for M2M and reverse relations."""
-        settings = get_core_schema_settings(self.schema_name)
-        filter_style = getattr(settings, "filter_input_style", "flat")
-
-        # Only relevant for nested style
-        if filter_style != "nested":
-            return []
-
         relation_filters = []
         for field in model._meta.get_fields():
             if not hasattr(field, "name"):

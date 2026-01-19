@@ -2,6 +2,7 @@
 Grouping query builders.
 """
 
+import logging
 from typing import Any, Optional, Type
 
 import graphene
@@ -10,6 +11,8 @@ from django.db.models import Count, ForeignKey, ManyToManyField, OneToOneField
 
 from ..core.meta import get_model_graphql_meta
 from ..extensions.optimization import optimize_query
+
+logger = logging.getLogger(__name__)
 
 
 class GroupingBucketType(graphene.ObjectType):
@@ -49,6 +52,18 @@ def _resolve_group_by_field(
     return final_field
 
 
+def _get_nested_filter_generator(schema_name: str):
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterInputGenerator
+    return NestedFilterInputGenerator(schema_name=schema_name)
+
+
+def _get_nested_filter_applicator():
+    """Lazy import to avoid circular dependencies."""
+    from .filter_inputs import NestedFilterApplicator
+    return NestedFilterApplicator()
+
+
 def generate_grouping_query(
     self, model: type[models.Model], manager_name: str = "objects"
 ) -> graphene.Field:
@@ -60,9 +75,17 @@ def generate_grouping_query(
     model_name = model.__name__.lower()
     graphql_meta = get_model_graphql_meta(model)
     filter_class = self.filter_generator.generate_filter_set(model)
-    complex_filter_input = self.filter_generator.generate_complex_filter_input(
-        model
-    )
+
+    # Generate nested filter input (Prisma/Hasura style)
+    nested_where_input = None
+    nested_filter_applicator = None
+    try:
+        nested_generator = _get_nested_filter_generator(self.schema_name)
+        nested_where_input = nested_generator.generate_where_input(model)
+        nested_filter_applicator = _get_nested_filter_applicator()
+    except Exception as e:
+        logger.warning(f"Could not generate nested filter for {model.__name__}: {e}")
+
     max_buckets = getattr(self.settings, "max_grouping_buckets", 200) or 200
 
     @optimize_query()
@@ -94,11 +117,11 @@ def generate_grouping_query(
         # Apply query optimization first
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
-        # Apply advanced filtering
-        filters = kwargs.get("filters")
-        if filters:
-            queryset = self.filter_generator.apply_complex_filters(
-                queryset, filters
+        # Apply nested 'where' filtering (Prisma/Hasura style)
+        where = kwargs.get("where")
+        if where and nested_filter_applicator:
+            queryset = nested_filter_applicator.apply_where_filter(
+                queryset, where, model
             )
 
         # Apply basic filtering
@@ -107,7 +130,7 @@ def generate_grouping_query(
             for k, v in kwargs.items()
             if k
             not in [
-                "filters",
+                "where",
                 "group_by",
                 "order_by",
                 "limit",
@@ -195,10 +218,10 @@ def generate_grouping_query(
             description=f"Maximum number of groups (default: {max_buckets}, max: {max_buckets})",
         ),
     }
-    if complex_filter_input:
-        arguments["filters"] = graphene.Argument(
-            complex_filter_input,
-            description="Advanced filters shared with list queries",
+    if nested_where_input:
+        arguments["where"] = graphene.Argument(
+            nested_where_input,
+            description="Nested filtering with typed field inputs (Prisma/Hasura style)",
         )
     if filter_class:
         for name, field in filter_class.base_filters.items():

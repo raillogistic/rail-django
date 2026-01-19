@@ -82,9 +82,9 @@ from openpyxl.styles import Border, Side
 
 # Import GraphQL filter generator and auth decorators
 try:
-    from ..generators.filters import AdvancedFilterGenerator
+    from ..generators.filter_inputs import NestedFilterApplicator
 except ImportError:
-    AdvancedFilterGenerator = None
+    NestedFilterApplicator = None
 
 try:
     from .auth_decorators import jwt_required
@@ -748,15 +748,15 @@ class ModelExporter:
             self.model, self.export_settings
         )
 
-        # Initialize GraphQL filter generator if available
-        self.filter_generator = None
-        if AdvancedFilterGenerator:
+        # Initialize GraphQL filter applicator if available
+        self.nested_filter_applicator = None
+        if NestedFilterApplicator:
             try:
-                self.filter_generator = AdvancedFilterGenerator()
-                self.logger.info("GraphQL filter generator initialized successfully")
+                self.nested_filter_applicator = NestedFilterApplicator()
+                self.logger.info("Nested filter applicator initialized successfully")
             except Exception as e:
                 self.logger.warning(
-                    f"Failed to initialize GraphQL filter generator: {e}"
+                    f"Failed to initialize nested filter applicator: {e}"
                 )
 
     def _load_model(self) -> models.Model:
@@ -1305,21 +1305,21 @@ class ModelExporter:
         if not variables:
             return queryset
 
-        # Try to use GraphQL filter generator first
-        if self.filter_generator:
+        # Try to use nested filter applicator first
+        if self.nested_filter_applicator:
             try:
-                # Use apply_complex_filters to handle complex filter structures (AND/OR/NOT)
-                # variables likely contains the 'filters' structure from the frontend
-                filter_input = variables.get("filters", variables)
+                # Use apply_where_filter to handle nested filter structures (AND/OR/NOT)
+                # variables likely contains the 'where' structure from the frontend
+                filter_input = variables.get("where", variables)
                 if filter_input is None:
                     return queryset
                 if not isinstance(filter_input, dict):
-                    raise ExportError("filters must be an object")
-                return self.filter_generator.apply_complex_filters(queryset, filter_input)
+                    raise ExportError("where must be an object")
+                return self.nested_filter_applicator.apply_where_filter(queryset, filter_input, self.model)
 
             except Exception as e:
                 self.logger.warning(
-                    f"GraphQL filtering failed, falling back to basic filtering: {e}"
+                    f"Nested filtering failed, falling back to basic filtering: {e}"
                 )
 
         # Fall back to basic Django filtering
@@ -1330,7 +1330,7 @@ class ModelExporter:
                 for key, value in variables.items()
                 if value is not None and value != ""
             }
-            clean_variables.pop("filters", None)
+            clean_variables.pop("where", None)
             if clean_variables:
                 return queryset.filter(**clean_variables)
             return queryset

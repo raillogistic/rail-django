@@ -145,6 +145,10 @@ class Product(models.Model):
     def __str__(self) -> str:
         return f"{self.sku} - {self.name}"
 
+    @property
+    def order_items_count(self) -> int:
+        return self.order_items.count()
+
 
 class Order(models.Model):
     order_number = models.CharField(

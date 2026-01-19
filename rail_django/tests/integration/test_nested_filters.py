@@ -8,7 +8,7 @@ import pytest
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 
-from rail_django.testing import RailGraphQLTestClient, build_schema, override_rail_settings
+from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Category, Post, Tag, Product, Comment
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
@@ -16,34 +16,15 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 @pytest.fixture
 def gql_client_nested():
-    """GraphQL client with nested filter style enabled."""
-    with override_rail_settings(global_settings={
-        "query_settings": {"filter_input_style": "nested"}
-    }):
-        harness = build_schema(schema_name="test_nested", apps=["test_app"])
-        User = get_user_model()
-        user = User.objects.create_superuser(
-            username="nested_admin",
-            email="nested_admin@example.com",
-            password="pass12345",
-        )
-        yield RailGraphQLTestClient(harness.schema, schema_name="test_nested", user=user)
-
-
-@pytest.fixture
-def gql_client_dual():
-    """GraphQL client with dual filter styles enabled."""
-    with override_rail_settings(global_settings={
-        "query_settings": {"enable_dual_filter_styles": True}
-    }):
-        harness = build_schema(schema_name="test_dual", apps=["test_app"])
-        User = get_user_model()
-        user = User.objects.create_superuser(
-            username="dual_admin",
-            email="dual_admin@example.com",
-            password="pass12345",
-        )
-        yield RailGraphQLTestClient(harness.schema, schema_name="test_dual", user=user)
+    """GraphQL client with nested filter style."""
+    harness = build_schema(schema_name="test_nested", apps=["test_app"])
+    User = get_user_model()
+    user = User.objects.create_superuser(
+        username="nested_admin",
+        email="nested_admin@example.com",
+        password="pass12345",
+    )
+    yield RailGraphQLTestClient(harness.schema, schema_name="test_nested", user=user)
 
 
 def _create_category(name="General", description=""):
@@ -461,72 +442,6 @@ class TestNestedM2MFilters:
         assert "Old Post" not in titles
         assert "New Post" in titles
         assert "No Tags" in titles
-
-
-class TestDualFilterStyles:
-    """Test that both filter styles work when dual mode is enabled."""
-
-    def test_flat_filters_still_work(self, gql_client_dual):
-        """Test that flat filter syntax still works in dual mode."""
-        _create_category("Electronics")
-        _create_category("Books")
-
-        query = """
-        query($filters: CategoryComplexFilter) {
-            categorys(filters: $filters) {
-                name
-            }
-        }
-        """
-        result = gql_client_dual.execute(
-            query, variables={"filters": {"name__icontains": "electr"}}
-        )
-        assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
-        assert names == ["Electronics"]
-
-    def test_nested_filters_work(self, gql_client_dual):
-        """Test that nested filter syntax works in dual mode."""
-        _create_category("Electronics")
-        _create_category("Books")
-
-        query = """
-        query($where: CategoryWhereInput) {
-            categorys(where: $where) {
-                name
-            }
-        }
-        """
-        result = gql_client_dual.execute(
-            query, variables={"where": {"name": {"icontains": "electr"}}}
-        )
-        assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
-        assert names == ["Electronics"]
-
-    def test_both_filters_combined(self, gql_client_dual):
-        """Test using both filter styles together (AND logic)."""
-        _create_category("Electronics Store")
-        _create_category("Electronics Hub")
-        _create_category("Book Store")
-
-        query = """
-        query($filters: CategoryComplexFilter, $where: CategoryWhereInput) {
-            categorys(filters: $filters, where: $where) {
-                name
-            }
-        }
-        """
-        result = gql_client_dual.execute(
-            query,
-            variables={
-                "filters": {"name__icontains": "store"},
-                "where": {"name": {"icontains": "electr"}},
-            },
-        )
-        assert result.get("errors") is None
-        names = [c["name"] for c in result["data"]["categorys"]]
-        assert names == ["Electronics Store"]
 
 
 class TestNestedIsNullFilter:

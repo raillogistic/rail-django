@@ -145,15 +145,17 @@ query ListProducts {
 
 ## Advanced Filtering
 
-### Simple Filters
+Rail Django uses a nested filter syntax (Prisma/Hasura style) with typed per-field inputs.
+
+### Basic Filters
 
 ```graphql
 query FilteredProducts {
   products(
-    filters: {
-      is_active__exact: true
-      price__gte: 100
-      name__icontains: "premium"
+    where: {
+      is_active: { eq: true }
+      price: { gte: 100 }
+      name: { icontains: "premium" }
     }
   ) {
     id
@@ -165,33 +167,29 @@ query FilteredProducts {
 
 ### Available Operators
 
-| Operator     | Description                 | Example                             |
-| ------------ | --------------------------- | ----------------------------------- |
-| `exact`      | Exact equality              | `status__exact: "active"`           |
-| `iexact`     | Case-insensitive equality   | `name__iexact: "product"`           |
-| `contains`   | Contains (case-sensitive)   | `name__contains: "Pro"`             |
-| `icontains`  | Contains (case-insensitive) | `name__icontains: "pro"`            |
-| `startswith` | Starts with                 | `sku__startswith: "PRD"`            |
-| `endswith`   | Ends with                   | `email__endswith: ".com"`           |
-| `in`         | In a list                   | `status__in: ["active", "pending"]` |
-| `gt`, `gte`  | Greater than (or equal)     | `price__gt: 100`                    |
-| `lt`, `lte`  | Less than (or equal)        | `price__lt: 500`                    |
-| `range`      | Between two values          | `price__range: [100, 500]`          |
-| `isnull`     | Is null                     | `deleted_at__isnull: true`          |
-| `date`       | Date part                   | `created_at__date: "2026-01-16"`    |
+| Field Type   | Operators                                                                |
+| ------------ | ------------------------------------------------------------------------ |
+| String       | `eq`, `neq`, `contains`, `icontains`, `starts_with`, `ends_with`, `in`, `not_in`, `is_null`, `regex` |
+| Integer/Float| `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null` |
+| Boolean      | `eq`, `is_null`                                                          |
+| Date/DateTime| `eq`, `gt`, `gte`, `lt`, `lte`, `between`, `is_null`, `year`, `month`, `day`, `today`, `this_week`, `this_month` |
+| ID/UUID      | `eq`, `neq`, `in`, `not_in`, `is_null`                                  |
 
 ### Complex Filters (AND/OR/NOT)
 
 ```graphql
 query ComplexFilter {
   products(
-    filters: {
-      AND: [{ is_active__exact: true }, { price__gte: 50 }]
-      OR: [
-        { category__name__icontains: "electronics" }
-        { category__name__icontains: "accessories" }
+    where: {
+      AND: [
+        { is_active: { eq: true } }
+        { price: { gte: 50 } }
       ]
-      NOT: { status__exact: "discontinued" }
+      OR: [
+        { category_rel: { name: { icontains: "electronics" } } }
+        { category_rel: { name: { icontains: "accessories" } } }
+      ]
+      NOT: { status: { eq: "discontinued" } }
     }
   ) {
     id
@@ -205,9 +203,9 @@ query ComplexFilter {
 ```graphql
 query ProductsByCategory {
   products(
-    filters: {
-      category__name__icontains: "Electronics"
-      supplier__country__exact: "US"
+    where: {
+      category_rel: { name: { icontains: "Electronics" } }
+      supplier_rel: { country: { eq: "US" } }
     }
   ) {
     id
@@ -222,57 +220,21 @@ query ProductsByCategory {
 }
 ```
 
-### Predefined Temporal Filters
+### Temporal Filters
 
 ```graphql
 query RecentProducts {
   products(
-    filters: {
-      created_at_today: true
-      # Or: created_at_this_week: true
-      # Or: created_at_past_month: true
+    where: {
+      created_at: { today: true }
+      # Or: { this_week: true }
+      # Or: { past_month: true }
     }
   ) {
     id
     name
     created_at
   }
-}
-```
-
-### Nested Filter Style (Prisma/Hasura)
-
-Rail Django also supports a nested filter syntax with typed per-field inputs:
-
-```graphql
-query NestedFilters {
-  products(
-    where: {
-      name: { icontains: "premium" }
-      price: { gte: 100, lte: 500 }
-      category_rel: { name: { eq: "Electronics" } }
-      AND: [
-        { is_active: { eq: true } }
-        { stock: { gt: 0 } }
-      ]
-    }
-  ) {
-    id
-    name
-    price
-  }
-}
-```
-
-Enable nested filters in settings:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "query_settings": {
-        "filter_input_style": "nested",  # Use nested style
-        # Or enable both:
-        "enable_dual_filter_styles": True,
-    },
 }
 ```
 
