@@ -5,6 +5,7 @@ This document outlines the implementation plan for next-level filtering features
 ## Current State
 
 The filtering system (`rail_django/generators/filter_inputs.py`) currently supports:
+
 - Typed filter inputs (String, Int, Float, Boolean, Date, DateTime, ID, UUID, JSON, Count)
 - Boolean operators (AND, OR, NOT)
 - Relationship quantifiers (`_some`, `_every`, `_none`)
@@ -22,6 +23,7 @@ The filtering system (`rail_django/generators/filter_inputs.py`) currently suppo
 **Priority:** P0 - High Impact
 **Estimated Complexity:** Medium
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/tests/unit/test_nested_filters.py`
 - `rail_django/tests/integration/test_nested_filters.py`
@@ -65,12 +67,7 @@ class AggregationFilterInput(graphene.InputObjectType):
 ```graphql
 # Orders with total line items amount >= $1000
 query {
-  orders(where: {
-    line_items_agg: {
-      field: "amount"
-      sum: { gte: 1000 }
-    }
-  }) {
+  orders(where: { line_items_agg: { field: "amount", sum: { gte: 1000 } } }) {
     id
     customer_name
   }
@@ -78,12 +75,7 @@ query {
 
 # Products with average review rating >= 4.0
 query {
-  products(where: {
-    reviews_agg: {
-      field: "rating"
-      avg: { gte: 4.0 }
-    }
-  }) {
+  products(where: { reviews_agg: { field: "rating", avg: { gte: 4.0 } } }) {
     id
     name
   }
@@ -91,12 +83,7 @@ query {
 
 # Authors with more than 5 published books
 query {
-  authors(where: {
-    books_agg: {
-      field: "id"
-      count: { gt: 5 }
-    }
-  }) {
+  authors(where: { books_agg: { field: "id", count: { gt: 5 } } }) {
     id
     name
   }
@@ -104,12 +91,9 @@ query {
 
 # Invoices where max line item price exceeds $500
 query {
-  invoices(where: {
-    line_items_agg: {
-      field: "unit_price"
-      max: { gt: 500 }
-    }
-  }) {
+  invoices(
+    where: { line_items_agg: { field: "unit_price", max: { gt: 500 } } }
+  ) {
     id
     invoice_number
   }
@@ -153,6 +137,7 @@ def _build_aggregation_q(
 **Priority:** P0 - High Impact
 **Estimated Complexity:** Low-Medium
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/core/settings.py` (add FTS settings)
 - `rail_django/defaults.py`
@@ -214,27 +199,28 @@ class FullTextSearchInput(graphene.InputObjectType):
 ```graphql
 # Simple full-text search
 query {
-  articles(where: {
-    search: {
-      query: "django graphql api"
-      fields: ["title", "body"]
+  articles(
+    where: {
+      search: { query: "django graphql api", fields: ["title", "body"] }
     }
-  }) {
+  ) {
     id
     title
-    _search_rank  # Optional: expose search rank
+    _search_rank # Optional: expose search rank
   }
 }
 
 # Search with minimum rank threshold
 query {
-  products(where: {
-    search: {
-      query: "wireless bluetooth headphones"
-      fields: ["name", "description", "tags__name"]
-      rank_threshold: 0.1
+  products(
+    where: {
+      search: {
+        query: "wireless bluetooth headphones"
+        fields: ["name", "description", "tags__name"]
+        rank_threshold: 0.1
+      }
     }
-  }) {
+  ) {
     id
     name
   }
@@ -242,13 +228,15 @@ query {
 
 # Phrase search
 query {
-  documents(where: {
-    search: {
-      query: "machine learning"
-      fields: ["content"]
-      search_type: "phrase"
+  documents(
+    where: {
+      search: {
+        query: "machine learning"
+        fields: ["content"]
+        search_type: "phrase"
+      }
     }
-  }) {
+  ) {
     id
     title
   }
@@ -256,14 +244,13 @@ query {
 
 # Combined with other filters
 query {
-  products(where: {
-    search: {
-      query: "laptop"
-      fields: ["name", "description"]
+  products(
+    where: {
+      search: { query: "laptop", fields: ["name", "description"] }
+      price: { lte: 1000 }
+      category_rel: { name: { eq: "Electronics" } }
     }
-    price: { lte: 1000 }
-    category_rel: { name: { eq: "Electronics" } }
-  }) {
+  ) {
     id
     name
     price
@@ -314,6 +301,7 @@ def _build_fts_q(
 **Priority:** P1 - Medium Impact
 **Estimated Complexity:** Low
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/core/meta.py` (add presets to GraphQLMeta)
 
@@ -379,7 +367,9 @@ query {
   ) {
     id
     total
-    customer { name }
+    customer {
+      name
+    }
   }
 }
 
@@ -387,7 +377,7 @@ query {
 query {
   orders(
     presets: ["recent"]
-    where: { created_at: { this_week: true } }  # Overrides this_month
+    where: { created_at: { this_week: true } } # Overrides this_month
   ) {
     id
     created_at
@@ -428,6 +418,7 @@ def _apply_presets(
 **Priority:** P1 - Medium Impact
 **Estimated Complexity:** Low
 **Files to modify:**
+
 - `rail_django/generators/queries_list.py`
 
 ### Description
@@ -446,10 +437,7 @@ Deduplicate results by specific fields (Postgres `DISTINCT ON`).
 ```graphql
 # Get one product per brand (latest by created_at)
 query {
-  products(
-    distinct_on: ["brand"]
-    order_by: ["brand", "-created_at"]
-  ) {
+  products(distinct_on: ["brand"], order_by: ["brand", "-created_at"]) {
     id
     brand
     name
@@ -464,7 +452,9 @@ query {
     order_by: ["customer_id", "-created_at"]
   ) {
     id
-    customer { name }
+    customer {
+      name
+    }
     created_at
     total
   }
@@ -478,7 +468,9 @@ query {
     order_by: ["category_id", "-rating"]
   ) {
     id
-    category { name }
+    category {
+      name
+    }
     name
     rating
   }
@@ -538,6 +530,7 @@ def _apply_distinct_on(
 **Priority:** P1 - Medium Impact
 **Estimated Complexity:** Medium
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/core/meta.py`
 
@@ -597,9 +590,7 @@ class ProductMeta(GraphQLMeta):
 ```graphql
 # Filter by profit margin
 query {
-  products(where: {
-    profit_margin: { gte: 50 }
-  }) {
+  products(where: { profit_margin: { gte: 50 } }) {
     id
     name
     price
@@ -609,9 +600,7 @@ query {
 
 # Filter by profit percentage
 query {
-  products(where: {
-    profit_percentage: { gte: 20, lte: 50 }
-  }) {
+  products(where: { profit_percentage: { gte: 20, lte: 50 } }) {
     id
     name
   }
@@ -619,9 +608,11 @@ query {
 
 # Filter by age in days
 query {
-  products(where: {
-    age_days: { lte: 30 }  # Created in last 30 days
-  }) {
+  products(
+    where: {
+      age_days: { lte: 30 } # Created in last 30 days
+    }
+  ) {
     id
     name
     created_at
@@ -630,11 +621,13 @@ query {
 
 # Combined computed and regular filters
 query {
-  products(where: {
-    is_on_sale: { eq: true }
-    profit_margin: { gte: 25 }
-    category_rel: { name: { eq: "Electronics" } }
-  }) {
+  products(
+    where: {
+      is_on_sale: { eq: true }
+      profit_margin: { gte: 25 }
+      category_rel: { name: { eq: "Electronics" } }
+    }
+  ) {
     id
     name
     price
@@ -686,6 +679,7 @@ def _apply_computed_filters(
 **Priority:** P2 - Medium Impact
 **Estimated Complexity:** Low
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/extensions/metadata.py`
 
@@ -762,7 +756,9 @@ query {
     fields {
       name
       field_type
-      operators { name }
+      operators {
+        name
+      }
       is_relation
       related_model
     }
@@ -781,9 +777,21 @@ query {
         "name": "name",
         "field_type": "CharField",
         "operators": [
-          { "name": "eq", "description": "Exact match", "input_type": "String" },
-          { "name": "icontains", "description": "Case-insensitive contains", "input_type": "String" },
-          { "name": "starts_with", "description": "Starts with", "input_type": "String" },
+          {
+            "name": "eq",
+            "description": "Exact match",
+            "input_type": "String"
+          },
+          {
+            "name": "icontains",
+            "description": "Case-insensitive contains",
+            "input_type": "String"
+          },
+          {
+            "name": "starts_with",
+            "description": "Starts with",
+            "input_type": "String"
+          },
           { "name": "in_", "description": "In list", "input_type": "[String]" }
         ],
         "is_relation": false
@@ -793,8 +801,16 @@ query {
         "field_type": "DecimalField",
         "operators": [
           { "name": "eq", "description": "Equal to", "input_type": "Float" },
-          { "name": "gt", "description": "Greater than", "input_type": "Float" },
-          { "name": "between", "description": "Between range", "input_type": "[Float]" }
+          {
+            "name": "gt",
+            "description": "Greater than",
+            "input_type": "Float"
+          },
+          {
+            "name": "between",
+            "description": "Between range",
+            "input_type": "[Float]"
+          }
         ],
         "is_relation": false
       },
@@ -824,6 +840,7 @@ query {
 **Priority:** P2 - Medium Impact
 **Estimated Complexity:** Medium
 **Files to modify:**
+
 - `rail_django/models/` (new: saved_filters.py)
 - `rail_django/generators/mutations.py`
 - `rail_django/generators/queries_list.py`
@@ -871,16 +888,15 @@ class SavedFilter(models.Model):
 ```graphql
 # Save a filter
 mutation {
-  saveFilter(input: {
-    name: "high_value_pending"
-    model: "Order"
-    filter: {
-      total: { gte: 1000 }
-      status: { eq: "pending" }
+  saveFilter(
+    input: {
+      name: "high_value_pending"
+      model: "Order"
+      filter: { total: { gte: 1000 }, status: { eq: "pending" } }
+      description: "High value orders awaiting processing"
+      shared: true
     }
-    description: "High value orders awaiting processing"
-    shared: true
-  }) {
+  ) {
     savedFilter {
       id
       name
@@ -914,7 +930,9 @@ query {
   ) {
     id
     total
-    customer { name }
+    customer {
+      name
+    }
   }
 }
 
@@ -935,18 +953,15 @@ query {
     id
     name
     description
-    created_by { username }
+    created_by {
+      username
+    }
   }
 }
 
 # Update saved filter
 mutation {
-  updateSavedFilter(
-    id: "abc123"
-    input: {
-      filter: { total: { gte: 2000 } }
-    }
-  ) {
+  updateSavedFilter(id: "abc123", input: { filter: { total: { gte: 2000 } } }) {
     success
   }
 }
@@ -966,6 +981,7 @@ mutation {
 **Priority:** P2 - Niche but High Value
 **Estimated Complexity:** High
 **Files to modify:**
+
 - `rail_django/generators/filter_inputs.py`
 - `rail_django/core/settings.py`
 
@@ -1021,31 +1037,32 @@ class DistanceFilterInput(graphene.InputObjectType):
 ```graphql
 # Find stores within 10km of a point
 query {
-  stores(where: {
-    location: {
-      distance_lte: {
-        point: { lat: 48.8566, lng: 2.3522 }
-        km: 10
+  stores(
+    where: {
+      location: {
+        distance_lte: { point: { lat: 48.8566, lng: 2.3522 }, km: 10 }
       }
     }
-  }) {
+  ) {
     id
     name
     address
-    _distance_km  # Annotated distance
+    _distance_km # Annotated distance
   }
 }
 
 # Find properties within bounding box
 query {
-  properties(where: {
-    location: {
-      within_bounds: {
-        sw: { lat: 48.8, lng: 2.2 }
-        ne: { lat: 48.9, lng: 2.4 }
+  properties(
+    where: {
+      location: {
+        within_bounds: {
+          sw: { lat: 48.8, lng: 2.2 }
+          ne: { lat: 48.9, lng: 2.4 }
+        }
       }
     }
-  }) {
+  ) {
     id
     address
     price
@@ -1054,14 +1071,13 @@ query {
 
 # Find locations beyond 50km (exclude nearby)
 query {
-  warehouses(where: {
-    location: {
-      distance_gte: {
-        point: { lat: 40.7128, lng: -74.0060 }
-        km: 50
+  warehouses(
+    where: {
+      location: {
+        distance_gte: { point: { lat: 40.7128, lng: -74.0060 }, km: 50 }
       }
     }
-  }) {
+  ) {
     id
     name
   }
@@ -1069,16 +1085,15 @@ query {
 
 # Combined geo and regular filters
 query {
-  restaurants(where: {
-    location: {
-      distance_lte: {
-        point: { lat: 48.8566, lng: 2.3522 }
-        km: 5
+  restaurants(
+    where: {
+      location: {
+        distance_lte: { point: { lat: 48.8566, lng: 2.3522 }, km: 5 }
       }
+      rating: { gte: 4.0 }
+      cuisine: { in_: ["Italian", "French"] }
     }
-    rating: { gte: 4.0 }
-    cuisine: { in_: ["Italian", "French"] }
-  }) {
+  ) {
     id
     name
     rating
@@ -1091,10 +1106,7 @@ query {
   stores(
     where: {
       location: {
-        distance_lte: {
-          point: { lat: 48.8566, lng: 2.3522 }
-          km: 20
-        }
+        distance_lte: { point: { lat: 48.8566, lng: 2.3522 }, km: 20 }
       }
     }
     order_by: ["_distance"]
@@ -1110,16 +1122,16 @@ query {
 
 ## Implementation Timeline
 
-| Phase | Feature | Estimated Duration |
-|-------|---------|-------------------|
-| 1 | Aggregation Filters | 2-3 days |
-| 2 | Full-Text Search | 1-2 days |
-| 3 | Filter Presets | 1 day |
-| 4 | Distinct On | 1 day |
-| 5 | Computed Filters | 2 days |
-| 6 | Filter Introspection | 1-2 days |
-| 7 | Saved Filters | 3-4 days |
-| 8 | Geo Filters | 3-4 days |
+| Phase | Feature              | Estimated Duration |
+| ----- | -------------------- | ------------------ |
+| 1     | Aggregation Filters  | 2-3 days           |
+| 2     | Full-Text Search     | 1-2 days           |
+| 3     | Filter Presets       | 1 day              |
+| 4     | Distinct On          | 1 day              |
+| 5     | Computed Filters     | 2 days             |
+| 6     | Filter Introspection | 1-2 days           |
+| 7     | Saved Filters        | 3-4 days           |
+| 8     | Geo Filters          | 3-4 days           |
 
 **Total Estimated Time:** 14-19 days
 
@@ -1148,6 +1160,7 @@ Each phase should include:
 ## Backwards Compatibility
 
 All new features should be:
+
 - Opt-in by default
 - Configurable via `SchemaSettings`
 - Gracefully degraded when database doesn't support feature
@@ -1170,11 +1183,3 @@ RAIL_SCHEMAS = {
 ```
 
 ---
-
-## Next Steps
-
-1. Review and approve this plan
-2. Create feature branch: `feature/advanced-filtering`
-3. Begin Phase 1 implementation
-4. Code review after each phase
-5. Merge to main after all tests pass

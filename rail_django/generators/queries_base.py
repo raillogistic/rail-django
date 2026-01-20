@@ -113,14 +113,27 @@ class QueryFilterPipeline:
         # 3. Apply include IDs (merges into where)
         self._apply_include_ids()
 
-        # 4. Apply where filter
+        # 4. Apply quick filter (merges into where)
+        self._apply_quick_filter()
+
+        # 5. Apply where filter
         queryset = self._apply_where_filter(queryset)
 
-        # 5. Apply basic filters
+        # 6. Apply basic filters
         queryset = self._apply_basic_filters(queryset)
 
         self.context.queryset = queryset
         return queryset
+
+    def _apply_quick_filter(self) -> None:
+        """Apply quick filter by merging into where dict."""
+        quick_value = self.context.kwargs.get("quick")
+        if not quick_value:
+            return
+
+        current_where = self._get_current_where()
+        current_where["quick"] = quick_value
+        self._where = current_where
 
     def _apply_saved_filter(self) -> None:
         """Load and merge saved filter if specified."""

@@ -12,6 +12,19 @@ from unittest.mock import Mock, patch
 from test_app.models import Category, Product, Tag
 
 
+def grant_model_permissions(user, model, permissions):
+    """Grant permissions for a model to a user."""
+    from django.contrib.auth.models import Permission
+    from django.contrib.contenttypes.models import ContentType
+
+    content_type = ContentType.objects.get_for_model(model)
+    for perm_codename in permissions:
+        permission = Permission.objects.get(
+            codename=perm_codename, content_type=content_type
+        )
+        user.user_permissions.add(permission)
+
+
 @pytest.mark.integration
 class TestPipelineMutationGenerator(TestCase):
     """Integration tests for pipeline-based mutation generation."""
@@ -88,6 +101,7 @@ class TestPipelineCreateMutation(TestCase):
             email="test@example.com",
             password="testpass123",
         )
+        grant_model_permissions(self.user, Category, ["add_category"])
 
     def test_create_mutation_executes_successfully(self):
         """Test that create mutation works end-to-end."""
@@ -101,10 +115,13 @@ class TestPipelineCreateMutation(TestCase):
 
         mutation = mutation_generator.generate_create_mutation(Category)
 
-        # Create mock GraphQL info
+        # Create mock GraphQL info with proper request mock
+        mock_request = Mock()
+        mock_request.META = {}  # Empty dict instead of Mock
+        mock_request.user = self.user
+
         mock_info = Mock()
-        mock_info.context = Mock()
-        mock_info.context.user = self.user
+        mock_info.context = mock_request
 
         # Execute mutation
         result = mutation.mutate(
@@ -130,11 +147,15 @@ class TestPipelineCreateMutation(TestCase):
         mutation = mutation_generator.generate_create_mutation(Category)
 
         # Create mock GraphQL info with unauthenticated user
-        mock_info = Mock()
-        mock_info.context = Mock()
         mock_user = Mock()
         mock_user.is_authenticated = False
-        mock_info.context.user = mock_user
+
+        mock_request = Mock()
+        mock_request.META = {}
+        mock_request.user = mock_user
+
+        mock_info = Mock()
+        mock_info.context = mock_request
 
         # Execute mutation - should fail due to authentication
         result = mutation.mutate(
@@ -160,6 +181,7 @@ class TestPipelineUpdateMutation(TestCase):
             email="test@example.com",
             password="testpass123",
         )
+        grant_model_permissions(self.user, Category, ["change_category"])
         self.category = Category.objects.create(name="Original Category")
 
     def test_update_mutation_executes_successfully(self):
@@ -174,10 +196,13 @@ class TestPipelineUpdateMutation(TestCase):
 
         mutation = mutation_generator.generate_update_mutation(Category)
 
-        # Create mock GraphQL info
+        # Create mock GraphQL info with proper request mock
+        mock_request = Mock()
+        mock_request.META = {}
+        mock_request.user = self.user
+
         mock_info = Mock()
-        mock_info.context = Mock()
-        mock_info.context.user = self.user
+        mock_info.context = mock_request
 
         # Execute mutation
         result = mutation.mutate(
@@ -203,10 +228,13 @@ class TestPipelineUpdateMutation(TestCase):
 
         mutation = mutation_generator.generate_update_mutation(Category)
 
-        # Create mock GraphQL info
+        # Create mock GraphQL info with proper request mock
+        mock_request = Mock()
+        mock_request.META = {}
+        mock_request.user = self.user
+
         mock_info = Mock()
-        mock_info.context = Mock()
-        mock_info.context.user = self.user
+        mock_info.context = mock_request
 
         # Execute mutation with non-existent ID
         result = mutation.mutate(
@@ -233,6 +261,7 @@ class TestPipelineDeleteMutation(TestCase):
             email="test@example.com",
             password="testpass123",
         )
+        grant_model_permissions(self.user, Category, ["delete_category"])
         self.category = Category.objects.create(name="Category to Delete")
 
     def test_delete_mutation_executes_successfully(self):
@@ -247,10 +276,13 @@ class TestPipelineDeleteMutation(TestCase):
 
         mutation = mutation_generator.generate_delete_mutation(Category)
 
-        # Create mock GraphQL info
+        # Create mock GraphQL info with proper request mock
+        mock_request = Mock()
+        mock_request.META = {}
+        mock_request.user = self.user
+
         mock_info = Mock()
-        mock_info.context = Mock()
-        mock_info.context.user = self.user
+        mock_info.context = mock_request
 
         category_id = self.category.pk
 

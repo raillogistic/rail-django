@@ -24,15 +24,27 @@ def _get_nested_validation_limits(
 ) -> NestedValidationLimits:
     settings = None
     if hasattr(info.context, "mutation_generator"):
-        settings = info.context.mutation_generator.settings
+        mg = info.context.mutation_generator
+        # Ensure we have a real settings object, not a mock
+        if hasattr(mg, "settings") and mg.settings is not None:
+            settings = mg.settings
 
-    max_depth = getattr(settings, "max_nested_depth", None) if settings else None
+    def _get_int_or_default(obj, attr, default):
+        """Safely get an integer attribute or return default."""
+        if obj is None:
+            return default
+        value = getattr(obj, attr, None)
+        if isinstance(value, int):
+            return value
+        return default
+
+    max_depth = _get_int_or_default(settings, "max_nested_depth", None)
     if max_depth is None:
         max_depth = getattr(handler, "max_depth", 10)
 
-    max_list_items = getattr(settings, "max_nested_list_items", None) if settings else None
-    max_total_nodes = getattr(settings, "max_nested_nodes", None) if settings else None
-    max_errors = getattr(settings, "max_nested_errors", 50) if settings else 50
+    max_list_items = _get_int_or_default(settings, "max_nested_list_items", None)
+    max_total_nodes = _get_int_or_default(settings, "max_nested_nodes", None)
+    max_errors = _get_int_or_default(settings, "max_nested_errors", 50)
 
     return NestedValidationLimits(
         max_depth=max_depth,

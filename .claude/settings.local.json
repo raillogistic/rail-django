@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(.venv311Scriptspython.exe -m pytest rail_django/tests/integration/test_api_endpoints.py -v)",
-      "Bash(python -m pytest rail_django/tests/unit/test_nested_filters.py -v --tb=short)"
+      "Bash(python -m pytest rail_django/tests/unit/test_nested_filters.py -v --tb=short)",
+      "Bash(.venv311/scripts/pytest:*)",
+      "Bash(.venv311/scripts/python -c:*)",
+      "Bash(.venv311Scriptspytest -m integration --tb=short)",
+      "Bash(.venv311/Scripts/pytest:*)",
+      "Bash(.venv311/Scripts/python:*)"
     ]
   }
 }

@@ -36,6 +36,7 @@ Example GraphQL query:
 """
 
 from __future__ import annotations
+from django.core.exceptions import FieldDoesNotExist
 
 import logging
 from datetime import date, datetime, timedelta
@@ -68,6 +69,7 @@ DEFAULT_MAX_FILTER_CLAUSES = 50
 
 class FilterSecurityError(ValueError):
     """Raised when a filter violates security constraints."""
+
     pass
 
 
@@ -116,12 +118,12 @@ def validate_regex_pattern(
     # These patterns can cause exponential time complexity
     if check_redos:
         redos_patterns = [
-            r'\(\.\*\)\+',      # (.*)+
-            r'\(\.\+\)\+',      # (.+)+
-            r'\(\[^\]]*\]\+\)\+',  # ([abc]+)+
-            r'\(.*\|.*\)\+',    # (a|b)+ with complex alternatives
-            r'\(\.\*\)\*',      # (.*)*
-            r'\(\.\+\)\*',      # (.+)*
+            r"\(\.\*\)\+",  # (.*)+
+            r"\(\.\+\)\+",  # (.+)+
+            r"\(\[^\]]*\]\+\)\+",  # ([abc]+)+
+            r"\(.*\|.*\)\+",  # (a|b)+ with complex alternatives
+            r"\(\.\*\)\*",  # (.*)*
+            r"\(\.\+\)\*",  # (.+)*
         ]
 
         for dangerous in redos_patterns:
@@ -167,7 +169,9 @@ def validate_filter_depth(
         if key in ("AND", "OR") and isinstance(value, list):
             for item in value:
                 if isinstance(item, dict):
-                    depth = validate_filter_depth(item, current_depth + 1, max_allowed_depth)
+                    depth = validate_filter_depth(
+                        item, current_depth + 1, max_allowed_depth
+                    )
                     found_max_depth = max(found_max_depth, depth)
 
         elif key == "NOT" and isinstance(value, dict):
@@ -254,7 +258,9 @@ _filter_applicator_registry: Dict[str, "NestedFilterApplicator"] = {}
 _filter_generator_registry: Dict[str, "NestedFilterInputGenerator"] = {}
 
 
-def get_nested_filter_applicator(schema_name: str = "default") -> "NestedFilterApplicator":
+def get_nested_filter_applicator(
+    schema_name: str = "default",
+) -> "NestedFilterApplicator":
     """
     Get or create a filter applicator for the schema (singleton pattern).
 
@@ -272,7 +278,9 @@ def get_nested_filter_applicator(schema_name: str = "default") -> "NestedFilterA
     return _filter_applicator_registry[schema_name]
 
 
-def get_nested_filter_generator(schema_name: str = "default") -> "NestedFilterInputGenerator":
+def get_nested_filter_generator(
+    schema_name: str = "default",
+) -> "NestedFilterInputGenerator":
     """
     Get or create a filter generator for the schema (singleton pattern).
 
@@ -286,7 +294,9 @@ def get_nested_filter_generator(schema_name: str = "default") -> "NestedFilterIn
         NestedFilterInputGenerator instance for the schema
     """
     if schema_name not in _filter_generator_registry:
-        _filter_generator_registry[schema_name] = NestedFilterInputGenerator(schema_name=schema_name)
+        _filter_generator_registry[schema_name] = NestedFilterInputGenerator(
+            schema_name=schema_name
+        )
     return _filter_generator_registry[schema_name]
 
 
@@ -324,17 +334,30 @@ class StringFilterInput(graphene.InputObjectType):
     Supports various text matching operations including exact match,
     case-insensitive variants, and pattern matching.
     """
+
     eq = graphene.String(description="Exact match")
     neq = graphene.String(description="Not equal")
     contains = graphene.String(description="Contains (case-sensitive)")
     icontains = graphene.String(description="Contains (case-insensitive)")
-    starts_with = graphene.String(description="Starts with (case-sensitive)")
-    istarts_with = graphene.String(description="Starts with (case-insensitive)")
-    ends_with = graphene.String(description="Ends with (case-sensitive)")
-    iends_with = graphene.String(description="Ends with (case-insensitive)")
-    in_ = graphene.List(graphene.NonNull(graphene.String), name="in", description="In list")
-    not_in = graphene.List(graphene.NonNull(graphene.String), description="Not in list")
-    is_null = graphene.Boolean(description="Is null")
+    starts_with = graphene.String(
+        name="starts_with", description="Starts with (case-sensitive)"
+    )
+    istarts_with = graphene.String(
+        name="istarts_with", description="Starts with (case-insensitive)"
+    )
+    ends_with = graphene.String(
+        name="ends_with", description="Ends with (case-sensitive)"
+    )
+    iends_with = graphene.String(
+        name="iends_with", description="Ends with (case-insensitive)"
+    )
+    in_ = graphene.List(
+        graphene.NonNull(graphene.String), name="in", description="In list"
+    )
+    not_in = graphene.List(
+        graphene.NonNull(graphene.String), name="not_in", description="Not in list"
+    )
+    is_null = graphene.Boolean(name="is_null", description="Is null")
     regex = graphene.String(description="Regex match (case-sensitive)")
     iregex = graphene.String(description="Regex match (case-insensitive)")
 
@@ -345,16 +368,21 @@ class IntFilterInput(graphene.InputObjectType):
 
     Supports numeric comparisons and range operations.
     """
+
     eq = graphene.Int(description="Equal to")
     neq = graphene.Int(description="Not equal to")
     gt = graphene.Int(description="Greater than")
     gte = graphene.Int(description="Greater than or equal to")
     lt = graphene.Int(description="Less than")
     lte = graphene.Int(description="Less than or equal to")
-    in_ = graphene.List(graphene.NonNull(graphene.Int), name="in", description="In list")
-    not_in = graphene.List(graphene.NonNull(graphene.Int), description="Not in list")
+    in_ = graphene.List(
+        graphene.NonNull(graphene.Int), name="in", description="In list"
+    )
+    not_in = graphene.List(
+        graphene.NonNull(graphene.Int), name="not_in", description="Not in list"
+    )
     between = graphene.List(graphene.Int, description="Between [min, max] inclusive")
-    is_null = graphene.Boolean(description="Is null")
+    is_null = graphene.Boolean(name="is_null", description="Is null")
 
 
 class FloatFilterInput(graphene.InputObjectType):
@@ -363,24 +391,30 @@ class FloatFilterInput(graphene.InputObjectType):
 
     Supports numeric comparisons and range operations.
     """
+
     eq = graphene.Float(description="Equal to")
     neq = graphene.Float(description="Not equal to")
     gt = graphene.Float(description="Greater than")
     gte = graphene.Float(description="Greater than or equal to")
     lt = graphene.Float(description="Less than")
     lte = graphene.Float(description="Less than or equal to")
-    in_ = graphene.List(graphene.NonNull(graphene.Float), name="in", description="In list")
-    not_in = graphene.List(graphene.NonNull(graphene.Float), description="Not in list")
+    in_ = graphene.List(
+        graphene.NonNull(graphene.Float), name="in", description="In list"
+    )
+    not_in = graphene.List(
+        graphene.NonNull(graphene.Float), name="not_in", description="Not in list"
+    )
     between = graphene.List(graphene.Float, description="Between [min, max] inclusive")
-    is_null = graphene.Boolean(description="Is null")
+    is_null = graphene.Boolean(name="is_null", description="Is null")
 
 
 class BooleanFilterInput(graphene.InputObjectType):
     """
     Filter input for boolean fields.
     """
+
     eq = graphene.Boolean(description="Equal to")
-    is_null = graphene.Boolean(description="Is null")
+    is_null = graphene.Boolean(name="is_null", description="Is null")
 
 
 class DateFilterInput(graphene.InputObjectType):
@@ -389,6 +423,7 @@ class DateFilterInput(graphene.InputObjectType):
 
     Supports date comparisons, ranges, and convenient temporal filters.
     """
+
     eq = graphene.Date(description="Equal to")
     neq = graphene.Date(description="Not equal to")
     gt = graphene.Date(description="After date")
@@ -396,21 +431,23 @@ class DateFilterInput(graphene.InputObjectType):
     lt = graphene.Date(description="Before date")
     lte = graphene.Date(description="On or before date")
     between = graphene.List(graphene.Date, description="Between [start, end] inclusive")
-    is_null = graphene.Boolean(description="Is null")
+    is_null = graphene.Boolean(name="is_null", description="Is null")
     # Temporal convenience filters
     year = graphene.Int(description="Filter by year")
     month = graphene.Int(description="Filter by month (1-12)")
     day = graphene.Int(description="Filter by day of month")
-    week_day = graphene.Int(description="Filter by day of week (1=Sunday, 7=Saturday)")
+    week_day = graphene.Int(
+        name="week_day", description="Filter by day of week (1=Sunday, 7=Saturday)"
+    )
     # Relative date filters
     today = graphene.Boolean(description="Is today")
     yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(description="Is this week")
-    past_week = graphene.Boolean(description="Is past week")
-    this_month = graphene.Boolean(description="Is this month")
-    past_month = graphene.Boolean(description="Is past month")
-    this_year = graphene.Boolean(description="Is this year")
-    past_year = graphene.Boolean(description="Is past year")
+    this_week = graphene.Boolean(name="this_week", description="Is this week")
+    past_week = graphene.Boolean(name="past_week", description="Is past week")
+    this_month = graphene.Boolean(name="this_month", description="Is this month")
+    past_month = graphene.Boolean(name="past_month", description="Is past month")
+    this_year = graphene.Boolean(name="this_year", description="Is this year")
+    past_year = graphene.Boolean(name="past_year", description="Is past year")
 
 
 class DateTimeFilterInput(graphene.InputObjectType):
@@ -419,63 +456,83 @@ class DateTimeFilterInput(graphene.InputObjectType):
 
     Supports datetime comparisons, ranges, and convenient temporal filters.
     """
+
     eq = graphene.DateTime(description="Equal to")
     neq = graphene.DateTime(description="Not equal to")
     gt = graphene.DateTime(description="After datetime")
     gte = graphene.DateTime(description="On or after datetime")
     lt = graphene.DateTime(description="Before datetime")
     lte = graphene.DateTime(description="On or before datetime")
-    between = graphene.List(graphene.DateTime, description="Between [start, end] inclusive")
-    is_null = graphene.Boolean(description="Is null")
+    between = graphene.List(
+        graphene.DateTime, description="Between [start, end] inclusive"
+    )
+    is_null = graphene.Boolean(name="is_null", description="Is null")
     # Date-only filters (ignores time)
     date = graphene.Date(description="Filter by date part only")
     year = graphene.Int(description="Filter by year")
     month = graphene.Int(description="Filter by month (1-12)")
     day = graphene.Int(description="Filter by day of month")
-    week_day = graphene.Int(description="Filter by day of week (1=Sunday, 7=Saturday)")
+    week_day = graphene.Int(
+        name="week_day", description="Filter by day of week (1=Sunday, 7=Saturday)"
+    )
     hour = graphene.Int(description="Filter by hour (0-23)")
     # Relative date filters
     today = graphene.Boolean(description="Is today")
     yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(description="Is this week")
-    past_week = graphene.Boolean(description="Is past week")
-    this_month = graphene.Boolean(description="Is this month")
-    past_month = graphene.Boolean(description="Is past month")
-    this_year = graphene.Boolean(description="Is this year")
-    past_year = graphene.Boolean(description="Is past year")
+    this_week = graphene.Boolean(name="this_week", description="Is this week")
+    past_week = graphene.Boolean(name="past_week", description="Is past week")
+    this_month = graphene.Boolean(name="this_month", description="Is this month")
+    past_month = graphene.Boolean(name="past_month", description="Is past month")
+    this_year = graphene.Boolean(name="this_year", description="Is this year")
+    past_year = graphene.Boolean(name="past_year", description="Is past year")
 
 
 class IDFilterInput(graphene.InputObjectType):
     """
     Filter input for ID/primary key fields.
     """
+
     eq = graphene.ID(description="Equal to")
     neq = graphene.ID(description="Not equal to")
     in_ = graphene.List(graphene.NonNull(graphene.ID), name="in", description="In list")
-    not_in = graphene.List(graphene.NonNull(graphene.ID), description="Not in list")
-    is_null = graphene.Boolean(description="Is null")
+    not_in = graphene.List(
+        graphene.NonNull(graphene.ID), name="not_in", description="Not in list"
+    )
+    is_null = graphene.Boolean(name="is_null", description="Is null")
 
 
 class UUIDFilterInput(graphene.InputObjectType):
     """
     Filter input for UUID fields.
     """
+
     eq = graphene.String(description="Equal to")
     neq = graphene.String(description="Not equal to")
-    in_ = graphene.List(graphene.NonNull(graphene.String), name="in", description="In list")
-    not_in = graphene.List(graphene.NonNull(graphene.String), description="Not in list")
-    is_null = graphene.Boolean(description="Is null")
+    in_ = graphene.List(
+        graphene.NonNull(graphene.String), name="in", description="In list"
+    )
+    not_in = graphene.List(
+        graphene.NonNull(graphene.String), name="not_in", description="Not in list"
+    )
+    is_null = graphene.Boolean(name="is_null", description="Is null")
 
 
 class JSONFilterInput(graphene.InputObjectType):
     """
     Filter input for JSON fields.
     """
+
     eq = graphene.JSONString(description="Exact JSON match")
-    is_null = graphene.Boolean(description="Is null")
-    has_key = graphene.String(description="Has key")
-    has_keys = graphene.List(graphene.NonNull(graphene.String), description="Has all keys")
-    has_any_keys = graphene.List(graphene.NonNull(graphene.String), description="Has any of keys")
+    is_null = graphene.Boolean(name="is_null", description="Is null")
+    has_key = graphene.String(name="has_key", description="Has key")
+    has_keys = graphene.List(
+        graphene.NonNull(graphene.String), name="has_keys", description="Has all keys"
+    )
+    has_any_keys = graphene.List(
+        graphene.NonNull(graphene.String),
+        name="has_any_keys",
+        description="Has any of keys",
+    )
 
 
 class CountFilterInput(graphene.InputObjectType):
@@ -484,6 +541,7 @@ class CountFilterInput(graphene.InputObjectType):
 
     Used for filtering by the count of related objects.
     """
+
     eq = graphene.Int(description="Count equals")
     neq = graphene.Int(description="Count not equals")
     gt = graphene.Int(description="Count greater than")
@@ -498,6 +556,7 @@ class AggregationFilterInput(graphene.InputObjectType):
 
     Supports SUM, AVG, MIN, MAX, and COUNT on a selected field.
     """
+
     field = graphene.String(required=True, description="Field to aggregate")
     sum = graphene.InputField(FloatFilterInput, description="Filter by SUM")
     avg = graphene.InputField(FloatFilterInput, description="Filter by AVG")
@@ -508,6 +567,7 @@ class AggregationFilterInput(graphene.InputObjectType):
 
 class FullTextSearchTypeEnum(graphene.Enum):
     """Supported full-text search query modes."""
+
     PLAIN = "plain"
     PHRASE = "phrase"
     WEBSEARCH = "websearch"
@@ -518,6 +578,7 @@ class FullTextSearchInput(graphene.InputObjectType):
     """
     Full-text search configuration.
     """
+
     query = graphene.String(required=True, description="Search query")
     fields = graphene.List(
         graphene.NonNull(graphene.String),
@@ -563,7 +624,9 @@ FIELD_TYPE_TO_FILTER_INPUT: Dict[Type[models.Field], Type[graphene.InputObjectTy
 }
 
 
-def get_filter_input_for_field(field: models.Field) -> Optional[Type[graphene.InputObjectType]]:
+def get_filter_input_for_field(
+    field: models.Field,
+) -> Optional[Type[graphene.InputObjectType]]:
     """
     Get the appropriate filter input type for a Django model field.
 
@@ -592,6 +655,7 @@ def get_filter_input_for_field(field: models.Field) -> Optional[Type[graphene.In
 # =============================================================================
 # Nested Filter Input Generator
 # =============================================================================
+
 
 class NestedFilterInputGenerator:
     """
@@ -643,6 +707,7 @@ class NestedFilterInputGenerator:
 
         try:
             from ..core.settings import FilteringSettings
+
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
         except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
@@ -656,7 +721,9 @@ class NestedFilterInputGenerator:
         """Evict oldest cache entries if cache exceeds max size."""
         if len(self._filter_input_cache) >= self.cache_max_size:
             # Remove first 10% of entries (oldest due to insertion order in Python 3.7+)
-            keys_to_remove = list(self._filter_input_cache.keys())[: self.cache_max_size // 10 or 1]
+            keys_to_remove = list(self._filter_input_cache.keys())[
+                : self.cache_max_size // 10 or 1
+            ]
             for key in keys_to_remove:
                 del self._filter_input_cache[key]
             logger.debug(
@@ -706,7 +773,9 @@ class NestedFilterInputGenerator:
                 field_name = field.name
 
                 # Skip internal fields
-                if field_name in ("id", "pk") and not isinstance(field, models.AutoField):
+                if field_name in ("id", "pk") and not isinstance(
+                    field, models.AutoField
+                ):
                     continue
                 if field_name.startswith("_") or "polymorphic" in field_name.lower():
                     continue
@@ -726,26 +795,22 @@ class NestedFilterInputGenerator:
                     filter_input = get_filter_input_for_field(field)
                     if filter_input:
                         fields[field_name] = graphene.InputField(
-                            filter_input,
-                            description=f"Filter by {field_name}"
+                            filter_input, description=f"Filter by {field_name}"
                         )
 
             # Add ID filter
             fields["id"] = graphene.InputField(
-                IDFilterInput,
-                description="Filter by ID"
+                IDFilterInput, description="Filter by ID"
             )
 
             # Add quick filter for multi-field search
             fields["quick"] = graphene.InputField(
-                graphene.String,
-                description="Quick search across multiple text fields"
+                graphene.String, description="Quick search across multiple text fields"
             )
 
             # Add full-text search filter if enabled
-            if (
-                self.filtering_settings
-                and getattr(self.filtering_settings, "enable_full_text_search", False)
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_full_text_search", False
             ):
                 fields["search"] = graphene.InputField(
                     FullTextSearchInput,
@@ -755,7 +820,7 @@ class NestedFilterInputGenerator:
             # Add include filter for ID union
             fields["include"] = graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.ID)),
-                description="Include specific IDs regardless of other filters"
+                description="Include specific IDs regardless of other filters",
             )
 
             # Add historical filters if applicable
@@ -783,13 +848,16 @@ class NestedFilterInputGenerator:
         fields = {}
         try:
             from ..core.meta import get_model_graphql_meta
+
             graphql_meta = get_model_graphql_meta(model)
             computed_defs = getattr(graphql_meta, "computed_filters", {})
-            
+
             for field_name, definition in computed_defs.items():
                 filter_type_name = definition.get("filter_type", "string")
-                description = definition.get("description", f"Filter by computed {field_name}")
-                
+                description = definition.get(
+                    "description", f"Filter by computed {field_name}"
+                )
+
                 filter_type_map = {
                     "string": StringFilterInput,
                     "int": IntFilterInput,
@@ -800,14 +868,18 @@ class NestedFilterInputGenerator:
                     "id": IDFilterInput,
                     "uuid": UUIDFilterInput,
                 }
-                
-                input_type = filter_type_map.get(filter_type_name.lower(), StringFilterInput)
-                fields[field_name] = graphene.InputField(input_type, description=description)
-                
+
+                input_type = filter_type_map.get(
+                    filter_type_name.lower(), StringFilterInput
+                )
+                fields[field_name] = graphene.InputField(
+                    input_type, description=description
+                )
+
         except Exception as e:
             logger.debug(f"Error generating computed filters for {model.__name__}: {e}")
             pass
-            
+
         return fields
 
     def _generate_fk_filter(
@@ -822,17 +894,18 @@ class NestedFilterInputGenerator:
 
         # ID filter for the FK
         filters[field_name] = graphene.InputField(
-            IDFilterInput,
-            description=f"Filter by {field_name} ID"
+            IDFilterInput, description=f"Filter by {field_name} ID"
         )
 
         # Nested filter for related model (if within depth limit)
         if depth < self.max_nested_depth and related_model:
             try:
                 nested_where = self.generate_where_input(related_model, depth + 1)
-                filters[f"{field_name}_rel"] = graphene.InputField(
+                rel_name = f"{field_name}_rel"
+                filters[rel_name] = graphene.InputField(
                     nested_where,
-                    description=f"Filter by {field_name} fields"
+                    name=rel_name,
+                    description=f"Filter by {field_name} fields",
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(f"Could not generate nested filter for {field_name}: {e}")
@@ -851,41 +924,48 @@ class NestedFilterInputGenerator:
 
         # ID filter (any match)
         filters[field_name] = graphene.InputField(
-            IDFilterInput,
-            description=f"Filter by any {field_name} ID"
+            IDFilterInput, description=f"Filter by any {field_name} ID"
         )
 
         # Aggregation filter
-        filters[f"{field_name}_agg"] = graphene.InputField(
+        agg_name = f"{field_name}_agg"
+        filters[agg_name] = graphene.InputField(
             AggregationFilterInput,
-            description=f"Filter by aggregated {field_name} values"
+            name=agg_name,
+            description=f"Filter by aggregated {field_name} values",
         )
 
         # Count filter
         if self.enable_count_filters:
-            filters[f"{field_name}_count"] = graphene.InputField(
+            count_name = f"{field_name}_count"
+            filters[count_name] = graphene.InputField(
                 CountFilterInput,
-                description=f"Filter by {field_name} count"
+                name=count_name,
+                description=f"Filter by {field_name} count",
             )
 
         # Nested filter with quantifiers
         if depth < self.max_nested_depth and related_model:
             try:
                 nested_where = self.generate_where_input(related_model, depth + 1)
-                filters[f"{field_name}_some"] = graphene.InputField(
+                some_name = f"{field_name}_some"
+                filters[some_name] = graphene.InputField(
                     nested_where,
-                    description=f"At least one {field_name} matches"
+                    name=some_name,
+                    description=f"At least one {field_name} matches",
                 )
-                filters[f"{field_name}_every"] = graphene.InputField(
-                    nested_where,
-                    description=f"All {field_name} match"
+                every_name = f"{field_name}_every"
+                filters[every_name] = graphene.InputField(
+                    nested_where, name=every_name, description=f"All {field_name} match"
                 )
-                filters[f"{field_name}_none"] = graphene.InputField(
-                    nested_where,
-                    description=f"No {field_name} matches"
+                none_name = f"{field_name}_none"
+                filters[none_name] = graphene.InputField(
+                    nested_where, name=none_name, description=f"No {field_name} matches"
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
-                logger.debug(f"Could not generate nested M2M filter for {field_name}: {e}")
+                logger.debug(
+                    f"Could not generate nested M2M filter for {field_name}: {e}"
+                )
 
         return filters
 
@@ -897,9 +977,10 @@ class NestedFilterInputGenerator:
         """Generate filter for reverse relation."""
         filters = {}
 
-        accessor_name = getattr(field, "name", None) or getattr(
-            field, "get_accessor_name", lambda: None
-        )()
+        accessor_name = (
+            getattr(field, "name", None)
+            or getattr(field, "get_accessor_name", lambda: None)()
+        )
         if not accessor_name:
             return filters
 
@@ -908,36 +989,48 @@ class NestedFilterInputGenerator:
             return filters
 
         # Aggregation filter
-        filters[f"{accessor_name}_agg"] = graphene.InputField(
+        agg_name = f"{accessor_name}_agg"
+        filters[agg_name] = graphene.InputField(
             AggregationFilterInput,
-            description=f"Filter by aggregated {accessor_name} values"
+            name=agg_name,
+            description=f"Filter by aggregated {accessor_name} values",
         )
 
         # Count filter
         if self.enable_count_filters:
-            filters[f"{accessor_name}_count"] = graphene.InputField(
+            count_name = f"{accessor_name}_count"
+            filters[count_name] = graphene.InputField(
                 CountFilterInput,
-                description=f"Filter by {accessor_name} count"
+                name=count_name,
+                description=f"Filter by {accessor_name} count",
             )
 
         # Nested filter with quantifiers (if within depth limit)
         if depth < self.max_nested_depth:
             try:
                 nested_where = self.generate_where_input(related_model, depth + 1)
-                filters[f"{accessor_name}_some"] = graphene.InputField(
+                some_name = f"{accessor_name}_some"
+                filters[some_name] = graphene.InputField(
                     nested_where,
-                    description=f"At least one {accessor_name} matches"
+                    name=some_name,
+                    description=f"At least one {accessor_name} matches",
                 )
-                filters[f"{accessor_name}_every"] = graphene.InputField(
+                every_name = f"{accessor_name}_every"
+                filters[every_name] = graphene.InputField(
                     nested_where,
-                    description=f"All {accessor_name} match"
+                    name=every_name,
+                    description=f"All {accessor_name} match",
                 )
-                filters[f"{accessor_name}_none"] = graphene.InputField(
+                none_name = f"{accessor_name}_none"
+                filters[none_name] = graphene.InputField(
                     nested_where,
-                    description=f"No {accessor_name} matches"
+                    name=none_name,
+                    description=f"No {accessor_name} matches",
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
-                logger.debug(f"Could not generate reverse filter for {accessor_name}: {e}")
+                logger.debug(
+                    f"Could not generate reverse filter for {accessor_name}: {e}"
+                )
 
         return filters
 
@@ -957,16 +1050,14 @@ class NestedFilterInputGenerator:
 
         # Add boolean operators
         fields["AND"] = graphene.List(
-            lambda: get_self_type(),
-            description="All conditions must match (AND)"
+            lambda: get_self_type(), description="All conditions must match (AND)"
         )
         fields["OR"] = graphene.List(
             lambda: get_self_type(),
-            description="At least one condition must match (OR)"
+            description="At least one condition must match (OR)",
         )
         fields["NOT"] = graphene.InputField(
-            lambda: get_self_type(),
-            description="Condition must not match (NOT)"
+            lambda: get_self_type(), description="Condition must not match (NOT)"
         )
 
         return type(type_name, (graphene.InputObjectType,), fields)
@@ -1003,7 +1094,7 @@ class NestedFilterInputGenerator:
         # Instance filter - filter by original instance IDs
         filters["instance_in"] = graphene.InputField(
             graphene.List(graphene.NonNull(graphene.ID)),
-            description="Filter by original instance IDs"
+            description="Filter by original instance IDs",
         )
 
         # History type filter
@@ -1013,7 +1104,7 @@ class NestedFilterInputGenerator:
             if choices:
                 filters["history_type_in"] = graphene.InputField(
                     graphene.List(graphene.NonNull(graphene.String)),
-                    description="Filter by history type (create, update, delete)"
+                    description="Filter by history type (create, update, delete)",
                 )
         except FieldDoesNotExist:
             pass
@@ -1024,6 +1115,7 @@ class NestedFilterInputGenerator:
 # =============================================================================
 # Filter Application (Q Object Builder)
 # =============================================================================
+
 
 class NestedFilterApplicator:
     """
@@ -1040,8 +1132,10 @@ class NestedFilterApplicator:
         self._quick_mixin = None
         self._include_mixin = None
         self._historical_mixin = None
+        # self._geo_mixin = None
         try:
             from ..core.settings import FilteringSettings
+
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
         except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
@@ -1060,6 +1154,11 @@ class NestedFilterApplicator:
         if self._historical_mixin is None:
             self._historical_mixin = HistoricalModelMixin()
         return self._historical_mixin
+
+    # def _get_geo_mixin(self):
+    #     if self._geo_mixin is None:
+    #         self._geo_mixin = GeoFilterMixin()
+    #     return self._geo_mixin
 
     def apply_presets(
         self,
@@ -1102,10 +1201,12 @@ class NestedFilterApplicator:
 
         return merged
 
-    def _deep_merge(self, dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
+    def _deep_merge(
+        self, dict1: Dict[str, Any], dict2: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Deep merge two dictionaries.
-        
+
         Args:
             dict1: Base dictionary
             dict2: Override dictionary (takes precedence)
@@ -1114,16 +1215,25 @@ class NestedFilterApplicator:
             Merged dictionary
         """
         result = dict1.copy()
-        
+
         for key, value in dict2.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
                 result[key] = self._deep_merge(result[key], value)
-            elif key == "AND" and key in result and isinstance(result[key], list) and isinstance(value, list):
+            elif (
+                key == "AND"
+                and key in result
+                and isinstance(result[key], list)
+                and isinstance(value, list)
+            ):
                 # For AND lists, we combine them
                 result[key] = result[key] + value
             else:
                 result[key] = value
-        
+
         return result
 
     def apply_where_filter(
@@ -1154,6 +1264,7 @@ class NestedFilterApplicator:
         if quick_filter_fields is None and model:
             try:
                 from ..core.meta import get_model_graphql_meta
+
                 meta = get_model_graphql_meta(model)
                 if meta and meta.quick_filter_fields:
                     quick_filter_fields = meta.quick_filter_fields
@@ -1166,10 +1277,14 @@ class NestedFilterApplicator:
         max_clauses = DEFAULT_MAX_FILTER_CLAUSES
         if self.filtering_settings:
             max_depth = getattr(self.filtering_settings, "max_filter_depth", max_depth)
-            max_clauses = getattr(self.filtering_settings, "max_filter_clauses", max_clauses)
+            max_clauses = getattr(
+                self.filtering_settings, "max_filter_clauses", max_clauses
+            )
 
         try:
-            validate_filter_complexity(where_input, max_depth=max_depth, max_clauses=max_clauses)
+            validate_filter_complexity(
+                where_input, max_depth=max_depth, max_clauses=max_clauses
+            )
         except FilterSecurityError as e:
             logger.warning(
                 f"Rejected filter due to security constraints: {e}",
@@ -1197,7 +1312,9 @@ class NestedFilterApplicator:
         queryset = self.prepare_queryset_for_count_filters(queryset, where_input)
 
         # Then, prepare queryset with computed filters annotations if needed
-        queryset = self.prepare_queryset_for_computed_filters(queryset, where_input, model)
+        queryset = self.prepare_queryset_for_computed_filters(
+            queryset, where_input, model
+        )
 
         # Build and apply main Q object
         q_object = self._build_q_from_where(where_input, model)
@@ -1218,22 +1335,30 @@ class NestedFilterApplicator:
 
         # Apply quick filter
         if quick_value:
-            quick_q = self._get_quick_mixin().build_quick_filter_q(model, quick_value, quick_filter_fields)
+            quick_q = self._get_quick_mixin().build_quick_filter_q(
+                model, quick_value, quick_filter_fields
+            )
             if quick_q:
                 q_object &= quick_q
 
         # Apply historical filters
         if instance_in:
-            q_object &= self._get_historical_mixin().build_historical_filter_q("instance_in", instance_in)
+            q_object &= self._get_historical_mixin().build_historical_filter_q(
+                "instance_in", instance_in
+            )
         if history_type_in:
-            q_object &= self._get_historical_mixin().build_historical_filter_q("history_type_in", history_type_in)
+            q_object &= self._get_historical_mixin().build_historical_filter_q(
+                "history_type_in", history_type_in
+            )
 
         if q_object:
             queryset = queryset.filter(q_object)
 
         # Apply include filter last (unions IDs into results)
         if include_ids:
-            queryset = self._get_include_mixin().apply_include_filter(queryset, include_ids)
+            queryset = self._get_include_mixin().apply_include_filter(
+                queryset, include_ids
+            )
 
         return queryset
 
@@ -1256,6 +1381,7 @@ class NestedFilterApplicator:
         """
         try:
             from ..core.meta import get_model_graphql_meta
+
             graphql_meta = get_model_graphql_meta(model)
             computed_defs = getattr(graphql_meta, "computed_filters", {})
         except Exception:
@@ -1265,7 +1391,7 @@ class NestedFilterApplicator:
             return queryset
 
         annotations = {}
-        
+
         # Flatten input to find all keys used
         # This is a bit simplistic, ideally we'd traverse properly
         # But for annotation purposes, we just need to know if the key exists
@@ -1278,7 +1404,7 @@ class NestedFilterApplicator:
                     for item in v:
                         if isinstance(item, dict):
                             collect_keys(item, keys)
-        
+
         used_keys = set()
         collect_keys(where_input, used_keys)
 
@@ -1363,7 +1489,9 @@ class NestedFilterApplicator:
         if field_name.endswith("_rel"):
             # Nested relation filter
             base_field = field_name[:-4]  # Remove "_rel"
-            return self._build_q_from_where(filter_value, model, f"{full_field_path[:-4]}__")
+            return self._build_q_from_where(
+                filter_value, model, f"{full_field_path[:-4]}__"
+            )
 
         if field_name.endswith("_some"):
             # At least one match (exists subquery)
@@ -1392,33 +1520,39 @@ class NestedFilterApplicator:
                 # Get the relation field to find the related model
                 relation_field = self._get_relation_field(model, base_field)
                 if relation_field is not None:
-                    related_model = getattr(relation_field, 'related_model', None)
+                    related_model = getattr(relation_field, "related_model", None)
                     if related_model is not None:
                         # Build condition that matches the filter
-                        matching_q = self._build_q_from_where(filter_value, related_model, "")
+                        matching_q = self._build_q_from_where(
+                            filter_value, related_model, ""
+                        )
 
                         # Find the FK field pointing back to parent
                         fk_field = self._get_fk_to_parent(related_model, model)
                         if fk_field:
                             # Build subquery for non-matching related objects
                             non_matching = related_model.objects.filter(
-                                **{fk_field: OuterRef('pk')}
+                                **{fk_field: OuterRef("pk")}
                             ).exclude(matching_q)
 
                             # Exclude parents that have ANY non-matching children
                             # Also ensure parent has at least one child (empty set vacuously matches "every")
                             has_children = related_model.objects.filter(
-                                **{fk_field: OuterRef('pk')}
+                                **{fk_field: OuterRef("pk")}
                             )
 
                             return Q(Exists(has_children)) & ~Q(Exists(non_matching))
             except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
-                logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
+                logger.debug(
+                    f"Could not build optimized _every filter for {base_field}: {e}"
+                )
 
             # Fallback: use simple approach (may have edge cases with empty sets)
             # This matches records where at least one child matches
             sub_q = self._build_q_from_where(filter_value, model, f"{base_field}__")
-            logger.debug(f"_every filter for {base_field} using fallback implementation")
+            logger.debug(
+                f"_every filter for {base_field} using fallback implementation"
+            )
             return sub_q
 
         if field_name.endswith("_none"):
@@ -1476,11 +1610,23 @@ class NestedFilterApplicator:
                         logger.warning(f"Rejected unsafe regex filter: {e}")
                         continue  # Skip this filter clause
 
-                if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
+                if (
+                    lookup == "between"
+                    and isinstance(op_value, list)
+                    and len(op_value) == 2
+                ):
                     q &= Q(**{f"{full_field_path}__gte": op_value[0]})
                     q &= Q(**{f"{full_field_path}__lte": op_value[1]})
-                elif lookup in ("today", "yesterday", "this_week", "past_week",
-                               "this_month", "past_month", "this_year", "past_year"):
+                elif lookup in (
+                    "today",
+                    "yesterday",
+                    "this_week",
+                    "past_week",
+                    "this_month",
+                    "past_month",
+                    "this_year",
+                    "past_year",
+                ):
                     if op_value:
                         date_q = self._build_temporal_q(full_field_path, lookup)
                         if date_q:
@@ -1512,7 +1658,11 @@ class NestedFilterApplicator:
             if not lookup:
                 continue
 
-            if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
+            if (
+                lookup == "between"
+                and isinstance(op_value, list)
+                and len(op_value) == 2
+            ):
                 q &= Q(**{f"{field_path}__gte": op_value[0]})
                 q &= Q(**{f"{field_path}__lte": op_value[1]})
             elif lookup == "in":
@@ -1565,7 +1715,9 @@ class NestedFilterApplicator:
         """Build full-text search Q object and annotations."""
         from django.db import connection
 
-        query_text = search_input.get("query") if isinstance(search_input, dict) else None
+        query_text = (
+            search_input.get("query") if isinstance(search_input, dict) else None
+        )
         if not query_text:
             return Q(), {}
 
@@ -1578,13 +1730,13 @@ class NestedFilterApplicator:
         if not fields:
             return Q(), {}
 
-        config = (
-            search_input.get("config")
-            or (self.filtering_settings.fts_config if self.filtering_settings else "english")
+        config = search_input.get("config") or (
+            self.filtering_settings.fts_config if self.filtering_settings else "english"
         )
-        search_type = (
-            search_input.get("search_type")
-            or (self.filtering_settings.fts_search_type if self.filtering_settings else "websearch")
+        search_type = search_input.get("search_type") or (
+            self.filtering_settings.fts_search_type
+            if self.filtering_settings
+            else "websearch"
         )
         if search_type is not None and not isinstance(search_type, str):
             search_type = getattr(search_type, "value", str(search_type))
@@ -1595,7 +1747,9 @@ class NestedFilterApplicator:
         if connection.vendor == "postgresql":
             try:
                 from django.contrib.postgres.search import (
-                    SearchVector, SearchQuery, SearchRank,
+                    SearchVector,
+                    SearchQuery,
+                    SearchRank,
                 )
 
                 vector = SearchVector(*fields, config=config)
@@ -1617,7 +1771,9 @@ class NestedFilterApplicator:
         fallback_q = Q()
         for field_path in fields:
             field = self._get_quick_mixin()._get_field_from_path(model, field_path)
-            if field and isinstance(field, (models.CharField, models.TextField, models.EmailField)):
+            if field and isinstance(
+                field, (models.CharField, models.TextField, models.EmailField)
+            ):
                 fallback_q |= Q(**{f"{field_path}__icontains": query_text})
 
         return fallback_q, {}
@@ -1789,7 +1945,9 @@ class NestedFilterApplicator:
         temporal_filter: str,
     ) -> Optional[Q]:
         """Build Q object for temporal filters."""
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
 
         if temporal_filter == "today":
             return Q(**{f"{field_path}__date": today})
@@ -1831,7 +1989,9 @@ class NestedFilterApplicator:
                     month=this_month_start.month - 1, day=1
                 )
             past_month_end = this_month_start - timedelta(days=1)
-            return Q(**{f"{field_path}__date__range": [past_month_start, past_month_end]})
+            return Q(
+                **{f"{field_path}__date__range": [past_month_start, past_month_end]}
+            )
 
         elif temporal_filter == "this_year":
             year_start = today.replace(month=1, day=1)
@@ -1932,7 +2092,10 @@ class NestedFilterApplicator:
         """
         try:
             for field in related_model._meta.get_fields():
-                if hasattr(field, 'related_model') and field.related_model == parent_model:
+                if (
+                    hasattr(field, "related_model")
+                    and field.related_model == parent_model
+                ):
                     return field.name
         except (AttributeError, TypeError):
             pass
@@ -1988,7 +2151,7 @@ class NestedFilterApplicator:
                         is_real_field = True
                     except FieldDoesNotExist:
                         pass
-                
+
                 if not is_real_field:
                     base_field = key[:-6]
                     annotation_name = f"{base_field}_count_annotation"
@@ -2000,6 +2163,7 @@ class NestedFilterApplicator:
 # =============================================================================
 # Quick Filter Support
 # =============================================================================
+
 
 class QuickFilterMixin:
     """
@@ -2058,7 +2222,11 @@ class QuickFilterMixin:
                 if isinstance(field, (models.CharField, models.TextField)):
                     # Skip very short fields and sensitive fields
                     if (
-                        (hasattr(field, "max_length") and field.max_length and field.max_length < 10)
+                        (
+                            hasattr(field, "max_length")
+                            and field.max_length
+                            and field.max_length < 10
+                        )
                         or "password" in field.name.lower()
                         or "token" in field.name.lower()
                         or "secret" in field.name.lower()
@@ -2098,9 +2266,14 @@ class QuickFilterMixin:
             try:
                 field = self._get_field_from_path(model, field_path)
                 if field:
-                    if isinstance(field, (models.CharField, models.TextField, models.EmailField)):
+                    if isinstance(
+                        field, (models.CharField, models.TextField, models.EmailField)
+                    ):
                         q_objects |= Q(**{f"{field_path}__icontains": search_value})
-                    elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                    elif isinstance(
+                        field,
+                        (models.IntegerField, models.FloatField, models.DecimalField),
+                    ):
                         try:
                             numeric_value = float(search_value)
                             q_objects |= Q(**{field_path: numeric_value})
@@ -2121,6 +2294,7 @@ class QuickFilterMixin:
 # =============================================================================
 # Include Filter Support
 # =============================================================================
+
 
 class IncludeFilterMixin:
     """
@@ -2197,6 +2371,7 @@ class IncludeFilterMixin:
 # Historical Model Support
 # =============================================================================
 
+
 class HistoricalModelMixin:
     """
     Mixin for django-simple-history model support.
@@ -2234,7 +2409,7 @@ class HistoricalModelMixin:
         # Instance filter - filter by original instance IDs
         filters["instance_in"] = graphene.InputField(
             graphene.List(graphene.NonNull(graphene.ID)),
-            description="Filter by original instance IDs"
+            description="Filter by original instance IDs",
         )
 
         # History type filter
@@ -2244,7 +2419,7 @@ class HistoricalModelMixin:
             if choices:
                 filters["history_type_in"] = graphene.InputField(
                     graphene.List(graphene.NonNull(graphene.String)),
-                    description="Filter by history type (create, update, delete)"
+                    description="Filter by history type (create, update, delete)",
                 )
         except FieldDoesNotExist:
             pass
@@ -2277,6 +2452,7 @@ class HistoricalModelMixin:
 # GraphQLMeta Integration
 # =============================================================================
 
+
 class GraphQLMetaIntegrationMixin:
     """
     Mixin for GraphQLMeta integration.
@@ -2289,6 +2465,7 @@ class GraphQLMetaIntegrationMixin:
         """Get GraphQLMeta for a model."""
         try:
             from ..core.meta import get_model_graphql_meta
+
             return get_model_graphql_meta(model)
         except ImportError:
             return None
@@ -2367,6 +2544,7 @@ class GraphQLMetaIntegrationMixin:
 # Schema Settings Integration
 # =============================================================================
 
+
 class SchemaSettingsMixin:
     """
     Mixin for schema settings integration.
@@ -2392,6 +2570,7 @@ class SchemaSettingsMixin:
 
         try:
             from ..core.settings import SchemaSettings
+
             settings = SchemaSettings.from_schema(self.schema_name)
         except (ImportError, AttributeError, KeyError):
             return False
@@ -2418,6 +2597,7 @@ class SchemaSettingsMixin:
 # =============================================================================
 # Performance Analysis
 # =============================================================================
+
 
 class PerformanceAnalyzer:
     """
@@ -2483,8 +2663,12 @@ class PerformanceAnalyzer:
             )
 
         # Convert sets to lists for JSON serialization
-        analysis["select_related_suggestions"] = list(analysis["select_related_suggestions"])
-        analysis["prefetch_related_suggestions"] = list(analysis["prefetch_related_suggestions"])
+        analysis["select_related_suggestions"] = list(
+            analysis["select_related_suggestions"]
+        )
+        analysis["prefetch_related_suggestions"] = list(
+            analysis["prefetch_related_suggestions"]
+        )
 
         return analysis
 
@@ -2564,13 +2748,17 @@ class PerformanceAnalyzer:
 
         if analysis["select_related_suggestions"]:
             try:
-                queryset = queryset.select_related(*analysis["select_related_suggestions"])
+                queryset = queryset.select_related(
+                    *analysis["select_related_suggestions"]
+                )
             except (FieldDoesNotExist, TypeError, ValueError) as e:
                 logger.debug(f"Could not apply select_related: {e}")
 
         if analysis["prefetch_related_suggestions"]:
             try:
-                queryset = queryset.prefetch_related(*analysis["prefetch_related_suggestions"])
+                queryset = queryset.prefetch_related(
+                    *analysis["prefetch_related_suggestions"]
+                )
             except (FieldDoesNotExist, TypeError, ValueError) as e:
                 logger.debug(f"Could not apply prefetch_related: {e}")
 
@@ -2580,6 +2768,7 @@ class PerformanceAnalyzer:
 # =============================================================================
 # Filter Metadata (for UI generation)
 # =============================================================================
+
 
 class FilterOperation:
     """
@@ -2678,9 +2867,7 @@ class FilterMetadataGenerator:
         self._cache[cache_key] = grouped_filters
         return grouped_filters
 
-    def _generate_field_operations(
-        self, field: models.Field
-    ) -> List[FilterOperation]:
+    def _generate_field_operations(self, field: models.Field) -> List[FilterOperation]:
         """Generate filter operations for a field type."""
         operations = []
         field_name = field.name
@@ -2689,7 +2876,9 @@ class FilterMetadataGenerator:
             operations.extend(self._get_choice_operations(field_name))
         elif isinstance(field, (models.CharField, models.TextField)):
             operations.extend(self._get_text_operations(field_name))
-        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+        elif isinstance(
+            field, (models.IntegerField, models.FloatField, models.DecimalField)
+        ):
             operations.extend(self._get_numeric_operations(field_name))
         elif isinstance(field, (models.DateField, models.DateTimeField)):
             operations.extend(self._get_date_operations(field_name))
@@ -2706,8 +2895,12 @@ class FilterMetadataGenerator:
         return [
             FilterOperation("eq", "String", "exact", f"Exact match for {field_name}"),
             FilterOperation("neq", "String", "neq", f"Not equal to {field_name}"),
-            FilterOperation("contains", "String", "contains", f"Contains in {field_name}"),
-            FilterOperation("icontains", "String", "icontains", f"Contains (case-insensitive)"),
+            FilterOperation(
+                "contains", "String", "contains", f"Contains in {field_name}"
+            ),
+            FilterOperation(
+                "icontains", "String", "icontains", f"Contains (case-insensitive)"
+            ),
             FilterOperation("starts_with", "String", "startswith", f"Starts with"),
             FilterOperation("ends_with", "String", "endswith", f"Ends with"),
             FilterOperation("in", "StringList", "in", f"In list", is_array=True),
@@ -2779,6 +2972,7 @@ class FilterMetadataGenerator:
 # Convenience Functions
 # =============================================================================
 
+
 def generate_where_input_for_model(
     model: Type[models.Model],
     max_depth: int = 3,
@@ -2829,7 +3023,10 @@ def apply_where_filter(
 # Legacy Compatibility Layer
 # =============================================================================
 
-class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQLMetaIntegrationMixin):
+
+class AdvancedFilterGenerator(
+    SchemaSettingsMixin, HistoricalModelMixin, GraphQLMetaIntegrationMixin
+):
     """
     Legacy-compatible filter generator that provides the same API as the old
     filters.py AdvancedFilterGenerator, but uses the new nested filter system.
@@ -2905,8 +3102,12 @@ class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQL
                         field_name=field_name,
                         lookup_expr="exact",
                     )
-                elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
-                    filters[field_name] = django_filters.NumberFilter(field_name=field_name)
+                elif isinstance(
+                    field, (models.IntegerField, models.FloatField, models.DecimalField)
+                ):
+                    filters[field_name] = django_filters.NumberFilter(
+                        field_name=field_name
+                    )
                     filters[f"{field_name}__gt"] = django_filters.NumberFilter(
                         field_name=field_name, lookup_expr="gt"
                     )
@@ -2914,7 +3115,9 @@ class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQL
                         field_name=field_name, lookup_expr="lt"
                     )
                 elif isinstance(field, (models.DateField, models.DateTimeField)):
-                    filters[field_name] = django_filters.DateFilter(field_name=field_name)
+                    filters[field_name] = django_filters.DateFilter(
+                        field_name=field_name
+                    )
                     filters[f"{field_name}__gt"] = django_filters.DateFilter(
                         field_name=field_name, lookup_expr="gt"
                     )
@@ -2922,15 +3125,50 @@ class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQL
                         field_name=field_name, lookup_expr="lt"
                     )
                 elif isinstance(field, models.BooleanField):
-                    filters[field_name] = django_filters.BooleanFilter(field_name=field_name)
+                    filters[field_name] = django_filters.BooleanFilter(
+                        field_name=field_name
+                    )
                 elif isinstance(field, models.ForeignKey):
-                    filters[field_name] = django_filters.NumberFilter(field_name=field_name)
+                    filters[field_name] = django_filters.NumberFilter(
+                        field_name=field_name
+                    )
+
+            # Add quick filter for text search across multiple fields
+            # This enables the quick=... top-level argument in queries
+            text_fields = [
+                f.name
+                for f in model._meta.get_fields()
+                if hasattr(f, "name")
+                and isinstance(f, (models.CharField, models.TextField))
+                and f.name not in ("polymorphic_ctype",)
+                and "_ptr" not in f.name
+            ]
+            if text_fields:
+                filters["quick"] = django_filters.CharFilter(
+                    method="filter_quick", help_text="Quick search across text fields"
+                )
+
+            def make_filter_quick_method(text_fields_list):
+                """Create a filter_quick method that searches across text fields."""
+
+                def filter_quick(self, queryset, name, value):
+                    if not value:
+                        return queryset
+                    from django.db.models import Q
+
+                    q_objects = Q()
+                    for field_name in text_fields_list:
+                        q_objects |= Q(**{f"{field_name}__icontains": value})
+                    return queryset.filter(q_objects)
+
+                return filter_quick
 
             filter_set_class = type(
                 f"{model.__name__}FilterSet",
                 (FilterSet,),
                 {
                     **filters,
+                    "filter_quick": make_filter_quick_method(text_fields),
                     "Meta": type(
                         "Meta",
                         (),
@@ -2948,10 +3186,18 @@ class AdvancedFilterGenerator(SchemaSettingsMixin, HistoricalModelMixin, GraphQL
 
         except ImportError:
             # django-filter not available, return a placeholder
-            logger.warning("django-filter not available, returning placeholder FilterSet")
-            return type(f"{model.__name__}FilterSet", (), {"Meta": type("Meta", (), {"model": model})})
+            logger.warning(
+                "django-filter not available, returning placeholder FilterSet"
+            )
+            return type(
+                f"{model.__name__}FilterSet",
+                (),
+                {"Meta": type("Meta", (), {"model": model})},
+            )
 
-    def generate_where_input(self, model: Type[models.Model]) -> Type[graphene.InputObjectType]:
+    def generate_where_input(
+        self, model: Type[models.Model]
+    ) -> Type[graphene.InputObjectType]:
         """
         Generate a WhereInput type for GraphQL filtering.
 
@@ -3039,7 +3285,9 @@ class EnhancedFilterGenerator:
         self.schema_name = schema_name or "default"
         self.enable_quick_filter = enable_quick_filter
         self._metadata_generator = FilterMetadataGenerator(schema_name=self.schema_name)
-        self._grouped_filter_cache: Dict[Type[models.Model], List[GroupedFieldFilter]] = {}
+        self._grouped_filter_cache: Dict[
+            Type[models.Model], List[GroupedFieldFilter]
+        ] = {}
 
     def get_grouped_filters(
         self, model: Type[models.Model]

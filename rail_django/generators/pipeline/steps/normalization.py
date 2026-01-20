@@ -68,7 +68,12 @@ class DualFieldProcessingStep(MutationStep):
         from ...mutations_errors import build_validation_errors
 
         try:
-            mandatory = get_mandatory_fields(ctx.model, ctx.graphql_meta)
+            # Only enforce mandatory fields for create operations
+            # Update operations should not require mandatory fields
+            mandatory = None
+            if ctx.operation == "create":
+                mandatory = get_mandatory_fields(ctx.model, ctx.graphql_meta)
+
             ctx.input_data = process_dual_fields(
                 ctx.input_data,
                 ctx.model,
