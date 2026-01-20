@@ -319,6 +319,7 @@ class FilteringSettings:
     enable_field_comparison: bool = True
     enable_distinct_count: bool = True
     enable_date_trunc_filters: bool = True
+    enable_extract_date_filters: bool = True
 
     # Security settings for filter validation
     max_filter_depth: int = 10

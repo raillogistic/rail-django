@@ -31,6 +31,7 @@ def gql_client_advanced():
                 "enable_field_comparison": True,
                 "enable_distinct_count": True,
                 "enable_date_trunc_filters": True,
+                "enable_extract_date_filters": True,
             },
         },
     )
@@ -694,4 +695,214 @@ class TestDateTruncFilters:
         assert result.get("errors") is None
         names = [p["name"] for p in result["data"]["products"]]
         assert "This Month Product" in names
+
+
+class TestExtractDateFilters:
+    """Test date extraction filters with actual queries."""
+
+    def test_filter_by_day_of_month(self, gql_client_advanced):
+        """Filter products created on the 15th of any month."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Create products
+        p1 = _create_product("Created on 15th", 100)
+        p2 = _create_product("Created on other day", 200)
+
+        # Update date_creation for testing
+        today = timezone.now()
+        day_15 = today.replace(day=15)
+        day_20 = today.replace(day=20)
+
+        from test_app.models import Product
+        Product.objects.filter(pk=p1.pk).update(date_creation=day_15)
+        Product.objects.filter(pk=p2.pk).update(date_creation=day_20)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_extract": {
+                        "day": {"eq": 15}
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Created on 15th" in names
+        assert "Created on other day" not in names
+
+    def test_filter_by_quarter(self, gql_client_advanced):
+        """Filter products created in Q4 (October-December)."""
+        from django.utils import timezone
+
+        p1 = _create_product("Q4 Product", 100)
+        p2 = _create_product("Q2 Product", 200)
+
+        # Set Q4 date (October) and Q2 date (April)
+        q4_date = timezone.now().replace(month=10, day=15)
+        q2_date = timezone.now().replace(month=4, day=15)
+
+        from test_app.models import Product
+        Product.objects.filter(pk=p1.pk).update(date_creation=q4_date)
+        Product.objects.filter(pk=p2.pk).update(date_creation=q2_date)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_extract": {
+                        "quarter": {"eq": 4}
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Q4 Product" in names
+        assert "Q2 Product" not in names
+
+    def test_filter_by_day_of_week(self, gql_client_advanced):
+        """Filter products created on specific day of week."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        p1 = _create_product("Monday Product", 100)
+        p2 = _create_product("Friday Product", 200)
+
+        # Find next Monday and Friday
+        today = timezone.now()
+        days_until_monday = (7 - today.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        monday = today + timedelta(days=days_until_monday)
+        friday = monday + timedelta(days=4)
+
+        from test_app.models import Product
+        Product.objects.filter(pk=p1.pk).update(date_creation=monday)
+        Product.objects.filter(pk=p2.pk).update(date_creation=friday)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Monday is day 2 in Django's ExtractWeekDay (Sunday=1, Monday=2, ..., Saturday=7)
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_extract": {
+                        "day_of_week": {"eq": 2}  # Monday
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Monday Product" in names
+        assert "Friday Product" not in names
+
+    def test_filter_by_hour_range(self, gql_client_advanced):
+        """Filter products by hour range (business hours)."""
+        from django.utils import timezone
+
+        p1 = _create_product("Morning Product", 100)
+        p2 = _create_product("Evening Product", 200)
+
+        # Set 10 AM and 8 PM times
+        morning = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
+        evening = timezone.now().replace(hour=20, minute=0, second=0, microsecond=0)
+
+        from test_app.models import Product
+        Product.objects.filter(pk=p1.pk).update(date_creation=morning)
+        Product.objects.filter(pk=p2.pk).update(date_creation=evening)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Business hours: 9 AM - 5 PM (9-17)
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_extract": {
+                        "hour": {"gte": 9, "lt": 17}
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Morning Product" in names
+        assert "Evening Product" not in names
+
+    def test_filter_combined_extract_parts(self, gql_client_advanced):
+        """Filter by multiple extracted date parts (year and month)."""
+        from django.utils import timezone
+
+        p1 = _create_product("Target Product", 100)
+        p2 = _create_product("Different Month", 200)
+
+        today = timezone.now()
+        target_date = today.replace(month=6, day=15)  # June 15
+        other_date = today.replace(month=3, day=15)   # March 15
+
+        from test_app.models import Product
+        Product.objects.filter(pk=p1.pk).update(date_creation=target_date)
+        Product.objects.filter(pk=p2.pk).update(date_creation=other_date)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_extract": {
+                        "year": {"eq": today.year},
+                        "month": {"eq": 6}
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Target Product" in names
+        assert "Different Month" not in names
 

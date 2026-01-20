@@ -1746,6 +1746,226 @@ input DateTruncFilterInput {
 
 ---
 
+## Extract Date Part Filters
+
+Extract date part filters allow you to filter by specific date/time components without truncation. Unlike truncation which rounds to period boundaries, extraction pulls out specific parts like day of week, hour, quarter, etc. This is useful for recurring patterns like "all orders on Fridays" or "all invoices due on the 15th".
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_extract_date_filters": True,
+    }
+}
+```
+
+### Filter by Day of Month
+
+Find invoices due on the 15th of any month:
+
+```graphql
+query {
+  invoices(
+    where: {
+      due_date_extract: {
+        day: { eq: 15 }
+      }
+    }
+  ) {
+    id
+    amount
+  }
+}
+```
+
+### Filter by Day of Week
+
+Find orders placed on weekends (Sunday or Saturday):
+
+```graphql
+query {
+  orders(
+    where: {
+      created_at_extract: {
+        day_of_week: { in: [1, 7] }  # Sunday=1, Saturday=7
+      }
+    }
+  ) {
+    id
+    total
+  }
+}
+```
+
+Note: Django's `ExtractWeekDay` uses Sunday=1, Monday=2, ..., Saturday=7.
+
+### Filter by Quarter
+
+Find reports from Q4 (October-December) of any year:
+
+```graphql
+query {
+  reports(
+    where: {
+      report_date_extract: {
+        quarter: { eq: 4 }
+      }
+    }
+  ) {
+    id
+    title
+  }
+}
+```
+
+### Filter by Business Hours
+
+Find events during business hours (9 AM - 5 PM):
+
+```graphql
+query {
+  events(
+    where: {
+      start_time_extract: {
+        hour: { gte: 9, lt: 17 }
+      }
+    }
+  ) {
+    id
+    title
+  }
+}
+```
+
+### Filter by ISO Week Day
+
+Find records created on Monday using ISO weekday (Monday=1, Sunday=7):
+
+```graphql
+query {
+  tasks(
+    where: {
+      created_at_extract: {
+        iso_week_day: { eq: 1 }  # Monday
+      }
+    }
+  ) {
+    id
+    title
+  }
+}
+```
+
+### Filter by Week Number
+
+Find records from ISO week 10:
+
+```graphql
+query {
+  timesheets(
+    where: {
+      week_start_extract: {
+        week: { eq: 10 }
+      }
+    }
+  ) {
+    id
+    hoursWorked
+  }
+}
+```
+
+### Combined Extraction Filters
+
+Filter by multiple extracted parts (e.g., June of current year):
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_extract: {
+        year: { eq: 2024 }
+        month: { eq: 6 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Available Extraction Parts
+
+| Part | Field Name | Range | Description |
+|------|------------|-------|-------------|
+| Year | `year` | 1-9999 | Calendar year |
+| Month | `month` | 1-12 | Month of year |
+| Day | `day` | 1-31 | Day of month |
+| Quarter | `quarter` | 1-4 | Quarter of year |
+| Week | `week` | 1-53 | ISO week number |
+| Day of Week | `day_of_week` | 1-7 | Sunday=1 through Saturday=7 |
+| Day of Year | `day_of_year` | 1-366 | Day number within year |
+| ISO Week Day | `iso_week_day` | 1-7 | Monday=1 through Sunday=7 |
+| ISO Year | `iso_year` | 1-9999 | ISO week-numbering year |
+| Hour | `hour` | 0-23 | Hour of day (24-hour) |
+| Minute | `minute` | 0-59 | Minute of hour |
+| Second | `second` | 0-59 | Second of minute |
+
+### Extract Date Filter Input Reference
+
+```graphql
+input ExtractDateFilterInput {
+  # Filter by year
+  year: IntFilterInput
+
+  # Filter by month (1-12)
+  month: IntFilterInput
+
+  # Filter by day of month (1-31)
+  day: IntFilterInput
+
+  # Filter by quarter (1-4)
+  quarter: IntFilterInput
+
+  # Filter by ISO week number (1-53)
+  week: IntFilterInput
+
+  # Filter by day of week (Sunday=1, Saturday=7)
+  day_of_week: IntFilterInput
+
+  # Filter by day of year (1-366)
+  day_of_year: IntFilterInput
+
+  # Filter by ISO week day (Monday=1, Sunday=7)
+  iso_week_day: IntFilterInput
+
+  # Filter by ISO week-numbering year
+  iso_year: IntFilterInput
+
+  # Filter by hour (0-23)
+  hour: IntFilterInput
+
+  # Filter by minute (0-59)
+  minute: IntFilterInput
+
+  # Filter by second (0-59)
+  second: IntFilterInput
+}
+```
+
+### Difference Between Truncation and Extraction
+
+| Feature | Date Truncation | Date Extraction |
+|---------|-----------------|-----------------|
+| Purpose | Round to period boundary | Extract component value |
+| Use Case | "Orders in March 2024" | "Orders on any 15th" |
+| Result | Date/DateTime | Integer |
+| Requires Year | Usually yes | No |
+
+---
+
 ## Combining Advanced Filters
 
 Advanced filters can be combined with standard filters and boolean operators:

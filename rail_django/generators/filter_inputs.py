@@ -53,6 +53,8 @@ from django.db.models.fields import IntegerField, FloatField
 from django.db.models.functions import (
     Rank, DenseRank, RowNumber, PercentRank, Lag, Lead,
     TruncYear, TruncQuarter, TruncMonth, TruncWeek, TruncDay, TruncHour, TruncMinute,
+    ExtractYear, ExtractMonth, ExtractDay, ExtractWeekDay, ExtractIsoWeekDay,
+    ExtractWeek, ExtractIsoYear, ExtractQuarter, ExtractHour, ExtractMinute, ExtractSecond,
 )
 from django.utils import timezone
 
@@ -796,6 +798,69 @@ class DateTruncFilterInput(graphene.InputObjectType):
     )
 
 
+class ExtractDateFilterInput(graphene.InputObjectType):
+    """
+    Filter input for extracting and filtering by date/time components.
+
+    Unlike truncation which rounds to period boundaries, extraction pulls out
+    specific parts of a date for comparison. Useful for recurring patterns
+    like "all orders on Fridays" or "all invoices due on the 15th".
+    """
+
+    year = graphene.InputField(
+        IntFilterInput,
+        description="Filter by year (e.g., 2024)",
+    )
+    month = graphene.InputField(
+        IntFilterInput,
+        description="Filter by month (1-12)",
+    )
+    day = graphene.InputField(
+        IntFilterInput,
+        description="Filter by day of month (1-31)",
+    )
+    quarter = graphene.InputField(
+        IntFilterInput,
+        description="Filter by quarter (1-4)",
+    )
+    week = graphene.InputField(
+        IntFilterInput,
+        description="Filter by ISO week number (1-53)",
+    )
+    day_of_week = graphene.InputField(
+        IntFilterInput,
+        name="day_of_week",
+        description="Filter by day of week (1=Sunday, 7=Saturday)",
+    )
+    day_of_year = graphene.InputField(
+        IntFilterInput,
+        name="day_of_year",
+        description="Filter by day of year (1-366)",
+    )
+    iso_week_day = graphene.InputField(
+        IntFilterInput,
+        name="iso_week_day",
+        description="Filter by ISO week day (1=Monday, 7=Sunday)",
+    )
+    iso_year = graphene.InputField(
+        IntFilterInput,
+        name="iso_year",
+        description="Filter by ISO week-numbering year",
+    )
+    hour = graphene.InputField(
+        IntFilterInput,
+        description="Filter by hour (0-23)",
+    )
+    minute = graphene.InputField(
+        IntFilterInput,
+        description="Filter by minute (0-59)",
+    )
+    second = graphene.InputField(
+        IntFilterInput,
+        description="Filter by second (0-59)",
+    )
+
+
 class FullTextSearchTypeEnum(graphene.Enum):
     """Supported full-text search query modes."""
 
@@ -1095,6 +1160,12 @@ class NestedFilterInputGenerator:
             ):
                 fields.update(self._generate_date_trunc_filters(model))
 
+            # Add date extraction filters for date/datetime fields
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_extract_date_filters", False
+            ):
+                fields.update(self._generate_date_extract_filters(model))
+
             # Add include filter for ID union
             fields["include"] = graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.ID)),
@@ -1200,6 +1271,31 @@ class NestedFilterInputGenerator:
                     DateTruncFilterInput,
                     name=trunc_field_name,
                     description=f"Filter {field_name} by truncated date parts",
+                )
+
+        return fields
+
+    def _generate_date_extract_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """Generate date extraction filters for date/datetime fields.
+
+        Unlike truncation which rounds to period boundaries, extraction pulls
+        out specific components like day_of_week, hour, quarter, etc.
+        """
+        fields = {}
+
+        for field in model._meta.get_fields():
+            if not hasattr(field, "name"):
+                continue
+
+            if isinstance(field, (models.DateField, models.DateTimeField)):
+                field_name = field.name
+                extract_field_name = f"{field_name}_extract"
+                fields[extract_field_name] = graphene.InputField(
+                    ExtractDateFilterInput,
+                    name=extract_field_name,
+                    description=f"Filter {field_name} by extracted date parts (day_of_week, hour, etc.)",
                 )
 
         return fields
@@ -1666,6 +1762,12 @@ class NestedFilterApplicator:
             if key.endswith("_trunc"):
                 date_trunc_filters[key] = where_input.pop(key)
 
+        # Extract date extract filters (they have _extract suffix)
+        date_extract_filters = {}
+        for key in list(where_input.keys()):
+            if key.endswith("_extract"):
+                date_extract_filters[key] = where_input.pop(key)
+
         # First, prepare queryset with aggregation annotations if needed
         queryset = self.prepare_queryset_for_aggregation_filters(queryset, where_input)
 
@@ -1773,6 +1875,21 @@ class NestedFilterApplicator:
                     queryset = queryset.annotate(**trunc_annotations)
                 if trunc_q:
                     q_object &= trunc_q
+
+        # Apply date extraction filters
+        if date_extract_filters and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_extract_date_filters", False
+        ):
+            for field_key, extract_filter in date_extract_filters.items():
+                # field_key is like "created_at_extract", base field is "created_at"
+                base_field = field_key[:-8]  # Remove "_extract"
+                extract_q, extract_annotations = self._build_date_extract_filter_q(
+                    base_field, extract_filter
+                )
+                if extract_annotations:
+                    queryset = queryset.annotate(**extract_annotations)
+                if extract_q:
+                    q_object &= extract_q
 
         if q_object:
             queryset = queryset.filter(q_object)
@@ -2973,6 +3090,72 @@ class NestedFilterApplicator:
             elif precision == "day":
                 yesterday = today - timedelta(days=1)
                 q &= Q(**{f"{base_field}__date": yesterday})
+
+        return q, annotations
+
+    # =========================================================================
+    # Date Extraction Filter Methods
+    # =========================================================================
+
+    def _build_date_extract_filter_q(
+        self,
+        base_field: str,
+        extract_filter: Dict[str, Any],
+    ) -> tuple[Q, Dict[str, Any]]:
+        """Build Q object and annotations for date extraction filters.
+
+        Unlike truncation which rounds to period boundaries, extraction pulls
+        out specific components like day_of_week, hour, quarter, etc.
+        """
+        q = Q()
+        annotations: Dict[str, Any] = {}
+
+        # Map filter keys to Extract functions
+        extract_functions = {
+            "year": ExtractYear,
+            "month": ExtractMonth,
+            "day": ExtractDay,
+            "quarter": ExtractQuarter,
+            "week": ExtractWeek,
+            "day_of_week": ExtractWeekDay,
+            "day_of_year": lambda f: ExtractDay(f),  # Will use custom annotation
+            "iso_week_day": ExtractIsoWeekDay,
+            "iso_year": ExtractIsoYear,
+            "hour": ExtractHour,
+            "minute": ExtractMinute,
+            "second": ExtractSecond,
+        }
+
+        for extract_key, filter_value in extract_filter.items():
+            if filter_value is None:
+                continue
+
+            # Get the extract function
+            extract_func = extract_functions.get(extract_key)
+            if not extract_func:
+                continue
+
+            # Create annotation name
+            annotation_name = f"_{base_field}_extract_{extract_key}"
+
+            # Handle special case for day_of_year (Django doesn't have ExtractDayOfYear)
+            if extract_key == "day_of_year":
+                # Use raw SQL for day of year extraction
+                from django.db.models import Func, IntegerField as DjIntegerField
+
+                class ExtractDayOfYear(Func):
+                    function = 'EXTRACT'
+                    template = "%(function)s(DOY FROM %(expressions)s)"
+                    output_field = DjIntegerField()
+
+                annotations[annotation_name] = ExtractDayOfYear(base_field)
+            else:
+                annotations[annotation_name] = extract_func(base_field)
+
+            # Build the Q object from the IntFilterInput
+            extract_q = self._build_numeric_q(annotation_name, filter_value)
+            if extract_q:
+                q &= extract_q
 
         return q, annotations
 
