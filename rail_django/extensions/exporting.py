@@ -23,7 +23,7 @@ Field Format:
 - Dict format: {"accessor": "field_name", "title": "Custom Title"}
 
 Usage:
-    POST /api/export/
+    POST /api/v1/export/
     Headers: Authorization: Bearer <jwt_token>
     {
         "app_name": "myapp",
@@ -57,6 +57,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover - fallback for older Python
@@ -73,7 +74,13 @@ from django.db.models.fields.reverse_related import (
     ManyToOneRel,
     OneToOneRel,
 )
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.utils import formats, timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -116,6 +123,7 @@ except ImportError:
 
 JWT_REQUIRED_AVAILABLE = jwt_required is not None
 if jwt_required is None:
+
     def _missing_jwt_required(view_func):
         raise ImproperlyConfigured(
             "Export endpoints require JWT auth; install auth_decorators to enable."
@@ -203,8 +211,8 @@ EXPORT_DEFAULTS = {
     "stream_csv": True,
     "csv_chunk_size": 1000,
     "enforce_streaming_csv": True,
-    "excel_write_only": True,
-    "excel_auto_width": False,
+    "excel_write_only": False,  # Use full mode for professional styling
+    "excel_auto_width": True,
     "excel_auto_width_max_columns": 50,
     "excel_auto_width_max_rows": 2000,
     "rate_limit": {
@@ -218,9 +226,9 @@ EXPORT_DEFAULTS = {
     "export_fields": {},
     "export_exclude": {},
     "sensitive_fields": DEFAULT_SENSITIVE_FIELDS,
-    "require_export_fields": True,
+    "require_export_fields": False,
     "require_model_permissions": True,
-    "require_field_permissions": True,
+    "require_field_permissions": False,
     "required_permissions": [],
     "allow_callables": False,
     "allow_dunder_access": False,
@@ -252,9 +260,9 @@ def _get_export_settings() -> dict[str, Any]:
     """Return merged export settings with defaults applied."""
     export_settings = getattr(settings, "RAIL_DJANGO_EXPORT", None)
     if export_settings is None:
-        export_settings = (
-            getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
-        ).get("export_settings", {})
+        export_settings = (getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}).get(
+            "export_settings", {}
+        )
 
     merged = dict(EXPORT_DEFAULTS)
     if isinstance(export_settings, dict):
@@ -326,9 +334,7 @@ def _normalize_filter_value(value: str) -> str:
     return value.replace(".", "__").strip().lower()
 
 
-def _get_model_scoped_list(
-    model: type, config_value: Any
-) -> Optional[list[str]]:
+def _get_model_scoped_list(model: type, config_value: Any) -> Optional[list[str]]:
     """Return a model-scoped list from a dict keyed by model identifiers."""
     if not isinstance(config_value, dict):
         return None
@@ -345,9 +351,7 @@ def _get_model_scoped_list(
     return []
 
 
-def _get_model_scoped_dict(
-    model: type, config_value: Any
-) -> Optional[dict[str, Any]]:
+def _get_model_scoped_dict(model: type, config_value: Any) -> Optional[dict[str, Any]]:
     """Return a model-scoped dict from a dict keyed by model identifiers."""
     if not isinstance(config_value, dict):
         return None
@@ -461,9 +465,7 @@ def _get_export_job(job_id: str) -> Optional[dict[str, Any]]:
     return cache.get(_export_job_cache_key(job_id))
 
 
-def _set_export_job(
-    job_id: str, job: dict[str, Any], *, timeout: int
-) -> None:
+def _set_export_job(job_id: str, job: dict[str, Any], *, timeout: int) -> None:
     cache.set(_export_job_cache_key(job_id), job, timeout=timeout)
 
 
@@ -649,6 +651,7 @@ except Exception:
     shared_task = None
 
 if shared_task:
+
     @shared_task(name="rail_django.export_job")
     def export_job_task(job_id: str) -> None:
         _run_export_job(job_id)
@@ -747,16 +750,17 @@ class ModelExporter:
             for value in (self.export_settings.get("allowed_filter_transforms") or [])
             if str(value).strip()
         ]
-        self.field_formatters = _get_field_formatters(
-            self.model, self.export_settings
-        )
+        self.field_formatters = _get_field_formatters(self.model, self.export_settings)
 
         # Initialize GraphQL filter applicator if available (singleton pattern)
         self.nested_filter_applicator = None
         if NestedFilterApplicator:
             try:
                 from ..generators.filter_inputs import get_nested_filter_applicator
-                self.nested_filter_applicator = get_nested_filter_applicator(self.schema_name)
+
+                self.nested_filter_applicator = get_nested_filter_applicator(
+                    self.schema_name
+                )
                 self.logger.info("Nested filter applicator initialized successfully")
             except Exception as e:
                 self.logger.warning(
@@ -829,8 +833,9 @@ class ModelExporter:
         parts = field_name.replace("__", ".").split(".")
         if any(part.startswith("_") for part in parts):
             return False
+        # If no orderable_fields configured, allow all (permissive default)
         if not self.orderable_fields:
-            return False
+            return True
         normalized = _normalize_filter_value(field_name)
         return normalized in self.orderable_fields
 
@@ -875,7 +880,10 @@ class ModelExporter:
 
                 if isinstance(field, (ForeignKey, OneToOneField)):
                     relation_depth += 1
-                    if self.max_prefetch_depth and relation_depth > self.max_prefetch_depth:
+                    if (
+                        self.max_prefetch_depth
+                        and relation_depth > self.max_prefetch_depth
+                    ):
                         raise ExportError(
                             f"Max prefetch depth exceeded for accessor '{accessor}'"
                         )
@@ -886,9 +894,14 @@ class ModelExporter:
                     current_model = field.related_model
                     continue
 
-                if isinstance(field, (ManyToManyField, ManyToOneRel, ManyToManyRel, OneToOneRel)):
+                if isinstance(
+                    field, (ManyToManyField, ManyToOneRel, ManyToManyRel, OneToOneRel)
+                ):
                     relation_depth += 1
-                    if self.max_prefetch_depth and relation_depth > self.max_prefetch_depth:
+                    if (
+                        self.max_prefetch_depth
+                        and relation_depth > self.max_prefetch_depth
+                    ):
                         raise ExportError(
                             f"Max prefetch depth exceeded for accessor '{accessor}'"
                         )
@@ -1005,7 +1018,15 @@ class ModelExporter:
                 return None
 
             is_relation = isinstance(
-                field, (ForeignKey, OneToOneField, ManyToManyField, ManyToOneRel, ManyToManyRel, OneToOneRel)
+                field,
+                (
+                    ForeignKey,
+                    OneToOneField,
+                    ManyToManyField,
+                    ManyToOneRel,
+                    ManyToManyRel,
+                    OneToOneRel,
+                ),
             )
             if is_relation:
                 relation_depth += 1
@@ -1040,9 +1061,7 @@ class ModelExporter:
             for value in (export_settings.get("sensitive_fields") or [])
             if str(value).strip()
         ]
-        require_export_fields = bool(
-            export_settings.get("require_export_fields", True)
-        )
+        require_export_fields = bool(export_settings.get("require_export_fields", True))
         require_field_permissions = bool(
             export_settings.get("require_field_permissions", True)
         )
@@ -1173,8 +1192,9 @@ class ModelExporter:
             return False
         if normalized in self.filterable_special_fields:
             return True
+        # If no filterable_fields configured, allow all (permissive default)
         if not self.filterable_fields:
-            return False
+            return True
 
         parts = normalized.split("__")
         if parts[-1] in self.allowed_filter_lookups:
@@ -1226,6 +1246,7 @@ class ModelExporter:
         # Import and use complexity validation from filter_inputs
         try:
             from ..generators.filter_inputs import validate_filter_complexity
+
             max_depth = export_settings.get("max_or_depth") or 10
             max_clauses = export_settings.get("max_filters") or 50
             try:
@@ -1240,7 +1261,9 @@ class ModelExporter:
                 max_depth = 10
             if max_clauses <= 0:
                 max_clauses = 50
-            validate_filter_complexity(where_input, max_depth=max_depth, max_clauses=max_clauses)
+            validate_filter_complexity(
+                where_input, max_depth=max_depth, max_clauses=max_clauses
+            )
         except ImportError:
             # Fall back to existing validation if filter_inputs unavailable
             max_filters = export_settings.get("max_filters", None)
@@ -1271,7 +1294,8 @@ class ModelExporter:
 
         # Validate against export-specific field allowlists
         invalid_keys = [
-            key for key in self._iter_filter_keys(where_input)
+            key
+            for key in self._iter_filter_keys(where_input)
             if not self._is_filter_key_allowed(key)
         ]
         if invalid_keys:
@@ -1293,6 +1317,7 @@ class ModelExporter:
             backward compatibility and will be removed in a future version.
         """
         import warnings
+
         warnings.warn(
             "validate_filters() is deprecated; use validate_filter_input() instead",
             DeprecationWarning,
@@ -1315,6 +1340,7 @@ class ModelExporter:
         *,
         presets: Optional[List[str]] = None,
         skip_validation: bool = False,
+        distinct_on: Optional[List[str]] = None,
     ) -> models.QuerySet:
         """
         Get the filtered and ordered queryset using GraphQL filters.
@@ -1326,6 +1352,7 @@ class ModelExporter:
             max_rows: Optional max rows cap
             presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
             skip_validation: If True, skip filter validation (use when already validated)
+            distinct_on: Optional list of field names for DISTINCT ON (PostgreSQL only)
 
         Returns:
             Filtered and ordered queryset
@@ -1341,12 +1368,24 @@ class ModelExporter:
                 if not skip_validation:
                     where_input = variables.get("where", variables)
                     self.validate_filter_input(where_input)
-                queryset = self.apply_graphql_filters(queryset, variables, presets=presets)
+                queryset = self.apply_graphql_filters(
+                    queryset, variables, presets=presets
+                )
 
-            # Apply ordering
+            # Apply ordering (must come before distinct for PostgreSQL DISTINCT ON)
             ordering_fields = self._normalize_ordering(ordering)
             if ordering_fields:
                 queryset = queryset.order_by(*ordering_fields)
+
+            # Apply DISTINCT ON if specified (PostgreSQL only)
+            if distinct_on:
+                distinct_fields = [
+                    f.replace(".", "__")
+                    for f in distinct_on
+                    if isinstance(f, str) and f
+                ]
+                if distinct_fields:
+                    queryset = queryset.distinct(*distinct_fields)
 
             # Apply relation optimizations based on requested fields
             if fields:
@@ -1561,9 +1600,7 @@ class ModelExporter:
             tz_name = formatter.get("timezone")
             if isinstance(value, datetime):
                 if timezone.is_naive(value):
-                    value = timezone.make_aware(
-                        value, timezone.get_default_timezone()
-                    )
+                    value = timezone.make_aware(value, timezone.get_default_timezone())
                 if tz_name and ZoneInfo:
                     try:
                         value = value.astimezone(ZoneInfo(str(tz_name)))
@@ -1806,6 +1843,7 @@ class ModelExporter:
         chunk_size: Optional[int] = None,
         *,
         presets: Optional[List[str]] = None,
+        distinct_on: Optional[List[str]] = None,
     ) -> str:
         """
         Export model data to CSV format with flexible field format support.
@@ -1816,6 +1854,7 @@ class ModelExporter:
             ordering: Ordering expression(s)
             max_rows: Optional max rows cap
             presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
+            distinct_on: Optional list of field names for DISTINCT ON (PostgreSQL only)
 
         Returns:
             CSV content as string
@@ -1841,6 +1880,7 @@ class ModelExporter:
             max_rows=max_rows,
             presets=presets,
             skip_validation=True,  # Already validated at view level
+            distinct_on=distinct_on,
         )
 
         if chunk_size is None:
@@ -1873,9 +1913,10 @@ class ModelExporter:
         progress_callback: Optional[Callable[[int], None]] = None,
         *,
         presets: Optional[List[str]] = None,
+        distinct_on: Optional[List[str]] = None,
     ) -> bytes:
         """
-        Export model data to Excel format with flexible field format support.
+        Export model data to Excel format with professional styling.
 
         Args:
             fields: List of field definitions (string or dict format)
@@ -1883,6 +1924,7 @@ class ModelExporter:
             ordering: Ordering expression(s)
             max_rows: Optional max rows cap
             presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
+            distinct_on: Optional list of field names for DISTINCT ON (PostgreSQL only)
 
         Returns:
             Excel file content as bytes
@@ -1895,17 +1937,40 @@ class ModelExporter:
                 "Excel export requires openpyxl package. Install with: pip install openpyxl"
             )
 
-        write_only = bool(self.export_settings.get("excel_write_only", True))
+        # Use non-write-only mode for better styling support
+        write_only = bool(self.export_settings.get("excel_write_only", False))
         workbook = openpyxl.Workbook(write_only=write_only)
         worksheet = workbook.active if not write_only else workbook.create_sheet()
         worksheet.title = f"{self.model_name} Export"
 
-        # Style definitions
-        header_font = Font(bold=True, color="FFFFFF")
+        # Hide gridlines (only works in non-write-only mode)
+        if not write_only:
+            worksheet.sheet_view.showGridLines = False
+
+        # Professional style definitions - headers have fill only, no borders
+        header_font = Font(bold=True, color="FFFFFF", size=11, name="Calibri")
         header_fill = PatternFill(
-            start_color="366092", end_color="366092", fill_type="solid"
+            start_color="2F5496", end_color="2F5496", fill_type="solid"
         )
-        header_alignment = Alignment(horizontal="center", vertical="center")
+        header_alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True
+        )
+
+        # Data row styles (no borders)
+        data_font = Font(size=10, name="Calibri")
+        data_alignment = Alignment(vertical="center", wrap_text=False)
+
+        # Row number column style
+        row_num_font = Font(size=10, name="Calibri", color="666666")
+        row_num_alignment = Alignment(horizontal="center", vertical="center")
+
+        # Alternating row colors
+        even_row_fill = PatternFill(
+            start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"
+        )
+        odd_row_fill = PatternFill(
+            start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"
+        )
 
         # Parse field configurations
         if parsed_fields is None:
@@ -1913,8 +1978,8 @@ class ModelExporter:
                 fields, export_settings=self.export_settings
             )
 
-        # Write headers
-        headers = [parsed_field["title"] for parsed_field in parsed_fields]
+        # Write headers - first column is "#" for row numbers
+        headers = ["#"] + [parsed_field["title"] for parsed_field in parsed_fields]
         if write_only:
             header_row = []
             for header in headers:
@@ -1922,12 +1987,7 @@ class ModelExporter:
                 cell.font = header_font
                 cell.fill = header_fill
                 cell.alignment = header_alignment
-                cell.border = Border(
-                    left=Side(border_style="thin"),
-                    right=Side(border_style="thin"),
-                    top=Side(border_style="thin"),
-                    bottom=Side(border_style="thin"),
-                )
+                # No border on headers
                 header_row.append(cell)
             worksheet.append(header_row)
         else:
@@ -1936,12 +1996,7 @@ class ModelExporter:
                 cell.font = header_font
                 cell.fill = header_fill
                 cell.alignment = header_alignment
-                cell.border = Border(
-                    left=Side(border_style="thin"),
-                    right=Side(border_style="thin"),
-                    top=Side(border_style="thin"),
-                    bottom=Side(border_style="thin"),
-                )
+                # No border on headers
 
         # Write data rows
         queryset = self.get_queryset(
@@ -1951,54 +2006,84 @@ class ModelExporter:
             max_rows=max_rows,
             presets=presets,
             skip_validation=True,  # Already validated at view level
+            distinct_on=distinct_on,
         )
 
         processed = 0
         progress_every = int(
-            (self.export_settings.get("async_jobs") or {}).get("progress_update_rows", 500)
+            (self.export_settings.get("async_jobs") or {}).get(
+                "progress_update_rows", 500
+            )
         )
         if progress_every <= 0:
             progress_every = 500
+
+        # Track max width per column for auto-sizing (including # column)
+        column_widths = [3] + [len(str(h)) for h in headers[1:]]  # # column starts narrow
+
+        row_counter = 0  # Sequential row number for # column
         for row_num, instance in enumerate(queryset.iterator(), 2):
+            row_counter += 1
+            is_even_row = (row_num % 2) == 0
+            row_fill = even_row_fill if is_even_row else odd_row_fill
+
             if write_only:
                 row = []
-                for parsed_field in parsed_fields:
+                # First cell: row number
+                num_cell = WriteOnlyCell(worksheet, value=row_counter)
+                num_cell.font = row_num_font
+                num_cell.fill = row_fill
+                num_cell.alignment = row_num_alignment
+                row.append(num_cell)
+                # Data cells
+                for col_idx, parsed_field in enumerate(parsed_fields):
                     accessor = parsed_field["accessor"]
                     value = self.get_field_value(instance, accessor)
-                    row.append(value)
+                    cell = WriteOnlyCell(worksheet, value=value)
+                    cell.font = data_font
+                    cell.fill = row_fill
+                    cell.alignment = data_alignment
+                    row.append(cell)
+                    # Track width (offset by 1 for # column)
+                    val_len = len(str(value)) if value else 0
+                    if val_len > column_widths[col_idx + 1]:
+                        column_widths[col_idx + 1] = min(val_len, 50)
                 worksheet.append(row)
             else:
-                for col_num, parsed_field in enumerate(parsed_fields, 1):
+                # First cell: row number
+                num_cell = worksheet.cell(row=row_num, column=1, value=row_counter)
+                num_cell.font = row_num_font
+                num_cell.fill = row_fill
+                num_cell.alignment = row_num_alignment
+                # Data cells (start at column 2)
+                for col_num, parsed_field in enumerate(parsed_fields, 2):
                     accessor = parsed_field["accessor"]
                     value = self.get_field_value(instance, accessor)
-                    worksheet.cell(row=row_num, column=col_num, value=value)
+                    cell = worksheet.cell(row=row_num, column=col_num, value=value)
+                    cell.font = data_font
+                    cell.fill = row_fill
+                    cell.alignment = data_alignment
+                    # Track width (col_num - 1 maps to index in column_widths)
+                    val_len = len(str(value)) if value else 0
+                    if val_len > column_widths[col_num - 1]:
+                        column_widths[col_num - 1] = min(val_len, 50)
+
             processed += 1
             if progress_callback and processed % progress_every == 0:
                 progress_callback(processed)
 
-        # Auto-adjust column widths (non write-only)
-        if not write_only and bool(self.export_settings.get("excel_auto_width", False)):
-            max_columns = int(self.export_settings.get("excel_auto_width_max_columns", 50))
-            max_rows = int(self.export_settings.get("excel_auto_width_max_rows", 2000))
-            for column in worksheet.iter_cols(max_col=max_columns, max_row=max_rows):
-                max_length = 0
-                column_letter = get_column_letter(column[0].column)
+        # Apply column widths and additional formatting (non write-only only)
+        if not write_only:
+            # Set column widths with padding
+            for col_idx, width in enumerate(column_widths, 1):
+                column_letter = get_column_letter(col_idx)
+                if col_idx == 1:  # # column - fixed narrow width
+                    worksheet.column_dimensions[column_letter].width = 6
+                else:
+                    worksheet.column_dimensions[column_letter].width = min(width + 3, 50)
 
-                for cell in column:
-                    cell.border = Border(
-                        left=Side(border_style="thin"),
-                        right=Side(border_style="thin"),
-                        top=Side(border_style="thin"),
-                        bottom=Side(border_style="thin"),
-                    )
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except Exception:
-                        pass
-
-                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+            # Set row height for header
+            worksheet.row_dimensions[1].height = 25
 
         # Save to bytes
         output = output or io.BytesIO()
@@ -2204,7 +2289,10 @@ class ExportView(View):
             ordering = data.get("ordering")
             variables = data.get("variables") or {}
             presets = data.get("presets")  # List of preset names for filtering
-            schema_name = data.get("schema_name")  # Schema name for multi-schema support
+            schema_name = data.get(
+                "schema_name"
+            )  # Schema name for multi-schema support
+            distinct_on = data.get("distinct_on")  # List of fields for DISTINCT ON
             async_value = data.get("async", False)
             if async_value is not None and not isinstance(async_value, bool):
                 self._log_export_event(
@@ -2261,6 +2349,17 @@ class ExportView(View):
                     {"error": "schema_name must be a string"}, status=400
                 )
 
+            if distinct_on is not None and not isinstance(distinct_on, list):
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="distinct_on must be a list of field names",
+                    details=audit_details,
+                )
+                return JsonResponse(
+                    {"error": "distinct_on must be a list of field names"}, status=400
+                )
+
             max_rows, max_rows_error = self._resolve_max_rows(data, export_settings)
             if max_rows_error is not None:
                 self._log_export_event(
@@ -2280,7 +2379,10 @@ class ExportView(View):
 
             # Create exporter and generate file
             exporter = ModelExporter(
-                app_name, model_name, export_settings=export_settings, schema_name=schema_name
+                app_name,
+                model_name,
+                export_settings=export_settings,
+                schema_name=schema_name,
             )
             permission_response = self._enforce_model_permissions(
                 request, exporter.model, export_settings
@@ -2296,7 +2398,9 @@ class ExportView(View):
                 return permission_response
 
             parsed_fields = exporter.validate_fields(
-                fields, user=getattr(request, "user", None), export_settings=export_settings
+                fields,
+                user=getattr(request, "user", None),
+                export_settings=export_settings,
             )
             # Use the new validate_filter_input method with standardized "where" key
             where_input = variables.get("where", variables) if variables else None
@@ -2344,13 +2448,16 @@ class ExportView(View):
                     max_rows=max_rows,
                     parsed_fields=parsed_fields,
                     presets=presets,
+                    distinct_on=distinct_on,
                 )
                 content_type = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 file_ext = "xlsx"
             else:  # csv
-                if export_settings.get("enforce_streaming_csv", True) or export_settings.get("stream_csv", True):
+                if export_settings.get(
+                    "enforce_streaming_csv", True
+                ) or export_settings.get("stream_csv", True):
                     audit_details["stream_csv"] = True
                     self._log_export_event(
                         request,
@@ -2366,6 +2473,7 @@ class ExportView(View):
                         filename=filename,
                         chunk_size=int(export_settings.get("csv_chunk_size", 1000)),
                         presets=presets,
+                        distinct_on=distinct_on,
                     )
                 content = exporter.export_to_csv(
                     fields,
@@ -2374,6 +2482,7 @@ class ExportView(View):
                     max_rows=max_rows,
                     parsed_fields=parsed_fields,
                     presets=presets,
+                    distinct_on=distinct_on,
                 )
                 content_type = "text/csv; charset=utf-8"
                 file_ext = "csv"
@@ -2461,7 +2570,9 @@ class ExportView(View):
 
         return f"ip:{ip_address}"
 
-    def _is_trusted_proxy(self, remote_addr: str, trusted_proxies: Iterable[str]) -> bool:
+    def _is_trusted_proxy(
+        self, remote_addr: str, trusted_proxies: Iterable[str]
+    ) -> bool:
         """Check if the remote address is in the trusted proxy list."""
         if not remote_addr:
             return False
@@ -2623,7 +2734,9 @@ class ExportView(View):
                 allowed_users = [allowed_users]
             if str(user.id) in {str(value) for value in allowed_users}:
                 return True
-            if getattr(user, "username", None) in {str(value) for value in allowed_users}:
+            if getattr(user, "username", None) in {
+                str(value) for value in allowed_users
+            }:
                 return True
             return False
 
@@ -2677,7 +2790,9 @@ class ExportView(View):
         cache.set(_export_job_payload_key(job_id), payload, timeout=expires_seconds)
 
         if backend == "thread":
-            thread = threading.Thread(target=_run_export_job, args=(job_id,), daemon=True)
+            thread = threading.Thread(
+                target=_run_export_job, args=(job_id,), daemon=True
+            )
             thread.start()
         elif backend == "celery":
             if not export_job_task:
@@ -2686,7 +2801,9 @@ class ExportView(View):
                     {"status": "failed", "error": "Celery is not available"},
                     timeout=expires_seconds,
                 )
-                return JsonResponse({"error": "Celery backend not available"}, status=500)
+                return JsonResponse(
+                    {"error": "Celery backend not available"}, status=500
+                )
             export_job_task.delay(job_id)
         elif backend == "rq":
             try:
@@ -2785,6 +2902,7 @@ class ExportView(View):
         filename: str,
         chunk_size: int,
         presets: Optional[List[str]] = None,
+        distinct_on: Optional[List[str]] = None,
     ) -> StreamingHttpResponse:
         """Stream a CSV export response."""
         headers = [field["title"] for field in parsed_fields]
@@ -2800,6 +2918,7 @@ class ExportView(View):
             max_rows=max_rows,
             presets=presets,
             skip_validation=True,  # Already validated at view level
+            distinct_on=distinct_on,
         ).iterator(chunk_size=chunk_size)
 
         def row_generator():
@@ -2812,7 +2931,10 @@ class ExportView(View):
             output.truncate(0)
 
             for instance in queryset:
-                row = [exporter.get_field_value(instance, accessor) for accessor in accessors]
+                row = [
+                    exporter.get_field_value(instance, accessor)
+                    for accessor in accessors
+                ]
                 writer.writerow(row)
                 yield output.getvalue()
                 output.seek(0)
@@ -2876,7 +2998,7 @@ class ExportView(View):
                 "custom_filters": {"has_tags": True, "content_length": "medium"},
             },
             "example_request": {
-                "url": "/api/export/",
+                "url": "/api/v1/export/",
                 "method": "POST",
                 "headers": {
                     "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
@@ -2912,8 +3034,8 @@ class ExportView(View):
                 "403": "Token valid but insufficient permissions",
             },
             "async_endpoints": {
-                "status": "GET /api/export/jobs/<job_id>/",
-                "download": "GET /api/export/jobs/<job_id>/download/",
+                "status": "GET /api/v1/export/jobs/<job_id>/",
+                "download": "GET /api/v1/export/jobs/<job_id>/download/",
             },
         }
 

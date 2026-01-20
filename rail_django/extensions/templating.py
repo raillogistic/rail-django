@@ -897,7 +897,40 @@ def _build_style_block(
 
 
 def _css_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+    """
+    Escape a string for safe inclusion in CSS content property.
+
+    Escapes backslashes, quotes, newlines, and other control characters
+    that could break out of CSS string context.
+    """
+    result = []
+    for char in value:
+        if char == "\\":
+            result.append("\\\\")
+        elif char == '"':
+            result.append('\\"')
+        elif char == "'":
+            result.append("\\'")
+        elif char == "\n":
+            result.append("\\A ")
+        elif char == "\r":
+            result.append("\\D ")
+        elif char == "\t":
+            result.append("\\9 ")
+        elif char == "{":
+            result.append("\\7B ")
+        elif char == "}":
+            result.append("\\7D ")
+        elif char == "<":
+            result.append("\\3C ")
+        elif char == ">":
+            result.append("\\3E ")
+        elif ord(char) < 32 or ord(char) == 127:
+            # Escape other control characters
+            result.append(f"\\{ord(char):X} ")
+        else:
+            result.append(char)
+    return "".join(result)
 
 
 def _page_stamp_content(text: str) -> str:
@@ -1177,6 +1210,40 @@ def evaluate_template_access(
                 )
 
     return TemplateAccessDecision(allowed=True)
+
+
+def authorize_template_access(
+    request: HttpRequest,
+    template_def: TemplateDefinition,
+    instance: Optional[models.Model] = None,
+) -> Optional[JsonResponse]:
+    """
+    Authorize access to a PDF template and return a denial response if not allowed.
+
+    Args:
+        request: The HTTP request.
+        template_def: Template definition to check access for.
+        instance: Optional model instance for guard evaluation.
+
+    Returns:
+        JsonResponse with error details if access denied, None if allowed.
+    """
+    user = _resolve_request_user(request)
+    decision = evaluate_template_access(
+        template_def,
+        user=user,
+        instance=instance,
+    )
+    if decision.allowed:
+        return None
+    detail = decision.reason or (
+        "Vous devez être authentifié pour accéder à ce document."
+        if decision.status_code == 401
+        else "Accès refusé pour ce document."
+    )
+    return JsonResponse(
+        {"error": "Forbidden", "detail": detail}, status=decision.status_code
+    )
 
 
 def _extract_client_data(
@@ -1703,6 +1770,58 @@ class PdfBuilder:
         )
 
 
+def _resolve_pdf_permissions(permissions: Any) -> Any:
+    """
+    Convert permissions config to pypdf Permissions object if needed.
+
+    Args:
+        permissions: Dict, Permissions object, or None.
+
+    Returns:
+        pypdf Permissions object or None.
+    """
+    if permissions is None:
+        return None
+
+    # Already a Permissions object
+    if hasattr(permissions, "print_document"):
+        return permissions
+
+    if not isinstance(permissions, dict):
+        return None
+
+    try:
+        from pypdf import Permissions
+    except ImportError:
+        return None
+
+    # Map common permission keys to Permissions constructor kwargs
+    permission_mapping = {
+        "print": "print_document",
+        "print_document": "print_document",
+        "modify": "modify",
+        "copy": "extract",
+        "extract": "extract",
+        "add_annotations": "add_annotations",
+        "annotations": "add_annotations",
+        "fill_forms": "fill_form_fields",
+        "fill_form_fields": "fill_form_fields",
+        "extract_for_accessibility": "extract_text_and_graphics",
+        "extract_text_and_graphics": "extract_text_and_graphics",
+        "assemble": "assemble_document",
+        "assemble_document": "assemble_document",
+        "print_high_quality": "print_high_quality",
+    }
+
+    kwargs = {}
+    for key, value in permissions.items():
+        mapped_key = permission_mapping.get(str(key).lower())
+        if mapped_key:
+            kwargs[mapped_key] = bool(value)
+
+    return Permissions(**kwargs) if kwargs else None
+
+
 def _apply_pdf_encryption(
     pdf_bytes: bytes, encryption: dict[str, Any], *, strict: bool
 ) -> bytes:
@@ -1715,7 +1834,7 @@ def _apply_pdf_encryption(
 
     user_password = encryption.get("user_password") or encryption.get("password") or ""
     owner_password = encryption.get("owner_password")
-    permissions = encryption.get("permissions")
+    permissions = _resolve_pdf_permissions(encryption.get("permissions"))
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
@@ -1724,7 +1843,11 @@ def _apply_pdf_encryption(
     if reader.metadata:
         writer.add_metadata(dict(reader.metadata))
 
-    writer.encrypt(user_password, owner_password=owner_password, permissions=permissions)
+    encrypt_kwargs: dict[str, Any] = {"owner_password": owner_password}
+    if permissions is not None:
+        encrypt_kwargs["permissions"] = permissions
+
+    writer.encrypt(user_password, **encrypt_kwargs)
     output = io.BytesIO()
     writer.write(output)
     return output.getvalue()
@@ -2281,6 +2404,14 @@ class PdfTemplateView(View):
                     status=404,
                 )
             except (ValidationError, ValueError, TypeError):
+                self._log_template_event(
+                    request,
+                    success=False,
+                    error_message="Invalid primary key",
+                    template_def=template_def,
+                    template_path=template_path,
+                    pk=pk,
+                )
                 return JsonResponse(
                     {"error": "Invalid primary key", "pk": pk}, status=400
                 )
@@ -2365,9 +2496,14 @@ class PdfTemplateView(View):
                 renderer=renderer_name,
             )
         except Exception as exc:  # pragma: no cover - defensive logging branch
+            model_name = (
+                template_def.model.__name__
+                if template_def.model
+                else template_def.url_path
+            )
             logger.exception(
                 "Failed to render PDF for %s pk=%s: %s",
-                template_def.model.__name__,
+                model_name,
                 pk,
                 exc,
             )
@@ -2436,22 +2572,7 @@ class PdfTemplateView(View):
         """
         Apply RBAC and permission requirements before rendering the PDF.
         """
-        user = self._resolve_request_user(request)
-        decision = evaluate_template_access(
-            template_def,
-            user=user,
-            instance=instance,
-        )
-        if decision.allowed:
-            return None
-        detail = decision.reason or (
-            "Vous devez être authentifié pour accéder à ce document."
-            if decision.status_code == 401
-            else "Accès refusé pour ce document."
-        )
-        return JsonResponse(
-            {"error": "Forbidden", "detail": detail}, status=decision.status_code
-        )
+        return authorize_template_access(request, template_def, instance)
 
     def _parse_async_request(self, request: HttpRequest) -> bool:
         value = request.GET.get("async")
@@ -2530,21 +2651,28 @@ class PdfTemplateView(View):
         identifier = self._get_rate_limit_identifier(request, config)
         cache_key = f"rail:pdf_rl:{identifier}:{template_def.url_path}"
 
-        count = cache.get(cache_key)
-        if count is None:
-            cache.add(cache_key, 1, timeout=window_seconds)
-            return None
+        # Atomic increment with race-condition handling
+        # Try to increment first; if key doesn't exist, add will set it
+        try:
+            current_count = cache.incr(cache_key)
+        except ValueError:
+            # Key doesn't exist, try to add it atomically
+            if cache.add(cache_key, 1, timeout=window_seconds):
+                return None
+            # Another request beat us to it, try increment again
+            try:
+                current_count = cache.incr(cache_key)
+            except ValueError:
+                # Key expired between add and incr, start fresh
+                cache.set(cache_key, 1, timeout=window_seconds)
+                return None
 
-        if int(count) >= max_requests:
+        if current_count > max_requests:
             return JsonResponse(
                 {"error": "Rate limit exceeded", "retry_after": window_seconds},
                 status=429,
             )
 
-        try:
-            cache.incr(cache_key)
-        except ValueError:
-            cache.set(cache_key, int(count) + 1, timeout=window_seconds)
         return None
 
     def _resolve_request_user(self, request: HttpRequest):
@@ -2654,9 +2782,7 @@ class PdfTemplatePreviewView(View):
             except (template_def.model.DoesNotExist, ValidationError, ValueError, TypeError):
                 raise Http404("Instance not found")
 
-        denial = PdfTemplateView()._authorize_template_access(
-            request, template_def, instance
-        )
+        denial = authorize_template_access(request, template_def, instance)
         if denial:
             return denial
 
@@ -2751,14 +2877,17 @@ class PdfTemplateJobStatusView(View):
         job = _get_pdf_job(str(job_id))
         if not job:
             raise Http404("PDF job not found")
-        if not _job_access_allowed(request, job):
-            return JsonResponse({"error": "PDF job not permitted"}, status=403)
 
+        # Check expiration before access check to prevent unauthorized users
+        # from keeping jobs alive by polling
         expires_at = _parse_iso_datetime(job.get("expires_at"))
         if expires_at and expires_at <= timezone.now():
             _cleanup_pdf_job_files(job)
             _delete_pdf_job(str(job_id))
-            return JsonResponse({"error": "PDF job expired"}, status=410)
+            raise Http404("PDF job not found")
+
+        if not _job_access_allowed(request, job):
+            return JsonResponse({"error": "PDF job not permitted"}, status=403)
 
         payload = {
             "job_id": job.get("id"),
@@ -2788,14 +2917,17 @@ class PdfTemplateJobDownloadView(View):
         job = _get_pdf_job(str(job_id))
         if not job:
             raise Http404("PDF job not found")
-        if not _job_access_allowed(request, job):
-            return JsonResponse({"error": "PDF job not permitted"}, status=403)
 
+        # Check expiration before access check to prevent unauthorized users
+        # from keeping jobs alive by polling
         expires_at = _parse_iso_datetime(job.get("expires_at"))
         if expires_at and expires_at <= timezone.now():
             _cleanup_pdf_job_files(job)
             _delete_pdf_job(str(job_id))
-            return JsonResponse({"error": "PDF job expired"}, status=410)
+            raise Http404("PDF job not found")
+
+        if not _job_access_allowed(request, job):
+            return JsonResponse({"error": "PDF job not permitted"}, status=403)
 
         if job.get("status") != "completed":
             return JsonResponse({"error": "PDF job not completed"}, status=409)
@@ -2862,6 +2994,7 @@ __all__ = [
     "template_registry",
     "template_urlpatterns",
     "evaluate_template_access",
+    "authorize_template_access",
     "render_pdf",
     "render_pdf_from_html",
     "render_template_html",

@@ -685,6 +685,13 @@ class SchemaBuilder:
                 filtered[key] = field
         return filtered
 
+    def _camelcase_fields(self, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert dictionary keys to camelCase if auto_camelcase is enabled."""
+        if not self.settings.auto_camelcase:
+            return fields
+
+        return {to_camel_case(k): v for k, v in fields.items()}
+
     def rebuild_schema(self) -> None:
         """
         Rebuilds the entire GraphQL schema.
@@ -1019,6 +1026,7 @@ class SchemaBuilder:
                             )
                         }
 
+                query_attrs = self._camelcase_fields(query_attrs)
                 query_type = type("Query", (graphene.ObjectType,), query_attrs)
 
                 # Create Mutation type if there are mutations
@@ -1126,6 +1134,7 @@ class SchemaBuilder:
                     # logger.info(
                     #     f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"
                     # )
+                    all_mutations = self._camelcase_fields(all_mutations)
                     mutation_type = type(
                         "Mutation", (graphene.ObjectType,), all_mutations
                     )
@@ -1169,6 +1178,7 @@ class SchemaBuilder:
                     )
 
                 if subscription_fields:
+                    subscription_fields = self._camelcase_fields(subscription_fields)
                     subscription_type = type(
                         "Subscription", (graphene.ObjectType,), subscription_fields
                     )

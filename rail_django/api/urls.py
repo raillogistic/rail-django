@@ -7,6 +7,7 @@ from django.urls import path
 from ..extensions.exporting import get_export_urls
 from ..extensions.tasks import get_task_urls
 from ..extensions.templating import template_urlpatterns
+from ..extensions.excel_export import excel_urlpatterns
 from .views import (
     SchemaDetailAPIView,
     SchemaDiscoveryAPIView,
@@ -60,3 +61,4 @@ urlpatterns = [
 urlpatterns += get_export_urls()
 urlpatterns += get_task_urls()
 urlpatterns += template_urlpatterns()
+urlpatterns += excel_urlpatterns()

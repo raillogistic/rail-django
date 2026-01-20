@@ -79,6 +79,17 @@ from .templating import (
     template_urlpatterns,
 )
 
+# Excel export templating helpers
+from .excel_export import (
+    ExcelTemplateView,
+    ExcelTemplateCatalogView,
+    model_excel_template,
+    excel_template,
+    excel_template_registry,
+    excel_urlpatterns,
+    render_excel,
+)
+
 # Multi-factor authentication
 from .mfa import MFAManager
 from .multitenancy import (
@@ -151,6 +162,14 @@ __all__ = [
     "model_pdf_template",
     "template_registry",
     "template_urlpatterns",
+    # Excel export templating
+    "ExcelTemplateView",
+    "ExcelTemplateCatalogView",
+    "model_excel_template",
+    "excel_template",
+    "excel_template_registry",
+    "excel_urlpatterns",
+    "render_excel",
     # Multi-factor authentication
     "MFAManager",
     # Multi-tenancy

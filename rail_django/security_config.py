@@ -42,12 +42,12 @@ class SecurityConfig:
             ),
             "audit_store_in_file": getattr(settings, "AUDIT_STORE_IN_FILE", True),
             "audit_webhook_url": getattr(settings, "AUDIT_WEBHOOK_URL", None),
-            "audit_retention_days": getattr(settings, "AUDIT_RETENTION_DAYS", 90),
+            "audit_retention_days": getattr(settings, "AUDIT_RETENTION_DAYS", 180),
             # Configuration de limitation de débit
             "enable_rate_limiting": getattr(
                 settings, "GRAPHQL_ENABLE_AUTH_RATE_LIMITING", True
             ),
-            "login_attempts_limit": getattr(settings, "AUTH_LOGIN_ATTEMPTS_LIMIT", 5),
+            "login_attempts_limit": getattr(settings, "AUTH_LOGIN_ATTEMPTS_LIMIT", 10),
             "login_attempts_window": getattr(
                 settings, "AUTH_LOGIN_ATTEMPTS_WINDOW", 900
             ),
