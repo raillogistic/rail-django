@@ -64,8 +64,8 @@ class TestTaskOrchestration(TestCase):
         client = self._client(self.user)
         mutation = """
         mutation {
-          run_task(message: "hello") {
-            task_id
+          runTask(message: "hello") {
+            taskId
             status
             task {
               status
@@ -77,8 +77,8 @@ class TestTaskOrchestration(TestCase):
         """
         result = client.execute(mutation)
         self.assertIsNone(result.get("errors"))
-        payload = result["data"]["run_task"]
-        task_id = payload["task_id"]
+        payload = result["data"]["runTask"]
+        task_id = payload["taskId"]
 
         self.assertEqual(payload["status"], "SUCCESS")
         self.assertEqual(payload["task"]["status"], "SUCCESS")
@@ -93,13 +93,13 @@ class TestTaskOrchestration(TestCase):
         client = self._client(self.user)
         mutation = """
         mutation {
-          run_task(message: "private") {
-            task_id
+          runTask(message: "private") {
+            taskId
           }
         }
         """
         result = client.execute(mutation)
-        task_id = result["data"]["run_task"]["task_id"]
+        task_id = result["data"]["runTask"]["taskId"]
 
         other_client = self._client(self.other_user)
         query = f"""

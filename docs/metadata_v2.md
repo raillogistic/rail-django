@@ -334,13 +334,13 @@ type FilterPreset {
 
 | Field Type | Operators |
 |------------|-----------|
-| String | `eq`, `neq`, `contains`, `icontains`, `starts_with`, `istarts_with`, `ends_with`, `iends_with`, `in`, `not_in`, `is_null`, `regex`, `iregex` |
-| Int/Float | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null` |
-| Boolean | `eq`, `is_null` |
-| Date | All numeric operators + `year`, `month`, `day`, `week_day`, `today`, `yesterday`, `this_week`, `past_week`, `this_month`, `past_month`, `this_year`, `past_year` |
+| String | `eq`, `neq`, `contains`, `icontains`, `startsWith`, `istartsWith`, `endsWith`, `iendsWith`, `in`, `notIn`, `isNull`, `regex`, `iregex` |
+| Int/Float | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `between`, `isNull` |
+| Boolean | `eq`, `isNull` |
+| Date | All numeric operators + `year`, `month`, `day`, `weekDay`, `today`, `yesterday`, `thisWeek`, `pastWeek`, `thisMonth`, `pastMonth`, `thisYear`, `pastYear` |
 | DateTime | All Date operators + `hour`, `minute`, `date` |
-| ID/UUID | `eq`, `neq`, `in`, `not_in`, `is_null` |
-| JSON | `eq`, `is_null`, `has_key`, `has_keys`, `has_any_keys` |
+| ID/UUID | `eq`, `neq`, `in`, `notIn`, `isNull` |
+| JSON | `eq`, `isNull`, `hasKey`, `hasKeys`, `hasAnyKeys` |
 
 ### 7. Model Permissions Matrix
 

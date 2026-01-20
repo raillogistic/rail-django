@@ -43,7 +43,7 @@ class MetadataTestModel(models.Model):
         ]
 
 
-class RelatedTestModel(models.Model):
+class RelatedMetadataTestModel(models.Model):
     """Related test model for relationship testing."""
 
     test_item = models.ForeignKey(
@@ -85,7 +85,7 @@ class PolymorphicChildModel(ParentModel):
         app_label = "test_app"
 
 
-class TestModelMetadataExtractor(TestCase):
+class MetadataTestModelMetadataExtractor(TestCase):
     """Test cases for ModelMetadataExtractor class."""
 
     def setUp(self):
@@ -132,7 +132,7 @@ class TestModelMetadataExtractor(TestCase):
 
     def test_extract_relationship_metadata(self):
         """Test relationship metadata extraction."""
-        field = RelatedTestModel._meta.get_field("test_item")
+        field = RelatedMetadataTestModel._meta.get_field("test_item")
         metadata = self.extractor._extract_relationship_metadata(field, self.user)
 
         self.assertEqual(metadata.name, "test_item")
@@ -163,11 +163,11 @@ class TestModelMetadataExtractor(TestCase):
     @patch("rail_django.extensions.metadata.apps.get_model")
     def test_extract_model_metadata_no_nested_fields(self, mock_get_model):
         """Test model metadata extraction without nested fields."""
-        mock_get_model.return_value = TestModel
+        mock_get_model.return_value = MetadataTestModel
 
         metadata = self.extractor.extract_model_metadata(
             app_name="test_app",
-            model_name="TestModel",
+            model_name="MetadataTestModel",
             user=self.user,
             nested_fields=False,
             permissions_included=True,
@@ -191,7 +191,7 @@ class TestModelMetadataExtractor(TestCase):
         self.assertIsNone(metadata)
 
 
-class TestModelMetadataQuery(TestCase):
+class MetadataTestModelMetadataQuery(TestCase):
     """Test cases for ModelMetadataQuery GraphQL resolver."""
 
     def setUp(self):
@@ -213,7 +213,7 @@ class TestModelMetadataQuery(TestCase):
         # Mock extracted metadata
         mock_metadata = Mock()
         mock_metadata.app_name = "test_app"
-        mock_metadata.model_name = "TestModel"
+        mock_metadata.model_name = "MetadataTestModel"
         mock_extract.return_value = mock_metadata
 
         # Mock GraphQL info object
@@ -224,7 +224,7 @@ class TestModelMetadataQuery(TestCase):
         result = self.query.resolve_model_metadata(
             info,
             app_name="test_app",
-            model_name="TestModel",
+            model_name="MetadataTestModel",
             nested_fields=True,
             permissions_included=True,
         )
@@ -232,7 +232,7 @@ class TestModelMetadataQuery(TestCase):
         self.assertEqual(result, mock_metadata)
         mock_extract.assert_called_once_with(
             app_name="test_app",
-            model_name="TestModel",
+            model_name="MetadataTestModel",
             user=self.user,
             nested_fields=True,
             permissions_included=True,
@@ -255,7 +255,7 @@ class TestModelMetadataQuery(TestCase):
 
         with self.assertRaises(GraphQLError):
             self.query.resolve_model_metadata(
-                info, app_name="test_app", model_name="TestModel"
+                info, app_name="test_app", model_name="MetadataTestModel"
             )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
@@ -273,7 +273,7 @@ class TestModelMetadataQuery(TestCase):
 
         with self.assertRaises(GraphQLError):
             self.query.resolve_model_metadata(
-                info, app_name="test_app", model_name="TestModel"
+                info, app_name="test_app", model_name="MetadataTestModel"
             )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
@@ -320,7 +320,7 @@ class TestGraphQLIntegration(TestCase):
         mock_get_settings.return_value = mock_settings
 
         # Mock model
-        mock_get_model.return_value = TestModel
+        mock_get_model.return_value = MetadataTestModel
 
         # Create GraphQL schema with metadata query
         class Query(ModelMetadataQuery, graphene.ObjectType):
@@ -334,7 +334,7 @@ class TestGraphQLIntegration(TestCase):
         query {
             modelMetadata(
                 appName: "test_app",
-                modelName: "TestModel",
+                modelName: "MetadataTestModel",
                 nestedFields: true,
                 permissionsIncluded: true
             ) {
@@ -364,7 +364,7 @@ class TestGraphQLIntegration(TestCase):
         metadata = data.get("modelMetadata")
         if metadata:  # Only check if metadata was returned
             self.assertEqual(metadata["appName"], "test_app")
-            self.assertEqual(metadata["modelName"], "TestModel")
+            self.assertEqual(metadata["modelName"], "MetadataTestModel")
             self.assertIsInstance(metadata["fields"], list)
             self.assertIsInstance(metadata["relationships"], list)
 
@@ -380,7 +380,7 @@ class TestPermissionFiltering(TestCase):
     def test_field_permission_checking(self):
         """Test field-level permission checking."""
         # Create specific field permission
-        content_type = ContentType.objects.get_for_model(TestModel)
+        content_type = ContentType.objects.get_for_model(MetadataTestModel)
         permission, _ = Permission.objects.get_or_create(
             codename="view_testmodel_name",
             name="Can view test model name",
@@ -388,7 +388,7 @@ class TestPermissionFiltering(TestCase):
         )
 
         # Test without permission
-        field = TestModel._meta.get_field("name")
+        field = MetadataTestModel._meta.get_field("name")
         metadata_without_perm = self.extractor._extract_field_metadata(field, self.user)
 
         # Add permission to user
@@ -404,11 +404,11 @@ class TestPermissionFiltering(TestCase):
     @patch("rail_django.extensions.metadata.apps.get_model")
     def test_model_metadata_permission_filtering(self, mock_get_model):
         """Test that model metadata respects permission filtering."""
-        mock_get_model.return_value = TestModel
+        mock_get_model.return_value = MetadataTestModel
 
         metadata = self.extractor.extract_model_metadata(
             app_name="test_app",
-            model_name="TestModel",
+            model_name="MetadataTestModel",
             user=self.user,
             nested_fields=True,
             permissions_included=True,
@@ -448,7 +448,7 @@ class TestEdgeCases(TestCase):
         from django.contrib.auth.models import AnonymousUser
 
         anonymous_user = AnonymousUser()
-        field = TestModel._meta.get_field("name")
+        field = MetadataTestModel._meta.get_field("name")
         metadata = self.extractor._extract_field_metadata(field, anonymous_user)
 
         # Should handle anonymous user gracefully
@@ -466,7 +466,7 @@ class TestEdgeCases(TestCase):
 
         with self.assertRaises(GraphQLError):
             query.resolve_model_metadata(
-                info, app_name="test_app", model_name="TestModel"
+                info, app_name="test_app", model_name="MetadataTestModel"
             )
 
 
@@ -501,7 +501,7 @@ class TestMetadataAccessGating(TestCase):
 
         with self.assertRaises(GraphQLError):
             self.query.resolve_model_table(
-                info, app_name="test_app", model_name="TestModel"
+                info, app_name="test_app", model_name="MetadataTestModel"
             )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
@@ -516,7 +516,7 @@ class TestMetadataAccessGating(TestCase):
 
         with self.assertRaises(GraphQLError):
             self.query.resolve_model_form_metadata(
-                info, app_name="test_app", model_name="TestModel"
+                info, app_name="test_app", model_name="MetadataTestModel"
             )
 
     @patch("rail_django.extensions.metadata.get_core_schema_settings")
@@ -561,10 +561,10 @@ class TestMetadataCaching(TestCase):
         extractor = metadata_module.ModelTableExtractor()
 
         with patch("rail_django.extensions.metadata.apps.get_model") as mock_get_model:
-            mock_get_model.return_value = TestModel
+            mock_get_model.return_value = MetadataTestModel
             extractor.extract_model_table_metadata(
                 app_name="test_app",
-                model_name="TestModel",
+                model_name="MetadataTestModel",
                 user=user,
                 include_filters=False,
                 include_mutations=False,
@@ -577,7 +577,7 @@ class TestMetadataCaching(TestCase):
         cache_key = metadata_module._make_table_cache_key(
             "default",
             "test_app",
-            "TestModel",
+            "MetadataTestModel",
             False,
             exclude=[],
             only=[],
@@ -595,7 +595,7 @@ class TestMetadataCaching(TestCase):
         }
 
         metadata_module.invalidate_metadata_cache(
-            model_name="TestModel", app_name="test_app"
+            model_name="MetadataTestModel", app_name="test_app"
         )
 
         self.assertNotIn(cache_key, metadata_module._table_cache)

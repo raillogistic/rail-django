@@ -127,7 +127,7 @@ DateTime filters include all Date operators plus:
 | `eq`      | Equal to     | `{ id: { eq: "123" } }`            |
 | `neq`     | Not equal to | `{ id: { neq: "456" } }`           |
 | `in`      | In list      | `{ id: { in: ["1", "2", "3"] } }`  |
-| `not_in`  | Not in list  | `{ id: { not_in: ["999"] } }`      |
+| `notIn`  | Not in list  | `{ id: { notIn: ["999"] } }`      |
 | `isNull` | Is null      | `{ parentId: { isNull: true } }` |
 
 ### UUID Filters
@@ -1292,7 +1292,7 @@ query {
   articles(
     where: {
       categories: {
-        is_null: true
+        isNull: true
       }
     }
   ) {

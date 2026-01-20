@@ -5,7 +5,7 @@ Module: `rail_django.extensions.tasks`
 - Run long-running mutations asynchronously.
 - Track status, progress, result, and errors in `TaskExecution`.
 - Query task status via GraphQL or REST.
-- Optional `task_updated` subscriptions when `channels-graphql-ws` is installed.
+- Optional `taskUpdated` subscriptions when `channels-graphql-ws` is installed.
 
 ## Enable
 
@@ -61,7 +61,7 @@ use camelCase versions like `taskId` and `taskUpdated`.
 ```graphql
 mutation {
   generate_report(dataset_id: "123") {
-    task_id
+    taskId
     status
   }
 }
@@ -83,7 +83,7 @@ query {
 
 ```graphql
 subscription {
-  task_updated(task_id: "abc-123") {
+  taskUpdated(taskId: "abc-123") {
     status
     progress
     result
@@ -92,7 +92,7 @@ subscription {
 }
 ```
 
-`task_updated` uses the same Channels stack as model subscriptions and requires
+`taskUpdated` uses the same Channels stack as model subscriptions and requires
 `channels-graphql-ws`.
 
 ## REST polling

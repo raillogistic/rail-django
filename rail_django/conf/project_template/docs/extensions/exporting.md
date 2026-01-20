@@ -72,7 +72,7 @@ curl -X POST /api/v1/export/ \
       "category__name__icontains": "Electronics"
     },
     "fields": ["id", "name", "sku", "price", "category__name"],
-    "order_by": ["-created_at"]
+    "orderBy": ["-created_at"]
   }'
 ```
 
@@ -125,7 +125,7 @@ Checks export status (for async exports).
 | `filters`         | object  | Django ORM filters               |
 | `fields`          | array   | Fields to include (default: all) |
 | `exclude_fields`  | array   | Fields to exclude                |
-| `order_by`        | array   | Sorting                          |
+| `orderBy`        | array   | Sorting                          |
 | `limit`           | integer | Maximum records                  |
 | `offset`          | integer | Starting offset                  |
 | `include_headers` | boolean | Include headers (CSV)            |

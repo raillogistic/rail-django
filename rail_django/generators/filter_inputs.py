@@ -44,6 +44,7 @@ from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
+from graphene.utils.str_converters import to_camel_case
 from django.db import models
 from django.db.models import (
     Avg, Case, Count, Exists, F, Max, Min, OuterRef, Q, Subquery, Sum, Value, When,
@@ -349,24 +350,24 @@ class StringFilterInput(graphene.InputObjectType):
     contains = graphene.String(description="Contains (case-sensitive)")
     icontains = graphene.String(description="Contains (case-insensitive)")
     starts_with = graphene.String(
-        name="starts_with", description="Starts with (case-sensitive)"
+        name="startsWith", description="Starts with (case-sensitive)"
     )
     istarts_with = graphene.String(
-        name="istarts_with", description="Starts with (case-insensitive)"
+        name="istartsWith", description="Starts with (case-insensitive)"
     )
     ends_with = graphene.String(
-        name="ends_with", description="Ends with (case-sensitive)"
+        name="endsWith", description="Ends with (case-sensitive)"
     )
     iends_with = graphene.String(
-        name="iends_with", description="Ends with (case-insensitive)"
+        name="iendsWith", description="Ends with (case-insensitive)"
     )
     in_ = graphene.List(
         graphene.NonNull(graphene.String), name="in", description="In list"
     )
     not_in = graphene.List(
-        graphene.NonNull(graphene.String), name="not_in", description="Not in list"
+        graphene.NonNull(graphene.String), name="notIn", description="Not in list"
     )
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
     regex = graphene.String(description="Regex match (case-sensitive)")
     iregex = graphene.String(description="Regex match (case-insensitive)")
 
@@ -388,10 +389,10 @@ class IntFilterInput(graphene.InputObjectType):
         graphene.NonNull(graphene.Int), name="in", description="In list"
     )
     not_in = graphene.List(
-        graphene.NonNull(graphene.Int), name="not_in", description="Not in list"
+        graphene.NonNull(graphene.Int), name="notIn", description="Not in list"
     )
     between = graphene.List(graphene.Int, description="Between [min, max] inclusive")
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
 
 
 class FloatFilterInput(graphene.InputObjectType):
@@ -411,10 +412,10 @@ class FloatFilterInput(graphene.InputObjectType):
         graphene.NonNull(graphene.Float), name="in", description="In list"
     )
     not_in = graphene.List(
-        graphene.NonNull(graphene.Float), name="not_in", description="Not in list"
+        graphene.NonNull(graphene.Float), name="notIn", description="Not in list"
     )
     between = graphene.List(graphene.Float, description="Between [min, max] inclusive")
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
 
 
 class BooleanFilterInput(graphene.InputObjectType):
@@ -423,7 +424,7 @@ class BooleanFilterInput(graphene.InputObjectType):
     """
 
     eq = graphene.Boolean(description="Equal to")
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
 
 
 class DateFilterInput(graphene.InputObjectType):
@@ -440,23 +441,23 @@ class DateFilterInput(graphene.InputObjectType):
     lt = graphene.Date(description="Before date")
     lte = graphene.Date(description="On or before date")
     between = graphene.List(graphene.Date, description="Between [start, end] inclusive")
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
     # Temporal convenience filters
     year = graphene.Int(description="Filter by year")
     month = graphene.Int(description="Filter by month (1-12)")
     day = graphene.Int(description="Filter by day of month")
     week_day = graphene.Int(
-        name="week_day", description="Filter by day of week (1=Sunday, 7=Saturday)"
+        name="weekDay", description="Filter by day of week (1=Sunday, 7=Saturday)"
     )
     # Relative date filters
     today = graphene.Boolean(description="Is today")
     yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(name="this_week", description="Is this week")
-    past_week = graphene.Boolean(name="past_week", description="Is past week")
-    this_month = graphene.Boolean(name="this_month", description="Is this month")
-    past_month = graphene.Boolean(name="past_month", description="Is past month")
-    this_year = graphene.Boolean(name="this_year", description="Is this year")
-    past_year = graphene.Boolean(name="past_year", description="Is past year")
+    this_week = graphene.Boolean(name="thisWeek", description="Is this week")
+    past_week = graphene.Boolean(name="pastWeek", description="Is past week")
+    this_month = graphene.Boolean(name="thisMonth", description="Is this month")
+    past_month = graphene.Boolean(name="pastMonth", description="Is past month")
+    this_year = graphene.Boolean(name="thisYear", description="Is this year")
+    past_year = graphene.Boolean(name="pastYear", description="Is past year")
 
 
 class DateTimeFilterInput(graphene.InputObjectType):
@@ -475,25 +476,25 @@ class DateTimeFilterInput(graphene.InputObjectType):
     between = graphene.List(
         graphene.DateTime, description="Between [start, end] inclusive"
     )
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
     # Date-only filters (ignores time)
     date = graphene.Date(description="Filter by date part only")
     year = graphene.Int(description="Filter by year")
     month = graphene.Int(description="Filter by month (1-12)")
     day = graphene.Int(description="Filter by day of month")
     week_day = graphene.Int(
-        name="week_day", description="Filter by day of week (1=Sunday, 7=Saturday)"
+        name="weekDay", description="Filter by day of week (1=Sunday, 7=Saturday)"
     )
     hour = graphene.Int(description="Filter by hour (0-23)")
     # Relative date filters
     today = graphene.Boolean(description="Is today")
     yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(name="this_week", description="Is this week")
-    past_week = graphene.Boolean(name="past_week", description="Is past week")
-    this_month = graphene.Boolean(name="this_month", description="Is this month")
-    past_month = graphene.Boolean(name="past_month", description="Is past month")
-    this_year = graphene.Boolean(name="this_year", description="Is this year")
-    past_year = graphene.Boolean(name="past_year", description="Is past year")
+    this_week = graphene.Boolean(name="thisWeek", description="Is this week")
+    past_week = graphene.Boolean(name="pastWeek", description="Is past week")
+    this_month = graphene.Boolean(name="thisMonth", description="Is this month")
+    past_month = graphene.Boolean(name="pastMonth", description="Is past month")
+    this_year = graphene.Boolean(name="thisYear", description="Is this year")
+    past_year = graphene.Boolean(name="pastYear", description="Is past year")
 
 
 class IDFilterInput(graphene.InputObjectType):
@@ -505,9 +506,9 @@ class IDFilterInput(graphene.InputObjectType):
     neq = graphene.ID(description="Not equal to")
     in_ = graphene.List(graphene.NonNull(graphene.ID), name="in", description="In list")
     not_in = graphene.List(
-        graphene.NonNull(graphene.ID), name="not_in", description="Not in list"
+        graphene.NonNull(graphene.ID), name="notIn", description="Not in list"
     )
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
 
 
 class UUIDFilterInput(graphene.InputObjectType):
@@ -521,9 +522,9 @@ class UUIDFilterInput(graphene.InputObjectType):
         graphene.NonNull(graphene.String), name="in", description="In list"
     )
     not_in = graphene.List(
-        graphene.NonNull(graphene.String), name="not_in", description="Not in list"
+        graphene.NonNull(graphene.String), name="notIn", description="Not in list"
     )
-    is_null = graphene.Boolean(name="is_null", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
 
 
 class JSONFilterInput(graphene.InputObjectType):
@@ -532,14 +533,14 @@ class JSONFilterInput(graphene.InputObjectType):
     """
 
     eq = graphene.JSONString(description="Exact JSON match")
-    is_null = graphene.Boolean(name="is_null", description="Is null")
-    has_key = graphene.String(name="has_key", description="Has key")
+    is_null = graphene.Boolean(name="isNull", description="Is null")
+    has_key = graphene.String(name="hasKey", description="Has key")
     has_keys = graphene.List(
-        graphene.NonNull(graphene.String), name="has_keys", description="Has all keys"
+        graphene.NonNull(graphene.String), name="hasKeys", description="Has all keys"
     )
     has_any_keys = graphene.List(
         graphene.NonNull(graphene.String),
-        name="has_any_keys",
+        name="hasAnyKeys",
         description="Has any of keys",
     )
 
@@ -574,7 +575,7 @@ class AggregationFilterInput(graphene.InputObjectType):
     count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
     count_distinct = graphene.InputField(
         IntFilterInput,
-        name="count_distinct",
+        name="countDistinct",
         description="Filter by COUNT of distinct values",
     )
 
@@ -619,13 +620,13 @@ class WindowFilterInput(graphene.InputObjectType):
     )
     partition_by = graphene.List(
         graphene.NonNull(graphene.String),
-        name="partition_by",
+        name="partitionBy",
         description="Fields to partition by",
     )
     order_by = graphene.List(
         graphene.NonNull(graphene.String),
         required=True,
-        name="order_by",
+        name="orderBy",
         description="Fields to order by within partition (prefix with '-' for descending)",
     )
     # Filter conditions
@@ -643,7 +644,7 @@ class SubqueryFilterInput(graphene.InputObjectType):
     relation = graphene.String(required=True, description="Related field name")
     order_by = graphene.List(
         graphene.NonNull(graphene.String),
-        name="order_by",
+        name="orderBy",
         description="Order by fields to determine which related record to use (prefix with '-' for desc)",
     )
     filter = graphene.Argument(
@@ -659,7 +660,7 @@ class SubqueryFilterInput(graphene.InputObjectType):
     gte = graphene.Float(description="Subquery result greater than or equal")
     lt = graphene.Float(description="Subquery result less than")
     lte = graphene.Float(description="Subquery result less than or equal")
-    is_null = graphene.Boolean(name="is_null", description="Subquery result is null")
+    is_null = graphene.Boolean(name="isNull", description="Subquery result is null")
 
 
 class ExistsFilterInput(graphene.InputObjectType):
@@ -701,7 +702,7 @@ class ArrayFilterInput(graphene.InputObjectType):
         description="Array overlaps with any of these values",
     )
     length = graphene.InputField(IntFilterInput, description="Filter by array length")
-    is_null = graphene.Boolean(name="is_null", description="Array is null")
+    is_null = graphene.Boolean(name="isNull", description="Array is null")
 
 
 # =============================================================================
@@ -741,11 +742,11 @@ class FieldCompareFilterInput(graphene.InputObjectType):
         description="Right-hand field name to compare against",
     )
     right_multiplier = graphene.Float(
-        name="right_multiplier",
+        name="rightMultiplier",
         description="Optional multiplier for the right-hand field (e.g., 1.5 for right * 1.5)",
     )
     right_offset = graphene.Float(
-        name="right_offset",
+        name="rightOffset",
         description="Optional offset to add to the right-hand field (e.g., 10 for right + 10)",
     )
 
@@ -789,11 +790,11 @@ class DateTruncFilterInput(graphene.InputObjectType):
     week = graphene.Int(description="Filter by week number (1-53)")
     # Relative period filters
     this_period = graphene.Boolean(
-        name="this_period",
+        name="thisPeriod",
         description="Filter by current period (this year/quarter/month/week/day)",
     )
     last_period = graphene.Boolean(
-        name="last_period",
+        name="lastPeriod",
         description="Filter by previous period (last year/quarter/month/week/day)",
     )
 
@@ -829,22 +830,22 @@ class ExtractDateFilterInput(graphene.InputObjectType):
     )
     day_of_week = graphene.InputField(
         IntFilterInput,
-        name="day_of_week",
+        name="dayOfWeek",
         description="Filter by day of week (1=Sunday, 7=Saturday)",
     )
     day_of_year = graphene.InputField(
         IntFilterInput,
-        name="day_of_year",
+        name="dayOfYear",
         description="Filter by day of year (1-366)",
     )
     iso_week_day = graphene.InputField(
         IntFilterInput,
-        name="iso_week_day",
+        name="isoWeekDay",
         description="Filter by ISO week day (1=Monday, 7=Sunday)",
     )
     iso_year = graphene.InputField(
         IntFilterInput,
-        name="iso_year",
+        name="isoYear",
         description="Filter by ISO week-numbering year",
     )
     hour = graphene.InputField(
@@ -1090,8 +1091,7 @@ class NestedFilterInputGenerator:
                     # Regular fields
                     filter_input = get_filter_input_for_field(field)
                     if filter_input:
-                        fields[field_name] = graphene.InputField(
-                            filter_input, description=f"Filter by {field_name}"
+                        fields[field_name] = graphene.InputField(filter_input, name=to_camel_case(field_name), description=f"Filter by {field_name}"
                         )
 
             # Add ID filter
@@ -1221,8 +1221,7 @@ class NestedFilterInputGenerator:
                 input_type = filter_type_map.get(
                     filter_type_name.lower(), StringFilterInput
                 )
-                fields[field_name] = graphene.InputField(
-                    input_type, description=description
+                fields[field_name] = graphene.InputField(input_type, name=to_camel_case(field_name), description=description
                 )
 
         except Exception as e:
@@ -1242,8 +1241,7 @@ class NestedFilterInputGenerator:
             for field in model._meta.get_fields():
                 if isinstance(field, ArrayField):
                     field_name = field.name
-                    fields[field_name] = graphene.InputField(
-                        ArrayFilterInput,
+                    fields[field_name] = graphene.InputField(ArrayFilterInput, name=to_camel_case(field_name),
                         description=f"Filter by {field_name} array field",
                     )
         except ImportError:
@@ -1269,7 +1267,7 @@ class NestedFilterInputGenerator:
                 trunc_field_name = f"{field_name}_trunc"
                 fields[trunc_field_name] = graphene.InputField(
                     DateTruncFilterInput,
-                    name=trunc_field_name,
+                    name=to_camel_case(trunc_field_name),
                     description=f"Filter {field_name} by truncated date parts",
                 )
 
@@ -1294,7 +1292,7 @@ class NestedFilterInputGenerator:
                 extract_field_name = f"{field_name}_extract"
                 fields[extract_field_name] = graphene.InputField(
                     ExtractDateFilterInput,
-                    name=extract_field_name,
+                    name=to_camel_case(extract_field_name),
                     description=f"Filter {field_name} by extracted date parts (day_of_week, hour, etc.)",
                 )
 
@@ -1311,8 +1309,7 @@ class NestedFilterInputGenerator:
         related_model = field.related_model
 
         # ID filter for the FK
-        filters[field_name] = graphene.InputField(
-            IDFilterInput, description=f"Filter by {field_name} ID"
+        filters[field_name] = graphene.InputField(IDFilterInput, name=to_camel_case(field_name), description=f"Filter by {field_name} ID"
         )
 
         # Nested filter for related model (if within depth limit)
@@ -1322,7 +1319,7 @@ class NestedFilterInputGenerator:
                 rel_name = f"{field_name}_rel"
                 filters[rel_name] = graphene.InputField(
                     nested_where,
-                    name=rel_name,
+                    name=to_camel_case(rel_name),
                     description=f"Filter by {field_name} fields",
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
@@ -1341,15 +1338,14 @@ class NestedFilterInputGenerator:
         related_model = field.related_model
 
         # ID filter (any match)
-        filters[field_name] = graphene.InputField(
-            IDFilterInput, description=f"Filter by any {field_name} ID"
+        filters[field_name] = graphene.InputField(IDFilterInput, name=to_camel_case(field_name), description=f"Filter by any {field_name} ID"
         )
 
         # Aggregation filter
         agg_name = f"{field_name}_agg"
         filters[agg_name] = graphene.InputField(
             AggregationFilterInput,
-            name=agg_name,
+            name=to_camel_case(agg_name),
             description=f"Filter by aggregated {field_name} values",
         )
 
@@ -1360,7 +1356,7 @@ class NestedFilterInputGenerator:
             cond_agg_name = f"{field_name}_cond_agg"
             filters[cond_agg_name] = graphene.InputField(
                 ConditionalAggregationFilterInput,
-                name=cond_agg_name,
+                name=to_camel_case(cond_agg_name),
                 description=f"Filter by conditional aggregation on {field_name}",
             )
 
@@ -1369,7 +1365,7 @@ class NestedFilterInputGenerator:
             count_name = f"{field_name}_count"
             filters[count_name] = graphene.InputField(
                 CountFilterInput,
-                name=count_name,
+                name=to_camel_case(count_name),
                 description=f"Filter by {field_name} count",
             )
 
@@ -1380,16 +1376,16 @@ class NestedFilterInputGenerator:
                 some_name = f"{field_name}_some"
                 filters[some_name] = graphene.InputField(
                     nested_where,
-                    name=some_name,
+                    name=to_camel_case(some_name),
                     description=f"At least one {field_name} matches",
                 )
                 every_name = f"{field_name}_every"
                 filters[every_name] = graphene.InputField(
-                    nested_where, name=every_name, description=f"All {field_name} match"
+                    nested_where, name=to_camel_case(every_name), description=f"All {field_name} match"
                 )
                 none_name = f"{field_name}_none"
                 filters[none_name] = graphene.InputField(
-                    nested_where, name=none_name, description=f"No {field_name} matches"
+                    nested_where, name=to_camel_case(none_name), description=f"No {field_name} matches"
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(
@@ -1421,7 +1417,7 @@ class NestedFilterInputGenerator:
         agg_name = f"{accessor_name}_agg"
         filters[agg_name] = graphene.InputField(
             AggregationFilterInput,
-            name=agg_name,
+            name=to_camel_case(agg_name),
             description=f"Filter by aggregated {accessor_name} values",
         )
 
@@ -1432,7 +1428,7 @@ class NestedFilterInputGenerator:
             cond_agg_name = f"{accessor_name}_cond_agg"
             filters[cond_agg_name] = graphene.InputField(
                 ConditionalAggregationFilterInput,
-                name=cond_agg_name,
+                name=to_camel_case(cond_agg_name),
                 description=f"Filter by conditional aggregation on {accessor_name}",
             )
 
@@ -1441,7 +1437,7 @@ class NestedFilterInputGenerator:
             count_name = f"{accessor_name}_count"
             filters[count_name] = graphene.InputField(
                 CountFilterInput,
-                name=count_name,
+                name=to_camel_case(count_name),
                 description=f"Filter by {accessor_name} count",
             )
 
@@ -1452,19 +1448,19 @@ class NestedFilterInputGenerator:
                 some_name = f"{accessor_name}_some"
                 filters[some_name] = graphene.InputField(
                     nested_where,
-                    name=some_name,
+                    name=to_camel_case(some_name),
                     description=f"At least one {accessor_name} matches",
                 )
                 every_name = f"{accessor_name}_every"
                 filters[every_name] = graphene.InputField(
                     nested_where,
-                    name=every_name,
+                    name=to_camel_case(every_name),
                     description=f"All {accessor_name} match",
                 )
                 none_name = f"{accessor_name}_none"
                 filters[none_name] = graphene.InputField(
                     nested_where,
-                    name=none_name,
+                    name=to_camel_case(none_name),
                     description=f"No {accessor_name} matches",
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
@@ -4211,7 +4207,7 @@ def generate_where_input_for_model(
     """
     generator = NestedFilterInputGenerator(
         max_nested_depth=max_depth,
-        schema_name=schema_name,
+        schema_name=to_camel_case(schema_name),
     )
     return generator.generate_where_input(model)
 
@@ -4231,7 +4227,7 @@ def apply_where_filter(
     Returns:
         Filtered queryset
     """
-    applicator = NestedFilterApplicator(schema_name=schema_name)
+    applicator = NestedFilterApplicator(schema_name=to_camel_case(schema_name))
 
     # Prepare count annotations if needed
     queryset = applicator.prepare_queryset_for_count_filters(queryset, where_input)

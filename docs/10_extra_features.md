@@ -82,7 +82,7 @@ Thread/Celery/Dramatiq integration with a task tracking model and GraphQL subscr
 | ---------------------------- | -------------------------------------------- |
 | **@task_mutation Decorator** | Wraps a mutation to run asynchronously       |
 | **TaskExecution Model**      | Tracks status, progress, result, and errors  |
-| **Task Subscriptions**       | Real-time `task_updated` subscription events |
+| **Task Subscriptions**       | Real-time `taskUpdated` subscription events |
 | **REST Endpoint**            | `/api/v1/tasks/{id}/` for polling fallback   |
 | **Retry & Dead Letter**      | Configurable retry policies with DLQ         |
 | **Result Storage**           | Store results in DB or external storage (S3) |
@@ -102,7 +102,7 @@ def generate_report(root, info, dataset_id: str):
         dataset_id: The dataset to generate the report from.
 
     Returns:
-        TaskExecution instance with task_id.
+        TaskExecution instance with taskId.
     """
     # This runs in a Celery worker
     from .services import ReportService
@@ -130,13 +130,13 @@ RAIL_DJANGO_GRAPHQL = {
 ```graphql
 mutation {
   generate_report(dataset_id: "123") {
-    task_id
+    taskId
     status # PENDING
   }
 }
 
 subscription {
-  task_updated(task_id: "abc-123") {
+  taskUpdated(taskId: "abc-123") {
     status # PENDING -> RUNNING -> SUCCESS
     progress # 0 -> 50 -> 100
     result
@@ -383,7 +383,7 @@ GeoJSON scalar types and spatial filter lookups integrated with `AdvancedFilterG
 | ------------------------- | ------------------------------------------------------------- |
 | **GeoJSON Scalars**       | `Point`, `Polygon`, `LineString`, `Geometry`                  |
 | **Spatial Lookups**       | `distance_lte`, `dwithin`, `intersects`, `within`, `contains` |
-| **Distance Ordering**     | `order_by: { distance_from: { point: ..., asc: true } }`      |
+| **Distance Ordering**     | `orderBy: { distance_from: { point: ..., asc: true } }`      |
 | **Bounding Box Filter**   | `bbox` argument for map viewport queries                      |
 | **GeoDjango Integration** | Seamless wrapper around `django.contrib.gis`                  |
 | **PostGIS Functions**     | Expose `ST_Distance`, `ST_Area`, etc. as computed fields      |

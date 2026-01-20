@@ -38,11 +38,11 @@ RAIL_DJANGO_GRAPHQL = {
 
 When using nested style, each field type exposes typed operators:
 
-- **String**: `eq`, `neq`, `contains`, `icontains`, `starts_with`, `ends_with`, `in`, `not_in`, `is_null`, `regex`
-- **Numeric**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null`
-- **Date/DateTime**: All numeric operators plus `year`, `month`, `day`, `today`, `this_week`, `this_month`, `past_year`
-- **Boolean**: `eq`, `is_null`
-- **JSON**: `eq`, `is_null`, `has_key`, `has_keys`, `has_any_keys`
+- **String**: `eq`, `neq`, `contains`, `icontains`, `startsWith`, `endsWith`, `in`, `notIn`, `isNull`, `regex`
+- **Numeric**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `between`, `isNull`
+- **Date/DateTime**: All numeric operators plus `year`, `month`, `day`, `today`, `thisWeek`, `thisMonth`, `pastYear`
+- **Boolean**: `eq`, `isNull`
+- **JSON**: `eq`, `isNull`, `hasKey`, `hasKeys`, `hasAnyKeys`
 
 ### Relation Filters
 

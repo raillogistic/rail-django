@@ -169,11 +169,11 @@ query FilteredProducts {
 
 | Field Type   | Operators                                                                |
 | ------------ | ------------------------------------------------------------------------ |
-| String       | `eq`, `neq`, `contains`, `icontains`, `starts_with`, `ends_with`, `in`, `not_in`, `is_null`, `regex` |
-| Integer/Float| `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null` |
-| Boolean      | `eq`, `is_null`                                                          |
-| Date/DateTime| `eq`, `gt`, `gte`, `lt`, `lte`, `between`, `is_null`, `year`, `month`, `day`, `today`, `this_week`, `this_month` |
-| ID/UUID      | `eq`, `neq`, `in`, `not_in`, `is_null`                                  |
+| String       | `eq`, `neq`, `contains`, `icontains`, `startsWith`, `endsWith`, `in`, `notIn`, `isNull`, `regex` |
+| Integer/Float| `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `between`, `isNull` |
+| Boolean      | `eq`, `isNull`                                                          |
+| Date/DateTime| `eq`, `gt`, `gte`, `lt`, `lte`, `between`, `isNull`, `year`, `month`, `day`, `today`, `thisWeek`, `thisMonth` |
+| ID/UUID      | `eq`, `neq`, `in`, `notIn`, `isNull`                                  |
 
 ### Complex Filters (AND/OR/NOT)
 
@@ -502,7 +502,7 @@ class Product(models.Model):
             # Detailed configuration by field
             fields={
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["eq", "icontains", "istarts_with"],
+                    lookups=["eq", "icontains", "istartsWith"],
                 ),
                 "price": GraphQLMetaConfig.FilterField(
                     lookups=["eq", "gt", "lt", "between"],

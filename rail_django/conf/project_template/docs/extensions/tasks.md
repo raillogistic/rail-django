@@ -353,13 +353,13 @@ query FailedTasks {
 }
 
 # myapp/tasks.py
-def on_task_failed(task_id, task_name, error, traceback):
+def on_task_failed(taskId, task_name, error, traceback):
     """
     Called when a task fails after all retries.
     """
     send_alert(
         f"Task {task_name} failed",
-        details={"task_id": task_id, "error": str(error)}
+        details={"taskId": taskId, "error": str(error)}
     )
 ```
 

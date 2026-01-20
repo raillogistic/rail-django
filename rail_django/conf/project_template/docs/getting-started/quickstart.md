@@ -127,10 +127,10 @@ class Product(models.Model):
             quick=["name", "sku"],
             fields={
                 "name": GraphQLMetaConfig.FilterField(
-                    lookups=["eq", "icontains", "istarts_with"],
+                    lookups=["eq", "icontains", "istartsWith"],
                 ),
                 "sku": GraphQLMetaConfig.FilterField(
-                    lookups=["eq", "istarts_with"],
+                    lookups=["eq", "istartsWith"],
                 ),
                 "price": GraphQLMetaConfig.FilterField(
                     lookups=["eq", "gt", "lt", "between"],
