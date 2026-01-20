@@ -684,6 +684,7 @@ class ModelExporter:
         model_name: str,
         *,
         export_settings: Optional[dict[str, Any]] = None,
+        schema_name: Optional[str] = None,
     ):
         """
         Initialize the exporter with model information and GraphQL filter generator.
@@ -691,6 +692,7 @@ class ModelExporter:
         Args:
             app_name: Name of the Django app containing the model
             model_name: Name of the Django model to export
+            schema_name: Schema name for multi-schema filter support (defaults to app_name or "default")
 
         Raises:
             ExportError: If the model cannot be found
@@ -698,6 +700,7 @@ class ModelExporter:
         self.app_name = app_name
         self.model_name = model_name
         self.export_settings = export_settings or _get_export_settings()
+        self.schema_name = schema_name or app_name or "default"
         self.model = self._load_model()
         self.logger = logging.getLogger(__name__)
         self.allow_callables = bool(self.export_settings.get("allow_callables", False))
@@ -748,11 +751,12 @@ class ModelExporter:
             self.model, self.export_settings
         )
 
-        # Initialize GraphQL filter applicator if available
+        # Initialize GraphQL filter applicator if available (singleton pattern)
         self.nested_filter_applicator = None
         if NestedFilterApplicator:
             try:
-                self.nested_filter_applicator = NestedFilterApplicator()
+                from ..generators.filter_inputs import get_nested_filter_applicator
+                self.nested_filter_applicator = get_nested_filter_applicator(self.schema_name)
                 self.logger.info("Nested filter applicator initialized successfully")
             except Exception as e:
                 self.logger.warning(
@@ -1193,54 +1197,114 @@ class ModelExporter:
 
         return normalized in self.filterable_fields
 
+    def validate_filter_input(
+        self,
+        where_input: Optional[dict[str, Any]] = None,
+        *,
+        export_settings: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """
+        Validate filter input against export allowlists and complexity limits.
+
+        This method standardizes on the "where" key format and uses validate_filter_complexity
+        from filter_inputs for depth and clause count validation.
+
+        Args:
+            where_input: The where filter dictionary (the contents of variables["where"])
+            export_settings: Optional export settings override
+
+        Raises:
+            ExportError: If filters violate complexity or allowlist rules
+        """
+        if not where_input:
+            return
+        if not isinstance(where_input, dict):
+            raise ExportError("where must be an object")
+
+        export_settings = export_settings or self.export_settings
+
+        # Import and use complexity validation from filter_inputs
+        try:
+            from ..generators.filter_inputs import validate_filter_complexity
+            max_depth = export_settings.get("max_or_depth") or 10
+            max_clauses = export_settings.get("max_filters") or 50
+            try:
+                max_depth = int(max_depth)
+            except (TypeError, ValueError):
+                max_depth = 10
+            try:
+                max_clauses = int(max_clauses)
+            except (TypeError, ValueError):
+                max_clauses = 50
+            if max_depth <= 0:
+                max_depth = 10
+            if max_clauses <= 0:
+                max_clauses = 50
+            validate_filter_complexity(where_input, max_depth=max_depth, max_clauses=max_clauses)
+        except ImportError:
+            # Fall back to existing validation if filter_inputs unavailable
+            max_filters = export_settings.get("max_filters", None)
+            max_or_depth = export_settings.get("max_or_depth", None)
+            total_filters, max_depth_found = self._analyze_filter_tree(where_input)
+
+            if max_filters is not None:
+                try:
+                    max_filters = int(max_filters)
+                except (TypeError, ValueError):
+                    max_filters = None
+            if max_filters is not None and max_filters <= 0:
+                max_filters = None
+            if max_filters is not None and total_filters > max_filters:
+                raise ExportError("Too many filters were provided")
+
+            if max_or_depth is not None:
+                try:
+                    max_or_depth = int(max_or_depth)
+                except (TypeError, ValueError):
+                    max_or_depth = None
+            if max_or_depth is not None and max_or_depth <= 0:
+                max_or_depth = None
+            if max_or_depth is not None and max_depth_found > max_or_depth:
+                raise ExportError("Filter OR depth exceeds limit")
+        except Exception as e:
+            raise ExportError(f"Filter complexity error: {e}")
+
+        # Validate against export-specific field allowlists
+        invalid_keys = [
+            key for key in self._iter_filter_keys(where_input)
+            if not self._is_filter_key_allowed(key)
+        ]
+        if invalid_keys:
+            raise ExportError(
+                "Filters not allowed: " + ", ".join(sorted(set(invalid_keys)))
+            )
+
     def validate_filters(
         self,
         variables: Optional[dict[str, Any]] = None,
         *,
         export_settings: Optional[dict[str, Any]] = None,
     ) -> None:
-        """Validate filter input against allowlists and guardrails."""
+        """
+        Validate filter input against allowlists and guardrails.
+
+        .. deprecated::
+            Use :meth:`validate_filter_input` instead. This method is kept for
+            backward compatibility and will be removed in a future version.
+        """
+        import warnings
+        warnings.warn(
+            "validate_filters() is deprecated; use validate_filter_input() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if not variables:
             return
 
         export_settings = export_settings or self.export_settings
-        filter_input = variables.get("filters", variables)
-        if filter_input is None:
-            return
-        if not isinstance(filter_input, dict):
-            raise ExportError("filters must be an object")
-
-        max_filters = export_settings.get("max_filters", None)
-        max_or_depth = export_settings.get("max_or_depth", None)
-        total_filters, max_depth = self._analyze_filter_tree(filter_input)
-
-        if max_filters is not None:
-            try:
-                max_filters = int(max_filters)
-            except (TypeError, ValueError):
-                max_filters = None
-        if max_filters is not None and max_filters <= 0:
-            max_filters = None
-        if max_filters is not None and total_filters > max_filters:
-            raise ExportError("Too many filters were provided")
-
-        if max_or_depth is not None:
-            try:
-                max_or_depth = int(max_or_depth)
-            except (TypeError, ValueError):
-                max_or_depth = None
-        if max_or_depth is not None and max_or_depth <= 0:
-            max_or_depth = None
-        if max_or_depth is not None and max_depth > max_or_depth:
-            raise ExportError("Filter OR depth exceeds limit")
-
-        invalid_keys = [
-            key for key in self._iter_filter_keys(filter_input) if not self._is_filter_key_allowed(key)
-        ]
-        if invalid_keys:
-            raise ExportError(
-                "Filters not allowed: " + ", ".join(sorted(set(invalid_keys)))
-            )
+        # Support both "where" and "filters" keys for backward compatibility
+        filter_input = variables.get("where") or variables.get("filters", variables)
+        self.validate_filter_input(filter_input, export_settings=export_settings)
 
     def get_queryset(
         self,
@@ -1248,15 +1312,20 @@ class ModelExporter:
         ordering: Optional[Union[str, list[str]]] = None,
         fields: Optional[Iterable[str]] = None,
         max_rows: Optional[int] = None,
+        *,
+        presets: Optional[List[str]] = None,
+        skip_validation: bool = False,
     ) -> models.QuerySet:
         """
         Get the filtered and ordered queryset using GraphQL filters.
 
         Args:
-            variables: Dictionary of filter kwargs (e.g., {'title__icontains': 'test'})
+            variables: Dictionary of filter kwargs (expects {"where": {...}})
             ordering: Django ORM ordering expression(s)
             fields: Field accessors for select_related/prefetch_related optimization
             max_rows: Optional max rows cap
+            presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
+            skip_validation: If True, skip filter validation (use when already validated)
 
         Returns:
             Filtered and ordered queryset
@@ -1269,8 +1338,10 @@ class ModelExporter:
 
             # Apply GraphQL filters
             if variables:
-                self.validate_filters(variables)
-                queryset = self.apply_graphql_filters(queryset, variables)
+                if not skip_validation:
+                    where_input = variables.get("where", variables)
+                    self.validate_filter_input(where_input)
+                queryset = self.apply_graphql_filters(queryset, variables, presets=presets)
 
             # Apply ordering
             ordering_fields = self._normalize_ordering(ordering)
@@ -1290,52 +1361,56 @@ class ModelExporter:
             raise ExportError(f"Error building queryset: {e}")
 
     def apply_graphql_filters(
-        self, queryset: models.QuerySet, variables: dict[str, Any]
+        self,
+        queryset: models.QuerySet,
+        variables: dict[str, Any],
+        *,
+        presets: Optional[List[str]] = None,
     ) -> models.QuerySet:
         """
-        Apply GraphQL filters to the queryset using the filter generator.
+        Apply GraphQL filters to the queryset using the nested filter applicator.
+
+        This method standardizes on the "where" key format and supports filter presets.
+        Errors are raised immediately instead of silently falling back to basic filtering.
 
         Args:
             queryset: Django QuerySet to filter
-            variables: Filter parameters from the request
+            variables: Filter parameters from the request (expects {"where": {...}})
+            presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
 
         Returns:
             Filtered QuerySet
+
+        Raises:
+            ExportError: If nested filter applicator is unavailable or filtering fails
         """
         if not variables:
             return queryset
 
-        # Try to use nested filter applicator first
-        if self.nested_filter_applicator:
-            try:
-                # Use apply_where_filter to handle nested filter structures (AND/OR/NOT)
-                # variables likely contains the 'where' structure from the frontend
-                filter_input = variables.get("where", variables)
-                if filter_input is None:
-                    return queryset
-                if not isinstance(filter_input, dict):
-                    raise ExportError("where must be an object")
-                return self.nested_filter_applicator.apply_where_filter(queryset, filter_input, self.model)
-
-            except Exception as e:
-                self.logger.warning(
-                    f"Nested filtering failed, falling back to basic filtering: {e}"
-                )
-
-        # Fall back to basic Django filtering
-        try:
-            # Clean variables to remove None values and empty strings
-            clean_variables = {
-                key: value
-                for key, value in variables.items()
-                if value is not None and value != ""
-            }
-            clean_variables.pop("where", None)
-            if clean_variables:
-                return queryset.filter(**clean_variables)
+        # Standardize on "where" key
+        where_input = variables.get("where", variables)
+        if not where_input:
             return queryset
+        if not isinstance(where_input, dict):
+            raise ExportError("where must be an object")
+
+        if not self.nested_filter_applicator:
+            raise ExportError(
+                "Nested filter applicator not available. Ensure filter_inputs module is accessible."
+            )
+
+        try:
+            # Apply presets if provided
+            if presets:
+                where_input = self.nested_filter_applicator.apply_presets(
+                    where_input, presets, self.model
+                )
+            return self.nested_filter_applicator.apply_where_filter(
+                queryset, where_input, self.model
+            )
         except Exception as e:
-            raise ExportError(f"Filtering failed: {e}")
+            # NO silent fallback - fail clearly
+            raise ExportError(f"Filter application failed: {e}")
 
     def get_field_value(self, instance: models.Model, accessor: str) -> Any:
         """
@@ -1729,15 +1804,18 @@ class ModelExporter:
         output: Optional[io.StringIO] = None,
         progress_callback: Optional[Callable[[int], None]] = None,
         chunk_size: Optional[int] = None,
+        *,
+        presets: Optional[List[str]] = None,
     ) -> str:
         """
         Export model data to CSV format with flexible field format support.
 
         Args:
             fields: List of field definitions (string or dict format)
-            variables: Filter variables
+            variables: Filter variables (expects {"where": {...}})
             ordering: Ordering expression(s)
             max_rows: Optional max rows cap
+            presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
 
         Returns:
             CSV content as string
@@ -1761,6 +1839,8 @@ class ModelExporter:
             ordering,
             fields=[field["accessor"] for field in parsed_fields],
             max_rows=max_rows,
+            presets=presets,
+            skip_validation=True,  # Already validated at view level
         )
 
         if chunk_size is None:
@@ -1791,15 +1871,18 @@ class ModelExporter:
         parsed_fields: Optional[list[dict[str, str]]] = None,
         output: Optional[io.BytesIO] = None,
         progress_callback: Optional[Callable[[int], None]] = None,
+        *,
+        presets: Optional[List[str]] = None,
     ) -> bytes:
         """
         Export model data to Excel format with flexible field format support.
 
         Args:
             fields: List of field definitions (string or dict format)
-            variables: Filter variables
+            variables: Filter variables (expects {"where": {...}})
             ordering: Ordering expression(s)
             max_rows: Optional max rows cap
+            presets: Optional list of preset names to apply from GraphQLMeta.filter_presets
 
         Returns:
             Excel file content as bytes
@@ -1866,6 +1949,8 @@ class ModelExporter:
             ordering,
             fields=[field["accessor"] for field in parsed_fields],
             max_rows=max_rows,
+            presets=presets,
+            skip_validation=True,  # Already validated at view level
         )
 
         processed = 0
@@ -2118,6 +2203,8 @@ class ExportView(View):
             filename = data.get("filename")
             ordering = data.get("ordering")
             variables = data.get("variables") or {}
+            presets = data.get("presets")  # List of preset names for filtering
+            schema_name = data.get("schema_name")  # Schema name for multi-schema support
             async_value = data.get("async", False)
             if async_value is not None and not isinstance(async_value, bool):
                 self._log_export_event(
@@ -2152,6 +2239,28 @@ class ExportView(View):
                     {"error": "ordering must be a string or list"}, status=400
                 )
 
+            if presets is not None and not isinstance(presets, list):
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="presets must be a list of preset names",
+                    details=audit_details,
+                )
+                return JsonResponse(
+                    {"error": "presets must be a list of preset names"}, status=400
+                )
+
+            if schema_name is not None and not isinstance(schema_name, str):
+                self._log_export_event(
+                    request,
+                    success=False,
+                    error_message="schema_name must be a string",
+                    details=audit_details,
+                )
+                return JsonResponse(
+                    {"error": "schema_name must be a string"}, status=400
+                )
+
             max_rows, max_rows_error = self._resolve_max_rows(data, export_settings)
             if max_rows_error is not None:
                 self._log_export_event(
@@ -2171,7 +2280,7 @@ class ExportView(View):
 
             # Create exporter and generate file
             exporter = ModelExporter(
-                app_name, model_name, export_settings=export_settings
+                app_name, model_name, export_settings=export_settings, schema_name=schema_name
             )
             permission_response = self._enforce_model_permissions(
                 request, exporter.model, export_settings
@@ -2189,7 +2298,9 @@ class ExportView(View):
             parsed_fields = exporter.validate_fields(
                 fields, user=getattr(request, "user", None), export_settings=export_settings
             )
-            exporter.validate_filters(variables, export_settings=export_settings)
+            # Use the new validate_filter_input method with standardized "where" key
+            where_input = variables.get("where", variables) if variables else None
+            exporter.validate_filter_input(where_input, export_settings=export_settings)
             ordering_fields = exporter._normalize_ordering(ordering)
             ordering_value = ordering_fields or None
 
@@ -2232,6 +2343,7 @@ class ExportView(View):
                     ordering_value,
                     max_rows=max_rows,
                     parsed_fields=parsed_fields,
+                    presets=presets,
                 )
                 content_type = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2253,6 +2365,7 @@ class ExportView(View):
                         max_rows=max_rows,
                         filename=filename,
                         chunk_size=int(export_settings.get("csv_chunk_size", 1000)),
+                        presets=presets,
                     )
                 content = exporter.export_to_csv(
                     fields,
@@ -2260,6 +2373,7 @@ class ExportView(View):
                     ordering_value,
                     max_rows=max_rows,
                     parsed_fields=parsed_fields,
+                    presets=presets,
                 )
                 content_type = "text/csv; charset=utf-8"
                 file_ext = "csv"
@@ -2670,6 +2784,7 @@ class ExportView(View):
         max_rows: Optional[int],
         filename: str,
         chunk_size: int,
+        presets: Optional[List[str]] = None,
     ) -> StreamingHttpResponse:
         """Stream a CSV export response."""
         headers = [field["title"] for field in parsed_fields]
@@ -2683,6 +2798,8 @@ class ExportView(View):
             ordering,
             fields=accessors,
             max_rows=max_rows,
+            presets=presets,
+            skip_validation=True,  # Already validated at view level
         ).iterator(chunk_size=chunk_size)
 
         def row_generator():

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import graphene
+from graphene.utils.str_converters import to_camel_case, to_snake_case
 from django.apps import apps
 from django.conf import settings as django_settings
 from django.db import models
@@ -248,7 +249,7 @@ class SchemaBuilder:
         alias = _GRAPHQL_NAME_INVALID_RE.sub("", alias).strip("_").lower()
         if not alias:
             return None
-        return f"all_{alias}"
+        return to_camel_case(f"all_{alias}")
 
     def _connect_signals(self) -> None:
         """
@@ -417,7 +418,7 @@ class SchemaBuilder:
         }
 
         for model in models:
-            model_name = model.__name__.lower()
+            model_name = to_camel_case(to_snake_case(model.__name__))
             plural_name = self._pluralize_name(model_name)
             # skip HistoricalModel
             # if model_name.startswith("historical"):
@@ -473,7 +474,9 @@ class SchemaBuilder:
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{plural_name}_groups"] = grouping_query
+                        self._query_fields[to_camel_case(f"{plural_name}_groups")] = (
+                            grouping_query
+                        )
 
                     # Paginated query
                     if self.settings.enable_pagination:
@@ -481,11 +484,13 @@ class SchemaBuilder:
                             model,
                             manager_name,
                             result_model=history_result_model,
-                            operation_name="history"
-                            if is_history_manager
-                            else "paginated",
+                            operation_name=(
+                                "history" if is_history_manager else "paginated"
+                            ),
                         )
-                        self._query_fields[f"{plural_name}_pages"] = paginated_query
+                        self._query_fields[to_camel_case(f"{plural_name}_pages")] = (
+                            paginated_query
+                        )
                 else:
                     # Custom managers use new naming convention
                     # Single object query: modelname__custommanager
@@ -493,23 +498,23 @@ class SchemaBuilder:
                         single_query = self.query_generator.generate_single_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{model_name}__{manager_name}"] = (
-                            single_query
-                        )
+                        self._query_fields[
+                            to_camel_case(f"{model_name}_{manager_name}")
+                        ] = single_query
 
                         # List query: modelname__custommanager (plural form)
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{plural_name}__{manager_name}"] = (
-                            list_query
-                        )
+                        self._query_fields[
+                            to_camel_case(f"{plural_name}_{manager_name}")
+                        ] = list_query
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
-                        self._query_fields[f"{plural_name}_groups_{manager_name}"] = (
-                            grouping_query
-                        )
+                        self._query_fields[
+                            to_camel_case(f"{plural_name}_groups_{manager_name}")
+                        ] = grouping_query
 
                     # Paginated query: modelname_pages_custommanager
                     if self.settings.enable_pagination:
@@ -517,13 +522,13 @@ class SchemaBuilder:
                             model,
                             manager_name,
                             result_model=history_result_model,
-                            operation_name="history"
-                            if is_history_manager
-                            else "paginated",
+                            operation_name=(
+                                "history" if is_history_manager else "paginated"
+                            ),
                         )
-                        self._query_fields[f"{plural_name}_pages_{manager_name}"] = (
-                            paginated_query
-                        )
+                        self._query_fields[
+                            to_camel_case(f"{plural_name}_pages_{manager_name}")
+                        ] = paginated_query
 
     def _generate_mutation_fields(self, models: list[type[models.Model]]) -> None:
         """
@@ -743,7 +748,9 @@ class SchemaBuilder:
 
                 # Add introspection queries (e.g. __filterSchema)
                 if hasattr(self.query_generator, "generate_introspection_queries"):
-                    query_attrs.update(self.query_generator.generate_introspection_queries())
+                    query_attrs.update(
+                        self.query_generator.generate_introspection_queries()
+                    )
 
                 custom_query_classes = self._load_query_extensions()
                 for query_class in custom_query_classes:
@@ -1418,7 +1425,7 @@ class SchemaBuilder:
             with self._lock:
                 # Remove existing app-related fields
                 for model in models:
-                    model_name = model.__name__.lower()
+                    model_name = to_camel_case(to_snake_case(model.__name__))
                     plural_name = self._pluralize_name(model_name)
                     # Remove queries
                     self._query_fields.pop(model_name, None)
