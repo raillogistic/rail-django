@@ -68,6 +68,12 @@ class NestedOperationHandler:
             self.mutation_settings, "max_nested_depth", 10
         )  # Prevent infinite recursion
 
+    def _reset_state(self) -> None:
+        """Clear all tracking collections to reset handler state."""
+        self._processed_objects.clear()
+        self._validation_errors.clear()
+        self.circular_reference_tracker.clear()
+
     def _should_use_nested_operations(self, model, field_name):
         """
         Check if nested operations should be used for a specific field.

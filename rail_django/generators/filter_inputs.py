@@ -1043,24 +1043,29 @@ class NestedFilterInputGenerator:
         """Create the WhereInput type with boolean operators."""
         type_name = f"{model_name}WhereInput"
 
-        # Use lambda for self-reference to handle recursion
-        def get_self_type():
-            cache_key = f"{self.schema_name}_{model_name}_where_{depth}"
-            return self._filter_input_cache.get(cache_key)
+        # Use a mutable container to hold the type reference.
+        # This allows lambdas to reference the type after it's created.
+        type_ref = [None]
 
-        # Add boolean operators
+        # Add boolean operators using lambdas that reference the container
         fields["AND"] = graphene.List(
-            lambda: get_self_type(), description="All conditions must match (AND)"
+            lambda: type_ref[0], description="All conditions must match (AND)"
         )
         fields["OR"] = graphene.List(
-            lambda: get_self_type(),
+            lambda: type_ref[0],
             description="At least one condition must match (OR)",
         )
         fields["NOT"] = graphene.InputField(
-            lambda: get_self_type(), description="Condition must not match (NOT)"
+            lambda: type_ref[0], description="Condition must not match (NOT)"
         )
 
-        return type(type_name, (graphene.InputObjectType,), fields)
+        # Create the type
+        where_input_type = type(type_name, (graphene.InputObjectType,), fields)
+
+        # Store reference for the lambdas to use
+        type_ref[0] = where_input_type
+
+        return where_input_type
 
     def _create_placeholder_input(
         self,

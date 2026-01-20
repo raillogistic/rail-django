@@ -262,9 +262,8 @@ class TestNestedFilterInputGenerator(TestCase):
 
     def setUp(self):
         self.generator = NestedFilterInputGenerator(max_nested_depth=2)
-        # Clear cache for each test
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
+        # Clear cache for each test (instance-level cache)
+        self.generator.clear_cache()
 
     def test_generate_where_input_creates_input_type(self):
         """generate_where_input should create an InputObjectType."""
@@ -335,7 +334,7 @@ class TestNestedFilterInputGenerator(TestCase):
     def test_nested_depth_limiting(self):
         """Nested filters should respect max_nested_depth."""
         generator = NestedFilterInputGenerator(max_nested_depth=1)
-        NestedFilterInputGenerator._filter_input_cache.clear()
+        generator.clear_cache()
 
         where_input = generator.generate_where_input(Post)
         fields = where_input._meta.fields
@@ -762,8 +761,8 @@ class TestConvenienceFunctions(TestCase):
     """Test the module-level convenience functions."""
 
     def setUp(self):
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
+        # Each call to convenience functions creates a fresh generator with empty cache
+        pass
 
     def test_generate_where_input_for_model(self):
         """generate_where_input_for_model should return InputObjectType."""
@@ -795,8 +794,7 @@ class TestComplexFilterScenarios(TestCase):
     def setUp(self):
         self.generator = NestedFilterInputGenerator(max_nested_depth=3)
         self.applicator = NestedFilterApplicator()
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
+        self.generator.clear_cache()
 
     def test_combined_field_and_relation_filters(self):
         """Filter combining field and relation conditions."""
@@ -872,8 +870,8 @@ class TestSchemaIntegration(TestCase):
     """Test integration with GraphQL schema generation."""
 
     def setUp(self):
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
+        # Each test creates fresh generators with empty caches
+        pass
 
     def test_generated_type_works_with_graphene(self):
         """Generated type should be valid for graphene schema."""
@@ -1152,8 +1150,8 @@ class TestLegacyCompatibility(TestCase):
     """Test legacy AdvancedFilterGenerator and EnhancedFilterGenerator compatibility."""
 
     def setUp(self):
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
+        # Each test creates fresh generators with empty caches
+        pass
 
     def test_advanced_filter_generator_exists(self):
         """AdvancedFilterGenerator should be importable."""
@@ -1198,9 +1196,8 @@ class TestWhereInputNewFields(TestCase):
     """Test that new fields (quick, include) are generated in WhereInput."""
 
     def setUp(self):
-        NestedFilterInputGenerator._filter_input_cache.clear()
-        NestedFilterInputGenerator._generation_stack.clear()
         self.generator = NestedFilterInputGenerator()
+        self.generator.clear_cache()
 
     def test_where_input_has_quick_field(self):
         """Generated WhereInput should have quick filter field."""

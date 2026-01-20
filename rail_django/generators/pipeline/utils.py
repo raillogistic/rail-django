@@ -294,6 +294,9 @@ def decode_global_id(id_value: str) -> tuple[Optional[str], str]:
         from graphql_relay import from_global_id
 
         type_name, decoded_id = from_global_id(id_value)
+        # If decoding resulted in empty values, the input wasn't a valid global ID
+        if not decoded_id:
+            return None, id_value
         return type_name, decoded_id
     except Exception:
         return None, id_value

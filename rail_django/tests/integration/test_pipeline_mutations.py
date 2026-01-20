@@ -25,6 +25,24 @@ def grant_model_permissions(user, model, permissions):
         user.user_permissions.add(permission)
 
 
+def create_mock_graphql_info(user):
+    """Create a properly mocked GraphQL info object for testing mutations."""
+    from django.http import HttpRequest
+
+    # Use spec to prevent Mock from auto-generating attributes
+    mock_request = Mock(spec=HttpRequest)
+    mock_request.META = {}
+    mock_request.user = user
+    mock_request.path = "/graphql/"
+    mock_request.method = "POST"
+    mock_request.session = Mock()
+    mock_request.session.session_key = None
+
+    mock_info = Mock()
+    mock_info.context = mock_request
+    return mock_info
+
+
 @pytest.mark.integration
 class TestPipelineMutationGenerator(TestCase):
     """Integration tests for pipeline-based mutation generation."""
@@ -115,13 +133,7 @@ class TestPipelineCreateMutation(TestCase):
 
         mutation = mutation_generator.generate_create_mutation(Category)
 
-        # Create mock GraphQL info with proper request mock
-        mock_request = Mock()
-        mock_request.META = {}  # Empty dict instead of Mock
-        mock_request.user = self.user
-
-        mock_info = Mock()
-        mock_info.context = mock_request
+        mock_info = create_mock_graphql_info(self.user)
 
         # Execute mutation
         result = mutation.mutate(
@@ -150,12 +162,7 @@ class TestPipelineCreateMutation(TestCase):
         mock_user = Mock()
         mock_user.is_authenticated = False
 
-        mock_request = Mock()
-        mock_request.META = {}
-        mock_request.user = mock_user
-
-        mock_info = Mock()
-        mock_info.context = mock_request
+        mock_info = create_mock_graphql_info(mock_user)
 
         # Execute mutation - should fail due to authentication
         result = mutation.mutate(
@@ -196,13 +203,7 @@ class TestPipelineUpdateMutation(TestCase):
 
         mutation = mutation_generator.generate_update_mutation(Category)
 
-        # Create mock GraphQL info with proper request mock
-        mock_request = Mock()
-        mock_request.META = {}
-        mock_request.user = self.user
-
-        mock_info = Mock()
-        mock_info.context = mock_request
+        mock_info = create_mock_graphql_info(self.user)
 
         # Execute mutation
         result = mutation.mutate(
@@ -228,13 +229,7 @@ class TestPipelineUpdateMutation(TestCase):
 
         mutation = mutation_generator.generate_update_mutation(Category)
 
-        # Create mock GraphQL info with proper request mock
-        mock_request = Mock()
-        mock_request.META = {}
-        mock_request.user = self.user
-
-        mock_info = Mock()
-        mock_info.context = mock_request
+        mock_info = create_mock_graphql_info(self.user)
 
         # Execute mutation with non-existent ID
         result = mutation.mutate(
@@ -276,13 +271,7 @@ class TestPipelineDeleteMutation(TestCase):
 
         mutation = mutation_generator.generate_delete_mutation(Category)
 
-        # Create mock GraphQL info with proper request mock
-        mock_request = Mock()
-        mock_request.META = {}
-        mock_request.user = self.user
-
-        mock_info = Mock()
-        mock_info.context = mock_request
+        mock_info = create_mock_graphql_info(self.user)
 
         category_id = self.category.pk
 

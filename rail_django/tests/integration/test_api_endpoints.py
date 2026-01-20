@@ -774,12 +774,12 @@ class TestAPIEndpointsAdvanced:
 
 
 # Configuration du schéma de test
-class TestQuery(graphene.ObjectType):
+class MockQuery(graphene.ObjectType):
     hello = graphene.String(default_value="Hi!")
 
 
-class TestMutation(graphene.ObjectType):
+class MockMutation(graphene.ObjectType):
     pass
 
 
-test_schema = Schema(query=TestQuery, mutation=TestMutation)
+test_schema = Schema(query=MockQuery, mutation=MockMutation)

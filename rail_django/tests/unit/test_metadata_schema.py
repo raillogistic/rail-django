@@ -27,7 +27,7 @@ from rail_django.extensions.metadata import (
 import rail_django.extensions.metadata as metadata_module
 
 
-class TestModel(models.Model):
+class MetadataTestModel(models.Model):
     """Test model for metadata extraction testing."""
 
     name = models.CharField(max_length=100, help_text="Name of the test item")
@@ -38,8 +38,8 @@ class TestModel(models.Model):
     class Meta:
         app_label = "test_app"
         permissions = [
-            ("view_testmodel_name", "Can view test model name"),
-            ("view_testmodel_description", "Can view test model description"),
+            ("view_metadatatestmodel_name", "Can view test model name"),
+            ("view_metadatatestmodel_description", "Can view test model description"),
         ]
 
 
@@ -47,7 +47,7 @@ class RelatedTestModel(models.Model):
     """Related test model for relationship testing."""
 
     test_item = models.ForeignKey(
-        TestModel, on_delete=models.CASCADE, related_name="related_items"
+        MetadataTestModel, on_delete=models.CASCADE, related_name="related_items"
     )
     value = models.IntegerField()
 
@@ -95,7 +95,7 @@ class TestModelMetadataExtractor(TestCase):
 
     def test_extract_field_metadata_basic(self):
         """Test basic field metadata extraction."""
-        field = TestModel._meta.get_field("name")
+        field = MetadataTestModel._meta.get_field("name")
         metadata = self.extractor._extract_field_metadata(field, self.user)
 
         self.assertEqual(metadata.name, "name")
@@ -109,22 +109,22 @@ class TestModelMetadataExtractor(TestCase):
     def test_extract_field_metadata_with_permissions(self):
         """Test field metadata extraction with specific permissions."""
         # Create permission for viewing name field
-        content_type = ContentType.objects.get_for_model(TestModel)
+        content_type = ContentType.objects.get_for_model(MetadataTestModel)
         permission, _ = Permission.objects.get_or_create(
-            codename="view_testmodel_name",
+            codename="view_metadatatestmodel_name",
             name="Can view test model name",
             content_type=content_type,
         )
         self.user.user_permissions.add(permission)
 
-        field = TestModel._meta.get_field("name")
+        field = MetadataTestModel._meta.get_field("name")
         metadata = self.extractor._extract_field_metadata(field, self.user)
 
         self.assertTrue(metadata.has_permission)
 
     def test_extract_field_metadata_without_permissions(self):
         """Test field metadata extraction without specific permissions."""
-        field = TestModel._meta.get_field("description")
+        field = MetadataTestModel._meta.get_field("description")
         metadata = self.extractor._extract_field_metadata(field, self.user)
 
         # Should still have permission if no specific permission is required
@@ -137,25 +137,25 @@ class TestModelMetadataExtractor(TestCase):
 
         self.assertEqual(metadata.name, "test_item")
         self.assertEqual(metadata.relationship_type, "ForeignKey")
-        self.assertEqual(metadata.related_model, "TestModel")
+        self.assertEqual(metadata.related_model, "MetadataTestModel")
         self.assertEqual(metadata.related_app, "test_app")
         self.assertTrue(metadata.has_permission)
 
     @patch("rail_django.extensions.metadata.apps.get_model")
     def test_extract_model_metadata_complete(self, mock_get_model):
         """Test complete model metadata extraction."""
-        mock_get_model.return_value = TestModel
+        mock_get_model.return_value = MetadataTestModel
 
         metadata = self.extractor.extract_model_metadata(
             app_name="test_app",
-            model_name="TestModel",
+            model_name="MetadataTestModel",
             user=self.user,
             nested_fields=True,
             permissions_included=True,
         )
 
         self.assertEqual(metadata.app_name, "test_app")
-        self.assertEqual(metadata.model_name, "TestModel")
+        self.assertEqual(metadata.model_name, "MetadataTestModel")
         self.assertIsNotNone(metadata.fields)
         self.assertIsNotNone(metadata.relationships)
         self.assertTrue(len(metadata.fields) > 0)

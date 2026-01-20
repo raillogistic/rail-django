@@ -22,8 +22,8 @@ from graphene import Boolean, DateTime, Field, Int, Mutation, ObjectType, String
 from graphene_django import DjangoObjectType
 from test_app.models import Category, Client, Comment
 from test_app.models import Post
-from test_app.models import Post as TestOrder
-from test_app.models import Product as TestProduct
+from test_app.models import Post as OrderForMutation
+from test_app.models import Product as ProductForMutation
 from test_app.models import Profile, Tag
 
 from rail_django.decorators import business_logic
@@ -104,7 +104,7 @@ class TestMutationGenerator(TestCase):
     def test_input_type_generation(self):
         """Test la génération des types d'entrée."""
         # Générer le type d'entrée pour TestProduct
-        input_type = self.input_generator.generate_input_type(TestProduct, "create")
+        input_type = self.input_generator.generate_input_type(ProductForMutation, "create")
 
         # Vérifier que le type d'entrée est généré
         self.assertIsNotNone(input_type)
@@ -118,7 +118,7 @@ class TestMutationGenerator(TestCase):
     def test_mutation_validation(self):
         """Test la validation des données dans les mutations."""
         # Créer une mutation avec validation
-        create_mutation = self.mutation_generator.generate_create_mutation(TestProduct)
+        create_mutation = self.mutation_generator.generate_create_mutation(ProductForMutation)
 
         # Vérifier que la mutation peut être instanciée
         self.assertIsNotNone(create_mutation)
@@ -128,8 +128,8 @@ class TestMutationGenerator(TestCase):
 
     def test_mutation_with_relationships(self):
         """Test la génération de mutations avec relations."""
-        # Générer la mutation pour TestOrder (qui a des relations)
-        order_mutation = self.mutation_generator.generate_create_mutation(TestOrder)
+        # Générer la mutation pour OrderForMutation (qui a des relations)
+        order_mutation = self.mutation_generator.generate_create_mutation(OrderForMutation)
 
         # Vérifier que la mutation est générée
         self.assertIsNotNone(order_mutation)
@@ -141,7 +141,7 @@ class TestMutationGenerator(TestCase):
     def test_mutation_error_handling(self):
         """Test la gestion d'erreurs dans les mutations."""
         # Générer une mutation avec gestion d'erreurs
-        create_mutation = self.mutation_generator.generate_create_mutation(TestProduct)
+        create_mutation = self.mutation_generator.generate_create_mutation(ProductForMutation)
 
         # Vérifier que la mutation est générée
         self.assertIsNotNone(create_mutation)
@@ -160,7 +160,7 @@ class TestMutationGenerator(TestCase):
 
         # Mesurer le temps de génération
         start_time = time.time()
-        all_mutations = self.mutation_generator.generate_all_mutations(TestOrder)
+        all_mutations = self.mutation_generator.generate_all_mutations(OrderForMutation)
         end_time = time.time()
 
         # La génération doit être rapide (moins de 500ms)
@@ -180,14 +180,14 @@ class TestInputTypeGenerator(TestCase):
 
     def setUp(self):
         """Configuration des tests."""
-        self.introspector = ModelIntrospector(TestProduct)
+        self.introspector = ModelIntrospector(ProductForMutation)
         self.type_generator = TypeGenerator()
         self.input_generator = self.type_generator
 
     def test_generate_create_input_type(self):
         """Test la génération de type d'entrée pour création."""
-        # Générer le type d'entrée pour création
-        create_input = self.input_generator.generate_input_type(TestProduct, "create")
+        # Générer le type d'entrée pour ProductForMutation
+        create_input = self.input_generator.generate_input_type(ProductForMutation, "create")
 
         # Vérifier que le type d'entrée est généré
         self.assertIsNotNone(create_input)
@@ -203,7 +203,7 @@ class TestInputTypeGenerator(TestCase):
     def test_generate_update_input_type(self):
         """Test la génération de type d'entrée pour mise à jour."""
         # Générer le type d'entrée pour mise à jour
-        update_input = self.input_generator.generate_input_type(TestProduct, "update")
+        update_input = self.input_generator.generate_input_type(ProductForMutation, "update")
 
         # Vérifier que le type d'entrée est généré
         self.assertIsNotNone(update_input)
@@ -218,7 +218,7 @@ class TestInputTypeGenerator(TestCase):
     def test_input_type_field_validation(self):
         """Test la validation des champs dans les types d'entrée."""
         # Générer le type d'entrée
-        input_type = self.input_generator.generate_input_type(TestProduct, "create")
+        input_type = self.input_generator.generate_input_type(ProductForMutation, "create")
 
         # Vérifier que le type d'entrée est généré
         self.assertIsNotNone(input_type)
