@@ -1150,6 +1150,16 @@ class NestedFilterApplicator:
 
         model = model or queryset.model
 
+        # Try to get quick fields from GraphQLMeta if not provided
+        if quick_filter_fields is None and model:
+            try:
+                from ..core.meta import get_model_graphql_meta
+                meta = get_model_graphql_meta(model)
+                if meta and meta.quick_filter_fields:
+                    quick_filter_fields = meta.quick_filter_fields
+            except (ImportError, AttributeError):
+                pass
+
         # Security validation: check filter depth and complexity
         # Use configurable limits from FilteringSettings
         max_depth = DEFAULT_MAX_FILTER_DEPTH
