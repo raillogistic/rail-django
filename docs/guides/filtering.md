@@ -1325,6 +1325,427 @@ input ArrayFilterInput {
 
 ---
 
+## F() Expression Field Comparison Filters
+
+Field comparison filters allow you to compare model fields to each other using Django's F() expressions. This is useful for filtering records where one field's value relates to another field.
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_field_comparison": True,
+    }
+}
+```
+
+### Basic Field Comparison
+
+Find products where price is greater than cost (profitable products):
+
+```graphql
+query {
+  products(
+    where: {
+      _compare: {
+        left: "price"
+        operator: GT
+        right: "cost_price"
+      }
+    }
+  ) {
+    id
+    name
+    price
+    costPrice
+  }
+}
+```
+
+### Comparison with Multiplier
+
+Find products with at least 50% markup (price >= cost * 1.5):
+
+```graphql
+query {
+  products(
+    where: {
+      _compare: {
+        left: "price"
+        operator: GTE
+        right: "cost_price"
+        right_multiplier: 1.5
+      }
+    }
+  ) {
+    id
+    name
+    price
+    costPrice
+  }
+}
+```
+
+### Comparison with Offset
+
+Find products with at least $30 margin (price > cost + 30):
+
+```graphql
+query {
+  products(
+    where: {
+      _compare: {
+        left: "price"
+        operator: GT
+        right: "cost_price"
+        right_offset: 30
+      }
+    }
+  ) {
+    id
+    name
+    price
+    costPrice
+  }
+}
+```
+
+### Comparison with Multiplier and Offset
+
+Find products where price > cost * 1.2 + 10:
+
+```graphql
+query {
+  products(
+    where: {
+      _compare: {
+        left: "price"
+        operator: GT
+        right: "cost_price"
+        right_multiplier: 1.2
+        right_offset: 10
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Comparison Operators
+
+| Operator | Description |
+|----------|-------------|
+| `EQ` | Equal |
+| `NEQ` | Not equal |
+| `GT` | Greater than |
+| `GTE` | Greater than or equal |
+| `LT` | Less than |
+| `LTE` | Less than or equal |
+
+### Field Compare Filter Input Reference
+
+```graphql
+enum CompareOperatorEnum {
+  EQ
+  NEQ
+  GT
+  GTE
+  LT
+  LTE
+}
+
+input FieldCompareFilterInput {
+  # Left-hand field name
+  left: String!
+
+  # Comparison operator
+  operator: CompareOperatorEnum!
+
+  # Right-hand field name
+  right: String!
+
+  # Optional multiplier for right-hand field
+  right_multiplier: Float
+
+  # Optional offset to add to right-hand field
+  right_offset: Float
+}
+```
+
+---
+
+## Distinct Count Aggregation Filters
+
+Distinct count filters allow you to filter by the count of unique values in a related field. This is an extension of standard aggregation filters.
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_distinct_count": True,
+    }
+}
+```
+
+### Basic Distinct Count
+
+Find products with at least 3 distinct unit prices in their orders:
+
+```graphql
+query {
+  products(
+    where: {
+      order_items_agg: {
+        field: "unit_price"
+        count_distinct: { gte: 3 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Distinct Count vs Regular Count
+
+Regular `count` counts all records, while `count_distinct` counts unique values:
+
+```graphql
+query {
+  products(
+    where: {
+      # At least 5 orders with at least 3 different prices
+      order_items_agg: {
+        field: "unit_price"
+        count: { gte: 5 }
+        count_distinct: { gte: 3 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Aggregation Filter Input with Distinct Count
+
+```graphql
+input AggregationFilterInput {
+  # Field to aggregate (defaults to "id")
+  field: String
+
+  # Standard aggregations
+  sum: FloatFilterInput
+  avg: FloatFilterInput
+  min: FloatFilterInput
+  max: FloatFilterInput
+  count: IntFilterInput
+
+  # Count of distinct values
+  count_distinct: IntFilterInput
+}
+```
+
+---
+
+## Date Truncation Filters
+
+Date truncation filters allow you to filter date/datetime fields by truncated parts (year, quarter, month, week, day, hour, minute). This uses Django's TruncYear, TruncMonth, etc. functions.
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_date_trunc_filters": True,
+    }
+}
+```
+
+### Filter by Current Period
+
+Find products created this year:
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_trunc: {
+        precision: YEAR
+        this_period: true
+      }
+    }
+  ) {
+    id
+    name
+    createdAt
+  }
+}
+```
+
+### Filter by Last Period
+
+Find orders from last month:
+
+```graphql
+query {
+  orders(
+    where: {
+      created_at_trunc: {
+        precision: MONTH
+        last_period: true
+      }
+    }
+  ) {
+    id
+    total
+    createdAt
+  }
+}
+```
+
+### Filter by Specific Year
+
+Find products created in 2024:
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_trunc: {
+        precision: YEAR
+        year: 2024
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Filter by Year and Month
+
+Find products created in March 2024:
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_trunc: {
+        precision: MONTH
+        year: 2024
+        month: 3
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Filter by Quarter
+
+Find products created in Q2 (April-June):
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_trunc: {
+        precision: QUARTER
+        year: 2024
+        quarter: 2
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Filter by Week Number
+
+Find products created in week 10 of the year:
+
+```graphql
+query {
+  products(
+    where: {
+      created_at_trunc: {
+        precision: WEEK
+        year: 2024
+        week: 10
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Precision Levels
+
+| Precision | Description | Truncates to |
+|-----------|-------------|--------------|
+| `YEAR` | Year level | Start of year |
+| `QUARTER` | Quarter level | Start of quarter |
+| `MONTH` | Month level | Start of month |
+| `WEEK` | Week level | Start of week (Monday) |
+| `DAY` | Day level | Start of day |
+| `HOUR` | Hour level | Start of hour |
+| `MINUTE` | Minute level | Start of minute |
+
+### Date Truncation Filter Input Reference
+
+```graphql
+enum DateTruncPrecisionEnum {
+  YEAR
+  QUARTER
+  MONTH
+  WEEK
+  DAY
+  HOUR
+  MINUTE
+}
+
+input DateTruncFilterInput {
+  # Truncation precision level
+  precision: DateTruncPrecisionEnum!
+
+  # ISO date string to match exactly
+  value: String
+
+  # Filter by specific year
+  year: Int
+
+  # Filter by quarter (1-4)
+  quarter: Int
+
+  # Filter by month (1-12)
+  month: Int
+
+  # Filter by ISO week number (1-53)
+  week: Int
+
+  # Filter by current period (this year/month/week/etc.)
+  this_period: Boolean
+
+  # Filter by previous period (last year/month/week/etc.)
+  last_period: Boolean
+}
+```
+
+---
+
 ## Combining Advanced Filters
 
 Advanced filters can be combined with standard filters and boolean operators:

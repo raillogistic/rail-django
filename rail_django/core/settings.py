@@ -316,6 +316,9 @@ class FilteringSettings:
     enable_subquery_filters: bool = True
     enable_conditional_aggregation: bool = True
     enable_array_filters: bool = True
+    enable_field_comparison: bool = True
+    enable_distinct_count: bool = True
+    enable_date_trunc_filters: bool = True
 
     # Security settings for filter validation
     max_filter_depth: int = 10

@@ -50,7 +50,10 @@ from django.db.models import (
     Window,
 )
 from django.db.models.fields import IntegerField, FloatField
-from django.db.models.functions import Rank, DenseRank, RowNumber, PercentRank, Lag, Lead
+from django.db.models.functions import (
+    Rank, DenseRank, RowNumber, PercentRank, Lag, Lead,
+    TruncYear, TruncQuarter, TruncMonth, TruncWeek, TruncDay, TruncHour, TruncMinute,
+)
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -558,7 +561,7 @@ class AggregationFilterInput(graphene.InputObjectType):
     """
     Filter input for aggregated values on related objects.
 
-    Supports SUM, AVG, MIN, MAX, and COUNT on a selected field.
+    Supports SUM, AVG, MIN, MAX, COUNT, and COUNT_DISTINCT on a selected field.
     """
 
     field = graphene.String(required=True, description="Field to aggregate")
@@ -567,6 +570,11 @@ class AggregationFilterInput(graphene.InputObjectType):
     min = graphene.InputField(FloatFilterInput, description="Filter by MIN")
     max = graphene.InputField(FloatFilterInput, description="Filter by MAX")
     count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
+    count_distinct = graphene.InputField(
+        IntFilterInput,
+        name="count_distinct",
+        description="Filter by COUNT of distinct values",
+    )
 
 
 class ConditionalAggregationFilterInput(graphene.InputObjectType):
@@ -692,6 +700,100 @@ class ArrayFilterInput(graphene.InputObjectType):
     )
     length = graphene.InputField(IntFilterInput, description="Filter by array length")
     is_null = graphene.Boolean(name="is_null", description="Array is null")
+
+
+# =============================================================================
+# F() Expression Comparison Filter
+# =============================================================================
+
+
+class CompareOperatorEnum(graphene.Enum):
+    """Comparison operators for field-to-field comparisons."""
+
+    EQ = "eq"
+    NEQ = "neq"
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+
+
+class FieldCompareFilterInput(graphene.InputObjectType):
+    """
+    Filter input for comparing fields to each other using F() expressions.
+
+    Enables queries like "price > cost_price" or "updated_at > created_at".
+    """
+
+    left = graphene.String(
+        required=True,
+        description="Left-hand field name to compare",
+    )
+    operator = graphene.Field(
+        CompareOperatorEnum,
+        required=True,
+        description="Comparison operator: eq, neq, gt, gte, lt, lte",
+    )
+    right = graphene.String(
+        required=True,
+        description="Right-hand field name to compare against",
+    )
+    right_multiplier = graphene.Float(
+        name="right_multiplier",
+        description="Optional multiplier for the right-hand field (e.g., 1.5 for right * 1.5)",
+    )
+    right_offset = graphene.Float(
+        name="right_offset",
+        description="Optional offset to add to the right-hand field (e.g., 10 for right + 10)",
+    )
+
+
+# =============================================================================
+# Date Truncation Filter
+# =============================================================================
+
+
+class DateTruncPrecisionEnum(graphene.Enum):
+    """Date truncation precision levels."""
+
+    YEAR = "year"
+    QUARTER = "quarter"
+    MONTH = "month"
+    WEEK = "week"
+    DAY = "day"
+    HOUR = "hour"
+    MINUTE = "minute"
+
+
+class DateTruncFilterInput(graphene.InputObjectType):
+    """
+    Filter input for date truncation comparisons.
+
+    Enables filtering by truncated date parts (e.g., all orders in Q1 2024).
+    """
+
+    precision = graphene.Field(
+        DateTruncPrecisionEnum,
+        required=True,
+        description="Truncation precision: year, quarter, month, week, day, hour, minute",
+    )
+    # Filter by specific value
+    value = graphene.String(
+        description="Date value to match (ISO format: 2024-01-01 or 2024-03 for month)",
+    )
+    year = graphene.Int(description="Filter by year")
+    quarter = graphene.Int(description="Filter by quarter (1-4)")
+    month = graphene.Int(description="Filter by month (1-12)")
+    week = graphene.Int(description="Filter by week number (1-53)")
+    # Relative period filters
+    this_period = graphene.Boolean(
+        name="this_period",
+        description="Filter by current period (this year/quarter/month/week/day)",
+    )
+    last_period = graphene.Boolean(
+        name="last_period",
+        description="Filter by previous period (last year/quarter/month/week/day)",
+    )
 
 
 class FullTextSearchTypeEnum(graphene.Enum):
@@ -977,6 +1079,22 @@ class NestedFilterInputGenerator:
             ):
                 fields.update(self._generate_array_field_filters(model))
 
+            # Add field comparison filter if enabled
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_field_comparison", False
+            ):
+                fields["_compare"] = graphene.InputField(
+                    FieldCompareFilterInput,
+                    name="_compare",
+                    description="Compare fields to each other (e.g., price > cost_price)",
+                )
+
+            # Add date truncation filters for date/datetime fields
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_date_trunc_filters", False
+            ):
+                fields.update(self._generate_date_trunc_filters(model))
+
             # Add include filter for ID union
             fields["include"] = graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.ID)),
@@ -1062,6 +1180,27 @@ class NestedFilterInputGenerator:
             pass
         except Exception as e:
             logger.debug(f"Error generating array filters for {model.__name__}: {e}")
+
+        return fields
+
+    def _generate_date_trunc_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """Generate date truncation filters for date/datetime fields."""
+        fields = {}
+
+        for field in model._meta.get_fields():
+            if not hasattr(field, "name"):
+                continue
+
+            if isinstance(field, (models.DateField, models.DateTimeField)):
+                field_name = field.name
+                trunc_field_name = f"{field_name}_trunc"
+                fields[trunc_field_name] = graphene.InputField(
+                    DateTruncFilterInput,
+                    name=trunc_field_name,
+                    description=f"Filter {field_name} by truncated date parts",
+                )
 
         return fields
 
@@ -1519,6 +1658,13 @@ class NestedFilterApplicator:
         window_filter = where_input.pop("_window", None)
         subquery_filter = where_input.pop("_subquery", None)
         exists_filter = where_input.pop("_exists", None)
+        compare_filter = where_input.pop("_compare", None)
+
+        # Extract date trunc filters (they have _trunc suffix)
+        date_trunc_filters = {}
+        for key in list(where_input.keys()):
+            if key.endswith("_trunc"):
+                date_trunc_filters[key] = where_input.pop(key)
 
         # First, prepare queryset with aggregation annotations if needed
         queryset = self.prepare_queryset_for_aggregation_filters(queryset, where_input)
@@ -1604,6 +1750,29 @@ class NestedFilterApplicator:
             exists_q = self._build_exists_filter_q(exists_filter, model)
             if exists_q:
                 q_object &= exists_q
+
+        # Apply field comparison filter
+        if compare_filter and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_field_comparison", False
+        ):
+            compare_q = self._build_field_compare_q(compare_filter)
+            if compare_q:
+                q_object &= compare_q
+
+        # Apply date truncation filters
+        if date_trunc_filters and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_date_trunc_filters", False
+        ):
+            for field_key, trunc_filter in date_trunc_filters.items():
+                # field_key is like "created_at_trunc", base field is "created_at"
+                base_field = field_key[:-6]  # Remove "_trunc"
+                trunc_q, trunc_annotations = self._build_date_trunc_filter_q(
+                    base_field, trunc_filter
+                )
+                if trunc_annotations:
+                    queryset = queryset.annotate(**trunc_annotations)
+                if trunc_q:
+                    q_object &= trunc_q
 
         if q_object:
             queryset = queryset.filter(q_object)
@@ -1967,7 +2136,7 @@ class NestedFilterApplicator:
         q = Q()
         target_field = agg_filter.get("field") or "id"
 
-        for agg_type in ("sum", "avg", "min", "max", "count"):
+        for agg_type in ("sum", "avg", "min", "max", "count", "count_distinct"):
             agg_value = agg_filter.get(agg_type)
             if not isinstance(agg_value, dict):
                 continue
@@ -2211,6 +2380,12 @@ class NestedFilterApplicator:
                 field_path, target_field, "count"
             )
             annotations[annotation_name] = Count(lookup_path)
+
+        if agg_filter.get("count_distinct") is not None:
+            annotation_name = self._aggregation_annotation_name(
+                field_path, target_field, "count_distinct"
+            )
+            annotations[annotation_name] = Count(lookup_path, distinct=True)
 
         return annotations
 
@@ -2590,6 +2765,216 @@ class NestedFilterApplicator:
             pass
 
         return q
+
+    # =========================================================================
+    # F() Expression Comparison Filter Methods
+    # =========================================================================
+
+    def _build_field_compare_q(
+        self,
+        compare_filter: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for F() expression field comparisons.
+
+        Allows comparing one field to another, with optional multiplier/offset.
+        Example: price > cost_price * 1.5 + 10
+        """
+        q = Q()
+
+        left_field = compare_filter.get("left")
+        operator = compare_filter.get("operator")
+        right_field = compare_filter.get("right")
+
+        if not left_field or not operator or not right_field:
+            return q
+
+        # Get operator value (handle enum)
+        if hasattr(operator, "value"):
+            operator = operator.value
+
+        # Build the right-hand side F() expression
+        right_expr = F(right_field)
+
+        # Apply multiplier if provided
+        multiplier = compare_filter.get("right_multiplier")
+        if multiplier is not None:
+            right_expr = right_expr * multiplier
+
+        # Apply offset if provided
+        offset = compare_filter.get("right_offset")
+        if offset is not None:
+            right_expr = right_expr + offset
+
+        # Build the comparison Q object
+        operator_map = {
+            "eq": "exact",
+            "neq": "exact",  # Will be negated
+            "gt": "gt",
+            "gte": "gte",
+            "lt": "lt",
+            "lte": "lte",
+        }
+
+        lookup = operator_map.get(operator)
+        if not lookup:
+            return q
+
+        if operator == "neq":
+            q = ~Q(**{f"{left_field}__{lookup}": right_expr})
+        else:
+            q = Q(**{f"{left_field}__{lookup}": right_expr})
+
+        return q
+
+    # =========================================================================
+    # Date Truncation Filter Methods
+    # =========================================================================
+
+    def _build_date_trunc_filter_q(
+        self,
+        base_field: str,
+        trunc_filter: Dict[str, Any],
+    ) -> tuple[Q, Dict[str, Any]]:
+        """Build Q object and annotations for date truncation filters.
+
+        Allows filtering by truncated date parts (year, quarter, month, etc.).
+        """
+        from datetime import date
+
+        q = Q()
+        annotations: Dict[str, Any] = {}
+
+        precision = trunc_filter.get("precision")
+        if not precision:
+            return q, annotations
+
+        # Get precision value (handle enum)
+        if hasattr(precision, "value"):
+            precision = precision.value
+
+        # Map precision to Trunc function
+        trunc_functions = {
+            "year": TruncYear,
+            "quarter": TruncQuarter,
+            "month": TruncMonth,
+            "week": TruncWeek,
+            "day": TruncDay,
+            "hour": TruncHour,
+            "minute": TruncMinute,
+        }
+
+        trunc_func = trunc_functions.get(precision)
+        if not trunc_func:
+            return q, annotations
+
+        # Create annotation name
+        annotation_name = f"_{base_field}_trunc_{precision}"
+        annotations[annotation_name] = trunc_func(base_field)
+
+        # Filter by specific value if provided
+        if trunc_filter.get("value"):
+            try:
+                # Parse the ISO date string
+                from dateutil.parser import parse as parse_date
+                target_date = parse_date(trunc_filter["value"])
+                q &= Q(**{annotation_name: target_date})
+            except (ValueError, ImportError):
+                # Fall back to simple string parsing for common formats
+                try:
+                    value_str = trunc_filter["value"]
+                    if precision == "year":
+                        q &= Q(**{f"{annotation_name}__year": int(value_str[:4])})
+                    elif precision == "month":
+                        parts = value_str.split("-")
+                        if len(parts) >= 2:
+                            q &= Q(**{f"{annotation_name}__year": int(parts[0])})
+                            q &= Q(**{f"{annotation_name}__month": int(parts[1])})
+                except (ValueError, IndexError):
+                    pass
+
+        # Filter by specific parts
+        if trunc_filter.get("year") is not None:
+            q &= Q(**{f"{annotation_name}__year": trunc_filter["year"]})
+
+        if trunc_filter.get("quarter") is not None:
+            # Django doesn't have quarter lookup, compute from month
+            quarter = trunc_filter["quarter"]
+            if 1 <= quarter <= 4:
+                start_month = (quarter - 1) * 3 + 1
+                end_month = quarter * 3
+                q &= Q(**{f"{annotation_name}__month__gte": start_month})
+                q &= Q(**{f"{annotation_name}__month__lte": end_month})
+
+        if trunc_filter.get("month") is not None:
+            q &= Q(**{f"{annotation_name}__month": trunc_filter["month"]})
+
+        if trunc_filter.get("week") is not None:
+            q &= Q(**{f"{annotation_name}__week": trunc_filter["week"]})
+
+        # Handle this_period / last_period
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
+        now = timezone.now() if timezone.is_aware(timezone.now()) else datetime.now()
+
+        if trunc_filter.get("this_period"):
+            if precision == "year":
+                q &= Q(**{f"{annotation_name}__year": today.year})
+            elif precision == "quarter":
+                current_quarter = (today.month - 1) // 3 + 1
+                start_month = (current_quarter - 1) * 3 + 1
+                end_month = current_quarter * 3
+                q &= Q(**{f"{annotation_name}__year": today.year})
+                q &= Q(**{f"{annotation_name}__month__gte": start_month})
+                q &= Q(**{f"{annotation_name}__month__lte": end_month})
+            elif precision == "month":
+                q &= Q(**{f"{annotation_name}__year": today.year})
+                q &= Q(**{f"{annotation_name}__month": today.month})
+            elif precision == "week":
+                q &= Q(**{f"{annotation_name}__year": today.year})
+                q &= Q(**{f"{annotation_name}__week": today.isocalendar()[1]})
+            elif precision == "day":
+                q &= Q(**{annotation_name: trunc_func(now)})
+            elif precision == "hour":
+                q &= Q(**{annotation_name: trunc_func(now)})
+
+        if trunc_filter.get("last_period"):
+            if precision == "year":
+                q &= Q(**{f"{annotation_name}__year": today.year - 1})
+            elif precision == "quarter":
+                current_quarter = (today.month - 1) // 3 + 1
+                if current_quarter == 1:
+                    last_quarter = 4
+                    year = today.year - 1
+                else:
+                    last_quarter = current_quarter - 1
+                    year = today.year
+                start_month = (last_quarter - 1) * 3 + 1
+                end_month = last_quarter * 3
+                q &= Q(**{f"{annotation_name}__year": year})
+                q &= Q(**{f"{annotation_name}__month__gte": start_month})
+                q &= Q(**{f"{annotation_name}__month__lte": end_month})
+            elif precision == "month":
+                if today.month == 1:
+                    q &= Q(**{f"{annotation_name}__year": today.year - 1})
+                    q &= Q(**{f"{annotation_name}__month": 12})
+                else:
+                    q &= Q(**{f"{annotation_name}__year": today.year})
+                    q &= Q(**{f"{annotation_name}__month": today.month - 1})
+            elif precision == "week":
+                last_week = today.isocalendar()[1] - 1
+                if last_week == 0:
+                    # First week of year, go to last week of previous year
+                    q &= Q(**{f"{annotation_name}__year": today.year - 1})
+                    q &= Q(**{f"{annotation_name}__week": 52})  # Simplified
+                else:
+                    q &= Q(**{f"{annotation_name}__year": today.year})
+                    q &= Q(**{f"{annotation_name}__week": last_week})
+            elif precision == "day":
+                yesterday = today - timedelta(days=1)
+                q &= Q(**{f"{base_field}__date": yesterday})
+
+        return q, annotations
 
     def _build_temporal_q(
         self,

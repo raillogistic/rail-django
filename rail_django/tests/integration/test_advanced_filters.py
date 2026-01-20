@@ -28,6 +28,9 @@ def gql_client_advanced():
                 "enable_subquery_filters": True,
                 "enable_conditional_aggregation": True,
                 "enable_array_filters": True,
+                "enable_field_comparison": True,
+                "enable_distinct_count": True,
+                "enable_date_trunc_filters": True,
             },
         },
     )
@@ -420,3 +423,275 @@ class TestCombinedAdvancedFilters:
         assert "Expensive with Sales" in names
         assert "Cheap with Sales" not in names  # Too cheap
         assert "Expensive no Sales" not in names  # No sales
+
+
+class TestFieldComparisonFilters:
+    """Test F() expression field comparison filters with actual queries."""
+
+    def test_filter_price_greater_than_cost(self, gql_client_advanced):
+        """Filter products where price > cost_price (profitable products)."""
+        _create_product("Profitable", 100, cost_price=50)  # profit margin
+        _create_product("Break Even", 100, cost_price=100)  # no margin
+        _create_product("Loss", 50, cost_price=80)  # negative margin
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+                price
+                costPrice
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_compare": {
+                        "left": "price",
+                        "operator": "GT",
+                        "right": "cost_price",
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Profitable" in names
+        assert "Break Even" not in names
+        assert "Loss" not in names
+
+    def test_filter_with_multiplier(self, gql_client_advanced):
+        """Filter products where price >= cost_price * 1.5 (50%+ markup)."""
+        _create_product("High Markup", 180, cost_price=100)  # 80% markup
+        _create_product("Low Markup", 120, cost_price=100)  # 20% markup
+        _create_product("Medium Markup", 150, cost_price=100)  # 50% markup
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_compare": {
+                        "left": "price",
+                        "operator": "GTE",
+                        "right": "cost_price",
+                        "right_multiplier": 1.5,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "High Markup" in names
+        assert "Medium Markup" in names  # Exactly 50%
+        assert "Low Markup" not in names
+
+    def test_filter_with_offset(self, gql_client_advanced):
+        """Filter products where price > cost_price + 30 (absolute margin)."""
+        _create_product("Good Margin", 100, cost_price=50)  # $50 margin
+        _create_product("Small Margin", 80, cost_price=60)  # $20 margin
+        _create_product("Exact Margin", 80, cost_price=50)  # $30 margin
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_compare": {
+                        "left": "price",
+                        "operator": "GT",
+                        "right": "cost_price",
+                        "right_offset": 30,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Good Margin" in names
+        assert "Small Margin" not in names
+        assert "Exact Margin" not in names  # Exactly $30, not greater
+
+
+class TestDistinctCountFilters:
+    """Test distinct count aggregation filters with actual queries."""
+
+    def test_filter_by_distinct_unit_prices(self, gql_client_advanced):
+        """Filter products by count of distinct unit prices in orders."""
+        p1 = _create_product("Varied Pricing", 100)
+        p2 = _create_product("Fixed Pricing", 200)
+        p3 = _create_product("Some Varied", 300)
+
+        # P1: 3 distinct unit prices
+        _create_order_item(p1, 1, 50)
+        _create_order_item(p1, 2, 60)
+        _create_order_item(p1, 1, 70)
+        _create_order_item(p1, 1, 50)  # Duplicate price
+
+        # P2: 1 distinct unit price
+        _create_order_item(p2, 1, 100)
+        _create_order_item(p2, 2, 100)
+        _create_order_item(p2, 1, 100)
+
+        # P3: 2 distinct unit prices
+        _create_order_item(p3, 1, 150)
+        _create_order_item(p3, 1, 200)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products with at least 3 distinct unit prices
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "order_items_agg": {
+                        "field": "unit_price",
+                        "count_distinct": {"gte": 3},
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Varied Pricing" in names
+        assert "Fixed Pricing" not in names
+        assert "Some Varied" not in names
+
+
+class TestDateTruncFilters:
+    """Test date truncation filters with actual queries."""
+
+    def test_filter_by_year(self, gql_client_advanced):
+        """Filter products created in a specific year."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Create products with different date_creation dates
+        p1 = _create_product("This Year Product", 100)
+        p2 = _create_product("Last Year Product", 200)
+
+        # Manually update date_creation for testing
+        today = timezone.now()
+        last_year = today.replace(year=today.year - 1)
+
+        # Update p2 to be created last year
+        from test_app.models import Product
+        Product.objects.filter(pk=p2.pk).update(date_creation=last_year)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products created this year
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_trunc": {
+                        "precision": "YEAR",
+                        "this_period": True,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "This Year Product" in names
+        assert "Last Year Product" not in names
+
+    def test_filter_by_specific_year(self, gql_client_advanced):
+        """Filter products by specific year value."""
+        from django.utils import timezone
+
+        p1 = _create_product("Current Product", 100)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        current_year = timezone.now().year
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_trunc": {
+                        "precision": "YEAR",
+                        "year": current_year,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Current Product" in names
+
+    def test_filter_by_month(self, gql_client_advanced):
+        """Filter products created in a specific month."""
+        from django.utils import timezone
+
+        p1 = _create_product("This Month Product", 100)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        today = timezone.now()
+
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "date_creation_trunc": {
+                        "precision": "MONTH",
+                        "year": today.year,
+                        "month": today.month,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "This Month Product" in names
+
