@@ -40,24 +40,24 @@ Retrieves complete metadata for a specific model.
 
 ```graphql
 query ModelMetadata($app: String!, $model: String!) {
-  modelSchema(app_label: $app, model_name: $model) {
-    app_label
-    model_name
-    verbose_name
-    verbose_name_plural
+  modelSchema(appLabel: $app, modelName: $model) {
+    appLabel
+    modelName
+    verboseName
+    verboseNamePlural
     description
     fields {
       name
-      verbose_name
-      field_type
-      graphql_type
-      is_required
-      is_read_only
-      is_primary_key
-      is_foreign_key
-      related_model
+      verboseName
+      fieldType
+      graphqlType
+      isRequired
+      isReadOnly
+      isPrimaryKey
+      isForeignKey
+      relatedModel
       description
-      default_value
+      defaultValue
       choices {
         value
         label
@@ -68,15 +68,15 @@ query ModelMetadata($app: String!, $model: String!) {
       }
     }
     filtering {
-      quick_fields
-      filter_fields {
+      quickFields
+      filterFields {
         field
         lookups
       }
     }
     ordering {
-      allowed_fields
-      default_ordering
+      allowedFields
+      defaultOrdering
     }
     access {
       operations {
@@ -95,14 +95,14 @@ Lists all available models with summary information.
 ```graphql
 query AvailableModels {
   availableModelsV2 {
-    app_label
-    model_name
-    verbose_name
-    verbose_name_plural
+    appLabel
+    modelName
+    verboseName
+    verboseNamePlural
     description
-    field_count
-    has_mutations
-    is_user_model
+    fieldCount
+    hasMutations
+    isUserModel
   }
 }
 ```
@@ -113,14 +113,14 @@ Retrieves all models for a specific application.
 
 ```graphql
 query AppModels($app: String!) {
-  appSchemas(app_label: $app) {
-    model_name
-    verbose_name
+  appSchemas(appLabel: $app) {
+    modelName
+    verboseName
     description
     fields {
       name
-      field_type
-      is_required
+      fieldType
+      isRequired
     }
   }
 }
@@ -135,10 +135,10 @@ query AppModels($app: String!) {
 ```graphql
 type ModelSchema {
   # ─── Identification ───
-  app_label: String!
-  model_name: String!
-  verbose_name: String
-  verbose_name_plural: String
+  appLabel: String!
+  modelName: String!
+  verboseName: String
+  verboseNamePlural: String
   description: String
 
   # ─── Fields ───
@@ -159,29 +159,29 @@ type ModelSchema {
 
 type FieldSchema {
   name: String!
-  verbose_name: String
-  field_type: String!
-  graphql_type: String!
+  verboseName: String
+  fieldType: String!
+  graphqlType: String!
 
   # ─── Constraints ───
-  is_required: Boolean!
-  is_read_only: Boolean!
-  is_primary_key: Boolean!
-  is_unique: Boolean!
-  max_length: Int
-  min_value: Float
-  max_value: Float
+  isRequired: Boolean!
+  isReadOnly: Boolean!
+  isPrimaryKey: Boolean!
+  isUnique: Boolean!
+  maxLength: Int
+  minValue: Float
+  maxValue: Float
 
   # ─── Relationships ───
-  is_foreign_key: Boolean!
-  is_many_to_many: Boolean!
-  related_model: String
-  related_name: String
+  isForeignKey: Boolean!
+  isManyToMany: Boolean!
+  relatedModel: String
+  relatedName: String
 
   # ─── Display ───
   description: String
-  help_text: String
-  default_value: String
+  helpText: String
+  defaultValue: String
   placeholder: String
 
   # ─── Choices ───
@@ -203,16 +203,16 @@ type FieldSchema {
 
 | Flag              | Description               |
 | ----------------- | ------------------------- |
-| `is_primary_key`  | Primary identifier        |
-| `is_foreign_key`  | Foreign key relationship  |
-| `is_many_to_many` | Many-to-many relationship |
-| `is_required`     | Mandatory field           |
-| `is_read_only`    | Read-only field           |
-| `is_unique`       | Unique constraint         |
-| `is_indexed`      | Has database index        |
-| `is_searchable`   | Included in quick search  |
-| `is_filterable`   | Can be filtered           |
-| `is_sortable`     | Can be sorted             |
+| `isPrimaryKey`    | Primary identifier        |
+| `isForeignKey`    | Foreign key relationship  |
+| `isManyToMany`    | Many-to-many relationship |
+| `isRequired`      | Mandatory field           |
+| `isReadOnly`      | Read-only field           |
+| `isUnique`        | Unique constraint         |
+| `isIndexed`       | Has database index        |
+| `isSearchable`    | Included in quick search  |
+| `isFilterable`    | Can be filtered           |
+| `isSortable`      | Can be sorted             |
 
 ### Classifications
 
@@ -237,7 +237,7 @@ Query classifications:
 
 ```graphql
 query SensitiveFields($app: String!, $model: String!) {
-  modelSchema(app_label: $app, model_name: $model) {
+  modelSchema(appLabel: $app, modelName: $model) {
     fields {
       name
       classifications
@@ -263,12 +263,12 @@ type FieldSchema {
 
 ```graphql
 query FieldVisibilityForRole($app: String!, $model: String!, $role: String!) {
-  modelSchemaForRole(app_label: $app, model_name: $model, role: $role) {
+  modelSchemaForRole(appLabel: $app, modelName: $model, role: $role) {
     fields {
       name
       visibility
-      can_read
-      can_write
+      canRead
+      canWrite
     }
   }
 }
@@ -285,18 +285,18 @@ import { useQuery, gql } from "@apollo/client";
 
 const MODEL_SCHEMA = gql`
   query ModelSchema($app: String!, $model: String!) {
-    modelSchema(app_label: $app, model_name: $model) {
+    modelSchema(appLabel: $app, modelName: $model) {
       fields {
         name
-        verbose_name
-        field_type
-        is_required
-        is_read_only
+        verboseName
+        fieldType
+        isRequired
+        isReadOnly
         choices {
           value
           label
         }
-        max_length
+        maxLength
       }
     }
   }
@@ -315,12 +315,12 @@ function DynamicForm({ app, model }) {
         <FormField
           key={field.name}
           name={field.name}
-          label={field.verbose_name}
-          type={mapFieldType(field.field_type)}
-          required={field.is_required}
-          readOnly={field.is_read_only}
+          label={field.verboseName}
+          type={mapFieldType(field.fieldType)}
+          required={field.isRequired}
+          readOnly={field.isReadOnly}
           options={field.choices}
-          maxLength={field.max_length}
+          maxLength={field.maxLength}
         />
       ))}
     </form>
@@ -357,11 +357,11 @@ function DynamicTable({ app, model }) {
   if (!schemaData || !listData) return <Loading />;
 
   const columns = schemaData.modelSchema.fields
-    .filter((f) => !f.is_read_only || f.is_primary_key)
+    .filter((f) => !f.isReadOnly || f.isPrimaryKey)
     .map((field) => ({
       key: field.name,
-      header: field.verbose_name,
-      sortable: schemaData.modelSchema.ordering.allowed_fields.includes(
+      header: field.verboseName,
+      sortable: schemaData.modelSchema.ordering.allowedFields.includes(
         field.name
       ),
     }));
@@ -438,12 +438,12 @@ class Product(models.Model):
 | -------------------- | --------------- | ---------------- |
 | Query name           | `modelMetadata` | `modelSchema`    |
 | Field types          | Django names    | Django + GraphQL |
-| Classifications      | ❌              | ✅               |
-| Validators           | ❌              | ✅               |
-| Visibility levels    | ❌              | ✅               |
-| Per-role queries     | ❌              | ✅               |
+| Classifications      | No              | Yes              |
+| Validators           | No              | Yes              |
+| Visibility levels    | No              | Yes              |
+| Per-role queries     | No              | Yes              |
 | Filter configuration | Basic           | Complete         |
-| Sort configuration   | ❌              | ✅               |
+| Sort configuration   | No              | Yes              |
 | Nested relationships | Limited         | Complete         |
 
 ### Migration from V1
@@ -451,7 +451,7 @@ class Product(models.Model):
 ```graphql
 # V1 (deprecated)
 query {
-  modelMetadata(app_label: "store", model_name: "Product") {
+  modelMetadata(appLabel: "store", modelName: "Product") {
     fields {
       name
       type
@@ -461,11 +461,11 @@ query {
 
 # V2 (recommended)
 query {
-  modelSchema(app_label: "store", model_name: "Product") {
+  modelSchema(appLabel: "store", modelName: "Product") {
     fields {
       name
-      field_type
-      graphql_type
+      fieldType
+      graphqlType
       validators {
         type
         params

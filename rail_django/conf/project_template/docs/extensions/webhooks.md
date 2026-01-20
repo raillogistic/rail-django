@@ -433,17 +433,17 @@ def on_webhook_failed(endpoint, payload, error, attempt):
 
 ```graphql
 query WebhookLogs {
-  webhook_logs(endpoint: "orders", status: "failed", limit: 50) {
+  webhookLogs(endpoint: "orders", status: "failed", limit: 50) {
     id
-    endpoint_name
-    event_type
+    endpointName
+    eventType
     payload
     status
-    status_code
-    error_message
+    statusCode
+    errorMessage
     attempts
-    created_at
-    completed_at
+    createdAt
+    completedAt
   }
 }
 ```

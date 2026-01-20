@@ -215,8 +215,8 @@ RAIL_DJANGO_GRAPHQL = {
         "authentication_required": True,
         # Master toggle for pagination fields
         "enable_pagination": True,
-        # Keep snake_case names when False
-        "auto_camelcase": False,
+        # Use camelCase names when True
+        "auto_camelcase": True,
         # Disable login/register/etc mutations
         "disable_security_mutations": False,
         # Enable built-in health/audit mutations
@@ -248,7 +248,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Alias for generate_filters
         "enable_filtering": True,
         # CamelCase type field names
-        "auto_camelcase": False,
+        "auto_camelcase": True,
         # Use model help_text as descriptions
         "generate_descriptions": True,
     },
@@ -704,7 +704,7 @@ Rail Django uses a nested filter syntax (Prisma/Hasura style) with typed
 per-field inputs.
 
 **Exact Match:**
-`products(where: { is_active: { eq: true } })`
+`products(where: { isActive: { eq: true } })`
 
 **String Search (Case-Insensitive):**
 `products(where: { name: { icontains: "phone" } })`
@@ -713,7 +713,7 @@ per-field inputs.
 `products(where: { price: { between: [100, 500] } })`
 
 **Related Fields:**
-`products(where: { category_rel: { name: { icontains: "Electronics" } } })`
+`products(where: { categoryRel: { name: { icontains: "Electronics" } } })`
 
 ### Pagination Strategies
 
@@ -741,7 +741,7 @@ _To enable Relay-style (Cursor) pagination, update `query_settings` in `settings
 ### Ordering
 
 Sort results by any field.
-`products(order_by: ["-price", "name"])` (High to low price, then A-Z)
+`products(orderBy: ["-price", "name"])` (High to low price, then A-Z)
 
 ---
 
@@ -1233,8 +1233,8 @@ GraphQL example:
 
 ```graphql
 mutation {
-  generate_report(dataset_id: "123") {
-    task_id
+  generateReport(datasetId: "123") {
+    taskId
     status
   }
 }
@@ -1316,11 +1316,11 @@ Auto-generate GraphQL subscriptions for per-model create/update/delete events.
     channel layer that supports multi-process messaging.
 
 5.  **Subscribe from GraphQL:**
-    Subscription field names are snake_case (for example `category_created`).
+    Subscription field names are camelCase (for example `categoryCreated`).
 
     ```graphql
     subscription {
-      category_created(filters: { name: { icontains: "book" } }) {
+      categoryCreated(filters: { name: { icontains: "book" } }) {
         event
         id
         node {
@@ -1545,7 +1545,7 @@ query {
 
     # Available mutations
     mutations {
-      name # e.g., "create_Product"
+      name # e.g., "createProduct"
       operation # CREATE, UPDATE, DELETE, METHOD
       allowed # Permission check result
       requiredPermissions

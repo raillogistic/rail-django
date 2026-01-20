@@ -54,7 +54,7 @@ _Note: Apps are created inside an `apps/` directory by default._
 - `rail_django/bin/`: CLI entry points (`rail_admin`).
 - `rail_django/conf/`: Framework configuration and project templates.
 - `rail_django/core/`: Core logic (Registry, SettingsProxy, Schema building, Snapshots).
-- `rail_django/generators/`: Logic for auto-generating GraphQL schemas from models snake_case.
+- `rail_django/generators/`: Logic for auto-generating GraphQL schemas from models with camelCase field names.
 - `rail_django/extensions/`: Pluggable features (Auth, Audit, Health, Exporting, Observability, Subscriptions).
 - `rail_django/security/`: Security implementations (RBAC, Validation).
 - `rail_django/webhooks/`: Webhook dispatcher, configuration, and signal handling.

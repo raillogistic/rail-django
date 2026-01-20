@@ -10,7 +10,7 @@ query {
     where: {
       username: { icontains: "john" }
       age: { gte: 18 }
-      is_active: { eq: true }
+      isActive: { eq: true }
     }
   ) {
     id
@@ -31,10 +31,10 @@ query {
     where: {
       AND: [
         { title: { icontains: "python" } }
-        { category_rel: { name: { eq: "Programming" } } }
+        { categoryRel: { name: { eq: "Programming" } } }
       ]
       OR: [{ status: { eq: "published" } }, { status: { eq: "featured" } }]
-      NOT: { is_draft: { eq: true } }
+      NOT: { isDraft: { eq: true } }
     }
   ) {
     id
@@ -53,13 +53,13 @@ query {
 | `neq`          | Not equal                      | `{ name: { neq: "Admin" } }`                |
 | `contains`     | Contains (case-sensitive)      | `{ name: { contains: "doe" } }`             |
 | `icontains`    | Contains (case-insensitive)    | `{ name: { icontains: "doe" } }`            |
-| `starts_with`  | Starts with (case-sensitive)   | `{ name: { starts_with: "J" } }`            |
-| `istarts_with` | Starts with (case-insensitive) | `{ name: { istarts_with: "j" } }`           |
-| `ends_with`    | Ends with (case-sensitive)     | `{ name: { ends_with: "son" } }`            |
-| `iends_with`   | Ends with (case-insensitive)   | `{ name: { iends_with: "SON" } }`           |
+| `startsWith`  | Starts with (case-sensitive)   | `{ name: { startsWith: "J" } }`            |
+| `istartsWith` | Starts with (case-insensitive) | `{ name: { istartsWith: "j" } }`           |
+| `endsWith`    | Ends with (case-sensitive)     | `{ name: { endsWith: "son" } }`            |
+| `iendsWith`   | Ends with (case-insensitive)   | `{ name: { iendsWith: "SON" } }`           |
 | `in`           | In list                        | `{ status: { in: ["A", "B"] } }`            |
-| `not_in`       | Not in list                    | `{ status: { not_in: ["X"] } }`             |
-| `is_null`      | Is null                        | `{ bio: { is_null: true } }`                |
+| `notIn`       | Not in list                    | `{ status: { notIn: ["X"] } }`             |
+| `isNull`      | Is null                        | `{ bio: { isNull: true } }`                |
 | `regex`        | Regex match (case-sensitive)   | `{ email: { regex: ".*@example\\.com" } }`  |
 | `iregex`       | Regex match (case-insensitive) | `{ email: { iregex: ".*@EXAMPLE\\.com" } }` |
 
@@ -74,41 +74,41 @@ query {
 | `lt`      | Less than                 | `{ price: { lt: 100 } }`           |
 | `lte`     | Less than or equal        | `{ price: { lte: 100 } }`          |
 | `in`      | In list                   | `{ quantity: { in: [1, 5, 10] } }` |
-| `not_in`  | Not in list               | `{ quantity: { not_in: [0] } }`    |
+| `notIn`  | Not in list               | `{ quantity: { notIn: [0] } }`    |
 | `between` | Between range (inclusive) | `{ price: { between: [10, 50] } }` |
-| `is_null` | Is null                   | `{ discount: { is_null: true } }`  |
+| `isNull` | Is null                   | `{ discount: { isNull: true } }`  |
 
 ### Boolean Filters
 
 | Operator  | Description | Example                            |
 | --------- | ----------- | ---------------------------------- |
 | `eq`      | Equal to    | `{ is_active: { eq: true } }`      |
-| `is_null` | Is null     | `{ verified: { is_null: false } }` |
+| `isNull` | Is null     | `{ verified: { isNull: false } }` |
 
 ### Date Filters
 
 | Operator     | Description               | Example                                                  |
 | ------------ | ------------------------- | -------------------------------------------------------- |
-| `eq`         | Equal to                  | `{ birth_date: { eq: "1990-01-15" } }`                   |
-| `neq`        | Not equal to              | `{ birth_date: { neq: "2000-01-01" } }`                  |
+| `eq`         | Equal to                  | `{ birthDate: { eq: "1990-01-15" } }`                   |
+| `neq`        | Not equal to              | `{ birthDate: { neq: "2000-01-01" } }`                  |
 | `gt`         | After date                | `{ created: { gt: "2024-01-01" } }`                      |
 | `gte`        | On or after date          | `{ created: { gte: "2024-01-01" } }`                     |
 | `lt`         | Before date               | `{ created: { lt: "2025-01-01" } }`                      |
 | `lte`        | On or before date         | `{ created: { lte: "2025-01-01" } }`                     |
 | `between`    | Between dates (inclusive) | `{ created: { between: ["2024-01-01", "2024-12-31"] } }` |
-| `is_null`    | Is null                   | `{ deleted_at: { is_null: true } }`                      |
+| `isNull`    | Is null                   | `{ deletedAt: { isNull: true } }`                      |
 | `year`       | Filter by year            | `{ created: { year: 2024 } }`                            |
 | `month`      | Filter by month (1-12)    | `{ created: { month: 12 } }`                             |
 | `day`        | Filter by day of month    | `{ created: { day: 25 } }`                               |
-| `week_day`   | Filter by day of week     | `{ created: { week_day: 1 } }`                           |
+| `weekDay`   | Filter by day of week     | `{ created: { weekDay: 1 } }`                           |
 | `today`      | Is today                  | `{ created: { today: true } }`                           |
 | `yesterday`  | Is yesterday              | `{ created: { yesterday: true } }`                       |
-| `this_week`  | Is this week              | `{ created: { this_week: true } }`                       |
-| `past_week`  | Is past week              | `{ created: { past_week: true } }`                       |
-| `this_month` | Is this month             | `{ created: { this_month: true } }`                      |
-| `past_month` | Is past month             | `{ created: { past_month: true } }`                      |
-| `this_year`  | Is this year              | `{ created: { this_year: true } }`                       |
-| `past_year`  | Is past year              | `{ created: { past_year: true } }`                       |
+| `thisWeek`  | Is this week              | `{ created: { thisWeek: true } }`                       |
+| `pastWeek`  | Is past week              | `{ created: { pastWeek: true } }`                       |
+| `thisMonth` | Is this month             | `{ created: { thisMonth: true } }`                      |
+| `pastMonth` | Is past month             | `{ created: { pastMonth: true } }`                      |
+| `thisYear`  | Is this year              | `{ created: { thisYear: true } }`                       |
+| `pastYear`  | Is past year              | `{ created: { pastYear: true } }`                       |
 
 ### DateTime Filters
 
@@ -128,7 +128,7 @@ DateTime filters include all Date operators plus:
 | `neq`     | Not equal to | `{ id: { neq: "456" } }`           |
 | `in`      | In list      | `{ id: { in: ["1", "2", "3"] } }`  |
 | `not_in`  | Not in list  | `{ id: { not_in: ["999"] } }`      |
-| `is_null` | Is null      | `{ parent_id: { is_null: true } }` |
+| `isNull` | Is null      | `{ parentId: { isNull: true } }` |
 
 ### UUID Filters
 
@@ -139,10 +139,10 @@ Same operators as ID filters, but accepts UUID strings.
 | Operator       | Description            | Example                                  |
 | -------------- | ---------------------- | ---------------------------------------- |
 | `eq`           | Equal to (entire JSON) | `{ meta: { eq: "{}" } }`                 |
-| `is_null`      | Is null                | `{ meta: { is_null: true } }`            |
-| `has_key`      | Has key                | `{ meta: { has_key: "version" } }`       |
-| `has_keys`     | Has all keys           | `{ meta: { has_keys: ["a", "b"] } }`     |
-| `has_any_keys` | Has any key            | `{ meta: { has_any_keys: ["x", "y"] } }` |
+| `isNull`      | Is null                | `{ meta: { isNull: true } }`            |
+| `hasKey`      | Has key                | `{ meta: { hasKey: "version" } }`       |
+| `hasKeys`     | Has all keys           | `{ meta: { hasKeys: ["a", "b"] } }`     |
+| `hasAnyKeys` | Has any key            | `{ meta: { hasAnyKeys: ["x", "y"] } }` |
 
 ## Relation Filters
 
@@ -157,7 +157,7 @@ query {
       # Filter by category ID
       category: { eq: "5" }
       # OR filter by nested category fields
-      category_rel: { name: { eq: "Technology" }, is_active: { eq: true } }
+      categoryRel: { name: { eq: "Technology" }, isActive: { eq: true } }
     }
   ) {
     id
@@ -172,10 +172,10 @@ Use quantifier suffixes for M2M and reverse relations:
 
 | Suffix   | Description                         | Example                                     |
 | -------- | ----------------------------------- | ------------------------------------------- |
-| `_some`  | At least one related object matches | `tags_some: { name: { eq: "python" } }`     |
-| `_every` | All related objects match           | `tags_every: { is_approved: { eq: true } }` |
-| `_none`  | No related objects match            | `tags_none: { name: { eq: "deprecated" } }` |
-| `_count` | Count of related objects            | `tags_count: { gte: 3 }`                    |
+| `Some`  | At least one related object matches | `tagsSome: { name: { eq: "python" } }`     |
+| `Every` | All related objects match           | `tagsEvery: { isApproved: { eq: true } }` |
+| `None`  | No related objects match            | `tagsNone: { name: { eq: "deprecated" } }` |
+| `Count` | Count of related objects            | `tagsCount: { gte: 3 }`                    |
 
 Example:
 
@@ -184,11 +184,11 @@ query {
   posts(
     where: {
       # Posts with at least one "python" tag
-      tags_some: { name: { icontains: "python" } }
+      tagsSome: { name: { icontains: "python" } }
       # Posts with at least 2 comments
-      comments_count: { gte: 2 }
+      commentsCount: { gte: 2 }
       # Posts with no "deprecated" tags
-      tags_none: { name: { eq: "deprecated" } }
+      tagsNone: { name: { eq: "deprecated" } }
     }
   ) {
     id
@@ -201,12 +201,12 @@ query {
 
 | Operator | Description       | Example                           |
 | -------- | ----------------- | --------------------------------- |
-| `eq`     | Exactly N related | `{ comments_count: { eq: 5 } }`   |
-| `neq`    | Not N related     | `{ comments_count: { neq: 0 } }`  |
-| `gt`     | More than N       | `{ comments_count: { gt: 10 } }`  |
-| `gte`    | N or more         | `{ comments_count: { gte: 1 } }`  |
-| `lt`     | Fewer than N      | `{ comments_count: { lt: 100 } }` |
-| `lte`    | N or fewer        | `{ comments_count: { lte: 50 } }` |
+| `eq`     | Exactly N related | `{ commentsCount: { eq: 5 } }`   |
+| `neq`    | Not N related     | `{ commentsCount: { neq: 0 } }`  |
+| `gt`     | More than N       | `{ commentsCount: { gt: 10 } }`  |
+| `gte`    | N or more         | `{ commentsCount: { gte: 1 } }`  |
+| `lt`     | Fewer than N      | `{ commentsCount: { lt: 100 } }` |
+| `lte`    | N or fewer        | `{ commentsCount: { lte: 50 } }` |
 
 ## Aggregation Filters
 
@@ -217,7 +217,7 @@ field to aggregate and one or more aggregate filters (`sum`, `avg`, `min`, `max`
 ```graphql
 query {
   products(
-    where: { order_items_agg: { field: "unit_price", sum: { gte: 1000 } } }
+    where: { orderItemsAgg: { field: "unitPrice", sum: { gte: 1000 } } }
   ) {
     id
     name
@@ -227,7 +227,7 @@ query {
 
 ```graphql
 query {
-  products(where: { order_items_agg: { field: "id", count: { gte: 2 } } }) {
+  products(where: { orderItemsAgg: { field: "id", count: { gte: 2 } } }) {
     id
     name
   }
@@ -251,7 +251,7 @@ class Order(models.Model):
     class GraphQLMeta:
         filter_presets = {
             "recent": {
-                "created_at": {"this_month": True}
+                "createdAt": {"thisMonth": True}
             },
             "high_value": {
                 "total": {"gte": 1000}
@@ -282,8 +282,8 @@ Combine multiple presets (AND logic):
 query {
   orders(presets: ["recent", "high_value"]) {
     id
-    total_amount
-    created_at
+    totalAmount
+    createdAt
   }
 }
 ```
@@ -294,10 +294,10 @@ Mix presets with custom filters:
 query {
   orders(
     presets: ["high_value"]
-    where: { customer_rel: { country: { eq: "US" } } }
+    where: { customerRel: { country: { eq: "US" } } }
   ) {
     id
-    total_amount
+    totalAmount
     customer {
       name
     }
@@ -312,19 +312,19 @@ reuse. They can be private (visible only to the creator) or shared.
 
 ### Creating Saved Filters
 
-Use the `create_savedfilter` mutation to save a filter configuration:
+Use the `createSavedfilter` mutation to save a filter configuration:
 
 ```graphql
 mutation {
-  create_savedfilter(
+  createSavedfilter(
     input: {
       name: "High Value Pending"
-      model_name: "Order"
-      filter_json: { total_amount: { gte: 1000 }, status: { eq: "pending" } }
-      is_shared: true
+      modelName: "Order"
+      filterJson: { totalAmount: { gte: 1000 }, status: { eq: "pending" } }
+      isShared: true
     }
   ) {
-    saved_filter {
+    savedFilter {
       id
       name
     }
@@ -334,13 +334,13 @@ mutation {
 
 ### Applying Saved Filters
 
-Use the `saved_filter` argument in your query to apply a stored filter by name or ID:
+Use the `savedFilter` argument in your query to apply a stored filter by name or ID:
 
 ```graphql
 query {
-  orders(saved_filter: "High Value Pending") {
+  orders(savedFilter: "High Value Pending") {
     id
-    total_amount
+    totalAmount
     status
   }
 }
@@ -351,11 +351,11 @@ You can also combine saved filters with ad-hoc filters (ad-hoc filters take prec
 ```graphql
 query {
   orders(
-    saved_filter: "High Value Pending"
-    where: { created_at: { this_month: true } }
+    savedFilter: "High Value Pending"
+    where: { createdAt: { thisMonth: true } }
   ) {
     id
-    total_amount
+    totalAmount
   }
 }
 ```
@@ -371,7 +371,7 @@ query {
       AND: [
         { name: { icontains: "phone" } }
         { price: { between: [100, 500] } }
-        { is_available: { eq: true } }
+        { isAvailable: { eq: true } }
       ]
     }
   ) {
@@ -387,7 +387,7 @@ query {
 ```graphql
 query {
   users(
-    where: { OR: [{ role: { eq: "admin" } }, { is_superuser: { eq: true } }] }
+    where: { OR: [{ role: { eq: "admin" } }, { isSuperuser: { eq: true } }] }
   ) {
     id
     username
@@ -401,7 +401,7 @@ query {
 query {
   posts(
     where: {
-      NOT: { OR: [{ status: { eq: "draft" } }, { is_deleted: { eq: true } }] }
+      NOT: { OR: [{ status: { eq: "draft" } }, { isDeleted: { eq: true } }] }
     }
   ) {
     id
@@ -417,8 +417,8 @@ query {
   orders(
     where: {
       AND: [
-        { customer_rel: { country: { eq: "US" } } }
-        { OR: [{ total: { gte: 1000 } }, { items_count: { gte: 10 } }] }
+        { customerRel: { country: { eq: "US" } } }
+        { OR: [{ total: { gte: 1000 } }, { itemsCount: { gte: 10 } }] }
       ]
       NOT: { status: { eq: "cancelled" } }
     }
@@ -434,19 +434,19 @@ query {
 Deduplicate results by specific fields (Postgres `DISTINCT ON` equivalent). This is
 useful for queries like "latest order per customer".
 
-**Note:** On Postgres, the `distinct_on` fields must match the beginning of your `order_by` list.
+**Note:** On Postgres, the `distinctOn` fields must match the beginning of your `orderBy` list.
 
 ```graphql
 # Get the single latest product per brand
 query {
   products(
-    distinct_on: ["brand"]
-    order_by: ["brand", "-created_at"]
+    distinctOn: ["brand"]
+    orderBy: ["brand", "-createdAt"]
   ) {
     id
     brand
     name
-    created_at
+    createdAt
   }
 }
 ```
@@ -455,13 +455,13 @@ query {
 # Get the most recent order for each customer
 query {
   orders(
-    distinct_on: ["customer_id"]
-    order_by: ["customer_id", "-created_at"]
+    distinctOn: ["customerId"]
+    orderBy: ["customerId", "-createdAt"]
   ) {
     id
     customer { name }
-    created_at
-    total_amount
+    createdAt
+    totalAmount
   }
 }
 ```
@@ -523,7 +523,7 @@ The `quick` argument provides simple text search across configured fields:
 
 ```graphql
 query {
-  users(quick: "john", where: { is_active: { eq: true } }) {
+  users(quick: "john", where: { isActive: { eq: true } }) {
     id
     username
     email
@@ -777,7 +777,7 @@ query {
     where: {
       _window: {
         function: RANK
-        order_by: ["-price"]
+        orderBy: ["-price"]
         rank: { lte: 3 }
       }
     }
@@ -800,8 +800,8 @@ query {
     where: {
       _window: {
         function: ROW_NUMBER
-        partition_by: ["category_id"]
-        order_by: ["-price"]
+        partitionBy: ["categoryId"]
+        orderBy: ["-price"]
         rank: { eq: 1 }
       }
     }
@@ -826,7 +826,7 @@ query {
     where: {
       _window: {
         function: PERCENT_RANK
-        order_by: ["-total_sales"]
+        orderBy: ["-totalSales"]
         percentile: { lte: 0.1 }
       }
     }
@@ -846,10 +846,10 @@ input WindowFilterInput {
   function: WindowFunctionEnum!  # RANK, DENSE_RANK, ROW_NUMBER, PERCENT_RANK
 
   # Optional: Fields to partition by (creates separate rankings per group)
-  partition_by: [String!]
+  partitionBy: [String!]
 
   # Required: Fields to order by within partition (prefix with '-' for descending)
-  order_by: [String!]!
+  orderBy: [String!]!
 
   # Filter by rank value (for RANK, DENSE_RANK, ROW_NUMBER)
   rank: IntFilterInput
@@ -884,9 +884,9 @@ query {
   products(
     where: {
       _subquery: {
-        relation: "order_items"
-        order_by: ["-unit_price"]
-        field: "unit_price"
+        relation: "orderItems"
+        orderBy: ["-unitPrice"]
+        field: "unitPrice"
         gt: 100
       }
     }
@@ -907,8 +907,8 @@ query {
     where: {
       _subquery: {
         relation: "orders"
-        order_by: ["-created_at"]
-        field: "created_at"
+        orderBy: ["-createdAt"]
+        field: "createdAt"
         gte: "2024-01-01"
       }
     }
@@ -928,10 +928,10 @@ query {
   products(
     where: {
       _subquery: {
-        relation: "order_items"
-        order_by: ["-unit_price"]
+        relation: "orderItems"
+        orderBy: ["-unitPrice"]
         filter: "{\"order\": {\"status\": {\"eq\": \"completed\"}}}"
-        field: "unit_price"
+        field: "unitPrice"
         gt: 50
       }
     }
@@ -951,7 +951,7 @@ input SubqueryFilterInput {
 
   # Order by fields to determine which related record to compare
   # (prefix with '-' for descending)
-  order_by: [String!]
+  orderBy: [String!]
 
   # Additional filter on related records (JSON string)
   filter: JSONString
@@ -966,7 +966,7 @@ input SubqueryFilterInput {
   gte: Float          # Greater than or equal
   lt: Float           # Less than
   lte: Float          # Less than or equal
-  is_null: Boolean    # Is null
+  isNull: Boolean    # Is null
 }
 ```
 
@@ -995,7 +995,7 @@ query {
   products(
     where: {
       _exists: {
-        relation: "order_items"
+        relation: "orderItems"
         exists: true
       }
     }
@@ -1015,7 +1015,7 @@ query {
   products(
     where: {
       _exists: {
-        relation: "order_items"
+        relation: "orderItems"
         exists: false
       }
     }
@@ -1035,7 +1035,7 @@ query {
   products(
     where: {
       _exists: {
-        relation: "order_items"
+        relation: "orderItems"
         filter: "{\"quantity\": {\"gte\": 10}}"
         exists: true
       }
@@ -1096,9 +1096,9 @@ Get products with at least 2 high-value order items (unit_price >= $50):
 query {
   products(
     where: {
-      order_items_cond_agg: {
+      orderItemsCondAgg: {
         field: "id"
-        filter: "{\"unit_price\": {\"gte\": 50}}"
+        filter: "{\"unitPrice\": {\"gte\": 50}}"
         count: { gte: 2 }
       }
     }
@@ -1117,9 +1117,9 @@ Get categories where the total price of active products exceeds $1000:
 query {
   categories(
     where: {
-      products_cond_agg: {
+      productsCondAgg: {
         field: "price"
-        filter: "{\"is_active\": {\"eq\": true}}"
+        filter: "{\"isActive\": {\"eq\": true}}"
         sum: { gte: 1000 }
       }
     }
@@ -1138,9 +1138,9 @@ Get stores where the average rating of verified reviews is at least 4.0:
 query {
   stores(
     where: {
-      reviews_cond_agg: {
+      reviewsCondAgg: {
         field: "rating"
-        filter: "{\"is_verified\": {\"eq\": true}}"
+        filter: "{\"isVerified\": {\"eq\": true}}"
         avg: { gte: 4.0 }
       }
     }
@@ -1155,8 +1155,8 @@ query {
 
 | Filter Type                        | Description                                    |
 | ---------------------------------- | ---------------------------------------------- |
-| `order_items_agg: { count: ... }` | Count ALL order items                          |
-| `order_items_cond_agg: { filter: ..., count: ... }` | Count only order items matching filter |
+| `orderItemsAgg: { count: ... }` | Count ALL order items                          |
+| `orderItemsCondAgg: { filter: ..., count: ... }` | Count only order items matching filter |
 
 ### Conditional Aggregation Filter Input Reference
 
@@ -1252,7 +1252,7 @@ query {
   articles(
     where: {
       tags: {
-        contained_by: ["python", "django", "rest", "graphql"]
+        containedBy: ["python", "django", "rest", "graphql"]
       }
     }
   ) {
@@ -1310,7 +1310,7 @@ input ArrayFilterInput {
   contains: [String!]
 
   # Array must be subset of these values
-  contained_by: [String!]
+  containedBy: [String!]
 
   # Array must have at least one of these values
   overlaps: [String!]
@@ -1319,7 +1319,7 @@ input ArrayFilterInput {
   length: IntFilterInput
 
   # Check if array is null
-  is_null: Boolean
+  isNull: Boolean
 }
 ```
 
@@ -1373,8 +1373,8 @@ query {
       _compare: {
         left: "price"
         operator: GTE
-        right: "cost_price"
-        right_multiplier: 1.5
+        right: "costPrice"
+        rightMultiplier: 1.5
       }
     }
   ) {
@@ -1397,8 +1397,8 @@ query {
       _compare: {
         left: "price"
         operator: GT
-        right: "cost_price"
-        right_offset: 30
+        right: "costPrice"
+        rightOffset: 30
       }
     }
   ) {
@@ -1421,9 +1421,9 @@ query {
       _compare: {
         left: "price"
         operator: GT
-        right: "cost_price"
-        right_multiplier: 1.2
-        right_offset: 10
+        right: "costPrice"
+        rightMultiplier: 1.2
+        rightOffset: 10
       }
     }
   ) {
@@ -1467,10 +1467,10 @@ input FieldCompareFilterInput {
   right: String!
 
   # Optional multiplier for right-hand field
-  right_multiplier: Float
+  rightMultiplier: Float
 
   # Optional offset to add to right-hand field
-  right_offset: Float
+  rightOffset: Float
 }
 ```
 
@@ -1498,9 +1498,9 @@ Find products with at least 3 distinct unit prices in their orders:
 query {
   products(
     where: {
-      order_items_agg: {
-        field: "unit_price"
-        count_distinct: { gte: 3 }
+      orderItemsAgg: {
+        field: "unitPrice"
+        countDistinct: { gte: 3 }
       }
     }
   ) {
@@ -1512,17 +1512,17 @@ query {
 
 ### Distinct Count vs Regular Count
 
-Regular `count` counts all records, while `count_distinct` counts unique values:
+Regular `count` counts all records, while `countDistinct` counts unique values:
 
 ```graphql
 query {
   products(
     where: {
       # At least 5 orders with at least 3 different prices
-      order_items_agg: {
-        field: "unit_price"
+      orderItemsAgg: {
+        field: "unitPrice"
         count: { gte: 5 }
-        count_distinct: { gte: 3 }
+        countDistinct: { gte: 3 }
       }
     }
   ) {
@@ -1547,7 +1547,7 @@ input AggregationFilterInput {
   count: IntFilterInput
 
   # Count of distinct values
-  count_distinct: IntFilterInput
+  countDistinct: IntFilterInput
 }
 ```
 
@@ -1575,9 +1575,9 @@ Find products created this year:
 query {
   products(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: YEAR
-        this_period: true
+        thisPeriod: true
       }
     }
   ) {
@@ -1596,9 +1596,9 @@ Find orders from last month:
 query {
   orders(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: MONTH
-        last_period: true
+        lastPeriod: true
       }
     }
   ) {
@@ -1617,7 +1617,7 @@ Find products created in 2024:
 query {
   products(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: YEAR
         year: 2024
       }
@@ -1637,7 +1637,7 @@ Find products created in March 2024:
 query {
   products(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: MONTH
         year: 2024
         month: 3
@@ -1658,7 +1658,7 @@ Find products created in Q2 (April-June):
 query {
   products(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: QUARTER
         year: 2024
         quarter: 2
@@ -1679,7 +1679,7 @@ Find products created in week 10 of the year:
 query {
   products(
     where: {
-      created_at_trunc: {
+      createdAtTrunc: {
         precision: WEEK
         year: 2024
         week: 10
@@ -1737,10 +1737,10 @@ input DateTruncFilterInput {
   week: Int
 
   # Filter by current period (this year/month/week/etc.)
-  this_period: Boolean
+  thisPeriod: Boolean
 
   # Filter by previous period (last year/month/week/etc.)
-  last_period: Boolean
+  lastPeriod: Boolean
 }
 ```
 
@@ -1768,7 +1768,7 @@ Find invoices due on the 15th of any month:
 query {
   invoices(
     where: {
-      due_date_extract: {
+      dueDateExtract: {
         day: { eq: 15 }
       }
     }
@@ -1787,8 +1787,8 @@ Find orders placed on weekends (Sunday or Saturday):
 query {
   orders(
     where: {
-      created_at_extract: {
-        day_of_week: { in: [1, 7] }  # Sunday=1, Saturday=7
+      createdAtExtract: {
+        dayOfWeek: { in: [1, 7] }  # Sunday=1, Saturday=7
       }
     }
   ) {
@@ -1808,7 +1808,7 @@ Find reports from Q4 (October-December) of any year:
 query {
   reports(
     where: {
-      report_date_extract: {
+      reportDateExtract: {
         quarter: { eq: 4 }
       }
     }
@@ -1827,7 +1827,7 @@ Find events during business hours (9 AM - 5 PM):
 query {
   events(
     where: {
-      start_time_extract: {
+      startTimeExtract: {
         hour: { gte: 9, lt: 17 }
       }
     }
@@ -1846,8 +1846,8 @@ Find records created on Monday using ISO weekday (Monday=1, Sunday=7):
 query {
   tasks(
     where: {
-      created_at_extract: {
-        iso_week_day: { eq: 1 }  # Monday
+      createdAtExtract: {
+        isoWeekDay: { eq: 1 }  # Monday
       }
     }
   ) {
@@ -1865,7 +1865,7 @@ Find records from ISO week 10:
 query {
   timesheets(
     where: {
-      week_start_extract: {
+      weekStartExtract: {
         week: { eq: 10 }
       }
     }
@@ -1884,7 +1884,7 @@ Filter by multiple extracted parts (e.g., June of current year):
 query {
   products(
     where: {
-      created_at_extract: {
+      createdAtExtract: {
         year: { eq: 2024 }
         month: { eq: 6 }
       }
@@ -1905,10 +1905,10 @@ query {
 | Day | `day` | 1-31 | Day of month |
 | Quarter | `quarter` | 1-4 | Quarter of year |
 | Week | `week` | 1-53 | ISO week number |
-| Day of Week | `day_of_week` | 1-7 | Sunday=1 through Saturday=7 |
-| Day of Year | `day_of_year` | 1-366 | Day number within year |
-| ISO Week Day | `iso_week_day` | 1-7 | Monday=1 through Sunday=7 |
-| ISO Year | `iso_year` | 1-9999 | ISO week-numbering year |
+| Day of Week | `dayOfWeek` | 1-7 | Sunday=1 through Saturday=7 |
+| Day of Year | `dayOfYear` | 1-366 | Day number within year |
+| ISO Week Day | `isoWeekDay` | 1-7 | Monday=1 through Sunday=7 |
+| ISO Year | `isoYear` | 1-9999 | ISO week-numbering year |
 | Hour | `hour` | 0-23 | Hour of day (24-hour) |
 | Minute | `minute` | 0-59 | Minute of hour |
 | Second | `second` | 0-59 | Second of minute |
@@ -1933,16 +1933,16 @@ input ExtractDateFilterInput {
   week: IntFilterInput
 
   # Filter by day of week (Sunday=1, Saturday=7)
-  day_of_week: IntFilterInput
+  dayOfWeek: IntFilterInput
 
   # Filter by day of year (1-366)
-  day_of_year: IntFilterInput
+  dayOfYear: IntFilterInput
 
   # Filter by ISO week day (Monday=1, Sunday=7)
-  iso_week_day: IntFilterInput
+  isoWeekDay: IntFilterInput
 
   # Filter by ISO week-numbering year
-  iso_year: IntFilterInput
+  isoYear: IntFilterInput
 
   # Filter by hour (0-23)
   hour: IntFilterInput
@@ -1979,14 +1979,14 @@ query {
 
       # Exists filter: must have orders
       _exists: {
-        relation: "order_items"
+        relation: "orderItems"
         exists: true
       }
 
       # Window filter: in top 10 by sales
       _window: {
         function: RANK
-        order_by: ["-total_sales"]
+        orderBy: ["-totalSales"]
         rank: { lte: 10 }
       }
     }
@@ -2008,15 +2008,15 @@ query {
         { price: { gte: 50 } }
         {
           _exists: {
-            relation: "order_items"
+            relation: "orderItems"
             filter: "{\"quantity\": {\"gte\": 5}}"
             exists: true
           }
         }
       ]
       OR: [
-        { category_rel: { name: { eq: "Electronics" } } }
-        { category_rel: { name: { eq: "Accessories" } } }
+        { categoryRel: { name: { eq: "Electronics" } } }
+        { categoryRel: { name: { eq: "Accessories" } } }
       ]
     }
   ) {

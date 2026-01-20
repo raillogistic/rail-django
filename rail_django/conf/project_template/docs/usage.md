@@ -117,7 +117,7 @@ RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
         "authentication_required": True,
         "enable_graphiql": True,
-        "auto_camelcase": False,
+        "auto_camelcase": True,
     },
     "mutation_settings": {
         "generate_create": True,
@@ -167,8 +167,8 @@ class Product(models.Model):
 ```graphql
 query {
   products(
-    where: { is_active: { eq: true }, price: { gt: 50 } }
-    order_by: ["-price"]
+    where: { isActive: { eq: true }, price: { gt: 50 } }
+    orderBy: ["-price"]
   ) {
     id
     name
@@ -181,7 +181,7 @@ query {
 
 ```graphql
 mutation {
-  create_product(input: { name: "New", price: 99.99 }) {
+  createProduct(input: { name: "New", price: 99.99 }) {
     ok
     object {
       id
@@ -205,7 +205,7 @@ mutation {
 mutation {
   login(username: "user", password: "secret") {
     token
-    refresh_token
+    refreshToken
     user {
       id
       username
@@ -257,7 +257,7 @@ RAIL_DJANGO_WEBHOOKS = {
 
 ```graphql
 subscription {
-  order_created(filters: { status: { eq: "pending" } }) {
+  orderCreated(filters: { status: { eq: "pending" } }) {
     event
     node {
       id
@@ -308,8 +308,8 @@ curl -X POST /api/v1/export/ \
 ```graphql
 query {
   health {
-    health_status {
-      overall_status
+    healthStatus {
+      overallStatus
       components {
         databases {
           status

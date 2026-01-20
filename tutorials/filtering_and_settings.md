@@ -139,7 +139,7 @@ Find products based on their category.
 
 ```graphql
 query {
-  products(where: { category_rel: { name: { eq: "Electronics" } } }) {
+  products(where: { categoryRel: { name: { eq: "Electronics" } } }) {
     name
     category {
       name
@@ -157,9 +157,9 @@ query {
   categories(
     where: {
       # Categories that have at least one active product
-      products_some: { is_active: { eq: true } }
+      productsSome: { isActive: { eq: true } }
       # Categories where NO product is over $1000
-      products_none: { price: { gt: 1000 } }
+      productsNone: { price: { gt: 1000 } }
     }
   ) {
     name
@@ -173,7 +173,7 @@ Filter based on aggregates of related data (e.g., "Categories with more than 10 
 
 ```graphql
 query {
-  categories(where: { products_agg: { count: { gt: 10 } } }) {
+  categories(where: { productsAgg: { count: { gt: 10 } } }) {
     name
   }
 }
@@ -198,7 +198,7 @@ Usage:
 
 ```graphql
 query {
-  products(order_by: ["price", "-created_at"]) {
+  products(orderBy: ["price", "-createdAt"]) {
     name
   }
 }
@@ -231,7 +231,7 @@ Usage:
 
 ```graphql
 query {
-  products(where: { profit_margin: { gt: 50.0 } }) {
+  products(where: { profitMargin: { gt: 50.0 } }) {
     name
     price
   }
@@ -261,7 +261,7 @@ Usage:
 
 ```graphql
 query {
-  products(where: { is_best_seller: true }) {
+  products(where: { isBestSeller: true }) {
     name
   }
 }
@@ -305,7 +305,7 @@ query {
       search: {
         query: "wireless bluetooth"
         fields: ["name", "description"]
-        search_type: WEBSEARCH
+        searchType: WEBSEARCH
       }
     }
   ) {

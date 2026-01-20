@@ -111,19 +111,19 @@ For each model, Rail Django generates:
 
 | Subscription | Format            | Description          |
 | ------------ | ----------------- | -------------------- |
-| Created      | `<model>_created` | Listen for creations |
-| Updated      | `<model>_updated` | Listen for updates   |
-| Deleted      | `<model>_deleted` | Listen for deletions |
-| All events   | `<model>_changed` | All events           |
+| Created      | `<model>Created`  | Listen for creations |
+| Updated      | `<model>Updated`  | Listen for updates   |
+| Deleted      | `<model>Deleted`  | Listen for deletions |
+| All events   | `<model>Changed`  | All events           |
 
 **Example for the `Order` model:**
 
 ```graphql
 type Subscription {
-  order_created(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
-  order_updated(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
-  order_deleted(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
-  order_changed(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  orderCreated(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  orderUpdated(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  orderDeleted(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
+  orderChanged(filters: OrderSubscriptionFilter): OrderSubscriptionPayload
 }
 ```
 
@@ -134,7 +134,7 @@ type OrderSubscriptionPayload {
   event: String! # "created", "updated", "deleted"
   node: OrderType # The object (null for delete)
   previous: OrderType # Previous values (for update)
-  changed_fields: [String] # Modified fields
+  changedFields: [String] # Modified fields
   timestamp: DateTime!
   user: UserType # User who made the change
 }
@@ -144,7 +144,7 @@ type OrderSubscriptionPayload {
 
 ```graphql
 subscription OnOrderCreated {
-  order_created {
+  orderCreated {
     event
     node {
       id
@@ -171,7 +171,7 @@ subscription OnOrderCreated {
 
 ```graphql
 subscription OrdersByStatus {
-  order_updated(filters: { status: { eq: "pending" } }) {
+  orderUpdated(filters: { status: { eq: "pending" } }) {
     event
     node {
       id
@@ -194,8 +194,8 @@ subscription OrdersByStatus {
 ### Filter by Relationship
 
 ```graphql
-subscription CustomerOrders($customer_id: ID!) {
-  order_created(filters: { customer: { id: { eq: $customer_id } } }) {
+subscription CustomerOrders($customerId: ID!) {
+  orderCreated(filters: { customer: { id: { eq: $customerId } } }) {
     node {
       id
       reference
@@ -208,7 +208,7 @@ subscription CustomerOrders($customer_id: ID!) {
 
 ```graphql
 subscription HighValuePendingOrders {
-  order_changed(
+  orderChanged(
     filters: {
       AND: [{ status: { eq: "pending" } }, { total: { gte: 1000 } }]
     }
@@ -294,13 +294,13 @@ class Order(models.Model):
             events=["created", "updated"],  # exclude "deleted"
 
             # Allowed filter fields
-            filter_fields=["status", "customer_id", "total"],
+            filter_fields=["status", "customerId", "total"],
 
             # Fields included in payload
             payload_fields=["id", "reference", "status", "total"],
 
             # Exclude sensitive fields
-            exclude_fields=["internal_notes"],
+            exclude_fields=["internalNotes"],
         )
 ```
 
@@ -367,7 +367,7 @@ import { useSubscription, gql } from "@apollo/client";
 
 const ORDER_SUBSCRIPTION = gql`
   subscription OnOrderCreated {
-    order_created {
+    orderCreated {
       event
       node {
         id
@@ -386,7 +386,7 @@ function OrderNotifications() {
   if (error) return <p>Subscription error: {error.message}</p>;
 
   if (data) {
-    const { node } = data.order_created;
+    const { node } = data.orderCreated;
     return (
       <div className="notification">
         New order: {node.reference} - ${node.total}

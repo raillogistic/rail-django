@@ -22,9 +22,9 @@ so clients can register them when `allow_unregistered` is enabled. See
 
 ## Field naming
 
-By default `auto_camelcase` is false, so field names are snake_case. If you set
-`schema_settings.auto_camelcase = True`, Graphene will expose camelCase names.
-Examples below use the default snake_case output.
+By default `auto_camelcase` is true, so field names are camelCase. If you set
+`schema_settings.auto_camelcase = False`, Graphene will expose snake_case names.
+Examples below use the default camelCase output.
 
 ## Authentication
 
@@ -44,8 +44,8 @@ mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {
     ok
     token
-    refresh_token
-    expires_at
+    refreshToken
+    expiresAt
     errors
     user {
       id
@@ -60,11 +60,11 @@ Refresh token:
 
 ```graphql
 mutation Refresh($token: String!) {
-  refresh_token(refresh_token: $token) {
+  refreshToken(refreshToken: $token) {
     ok
     token
-    refresh_token
-    expires_at
+    refreshToken
+    expiresAt
     errors
   }
 }
@@ -88,8 +88,8 @@ For each Django model, Rail Django generates a set of root fields:
 
 - Single: `<model>` (example: `user(id: ID!)`)
 - List: `<model>s` (example: `users`)
-- Paginated: `<model>s_pages` (example: `users_pages`)
-- Grouping: `<model>s_groups` (example: `users_groups`)
+- Paginated: `<model>sPages` (example: `usersPages`)
+- Grouping: `<model>sGroups` (example: `usersGroups`)
 
 If a custom manager is exposed, the name becomes `<model>__<manager>` for the
 single field and `<model>s__<manager>` for list queries.
@@ -144,20 +144,20 @@ query GetUser {
 
 ## List query with filters and ordering
 
-The list field accepts `where`, `order_by`, and optional pagination fields
+The list field accepts `where`, `orderBy`, and optional pagination fields
 `offset` and `limit` when enabled.
 
 ```graphql
 query ListUsers($where: UserWhereInput!) {
   users(
     where: $where
-    order_by: ["-date_joined"]
+    orderBy: ["-dateJoined"]
     offset: 0
     limit: 20
   ) {
     id
     username
-    date_joined
+    dateJoined
   }
 }
 ```
@@ -168,22 +168,22 @@ Variables example (nested filter input supports AND/OR/NOT):
 {
   "where": {
     "AND": [
-      {"is_active": {"eq": true}},
+      {"isActive": {"eq": true}},
       {"username": {"icontains": "admin"}}
     ],
     "OR": [
       {"email": {"icontains": "example.com"}},
       {"email": {"icontains": "corp.com"}}
     ],
-    "NOT": {"last_login": {"is_null": true}}
+    "NOT": {"lastLogin": {"isNull": true}}
   }
 }
 ```
 
 Common filter operators include:
-- `eq`, `neq`, `icontains`, `starts_with`, `ends_with`
-- `in`, `not_in`, `is_null`, `between`, `gt`, `gte`, `lt`, `lte`
-- Date helpers: `today`, `this_week`, `past_month`
+- `eq`, `neq`, `icontains`, `startsWith`, `endsWith`
+- `in`, `notIn`, `isNull`, `between`, `gt`, `gte`, `lt`, `lte`
+- Date helpers: `today`, `thisWeek`, `pastMonth`
 
 If you enable Relay or legacy flat filters, you can also use the `filters`
 argument with django-filter lookups like `status__in` or `created_at__gte`.
@@ -196,18 +196,18 @@ Paginated fields return `items` and `page_info`.
 
 ```graphql
 query PagedUsers {
-  users_pages(page: 1, per_page: 25, order_by: ["-id"]) {
+  usersPages(page: 1, perPage: 25, orderBy: ["-id"]) {
     items {
       id
       username
     }
-    page_info {
-      total_count
-      page_count
-      current_page
-      per_page
-      has_next_page
-      has_previous_page
+    pageInfo {
+      totalCount
+      pageCount
+      currentPage
+      perPage
+      hasNextPage
+      hasPreviousPage
     }
   }
 }
@@ -219,7 +219,7 @@ Grouping returns buckets with counts.
 
 ```graphql
 query GroupByStatus {
-  users_groups(group_by: "is_active", order_by: "count", limit: 10) {
+  usersGroups(groupBy: "isActive", orderBy: "count", limit: 10) {
     key
     label
     count
@@ -229,18 +229,18 @@ query GroupByStatus {
 
 ## Mutations (create, update, delete)
 
-Auto-generated mutation names are snake_case by default:
+Auto-generated mutation names are camelCase by default:
 
-- `create_<model>`
-- `update_<model>`
-- `delete_<model>`
-- `bulk_create_<model>` (if enabled)
+- `createModel`
+- `updateModel`
+- `deleteModel`
+- `bulkCreateModel` (if enabled)
 
 Example create mutation:
 
 ```graphql
 mutation CreateUser($input: UserCreateInput!) {
-  create_user(input: $input) {
+  createUser(input: $input) {
     ok
     object {
       id
@@ -259,7 +259,7 @@ Example update mutation:
 
 ```graphql
 mutation UpdateUser($id: ID!, $input: UserUpdateInput!) {
-  update_user(id: $id, input: $input) {
+  updateUser(id: $id, input: $input) {
     ok
     object {
       id

@@ -33,7 +33,7 @@ Now, whenever an `Order` is created, a JSON payload is POSTed to the URL.
 
 ```json
 {
-  "event_type": "created",
+  "eventType": "created",
   "model": "shop.Order",
   "data": {
     "id": 123,
@@ -63,7 +63,7 @@ You must install `channels` and `channels-graphql-ws`.
 
 ```graphql
 subscription {
-  message_created {
+  messageCreated {
     node {
       id
       text
@@ -113,11 +113,11 @@ Send a POST request to `/api/export/`:
         "id",
         {"accessor": "customer.email", "title": "Customer"},
         "total",
-        "created_at"
+        "createdAt"
     ],
     "variables": {
         "status": "paid",
-        "created_at__year": 2024
+        "createdAt__year": 2024
     }
 }
 ```

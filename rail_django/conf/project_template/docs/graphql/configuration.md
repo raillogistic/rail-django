@@ -88,8 +88,8 @@ Global GraphQL schema configuration.
     "enable_pagination": True,
 
     # ─── Naming ───
-    # Converts names to camelCase (false = snake_case)
-    "auto_camelcase": False,
+    # Converts names to camelCase (true = camelCase, false = snake_case)
+    "auto_camelcase": True,
 
     # ─── Metadata ───
     # Exposes metadata queries for dynamic UIs
@@ -140,7 +140,7 @@ Controls GraphQL type generation.
     "enable_filtering": True,  # Alias
 
     # Naming
-    "auto_camelcase": False,
+    "auto_camelcase": True,
 
     # Uses model help_text as descriptions
     "generate_descriptions": True,
@@ -481,7 +481,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
             "authentication_required": False,
             "enable_graphiql": False,
             "query_field_allowlist": ["me"],
-            "mutation_field_allowlist": ["login", "register", "refresh_token"],
+            "mutation_field_allowlist": ["login", "register", "refreshToken"],
         },
         "mutation_settings": {
             "generate_create": False,

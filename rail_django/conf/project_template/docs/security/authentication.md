@@ -71,14 +71,14 @@ mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {
     ok
     token # JWT access token
-    refresh_token # Refresh token
-    expires_at # Token expiration date
+    refreshToken # Refresh token
+    expiresAt # Token expiration date
     errors # List of any errors
     user {
       id
       username
       email
-      is_staff
+      isStaff
     }
   }
 }
@@ -101,14 +101,14 @@ mutation Login($username: String!, $password: String!) {
     "login": {
       "ok": true,
       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "expires_at": "2026-01-16T12:30:00Z",
+      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "expiresAt": "2026-01-16T12:30:00Z",
       "errors": null,
       "user": {
         "id": "1",
         "username": "john.doe",
         "email": "john@example.com",
-        "is_staff": false
+        "isStaff": false
       }
     }
   }
@@ -134,12 +134,12 @@ mutation Login($username: String!, $password: String!) {
 Obtains a new access token from the refresh token.
 
 ```graphql
-mutation RefreshToken($refresh_token: String!) {
-  refresh_token(refresh_token: $refresh_token) {
+mutation RefreshToken($refreshToken: String!) {
+  refreshToken(refreshToken: $refreshToken) {
     ok
     token # New access token
-    refresh_token # New refresh token (optional rotation)
-    expires_at
+    refreshToken # New refresh token (optional rotation)
+    expiresAt
     errors
   }
 }
@@ -149,7 +149,7 @@ mutation RefreshToken($refresh_token: String!) {
 
 ```json
 {
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
@@ -192,7 +192,7 @@ mutation Register($input: RegisterInput!) {
     "username": "new_user",
     "email": "new@example.com",
     "password": "Password123!",
-    "password_confirm": "Password123!"
+    "passwordConfirm": "Password123!"
   }
 }
 ```
@@ -207,10 +207,10 @@ query Me {
     id
     username
     email
-    first_name
-    last_name
-    is_staff
-    is_superuser
+    firstName
+    lastName
+    isStaff
+    isSuperuser
     permissions # List of Django permissions
     groups {
       id
@@ -299,7 +299,7 @@ const errorLink = onError(({ graphQLErrors, operation, forward }) => {
       if (err.message.includes("Signature has expired")) {
         // Refresh the token
         const refreshToken = localStorage.getItem("refresh_token");
-        // ... call refresh_token mutation
+        // ... call refreshToken mutation
         // ... update stored token
         // ... retry original request
         return forward(operation);
@@ -435,7 +435,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 **Cause:** The JWT token has expired.
 
-**Solution:** Use the `refresh_token` mutation to obtain a new access token.
+**Solution:** Use the `refreshToken` mutation to obtain a new access token.
 
 ### Error: "Token is invalid"
 

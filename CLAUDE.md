@@ -73,7 +73,7 @@ Test settings default to `rail_django.conf.test_settings` (SQLite).
 
 ## Coding Conventions
 
-- GraphQL fields are snake_case by default (`auto_camelcase = False`)
+- GraphQL fields are camelCase by default (`auto_camelcase = True`)
 - Tests under `rail_django/tests/unit/` and `rail_django/tests/integration/`
 - TypeGenerator auto-creates custom list fields for reverse relationships to avoid Relay connections
 

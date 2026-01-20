@@ -225,7 +225,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Enable pagination globally for list queries
         "enable_pagination": True,
         # Convert all field names to camelCase (e.g. my_field -> myField)
-        "auto_camelcase": False,
+        "auto_camelcase": True,
         # Disable generation of security-related mutations (login, etc.)
         "disable_security_mutations": False,
         # Show metadata fields in schema
@@ -254,7 +254,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Enable filtering on lists
         "enable_filtering": True,
         # CamelCase conversion for generated types
-        "auto_camelcase": False,
+        "auto_camelcase": True,
         # Add descriptions from model help_text to schema
         "generate_descriptions": True,
     },

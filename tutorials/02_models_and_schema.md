@@ -96,7 +96,7 @@ You can create related objects in a single mutation!
 
 ```graphql
 mutation {
-  create_book(input: {
+  createBook(input: {
     title: "New Novel",
     # Create the publisher inline
     publisher: {

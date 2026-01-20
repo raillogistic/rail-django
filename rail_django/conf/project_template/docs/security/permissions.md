@@ -305,14 +305,14 @@ Debug permission decisions via GraphQL:
 
 ```graphql
 query ExplainPermission {
-  explain_permission(
+  explainPermission(
     permission: "project.update_own"
-    model_name: "store.Product"
-    object_id: "123"
+    modelName: "store.Product"
+    objectId: "123"
   ) {
     allowed
     reason
-    policy_decision {
+    policyDecision {
       name
       effect
       priority
@@ -327,10 +327,10 @@ query ExplainPermission {
 ```json
 {
   "data": {
-    "explain_permission": {
+    "explainPermission": {
       "allowed": true,
       "reason": "Allowed by policy 'allow_own_profile'",
-      "policy_decision": {
+      "policyDecision": {
         "name": "allow_own_profile",
         "effect": "ALLOW",
         "priority": 40,
@@ -516,11 +516,11 @@ models:
 
 ```graphql
 query MyPermissions {
-  my_permissions {
+  myPermissions {
     permissions # List of Django permissions
     roles # List of assigned roles
-    is_superuser
-    is_staff
+    isSuperuser
+    isStaff
   }
 }
 ```
@@ -529,7 +529,7 @@ query MyPermissions {
 
 ```graphql
 query CheckPermission {
-  has_permission(permission: "store.change_product", object_id: "123") {
+  hasPermission(permission: "store.change_product", objectId: "123") {
     allowed
     reason
   }

@@ -239,7 +239,7 @@ class Order(models.Model):
       "cost": 142,
       "limit": 1000,
       "depth": 4,
-      "max_depth": 10
+      "maxDepth": 10
     }
   }
 }
@@ -338,14 +338,14 @@ class Order(models.Model):
 ### 2. Avoid N+1 Properties
 
 ```python
-# ❌ Bad: N+1 in a property
+# Bad: N+1 in a property
 @property
-def order_count(self):
+def orderCount(self):
     return self.orders.count()  # Query on each access!
 
-# ✅ Good: Annotation in the query
+# Good: Annotation in the query
 queryset = Customer.objects.annotate(
-    order_count=Count("orders")
+    orderCount=Count("orders")
 )
 ```
 

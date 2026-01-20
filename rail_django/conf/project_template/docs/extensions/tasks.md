@@ -194,9 +194,9 @@ def process_order(root, info, order_id: str):
 ### Execute Task
 
 ```graphql
-mutation GenerateReport($dataset_id: String!) {
-  generate_report(dataset_id: $dataset_id) {
-    task_id
+mutation GenerateReport($datasetId: String!) {
+  generateReport(datasetId: $datasetId) {
+    taskId
     status
   }
 }
@@ -207,8 +207,8 @@ mutation GenerateReport($dataset_id: String!) {
 ```json
 {
   "data": {
-    "generate_report": {
-      "task_id": "abc-123-xyz",
+    "generateReport": {
+      "taskId": "abc-123-xyz",
       "status": "pending"
     }
   }
@@ -222,18 +222,18 @@ mutation GenerateReport($dataset_id: String!) {
 ### GraphQL Query
 
 ```graphql
-query TaskStatus($task_id: ID!) {
-  task(id: $task_id) {
+query TaskStatus($taskId: ID!) {
+  task(id: $taskId) {
     id
     name
     status
     progress
-    progress_message
+    progressMessage
     result
     error
-    created_at
-    started_at
-    completed_at
+    createdAt
+    startedAt
+    completedAt
   }
 }
 ```
@@ -277,12 +277,12 @@ Real-time task updates require `channels-graphql-ws`.
 ### Task Status Subscription
 
 ```graphql
-subscription TaskProgress($task_id: ID!) {
-  task_progress(task_id: $task_id) {
+subscription TaskProgress($taskId: ID!) {
+  taskProgress(taskId: $taskId) {
     id
     status
     progress
-    progress_message
+    progressMessage
     result
     error
   }
@@ -293,7 +293,7 @@ subscription TaskProgress($task_id: ID!) {
 
 ```graphql
 subscription MyTasks {
-  my_task_updates {
+  myTaskUpdates {
     id
     name
     status
@@ -338,8 +338,8 @@ query FailedTasks {
     id
     name
     error
-    retry_count
-    created_at
+    retryCount
+    createdAt
   }
 }
 ```

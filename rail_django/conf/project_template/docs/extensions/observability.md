@@ -78,9 +78,9 @@ sentry_sdk.set_tag("tenant", tenant_id)
 # Custom breadcrumb
 sentry_sdk.add_breadcrumb(
     category="graphql",
-    message="Executing mutation create_order",
+    message="Executing mutation createOrder",
     level="info",
-    data={"order_id": order.id},
+    data={"orderId": order.id},
 )
 ```
 

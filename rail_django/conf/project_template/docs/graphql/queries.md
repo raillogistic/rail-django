@@ -37,16 +37,16 @@ type Query {
   product(id: ID!): ProductType
   products(
     where: ProductWhereInput
-    order_by: [String]
+    orderBy: [String]
     limit: Int
     offset: Int
   ): [ProductType]
-  products_pages(
+  productsPages(
     page: Int
-    per_page: Int
+    perPage: Int
     where: ProductWhereInput
   ): ProductPageType
-  products_groups(group_by: String!, limit: Int): [GroupBucketType]
+  productsGroups(groupBy: String!, limit: Int): [GroupBucketType]
 }
 ```
 
@@ -134,8 +134,8 @@ query ListProducts {
       name
     }
     supplier {
-      company_name
-      contact_email
+      companyName
+      contactEmail
     }
   }
 }
@@ -153,7 +153,7 @@ Rail Django uses a nested filter syntax (Prisma/Hasura style) with typed per-fie
 query FilteredProducts {
   products(
     where: {
-      is_active: { eq: true }
+      isActive: { eq: true }
       price: { gte: 100 }
       name: { icontains: "premium" }
     }
@@ -182,12 +182,12 @@ query ComplexFilter {
   products(
     where: {
       AND: [
-        { is_active: { eq: true } }
+        { isActive: { eq: true } }
         { price: { gte: 50 } }
       ]
       OR: [
-        { category_rel: { name: { icontains: "electronics" } } }
-        { category_rel: { name: { icontains: "accessories" } } }
+        { categoryRel: { name: { icontains: "electronics" } } }
+        { categoryRel: { name: { icontains: "accessories" } } }
       ]
       NOT: { status: { eq: "discontinued" } }
     }
@@ -204,8 +204,8 @@ query ComplexFilter {
 query ProductsByCategory {
   products(
     where: {
-      category_rel: { name: { icontains: "Electronics" } }
-      supplier_rel: { country: { eq: "US" } }
+      categoryRel: { name: { icontains: "Electronics" } }
+      supplierRel: { country: { eq: "US" } }
     }
   ) {
     id
@@ -226,14 +226,14 @@ query ProductsByCategory {
 query RecentProducts {
   products(
     where: {
-      created_at: { today: true }
-      # Or: { this_week: true }
-      # Or: { past_month: true }
+      createdAt: { today: true }
+      # Or: { thisWeek: true }
+      # Or: { pastMonth: true }
     }
   ) {
     id
     name
-    created_at
+    createdAt
   }
 }
 ```
@@ -247,13 +247,13 @@ query ProductsWithTags {
   products(
     where: {
       # At least one tag matches
-      tags_some: { name: { eq: "featured" } }
+      tagsSome: { name: { eq: "featured" } }
 
       # Count-based filter
-      reviews_count: { gte: 5 }
+      reviewsCount: { gte: 5 }
 
       # None match (exclusion)
-      tags_none: { name: { eq: "discontinued" } }
+      tagsNone: { name: { eq: "discontinued" } }
     }
   ) {
     id
@@ -282,19 +282,19 @@ Variables: `{ "offset": 0, "limit": 20 }`
 ### Page-Based Pagination
 
 ```graphql
-query PagedProducts($page: Int!, $per_page: Int!) {
-  products_pages(page: $page, per_page: $per_page) {
+query PagedProducts($page: Int!, $perPage: Int!) {
+  productsPages(page: $page, perPage: $perPage) {
     items {
       id
       name
     }
-    page_info {
-      total_count
-      page_count
-      current_page
-      per_page
-      has_next_page
-      has_previous_page
+    pageInfo {
+      totalCount
+      pageCount
+      currentPage
+      perPage
+      hasNextPage
+      hasPreviousPage
     }
   }
 }
@@ -347,7 +347,7 @@ query RelayProducts($first: Int!, $after: String) {
 
 ```graphql
 query OrderedProducts {
-  products(order_by: ["name"]) {
+  products(orderBy: ["name"]) {
     id
     name
   }
@@ -360,7 +360,7 @@ Prefix with `-`:
 
 ```graphql
 query OrderedProducts {
-  products(order_by: ["-price"]) {
+  products(orderBy: ["-price"]) {
     id
     name
     price
@@ -372,7 +372,7 @@ query OrderedProducts {
 
 ```graphql
 query OrderedProducts {
-  products(order_by: ["-price", "name"]) {
+  products(orderBy: ["-price", "name"]) {
     id
     name
     price
@@ -384,7 +384,7 @@ query OrderedProducts {
 
 ```graphql
 query OrderedProducts {
-  products(order_by: ["category__name", "-created_at"]) {
+  products(orderBy: ["category__name", "-createdAt"]) {
     id
     name
     category {
@@ -413,7 +413,7 @@ class Product(models.Model):
 
 ```graphql
 query ProductsByCategory {
-  products_groups(group_by: "category__name", order_by: "-count", limit: 10) {
+  productsGroups(groupBy: "category__name", orderBy: "-count", limit: 10) {
     key # Group value
     label # Display label
     count # Number of items
@@ -439,9 +439,9 @@ query ProductsByCategory {
 
 ```graphql
 query ActiveProductsByCategory {
-  products_groups(
-    group_by: "category__name"
-    where: { is_active: { eq: true } }
+  productsGroups(
+    groupBy: "category__name"
+    where: { isActive: { eq: true } }
     limit: 5
   ) {
     key

@@ -25,23 +25,23 @@ For each model, Rail Django generates:
 
 | Mutation    | Format                | Description                   |
 | ----------- | --------------------- | ----------------------------- |
-| Create      | `create_<model>`      | Creates a new instance        |
-| Update      | `update_<model>`      | Modifies an existing instance |
-| Delete      | `delete_<model>`      | Deletes an instance           |
-| Bulk Create | `bulk_create_<model>` | Creates multiple instances    |
-| Bulk Update | `bulk_update_<model>` | Modifies multiple instances   |
-| Bulk Delete | `bulk_delete_<model>` | Deletes multiple instances    |
+| Create      | `create<Model>`       | Creates a new instance        |
+| Update      | `update<Model>`       | Modifies an existing instance |
+| Delete      | `delete<Model>`       | Deletes an instance           |
+| Bulk Create | `bulkCreate<Model>`   | Creates multiple instances    |
+| Bulk Update | `bulkUpdate<Model>`   | Modifies multiple instances   |
+| Bulk Delete | `bulkDelete<Model>`   | Deletes multiple instances    |
 
 **Example for the `Product` model:**
 
 ```graphql
 type Mutation {
-  create_product(input: ProductCreateInput!): ProductMutationPayload
-  update_product(id: ID!, input: ProductUpdateInput!): ProductMutationPayload
-  delete_product(id: ID!): DeletePayload
-  bulk_create_product(inputs: [ProductCreateInput!]!): BulkProductPayload
-  bulk_update_product(inputs: [ProductUpdateWithIdInput!]!): BulkProductPayload
-  bulk_delete_product(ids: [ID!]!): BulkDeletePayload
+  createProduct(input: ProductCreateInput!): ProductMutationPayload
+  updateProduct(id: ID!, input: ProductUpdateInput!): ProductMutationPayload
+  deleteProduct(id: ID!): DeletePayload
+  bulkCreateProduct(inputs: [ProductCreateInput!]!): BulkProductPayload
+  bulkUpdateProduct(inputs: [ProductUpdateWithIdInput!]!): BulkProductPayload
+  bulkDeleteProduct(ids: [ID!]!): BulkDeletePayload
 }
 ```
 
@@ -53,7 +53,7 @@ type Mutation {
 
 ```graphql
 mutation CreateProduct($input: ProductCreateInput!) {
-  create_product(input: $input) {
+  createProduct(input: $input) {
     ok
     object {
       id
@@ -77,8 +77,8 @@ mutation CreateProduct($input: ProductCreateInput!) {
     "name": "New Product",
     "sku": "PRD-001",
     "price": "99.99",
-    "category_id": "1",
-    "is_active": true
+    "categoryId": "1",
+    "isActive": true
   }
 }
 ```
@@ -88,7 +88,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 ```json
 {
   "data": {
-    "create_product": {
+    "createProduct": {
       "ok": true,
       "object": {
         "id": "42",
@@ -107,7 +107,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 ```json
 {
   "data": {
-    "create_product": {
+    "createProduct": {
       "ok": false,
       "object": null,
       "errors": [
@@ -133,7 +133,7 @@ mutation CreateProduct($input: ProductCreateInput!) {
 
 ```graphql
 mutation UpdateProduct($id: ID!, $input: ProductUpdateInput!) {
-  update_product(id: $id, input: $input) {
+  updateProduct(id: $id, input: $input) {
     ok
     object {
       id
@@ -155,7 +155,7 @@ mutation UpdateProduct($id: ID!, $input: ProductUpdateInput!) {
   "id": "42",
   "input": {
     "price": "89.99",
-    "is_active": false
+    "isActive": false
   }
 }
 ```
@@ -195,7 +195,7 @@ class Product(models.Model):
 
 ```graphql
 mutation DeleteProduct($id: ID!) {
-  delete_product(id: $id) {
+  deleteProduct(id: $id) {
     ok
     errors {
       message
@@ -217,7 +217,7 @@ mutation DeleteProduct($id: ID!) {
 ```json
 {
   "data": {
-    "delete_product": {
+    "deleteProduct": {
       "ok": true,
       "errors": null
     }
@@ -232,7 +232,7 @@ If deletion fails (FK constraint):
 ```json
 {
   "data": {
-    "delete_product": {
+    "deleteProduct": {
       "ok": false,
       "errors": [
         {
@@ -264,7 +264,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 ```graphql
 mutation BulkCreateProducts($inputs: [ProductCreateInput!]!) {
-  bulk_create_product(inputs: $inputs) {
+  bulkCreateProduct(inputs: $inputs) {
     ok
     count
     objects {
@@ -289,19 +289,19 @@ mutation BulkCreateProducts($inputs: [ProductCreateInput!]!) {
       "name": "Product A",
       "sku": "A-001",
       "price": "10.00",
-      "category_id": "1"
+      "categoryId": "1"
     },
     {
       "name": "Product B",
       "sku": "B-001",
       "price": "20.00",
-      "category_id": "1"
+      "categoryId": "1"
     },
     {
       "name": "Product C",
       "sku": "C-001",
       "price": "30.00",
-      "category_id": "2"
+      "categoryId": "2"
     }
   ]
 }
@@ -311,7 +311,7 @@ mutation BulkCreateProducts($inputs: [ProductCreateInput!]!) {
 
 ```graphql
 mutation BulkUpdateProducts($inputs: [ProductUpdateWithIdInput!]!) {
-  bulk_update_product(inputs: $inputs) {
+  bulkUpdateProduct(inputs: $inputs) {
     ok
     count
     objects {
@@ -329,7 +329,7 @@ mutation BulkUpdateProducts($inputs: [ProductUpdateWithIdInput!]!) {
   "inputs": [
     { "id": "1", "price": "15.00" },
     { "id": "2", "price": "25.00" },
-    { "id": "3", "is_active": false }
+    { "id": "3", "isActive": false }
   ]
 }
 ```
@@ -338,7 +338,7 @@ mutation BulkUpdateProducts($inputs: [ProductUpdateWithIdInput!]!) {
 
 ```graphql
 mutation BulkDeleteProducts($ids: [ID!]!) {
-  bulk_delete_product(ids: $ids) {
+  bulkDeleteProduct(ids: $ids) {
     ok
     count
   }
@@ -374,7 +374,7 @@ Create the parent object and children in a single mutation:
 
 ```graphql
 mutation CreateOrder($input: OrderCreateInput!) {
-  create_order(input: $input) {
+  createOrder(input: $input) {
     ok
     object {
       id
@@ -396,10 +396,10 @@ mutation CreateOrder($input: OrderCreateInput!) {
 ```json
 {
   "input": {
-    "customer_id": "1",
+    "customerId": "1",
     "items": [
-      { "product_id": "10", "quantity": 2, "price": "99.99" },
-      { "product_id": "15", "quantity": 1, "price": "49.99" }
+      { "productId": "10", "quantity": 2, "price": "99.99" },
+      { "productId": "15", "quantity": 1, "price": "49.99" }
     ]
   }
 }
@@ -409,7 +409,7 @@ mutation CreateOrder($input: OrderCreateInput!) {
 
 ```graphql
 mutation UpdateOrder($id: ID!, $input: OrderUpdateInput!) {
-  update_order(id: $id, input: $input) {
+  updateOrder(id: $id, input: $input) {
     ok
     object {
       id
@@ -430,7 +430,7 @@ mutation UpdateOrder($id: ID!, $input: OrderUpdateInput!) {
   "input": {
     "items": [
       { "id": "100", "quantity": 5 },
-      { "product_id": "20", "quantity": 1, "price": "29.99" }
+      { "productId": "20", "quantity": 1, "price": "29.99" }
     ]
   }
 }
@@ -512,23 +512,23 @@ class Order(models.Model):
 
 ```graphql
 mutation ConfirmOrder($id: ID!) {
-  confirm_order(id: $id) {
+  confirmOrder(id: $id) {
     ok
     object {
       id
       status
-      confirmed_at
+      confirmedAt
     }
   }
 }
 
 mutation CancelOrder($id: ID!, $reason: String!) {
-  cancel_order(id: $id, reason: $reason) {
+  cancelOrder(id: $id, reason: $reason) {
     ok
     object {
       id
       status
-      cancellation_reason
+      cancellationReason
     }
   }
 }

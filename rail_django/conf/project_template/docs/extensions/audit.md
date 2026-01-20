@@ -280,27 +280,27 @@ def my_sensitive_function(request, **kwargs):
 
 ```graphql
 query SecurityReport($from: DateTime!, $to: DateTime!) {
-  security_report(from_date: $from, to_date: $to) {
+  securityReport(fromDate: $from, toDate: $to) {
     summary {
-      total_events
-      login_successes
-      login_failures
-      permission_denials
-      rate_limit_hits
+      totalEvents
+      loginSuccesses
+      loginFailures
+      permissionDenials
+      rateLimitHits
     }
-    by_severity {
+    bySeverity {
       severity
       count
     }
-    by_user {
-      user_id
+    byUser {
+      userId
       username
-      event_count
+      eventCount
     }
-    suspicious_ips {
-      ip_address
-      event_count
-      last_event
+    suspiciousIps {
+      ipAddress
+      eventCount
+      lastEvent
     }
   }
 }
@@ -334,34 +334,34 @@ send_report_email(
 
 ```graphql
 query AuditEvents(
-  $event_type: String
-  $app_label: String
-  $user_id: ID
+  $eventType: String
+  $appLabel: String
+  $userId: ID
   $from: DateTime
   $to: DateTime
   $limit: Int
 ) {
-  audit_events(
-    event_type: $event_type
-    app_label: $app_label
-    user_id: $user_id
-    from_date: $from
-    to_date: $to
+  auditEvents(
+    eventType: $eventType
+    appLabel: $appLabel
+    userId: $userId
+    fromDate: $from
+    toDate: $to
     limit: $limit
   ) {
     id
-    event_type
-    event_name
+    eventType
+    eventName
     user {
       id
       username
     }
-    ip_address
-    app_label
-    model_name
-    object_id
-    object_repr
-    changed_fields
+    ipAddress
+    appLabel
+    modelName
+    objectId
+    objectRepr
+    changedFields
     severity
     timestamp
   }

@@ -113,36 +113,36 @@ RAIL_DJANGO_HEALTH = {
 ```graphql
 query HealthStatus {
   health {
-    health_status {
-      overall_status
+    healthStatus {
+      overallStatus
       timestamp
       version
       components {
         databases {
           name
           status
-          response_time_ms
+          responseTimeMs
           error
         }
         cache {
           status
           backend
-          response_time_ms
+          responseTimeMs
         }
         disk {
           status
-          usage_percent
-          free_gb
+          usagePercent
+          freeGb
         }
         memory {
           status
-          usage_percent
-          available_mb
+          usagePercent
+          availableMb
         }
-        external_services {
+        externalServices {
           name
           status
-          response_time_ms
+          responseTimeMs
           error
         }
       }
@@ -157,8 +157,8 @@ query HealthStatus {
 {
   "data": {
     "health": {
-      "health_status": {
-        "overall_status": "healthy",
+      "healthStatus": {
+        "overallStatus": "healthy",
         "timestamp": "2026-01-16T12:00:00Z",
         "version": "1.2.0",
         "components": {
@@ -166,26 +166,26 @@ query HealthStatus {
             {
               "name": "default",
               "status": "healthy",
-              "response_time_ms": 5,
+              "responseTimeMs": 5,
               "error": null
             }
           ],
           "cache": {
             "status": "healthy",
             "backend": "redis",
-            "response_time_ms": 2
+            "responseTimeMs": 2
           },
           "disk": {
             "status": "warning",
-            "usage_percent": 82,
-            "free_gb": 18.5
+            "usagePercent": 82,
+            "freeGb": 18.5
           },
           "memory": {
             "status": "healthy",
-            "usage_percent": 62,
-            "available_mb": 3800
+            "usagePercent": 62,
+            "availableMb": 3800
           },
-          "external_services": []
+          "externalServices": []
         }
       }
     }

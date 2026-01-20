@@ -28,7 +28,7 @@ Use the built-in `login` mutation:
 mutation {
   login(username: "admin", password: "password123") {
     token
-    refresh_token
+    refreshToken
   }
 }
 ```

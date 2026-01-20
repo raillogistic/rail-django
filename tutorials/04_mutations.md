@@ -6,15 +6,15 @@ While queries fetch data, **mutations** modify it. Rail Django automates the cre
 
 For every model with `GraphQLMeta`, the following mutations are generated (unless disabled):
 
-*   `create_<model_name>`
-*   `update_<model_name>`
-*   `delete_<model_name>`
+*   `create<ModelName>`
+*   `update<ModelName>`
+*   `delete<ModelName>`
 
 ### Create
 
 ```graphql
 mutation {
-  create_product(input: {
+  createProduct(input: {
     name: "Widget",
     price: 19.99,
     category: 1  # ID of the relation
@@ -31,7 +31,7 @@ Updates require the `id` of the object to modify. Partial updates are supported 
 
 ```graphql
 mutation {
-  update_product(id: 1, input: {
+  updateProduct(id: 1, input: {
     price: 24.99
   }) {
     object { price }
@@ -43,7 +43,7 @@ mutation {
 
 ```graphql
 mutation {
-  delete_product(id: 1) {
+  deleteProduct(id: 1) {
     ok
   }
 }
@@ -75,7 +75,7 @@ Create a user and their profile simultaneously.
 
 ```graphql
 mutation {
-  create_user(input: {
+  createUser(input: {
     username: "jdoe",
     profile: {
       create: { bio: "Hello World" }
@@ -92,7 +92,7 @@ Update a book and change its author to an existing one (`connect`).
 
 ```graphql
 mutation {
-  update_book(id: 1, input: {
+  updateBook(id: 1, input: {
     title: "New Title",
     author: {
       connect: 5  # Connects to Author with ID 5
@@ -118,7 +118,7 @@ Enable bulk operations to create, update, or delete multiple records at once.
 
 ```graphql
 mutation {
-  bulk_create_product(inputs: [
+  bulkCreateProduct(inputs: [
     { name: "A", price: 10 },
     { name: "B", price: 20 }
   ]) {

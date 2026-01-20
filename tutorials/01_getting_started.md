@@ -131,7 +131,7 @@ class Book(models.Model):
         # 1. Type generation
         # 2. List & Detail queries (books, book)
         # 3. Filtering & Ordering
-        # 4. CRUD Mutations (create_book, update_book, delete_book)
+        # 4. CRUD Mutations (createBook, updateBook, deleteBook)
         pass
 ```
 
@@ -170,10 +170,10 @@ Now, let's create a book using the auto-generated mutation:
 
 ```graphql
 mutation {
-  create_book(input: {
+  createBook(input: {
     title: "The Django Guide",
     author: "Rail Team",
-    published_date: "2024-01-01"
+    publishedDate: "2024-01-01"
   }) {
     object {
       id

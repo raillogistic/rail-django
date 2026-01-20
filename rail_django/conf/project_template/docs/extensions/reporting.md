@@ -221,15 +221,15 @@ query OrderAnalysis(
   $dimensions: [String!]!
   $metrics: [String!]!
   $filters: ReportFilterInput
-  $order_by: String
+  $orderBy: String
   $limit: Int
 ) {
-  report_query(
+  reportQuery(
     dataset: "orders"
     dimensions: $dimensions
     metrics: $metrics
     filters: $filters
-    order_by: $order_by
+    orderBy: $orderBy
     limit: $limit
   ) {
     columns {
@@ -245,8 +245,8 @@ query OrderAnalysis(
       value
     }
     metadata {
-      row_count
-      execution_time_ms
+      rowCount
+      executionTimeMs
     }
   }
 }
@@ -257,10 +257,10 @@ query OrderAnalysis(
 ```json
 {
   "dimensions": ["month", "category"],
-  "metrics": ["revenue", "order_count"],
+  "metrics": ["revenue", "orderCount"],
   "filters": {
-    "date_range": {
-      "field": "created_at",
+    "dateRange": {
+      "field": "createdAt",
       "from": "2025-01-01",
       "to": "2025-12-31"
     },
@@ -268,7 +268,7 @@ query OrderAnalysis(
       { "field": "status", "operator": "eq", "value": "completed" }
     ]
   },
-  "order_by": "-revenue",
+  "orderBy": "-revenue",
   "limit": 100
 }
 ```
@@ -278,12 +278,12 @@ query OrderAnalysis(
 ```json
 {
   "data": {
-    "report_query": {
+    "reportQuery": {
       "columns": [
         { "name": "month", "type": "date", "label": "Month" },
         { "name": "category", "type": "string", "label": "Category" },
         { "name": "revenue", "type": "currency", "label": "Revenue" },
-        { "name": "order_count", "type": "integer", "label": "Orders" }
+        { "name": "orderCount", "type": "integer", "label": "Orders" }
       ],
       "rows": [
         { "values": ["2025-01", "Electronics", 125000.0, 450] },
@@ -292,11 +292,11 @@ query OrderAnalysis(
       ],
       "totals": [
         { "metric": "revenue", "value": 352000.0 },
-        { "metric": "order_count", "value": 1580 }
+        { "metric": "orderCount", "value": 1580 }
       ],
       "metadata": {
-        "row_count": 3,
-        "execution_time_ms": 125
+        "rowCount": 3,
+        "executionTimeMs": 125
       }
     }
   }
@@ -405,12 +405,12 @@ class MonthlySalesReport(Report):
 
 ```graphql
 mutation SaveReport($input: ReportInput!) {
-  save_report(input: $input) {
+  saveReport(input: $input) {
     ok
     report {
       id
       name
-      created_at
+      createdAt
     }
   }
 }
@@ -424,7 +424,7 @@ mutation SaveReport($input: ReportInput!) {
 
 ```graphql
 query AvailableDatasets {
-  reporting_datasets {
+  reportingDatasets {
     code
     name
     description
@@ -446,7 +446,7 @@ query AvailableDatasets {
 
 ```graphql
 query ExecuteReport($query: ReportQueryInput!) {
-  report_query(query: $query) {
+  reportQuery(query: $query) {
     columns {
       name
       type
@@ -462,12 +462,12 @@ query ExecuteReport($query: ReportQueryInput!) {
 
 ```graphql
 query MyReports {
-  my_reports {
+  myReports {
     id
     name
     description
-    created_at
-    updated_at
+    createdAt
+    updatedAt
   }
 }
 ```

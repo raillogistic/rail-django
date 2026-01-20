@@ -177,7 +177,7 @@ class TypeGeneratorSettings:
     enable_filtering: bool = True
 
     # Enable auto-camelcase for field names
-    auto_camelcase: bool = False
+    auto_camelcase: bool = True
 
     # Enable field descriptions
     generate_descriptions: bool = True
@@ -542,7 +542,7 @@ class SchemaSettings:
     enable_pagination: bool = True
 
     # Enable auto-camelcase for GraphQL schema
-    auto_camelcase: bool = False
+    auto_camelcase: bool = True
 
     # Disable security mutations (e.g., login, logout)
     disable_security_mutations: bool = False

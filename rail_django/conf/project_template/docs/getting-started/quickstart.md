@@ -210,11 +210,11 @@ Copy the `token` and add it to the HTTP Headers:
 
 ```graphql
 mutation {
-  create_category(
+  createCategory(
     input: {
       name: "Electronics"
       description: "Electronic devices"
-      is_active: true
+      isActive: true
     }
   ) {
     ok
@@ -234,14 +234,14 @@ mutation {
 
 ```graphql
 mutation {
-  create_product(
+  createProduct(
     input: {
       name: "iPhone 15 Pro"
       sku: "IPHONE-15-PRO"
       price: "1199.00"
       description: "Latest generation Apple smartphone"
-      category_id: "1"
-      is_active: true
+      categoryId: "1"
+      isActive: true
     }
   ) {
     ok
@@ -263,8 +263,8 @@ mutation {
 ```graphql
 query {
   products(
-    where: { is_active: { eq: true } }
-    order_by: ["-price"]
+    where: { isActive: { eq: true } }
+    orderBy: ["-price"]
     limit: 10
   ) {
     id
@@ -285,7 +285,7 @@ query {
   products(
     where: {
       price: { gte: 100, lte: 500 }
-      category_rel: { name: { icontains: "electronics" } }
+      categoryRel: { name: { icontains: "electronics" } }
     }
   ) {
     id
@@ -311,17 +311,17 @@ query {
 
 ```graphql
 query {
-  products_pages(page: 1, per_page: 20) {
+  productsPages(page: 1, perPage: 20) {
     items {
       id
       name
       price
     }
-    page_info {
-      total_count
-      page_count
-      current_page
-      has_next_page
+    pageInfo {
+      totalCount
+      pageCount
+      currentPage
+      hasNextPage
     }
   }
 }

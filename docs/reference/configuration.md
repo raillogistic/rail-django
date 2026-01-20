@@ -18,7 +18,7 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_graphiql": True,
         "enable_introspection": True,
         "authentication_required": False,
-        "auto_camelcase": False,
+        "auto_camelcase": True,
     },
     "query_settings": {
         "default_page_size": 20,
@@ -74,7 +74,7 @@ RAIL_DJANGO_GRAPHQL = {
     "type_generation_settings": {
         "exclude_fields": {},
         "include_fields": None,
-        "auto_camelcase": False,
+        "auto_camelcase": True,
     },
     "performance_settings": {
         "enable_query_optimization": True,
@@ -252,7 +252,7 @@ RAIL_DJANGO_GRAPHQL = {
         "exclude_models": ["audit.AuditEvent"],
     },
     "schema_settings": {
-        "subscription_field_allowlist": ["order_created", "order_updated"],
+        "subscription_field_allowlist": ["orderCreated", "orderUpdated"],
     },
 }
 ```

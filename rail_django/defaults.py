@@ -32,7 +32,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "prebuild_on_startup": True,
         "authentication_required": False,
         "enable_pagination": True,
-        "auto_camelcase": False,
+        "auto_camelcase": True,
         "disable_security_mutations": False,
         "enable_extension_mutations": True,
         "show_metadata": False,
@@ -49,7 +49,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "custom_field_mappings": {},
         "generate_filters": True,
         "enable_filtering": True,
-        "auto_camelcase": False,
+        "auto_camelcase": True,
         "generate_descriptions": True,
     },
     "query_settings": {

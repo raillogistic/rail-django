@@ -19,7 +19,7 @@
 ## Coding Style & Naming Conventions
 - Python uses 4-space indentation and standard PEP 8 naming: `snake_case` for modules/functions, `PascalCase` for classes.
 - Tests follow `test_*.py` and `test_*` function naming under `rail_django/tests/`.
-- GraphQL fields are snake_case by default (`auto_camelcase = False`); note this when adding schema fields.
+- GraphQL fields are camelCase by default (`auto_camelcase = True`); note this when adding schema fields.
 
 ## Testing Guidelines
 - Use pytest markers: `@pytest.mark.unit` and `@pytest.mark.integration`.

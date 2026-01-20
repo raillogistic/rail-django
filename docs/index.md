@@ -46,6 +46,6 @@ organizes the documentation for API consumers and integrators.
 
 ## Conventions
 
-- Default GraphQL field names are snake_case (`auto_camelcase = False`).
-- If you enable `auto_camelcase`, field names are exposed in camelCase.
+- Default GraphQL field names are camelCase (`auto_camelcase = True`).
+- If you disable `auto_camelcase`, field names are exposed in snake_case.
 - Multi-schema endpoints live at `/graphql/<schema_name>/`.
