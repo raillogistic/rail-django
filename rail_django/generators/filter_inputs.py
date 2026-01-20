@@ -47,15 +47,47 @@ import graphene
 from graphene.utils.str_converters import to_camel_case
 from django.db import models
 from django.db.models import (
-    Avg, Case, Count, Exists, F, Max, Min, OuterRef, Q, Subquery, Sum, Value, When,
+    Avg,
+    Case,
+    Count,
+    Exists,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
     Window,
 )
 from django.db.models.fields import IntegerField, FloatField
 from django.db.models.functions import (
-    Rank, DenseRank, RowNumber, PercentRank, Lag, Lead,
-    TruncYear, TruncQuarter, TruncMonth, TruncWeek, TruncDay, TruncHour, TruncMinute,
-    ExtractYear, ExtractMonth, ExtractDay, ExtractWeekDay, ExtractIsoWeekDay,
-    ExtractWeek, ExtractIsoYear, ExtractQuarter, ExtractHour, ExtractMinute, ExtractSecond,
+    Rank,
+    DenseRank,
+    RowNumber,
+    PercentRank,
+    Lag,
+    Lead,
+    TruncYear,
+    TruncQuarter,
+    TruncMonth,
+    TruncWeek,
+    TruncDay,
+    TruncHour,
+    TruncMinute,
+    ExtractYear,
+    ExtractMonth,
+    ExtractDay,
+    ExtractWeekDay,
+    ExtractIsoWeekDay,
+    ExtractWeek,
+    ExtractIsoYear,
+    ExtractQuarter,
+    ExtractHour,
+    ExtractMinute,
+    ExtractSecond,
 )
 from django.utils import timezone
 
@@ -594,7 +626,9 @@ class ConditionalAggregationFilterInput(graphene.InputObjectType):
     )
     sum = graphene.InputField(FloatFilterInput, description="Filter by conditional SUM")
     avg = graphene.InputField(FloatFilterInput, description="Filter by conditional AVG")
-    count = graphene.InputField(IntFilterInput, description="Filter by conditional COUNT")
+    count = graphene.InputField(
+        IntFilterInput, description="Filter by conditional COUNT"
+    )
 
 
 class WindowFunctionEnum(graphene.Enum):
@@ -631,7 +665,9 @@ class WindowFilterInput(graphene.InputObjectType):
     )
     # Filter conditions
     rank = graphene.InputField(IntFilterInput, description="Filter by rank value")
-    percentile = graphene.InputField(FloatFilterInput, description="Filter by percentile (0.0-1.0)")
+    percentile = graphene.InputField(
+        FloatFilterInput, description="Filter by percentile (0.0-1.0)"
+    )
 
 
 class SubqueryFilterInput(graphene.InputObjectType):
@@ -651,7 +687,9 @@ class SubqueryFilterInput(graphene.InputObjectType):
         lambda: graphene.JSONString,
         description="Additional filter on related records (JSON)",
     )
-    field = graphene.String(required=True, description="Field from related record to compare")
+    field = graphene.String(
+        required=True, description="Field from related record to compare"
+    )
     # Comparison conditions - apply to the subquery result
     # Using JSONString for flexibility since we don't know the field type
     eq = graphene.JSONString(description="Subquery result equals (value as JSON)")
@@ -1091,7 +1129,10 @@ class NestedFilterInputGenerator:
                     # Regular fields
                     filter_input = get_filter_input_for_field(field)
                     if filter_input:
-                        fields[field_name] = graphene.InputField(filter_input, name=to_camel_case(field_name), description=f"Filter by {field_name}"
+                        fields[field_name] = graphene.InputField(
+                            filter_input,
+                            name=to_camel_case(field_name),
+                            description=f"Filter by {field_name}",
                         )
 
             # Add ID filter
@@ -1221,7 +1262,8 @@ class NestedFilterInputGenerator:
                 input_type = filter_type_map.get(
                     filter_type_name.lower(), StringFilterInput
                 )
-                fields[field_name] = graphene.InputField(input_type, name=to_camel_case(field_name), description=description
+                fields[field_name] = graphene.InputField(
+                    input_type, name=to_camel_case(field_name), description=description
                 )
 
         except Exception as e:
@@ -1241,7 +1283,9 @@ class NestedFilterInputGenerator:
             for field in model._meta.get_fields():
                 if isinstance(field, ArrayField):
                     field_name = field.name
-                    fields[field_name] = graphene.InputField(ArrayFilterInput, name=to_camel_case(field_name),
+                    fields[field_name] = graphene.InputField(
+                        ArrayFilterInput,
+                        name=to_camel_case(field_name),
                         description=f"Filter by {field_name} array field",
                     )
         except ImportError:
@@ -1309,7 +1353,10 @@ class NestedFilterInputGenerator:
         related_model = field.related_model
 
         # ID filter for the FK
-        filters[field_name] = graphene.InputField(IDFilterInput, name=to_camel_case(field_name), description=f"Filter by {field_name} ID"
+        filters[field_name] = graphene.InputField(
+            IDFilterInput,
+            name=to_camel_case(field_name),
+            description=f"Filter by {field_name} ID",
         )
 
         # Nested filter for related model (if within depth limit)
@@ -1338,7 +1385,10 @@ class NestedFilterInputGenerator:
         related_model = field.related_model
 
         # ID filter (any match)
-        filters[field_name] = graphene.InputField(IDFilterInput, name=to_camel_case(field_name), description=f"Filter by any {field_name} ID"
+        filters[field_name] = graphene.InputField(
+            IDFilterInput,
+            name=to_camel_case(field_name),
+            description=f"Filter by any {field_name} ID",
         )
 
         # Aggregation filter
@@ -1381,11 +1431,15 @@ class NestedFilterInputGenerator:
                 )
                 every_name = f"{field_name}_every"
                 filters[every_name] = graphene.InputField(
-                    nested_where, name=to_camel_case(every_name), description=f"All {field_name} match"
+                    nested_where,
+                    name=to_camel_case(every_name),
+                    description=f"All {field_name} match",
                 )
                 none_name = f"{field_name}_none"
                 filters[none_name] = graphene.InputField(
-                    nested_where, name=to_camel_case(none_name), description=f"No {field_name} matches"
+                    nested_where,
+                    name=to_camel_case(none_name),
+                    description=f"No {field_name} matches",
                 )
             except (FieldDoesNotExist, RecursionError, AttributeError, TypeError) as e:
                 logger.debug(
@@ -1781,8 +1835,10 @@ class NestedFilterApplicator:
         )
 
         # Prepare queryset with window function annotations if needed
-        if window_filter and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_window_filters", False
+        if (
+            window_filter
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_window_filters", False)
         ):
             queryset = self.prepare_queryset_for_window_filter(queryset, window_filter)
 
@@ -1822,16 +1878,20 @@ class NestedFilterApplicator:
             )
 
         # Apply window function filter
-        if window_filter and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_window_filters", False
+        if (
+            window_filter
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_window_filters", False)
         ):
             window_q = self._build_window_filter_q(window_filter)
             if window_q:
                 q_object &= window_q
 
         # Apply subquery filter
-        if subquery_filter and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_subquery_filters", False
+        if (
+            subquery_filter
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_subquery_filters", False)
         ):
             subquery_q, subquery_annotations = self._build_subquery_filter_q(
                 subquery_filter, model
@@ -1842,24 +1902,30 @@ class NestedFilterApplicator:
                 q_object &= subquery_q
 
         # Apply exists filter
-        if exists_filter and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_subquery_filters", False
+        if (
+            exists_filter
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_subquery_filters", False)
         ):
             exists_q = self._build_exists_filter_q(exists_filter, model)
             if exists_q:
                 q_object &= exists_q
 
         # Apply field comparison filter
-        if compare_filter and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_field_comparison", False
+        if (
+            compare_filter
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_field_comparison", False)
         ):
             compare_q = self._build_field_compare_q(compare_filter)
             if compare_q:
                 q_object &= compare_q
 
         # Apply date truncation filters
-        if date_trunc_filters and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_date_trunc_filters", False
+        if (
+            date_trunc_filters
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_date_trunc_filters", False)
         ):
             for field_key, trunc_filter in date_trunc_filters.items():
                 # field_key is like "created_at_trunc", base field is "created_at"
@@ -1873,8 +1939,10 @@ class NestedFilterApplicator:
                     q_object &= trunc_q
 
         # Apply date extraction filters
-        if date_extract_filters and self.filtering_settings and getattr(
-            self.filtering_settings, "enable_extract_date_filters", False
+        if (
+            date_extract_filters
+            and self.filtering_settings
+            and getattr(self.filtering_settings, "enable_extract_date_filters", False)
         ):
             for field_key, extract_filter in date_extract_filters.items():
                 # field_key is like "created_at_extract", base field is "created_at"
@@ -2112,6 +2180,7 @@ class NestedFilterApplicator:
             field_obj = model._meta.get_field(field_name)
             try:
                 from django.contrib.postgres.fields import ArrayField
+
                 if isinstance(field_obj, ArrayField):
                     return self._build_array_field_q(full_field_path, filter_value)
             except ImportError:
@@ -2533,11 +2602,15 @@ class NestedFilterApplicator:
 
             if key in ("AND", "OR") and isinstance(value, list):
                 for item in value:
-                    self._collect_conditional_aggregation_annotations(item, annotations, prefix)
+                    self._collect_conditional_aggregation_annotations(
+                        item, annotations, prefix
+                    )
                 continue
 
             if key == "NOT" and isinstance(value, dict):
-                self._collect_conditional_aggregation_annotations(value, annotations, prefix)
+                self._collect_conditional_aggregation_annotations(
+                    value, annotations, prefix
+                )
                 continue
 
             if not isinstance(value, dict):
@@ -2547,7 +2620,9 @@ class NestedFilterApplicator:
                 base_field = key[:-9]
                 full_field_path = f"{prefix}{base_field}" if prefix else base_field
                 annotations.update(
-                    self._build_conditional_aggregation_annotations(full_field_path, value)
+                    self._build_conditional_aggregation_annotations(
+                        full_field_path, value
+                    )
                 )
 
         return annotations
@@ -2559,6 +2634,7 @@ class NestedFilterApplicator:
     ) -> Dict[str, Any]:
         """Build annotations for conditional aggregation filters."""
         import json
+
         annotations: Dict[str, Any] = {}
         target_field = cond_agg_filter.get("field") or "id"
         condition_json = cond_agg_filter.get("filter")
@@ -2577,7 +2653,9 @@ class NestedFilterApplicator:
                         for op, op_val in v.items():
                             lookup = self._get_lookup_for_operator(op)
                             if lookup:
-                                condition_q &= Q(**{f"{field_path}__{k}__{lookup}": op_val})
+                                condition_q &= Q(
+                                    **{f"{field_path}__{k}__{lookup}": op_val}
+                                )
                     else:
                         condition_q &= Q(**{f"{field_path}__{k}": v})
             except (json.JSONDecodeError, TypeError, ValueError) as e:
@@ -2693,6 +2771,7 @@ class NestedFilterApplicator:
     ) -> tuple[Q, Dict[str, Any]]:
         """Build Q object and annotations for subquery filter."""
         import json
+
         annotations = {}
         q = Q()
 
@@ -2720,9 +2799,7 @@ class NestedFilterApplicator:
                 return q, annotations
 
             # Build base subquery
-            subquery_qs = related_model.objects.filter(
-                **{fk_field: OuterRef("pk")}
-            )
+            subquery_qs = related_model.objects.filter(**{fk_field: OuterRef("pk")})
 
             # Apply additional filter if provided
             if filter_json:
@@ -2736,9 +2813,13 @@ class NestedFilterApplicator:
                             for op, op_val in v.items():
                                 lookup = self._get_lookup_for_operator(op)
                                 if lookup == "neq":
-                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
+                                    subquery_qs = subquery_qs.exclude(
+                                        **{f"{k}__exact": op_val}
+                                    )
                                 elif lookup:
-                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
+                                    subquery_qs = subquery_qs.filter(
+                                        **{f"{k}__{lookup}": op_val}
+                                    )
                         else:
                             subquery_qs = subquery_qs.filter(**{k: v})
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
@@ -2787,6 +2868,7 @@ class NestedFilterApplicator:
     ) -> Q:
         """Build Q object for exists filter."""
         import json
+
         q = Q()
 
         relation_name = exists_filter.get("relation")
@@ -2812,9 +2894,7 @@ class NestedFilterApplicator:
                 return q
 
             # Build exists subquery
-            subquery_qs = related_model.objects.filter(
-                **{fk_field: OuterRef("pk")}
-            )
+            subquery_qs = related_model.objects.filter(**{fk_field: OuterRef("pk")})
 
             # Apply filter condition if provided
             if filter_json:
@@ -2828,9 +2908,13 @@ class NestedFilterApplicator:
                             for op, op_val in v.items():
                                 lookup = self._get_lookup_for_operator(op)
                                 if lookup == "neq":
-                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
+                                    subquery_qs = subquery_qs.exclude(
+                                        **{f"{k}__exact": op_val}
+                                    )
                                 elif lookup:
-                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
+                                    subquery_qs = subquery_qs.filter(
+                                        **{f"{k}__{lookup}": op_val}
+                                    )
                         else:
                             subquery_qs = subquery_qs.filter(**{k: v})
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
@@ -2989,6 +3073,7 @@ class NestedFilterApplicator:
             try:
                 # Parse the ISO date string
                 from dateutil.parser import parse as parse_date
+
                 target_date = parse_date(trunc_filter["value"])
                 q &= Q(**{annotation_name: target_date})
             except (ValueError, ImportError):
@@ -3140,7 +3225,7 @@ class NestedFilterApplicator:
                 from django.db.models import Func, IntegerField as DjIntegerField
 
                 class ExtractDayOfYear(Func):
-                    function = 'EXTRACT'
+                    function = "EXTRACT"
                     template = "%(function)s(DOY FROM %(expressions)s)"
                     output_field = DjIntegerField()
 
