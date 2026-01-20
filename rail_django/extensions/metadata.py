@@ -802,7 +802,7 @@ class InputFieldMetadataType(graphene.ObjectType):
     validation_rules = graphene.JSONString(description="Validation rules as JSON")
     widget_type = graphene.String(description="Recommended UI widget type")
     placeholder = graphene.String(description="Placeholder text for input")
-    help_text = graphene.String(description="Help text for the field")
+    graphene.String(description="Help text for the field")
     min_length = graphene.Int(description="Minimum length for string fields")
     max_length = graphene.Int(description="Maximum length for string fields")
     min_value = graphene.Float(description="Minimum value for numeric fields")
@@ -1143,7 +1143,7 @@ class TableFieldMetadata:
     filterable: bool
     sortable: bool
     title: str
-    helpText: str
+    help_text: str
     is_property: bool
     is_related: bool
     permissions: Optional[FieldPermissionMetadata] = None
@@ -1177,12 +1177,12 @@ class ModelTableMetadata:
     metadata_version: str
     app: str
     model: str
-    verboseName: str
-    verboseNamePlural: str
-    tableName: str
-    primaryKey: str
+    verbose_name: str
+    verbose_name_plural: str
+    table_name: str
+    primary_key: str
     ordering: list[str]
-    defaultOrdering: list[str]
+    default_ordering: list[str]
     get_latest_by: Optional[str]
     managers: list[str]
     managed: bool
@@ -1326,7 +1326,7 @@ class FieldMetadataType(graphene.ObjectType):
     )
     null = graphene.Boolean(required=True, description="Whether field can be null")
     default_value = graphene.String(description="Default value as string")
-    help_text = graphene.String(description="Field help text")
+    graphene.String(description="Field help text")
     db_column = graphene.String(description="Database column name")
     db_type = graphene.String(description="Database column type")
     internal_type = graphene.String(description="Django internal field type")
@@ -1354,7 +1354,7 @@ class FieldMetadataType(graphene.ObjectType):
     )
     blank = graphene.Boolean(required=True, description="Whether field can be blank")
     editable = graphene.Boolean(required=True, description="Whether field is editable")
-    verbose_name = graphene.String(required=True, description="Field verbose name")
+    graphene.String(required=True, description="Field verbose name")
     has_permission = graphene.Boolean(
         required=True, description="Whether user has permission for this field"
     )
@@ -1397,7 +1397,7 @@ class RelationshipMetadataType(graphene.ObjectType):
     has_permission = graphene.Boolean(
         required=True, description="Whether user has permission for this relationship"
     )
-    verbose_name = graphene.String(required=True, description="Model verbose name")
+    graphene.String(required=True, description="Model verbose name")
 
 
 class ModelMetadataType(graphene.ObjectType):
@@ -1410,11 +1410,11 @@ class ModelMetadataType(graphene.ObjectType):
     )
     app_name = graphene.String(required=True, description="Django app name")
     model_name = graphene.String(required=True, description="Model class name")
-    verbose_name = graphene.String(required=True, description="Model verbose name")
+    graphene.String(required=True, description="Model verbose name")
     verbose_name_plural = graphene.String(
         required=True, description="Model verbose name plural"
     )
-    table_name = graphene.String(required=True, description="Database table name")
+    graphene.String(required=True, description="Database table name")
     primary_key_field = graphene.String(
         required=True, description="Primary key field name"
     )
@@ -1469,8 +1469,8 @@ class FormFieldMetadataType(graphene.ObjectType):
     is_required = graphene.Boolean(
         required=True, description="Whether field is required"
     )
-    verbose_name = graphene.String(required=True, description="Field verbose name")
-    help_text = graphene.String(description="Field help text")
+    graphene.String(required=True, description="Field verbose name")
+    graphene.String(description="Field help text")
     widget_type = graphene.String(
         required=True, description="Recommended UI widget type"
     )
@@ -1522,8 +1522,8 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     cardinality = graphene.String(
         required=True, description="Relationship cardinality"
     )
-    verbose_name = graphene.String(required=True, description="Field verbose name")
-    help_text = graphene.String(description="Field help text")
+    graphene.String(required=True, description="Field verbose name")
+    graphene.String(description="Field help text")
     widget_type = graphene.String(
         required=True, description="Recommended UI widget type"
     )
@@ -1584,7 +1584,7 @@ class ModelFormMetadataType(graphene.ObjectType):
     )
     app_name = graphene.String(required=True, description="Django app name")
     model_name = graphene.String(required=True, description="Model class name")
-    verbose_name = graphene.String(required=True, description="Model verbose name")
+    graphene.String(required=True, description="Model verbose name")
     verbose_name_plural = graphene.String(
         required=True, description="Model verbose name plural"
     )
@@ -1655,7 +1655,7 @@ class TableFieldMetadataType(graphene.ObjectType):
     )
     sortable = graphene.Boolean(required=True, description="Whether field is sortable")
     title = graphene.String(required=True, description="Field title (verbose name)")
-    helpText = graphene.String(required=True, description="Help text or description")
+    graphene.String(required=True, description="Help text or description")
     is_property = graphene.Boolean(
         required=True, description="Whether field is a property"
     )
@@ -1747,16 +1747,16 @@ class ModelTableType(graphene.ObjectType):
     )
     app = graphene.String(required=True, description="Application name")
     model = graphene.String(required=True, description="Model name")
-    verboseName = graphene.String(required=True, description="Singular verbose name")
-    verboseNamePlural = graphene.String(
+    graphene.String(required=True, description="Singular verbose name")
+    verbose_name_plural = graphene.String(
         required=True, description="Plural verbose name"
     )
-    tableName = graphene.String(required=True, description="Database table name")
-    primaryKey = graphene.String(required=True, description="Primary key field name")
+    graphene.String(required=True, description="Database table name")
+    graphene.String(required=True, description="Primary key field name")
     ordering = graphene.List(
         graphene.String, required=True, description="Default ordering fields"
     )
-    defaultOrdering = graphene.List(
+    default_ordering = graphene.List(
         graphene.String, required=True, description="Fallback ordering fields"
     )
     get_latest_by = graphene.String(description="Field used by 'latest' manager")
@@ -4565,7 +4565,7 @@ class ModelTableExtractor:
             filterable=True,
             sortable=True,
             title=title,
-            helpText=help_text,
+            help_text = help_text,
             is_property=False,
             is_related=is_related,
             permissions=permission_snapshot,
@@ -4627,7 +4627,7 @@ class ModelTableExtractor:
             filterable=True,
             sortable=True,
             title=str(verbose_name or prop_name),
-            helpText=f"Computed property ({field_type_str})",
+            help_text = f"Computed property ({field_type_str})",
             is_property=True,
             is_related=False,
         )
@@ -4710,7 +4710,7 @@ class ModelTableExtractor:
                     filterable=True,
                     sortable=True,
                     title=f"Related items count ({rel_name})",
-                    helpText=f"Number of related reverse objects ({rel_name})",
+                    help_text = f"Number of related reverse objects ({rel_name})",
                     is_property=False,
                     is_related=False,
                 )
@@ -4727,7 +4727,7 @@ class ModelTableExtractor:
                         filterable=True,
                         sortable=True,
                         title=f"Related items count ({field.verbose_name})",
-                        helpText=f"Number of related reverse objects ({field.verbose_name})",
+                        help_text = f"Number of related reverse objects ({field.verbose_name})",
                         is_property=False,
                         is_related=False,
                     )
@@ -5603,12 +5603,12 @@ class ModelTableExtractor:
             metadata_version=_get_metadata_version_value(app_name, model_name),
             app=app_label,
             model=model_label,
-            verboseName=verbose_name,
-            verboseNamePlural=verbose_name_plural,
-            tableName=table_name,
-            primaryKey=primary_key,
+            verbose_name = verbose_name,
+            verbose_name_plural = verbose_name_plural,
+            table_name = table_name,
+            primary_key = primary_key,
             ordering=ordering,
-            defaultOrdering=default_ordering,
+            default_ordering = default_ordering,
             get_latest_by=get_latest_by,
             managers=managers,
             managed=managed,
@@ -5657,7 +5657,7 @@ class AvailableModelType(graphene.ObjectType):
 
     app_label = graphene.String(required=True, description="App label")
     model_name = graphene.String(required=True, description="Model name")
-    verbose_name = graphene.String(required=True, description="Verbose name")
+    graphene.String(required=True, description="Verbose name")
 
 
 class ModelMetadataQuery(graphene.ObjectType):
