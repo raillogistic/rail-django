@@ -81,7 +81,7 @@ class QueryGenerator:
         self.authorization_manager = get_authz_manager(schema_name)
 
         self._query_registry: dict[type[models.Model], dict[str, Any]] = {}
-        self._filter_generator = AdvancedFilterGenerator()
+        self._filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
         self._query_fields: dict[str, graphene.Field] = {}
 
         # Initialize performance optimization

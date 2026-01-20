@@ -715,3 +715,672 @@ filtered_qs = applicator.apply_where_filter(
 - [GraphQL API Guide](./graphql.md) - General API documentation
 - [GraphQLMeta Reference](../reference/meta.md) - Per-model filter configuration
 - [Configuration Reference](../reference/configuration.md) - Settings reference
+
+## Advanced Filter Features
+
+Rail Django supports advanced filtering capabilities that leverage Django ORM's powerful querying features. These are opt-in features that must be enabled in your settings.
+
+### Enabling Advanced Filters
+
+Configure advanced filters in your Django settings:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        # Window function filters (rank, row_number, etc.)
+        "enable_window_filters": True,
+
+        # Subquery and exists filters
+        "enable_subquery_filters": True,
+
+        # Conditional aggregation (count/sum with conditions)
+        "enable_conditional_aggregation": True,
+
+        # PostgreSQL array field filters
+        "enable_array_filters": True,
+    }
+}
+```
+
+---
+
+## Window Function Filters
+
+Window functions allow you to filter records by their ranking, percentile, or row number within partitions. This is powerful for queries like "top N products per category" or "products in the top 10% by price."
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_window_filters": True,
+    }
+}
+```
+
+### Available Window Functions
+
+| Function       | Description                                      |
+| -------------- | ------------------------------------------------ |
+| `RANK`         | Rank with gaps (ties get same rank)              |
+| `DENSE_RANK`   | Rank without gaps (ties get same rank)           |
+| `ROW_NUMBER`   | Unique sequential number (no ties)               |
+| `PERCENT_RANK` | Relative rank as percentage (0.0 to 1.0)         |
+
+### Basic Usage: Top N Overall
+
+Get the top 3 most expensive products:
+
+```graphql
+query {
+  products(
+    where: {
+      _window: {
+        function: RANK
+        order_by: ["-price"]
+        rank: { lte: 3 }
+      }
+    }
+    orderBy: ["-price"]
+  ) {
+    id
+    name
+    price
+  }
+}
+```
+
+### Partitioned Ranking: Top N Per Category
+
+Get the most expensive product in each category:
+
+```graphql
+query {
+  products(
+    where: {
+      _window: {
+        function: ROW_NUMBER
+        partition_by: ["category_id"]
+        order_by: ["-price"]
+        rank: { eq: 1 }
+      }
+    }
+  ) {
+    id
+    name
+    price
+    category {
+      name
+    }
+  }
+}
+```
+
+### Percentile Filtering
+
+Get products in the top 10% by sales:
+
+```graphql
+query {
+  products(
+    where: {
+      _window: {
+        function: PERCENT_RANK
+        order_by: ["-total_sales"]
+        percentile: { lte: 0.1 }
+      }
+    }
+  ) {
+    id
+    name
+    totalSales
+  }
+}
+```
+
+### Window Filter Input Reference
+
+```graphql
+input WindowFilterInput {
+  # Required: Window function to use
+  function: WindowFunctionEnum!  # RANK, DENSE_RANK, ROW_NUMBER, PERCENT_RANK
+
+  # Optional: Fields to partition by (creates separate rankings per group)
+  partition_by: [String!]
+
+  # Required: Fields to order by within partition (prefix with '-' for descending)
+  order_by: [String!]!
+
+  # Filter by rank value (for RANK, DENSE_RANK, ROW_NUMBER)
+  rank: IntFilterInput
+
+  # Filter by percentile (for PERCENT_RANK, value between 0.0 and 1.0)
+  percentile: FloatFilterInput
+}
+```
+
+---
+
+## Subquery Filters
+
+Subquery filters allow you to filter parent records based on values from related records, such as "products whose highest-priced order exceeds $100" or "users whose latest login was this month."
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_subquery_filters": True,
+    }
+}
+```
+
+### Basic Usage: Filter by Related Record Value
+
+Get products whose highest-priced order item exceeds $100:
+
+```graphql
+query {
+  products(
+    where: {
+      _subquery: {
+        relation: "order_items"
+        order_by: ["-unit_price"]
+        field: "unit_price"
+        gt: 100
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Filter by Latest Related Record
+
+Get users whose most recent order was placed this year:
+
+```graphql
+query {
+  users(
+    where: {
+      _subquery: {
+        relation: "orders"
+        order_by: ["-created_at"]
+        field: "created_at"
+        gte: "2024-01-01"
+      }
+    }
+  ) {
+    id
+    username
+  }
+}
+```
+
+### Subquery with Additional Filtering
+
+Get products whose highest-priced *completed* order exceeds $50:
+
+```graphql
+query {
+  products(
+    where: {
+      _subquery: {
+        relation: "order_items"
+        order_by: ["-unit_price"]
+        filter: "{\"order\": {\"status\": {\"eq\": \"completed\"}}}"
+        field: "unit_price"
+        gt: 50
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Subquery Filter Input Reference
+
+```graphql
+input SubqueryFilterInput {
+  # Required: Name of the related field/relation
+  relation: String!
+
+  # Order by fields to determine which related record to compare
+  # (prefix with '-' for descending)
+  order_by: [String!]
+
+  # Additional filter on related records (JSON string)
+  filter: JSONString
+
+  # Required: Field from related record to compare
+  field: String!
+
+  # Comparison operators
+  eq: JSONString      # Equals (value as JSON)
+  neq: JSONString     # Not equals
+  gt: Float           # Greater than
+  gte: Float          # Greater than or equal
+  lt: Float           # Less than
+  lte: Float          # Less than or equal
+  is_null: Boolean    # Is null
+}
+```
+
+---
+
+## Exists Filters
+
+Exists filters provide a way to filter records based on the existence (or non-existence) of related records, optionally with conditions.
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_subquery_filters": True,  # Exists is part of subquery filters
+    }
+}
+```
+
+### Basic Existence Check
+
+Get products that have at least one order:
+
+```graphql
+query {
+  products(
+    where: {
+      _exists: {
+        relation: "order_items"
+        exists: true
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Non-Existence Check
+
+Get products with no orders:
+
+```graphql
+query {
+  products(
+    where: {
+      _exists: {
+        relation: "order_items"
+        exists: false
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Conditional Existence
+
+Get products that have high-quantity orders (quantity >= 10):
+
+```graphql
+query {
+  products(
+    where: {
+      _exists: {
+        relation: "order_items"
+        filter: "{\"quantity\": {\"gte\": 10}}"
+        exists: true
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Exists vs Count Filters
+
+| Use Case                              | Recommended Filter |
+| ------------------------------------- | ------------------ |
+| "Has any related records"             | `_exists`          |
+| "Has no related records"              | `_exists: false`   |
+| "Has exactly N related records"       | `_count: { eq: N }` |
+| "Has at least N related records"      | `_count: { gte: N }` |
+| "Has related records matching X"      | `_exists` with filter |
+
+### Exists Filter Input Reference
+
+```graphql
+input ExistsFilterInput {
+  # Required: Name of the related field/relation
+  relation: String!
+
+  # Additional filter on related records (JSON string)
+  filter: JSONString
+
+  # True to check existence, false to check non-existence
+  exists: Boolean = true
+}
+```
+
+---
+
+## Conditional Aggregation Filters
+
+Conditional aggregation filters allow you to filter by aggregates that only count/sum records meeting specific conditions. This is useful for queries like "products with at least 5 high-value orders" or "categories with more than 10 active products."
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_conditional_aggregation": True,
+    }
+}
+```
+
+### Basic Usage: Count with Condition
+
+Get products with at least 2 high-value order items (unit_price >= $50):
+
+```graphql
+query {
+  products(
+    where: {
+      order_items_cond_agg: {
+        field: "id"
+        filter: "{\"unit_price\": {\"gte\": 50}}"
+        count: { gte: 2 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Sum with Condition
+
+Get categories where the total price of active products exceeds $1000:
+
+```graphql
+query {
+  categories(
+    where: {
+      products_cond_agg: {
+        field: "price"
+        filter: "{\"is_active\": {\"eq\": true}}"
+        sum: { gte: 1000 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Average with Condition
+
+Get stores where the average rating of verified reviews is at least 4.0:
+
+```graphql
+query {
+  stores(
+    where: {
+      reviews_cond_agg: {
+        field: "rating"
+        filter: "{\"is_verified\": {\"eq\": true}}"
+        avg: { gte: 4.0 }
+      }
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Conditional Aggregation vs Standard Aggregation
+
+| Filter Type                        | Description                                    |
+| ---------------------------------- | ---------------------------------------------- |
+| `order_items_agg: { count: ... }` | Count ALL order items                          |
+| `order_items_cond_agg: { filter: ..., count: ... }` | Count only order items matching filter |
+
+### Conditional Aggregation Filter Input Reference
+
+```graphql
+input ConditionalAggregationFilterInput {
+  # Required: Field to aggregate
+  field: String!
+
+  # Filter condition on related records (JSON string)
+  filter: JSONString
+
+  # Aggregate filters (at least one required)
+  sum: FloatFilterInput     # Filter by conditional SUM
+  avg: FloatFilterInput     # Filter by conditional AVG
+  count: IntFilterInput     # Filter by conditional COUNT
+}
+```
+
+---
+
+## Array Field Filters (PostgreSQL)
+
+Array field filters provide operations for PostgreSQL `ArrayField` columns, allowing you to filter by array contents, overlap, and length.
+
+### Configuration
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "filtering_settings": {
+        "enable_array_filters": True,
+    }
+}
+```
+
+### Model Setup
+
+```python
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+class Article(models.Model):
+    title = models.CharField(max_length=200)
+    tags = ArrayField(models.CharField(max_length=50), default=list)
+    categories = ArrayField(models.CharField(max_length=50), blank=True, null=True)
+```
+
+### Contains: Array Contains All Values
+
+Get articles that have both "python" and "django" tags:
+
+```graphql
+query {
+  articles(
+    where: {
+      tags: {
+        contains: ["python", "django"]
+      }
+    }
+  ) {
+    id
+    title
+    tags
+  }
+}
+```
+
+### Overlaps: Array Has Any of the Values
+
+Get articles that have at least one of the specified tags:
+
+```graphql
+query {
+  articles(
+    where: {
+      tags: {
+        overlaps: ["python", "javascript", "rust"]
+      }
+    }
+  ) {
+    id
+    title
+    tags
+  }
+}
+```
+
+### Contained By: Array is Subset of Values
+
+Get articles whose tags are all within the allowed set:
+
+```graphql
+query {
+  articles(
+    where: {
+      tags: {
+        contained_by: ["python", "django", "rest", "graphql"]
+      }
+    }
+  ) {
+    id
+    title
+    tags
+  }
+}
+```
+
+### Length: Filter by Array Size
+
+Get articles with at least 3 tags:
+
+```graphql
+query {
+  articles(
+    where: {
+      tags: {
+        length: { gte: 3 }
+      }
+    }
+  ) {
+    id
+    title
+    tags
+  }
+}
+```
+
+### Null Check
+
+Get articles with no categories:
+
+```graphql
+query {
+  articles(
+    where: {
+      categories: {
+        is_null: true
+      }
+    }
+  ) {
+    id
+    title
+  }
+}
+```
+
+### Array Filter Input Reference
+
+```graphql
+input ArrayFilterInput {
+  # Array must contain all these values
+  contains: [String!]
+
+  # Array must be subset of these values
+  contained_by: [String!]
+
+  # Array must have at least one of these values
+  overlaps: [String!]
+
+  # Filter by array length
+  length: IntFilterInput
+
+  # Check if array is null
+  is_null: Boolean
+}
+```
+
+---
+
+## Combining Advanced Filters
+
+Advanced filters can be combined with standard filters and boolean operators:
+
+```graphql
+query {
+  products(
+    where: {
+      # Standard filter: price above $100
+      price: { gte: 100 }
+
+      # Exists filter: must have orders
+      _exists: {
+        relation: "order_items"
+        exists: true
+      }
+
+      # Window filter: in top 10 by sales
+      _window: {
+        function: RANK
+        order_by: ["-total_sales"]
+        rank: { lte: 10 }
+      }
+    }
+  ) {
+    id
+    name
+    price
+  }
+}
+```
+
+### With Boolean Operators
+
+```graphql
+query {
+  products(
+    where: {
+      AND: [
+        { price: { gte: 50 } }
+        {
+          _exists: {
+            relation: "order_items"
+            filter: "{\"quantity\": {\"gte\": 5}}"
+            exists: true
+          }
+        }
+      ]
+      OR: [
+        { category_rel: { name: { eq: "Electronics" } } }
+        { category_rel: { name: { eq: "Accessories" } } }
+      ]
+    }
+  ) {
+    id
+    name
+  }
+}
+```

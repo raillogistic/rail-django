@@ -45,8 +45,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
 from django.db import models
-from django.db.models import Avg, Case, Count, F, Max, Min, Q, Sum, Value, When
-from django.db.models.fields import IntegerField
+from django.db.models import (
+    Avg, Case, Count, Exists, F, Max, Min, OuterRef, Q, Subquery, Sum, Value, When,
+    Window,
+)
+from django.db.models.fields import IntegerField, FloatField
+from django.db.models.functions import Rank, DenseRank, RowNumber, PercentRank, Lag, Lead
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -565,6 +569,131 @@ class AggregationFilterInput(graphene.InputObjectType):
     count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
 
 
+class ConditionalAggregationFilterInput(graphene.InputObjectType):
+    """
+    Filter input for conditional aggregation on related objects.
+
+    Counts or sums only records matching a specific condition.
+    """
+
+    field = graphene.String(required=True, description="Field to aggregate")
+    filter = graphene.Argument(
+        lambda: graphene.JSONString,
+        description="Filter condition for records to include in aggregation (JSON)",
+    )
+    sum = graphene.InputField(FloatFilterInput, description="Filter by conditional SUM")
+    avg = graphene.InputField(FloatFilterInput, description="Filter by conditional AVG")
+    count = graphene.InputField(IntFilterInput, description="Filter by conditional COUNT")
+
+
+class WindowFunctionEnum(graphene.Enum):
+    """Supported window function types."""
+
+    RANK = "rank"
+    DENSE_RANK = "dense_rank"
+    ROW_NUMBER = "row_number"
+    PERCENT_RANK = "percent_rank"
+
+
+class WindowFilterInput(graphene.InputObjectType):
+    """
+    Filter input for window function filters.
+
+    Enables filtering by ranking, percentile, or row number within partitions.
+    """
+
+    function = graphene.Field(
+        WindowFunctionEnum,
+        required=True,
+        description="Window function to use: rank, dense_rank, row_number, percent_rank",
+    )
+    partition_by = graphene.List(
+        graphene.NonNull(graphene.String),
+        name="partition_by",
+        description="Fields to partition by",
+    )
+    order_by = graphene.List(
+        graphene.NonNull(graphene.String),
+        required=True,
+        name="order_by",
+        description="Fields to order by within partition (prefix with '-' for descending)",
+    )
+    # Filter conditions
+    rank = graphene.InputField(IntFilterInput, description="Filter by rank value")
+    percentile = graphene.InputField(FloatFilterInput, description="Filter by percentile (0.0-1.0)")
+
+
+class SubqueryFilterInput(graphene.InputObjectType):
+    """
+    Filter input for correlated subquery filters.
+
+    Enables filtering by values from the latest/first related record.
+    """
+
+    relation = graphene.String(required=True, description="Related field name")
+    order_by = graphene.List(
+        graphene.NonNull(graphene.String),
+        name="order_by",
+        description="Order by fields to determine which related record to use (prefix with '-' for desc)",
+    )
+    filter = graphene.Argument(
+        lambda: graphene.JSONString,
+        description="Additional filter on related records (JSON)",
+    )
+    field = graphene.String(required=True, description="Field from related record to compare")
+    # Comparison conditions - apply to the subquery result
+    # Using JSONString for flexibility since we don't know the field type
+    eq = graphene.JSONString(description="Subquery result equals (value as JSON)")
+    neq = graphene.JSONString(description="Subquery result not equals (value as JSON)")
+    gt = graphene.Float(description="Subquery result greater than")
+    gte = graphene.Float(description="Subquery result greater than or equal")
+    lt = graphene.Float(description="Subquery result less than")
+    lte = graphene.Float(description="Subquery result less than or equal")
+    is_null = graphene.Boolean(name="is_null", description="Subquery result is null")
+
+
+class ExistsFilterInput(graphene.InputObjectType):
+    """
+    Filter input for existence checks on related records.
+
+    More efficient than _some for simple existence checks.
+    """
+
+    relation = graphene.String(required=True, description="Related field name")
+    filter = graphene.Argument(
+        lambda: graphene.JSONString,
+        description="Filter condition for related records (JSON)",
+    )
+    exists = graphene.Boolean(
+        default_value=True,
+        description="True to check existence, False to check non-existence",
+    )
+
+
+class ArrayFilterInput(graphene.InputObjectType):
+    """
+    Filter input for PostgreSQL ArrayField.
+
+    Supports contains, overlap, contained_by, and length operations.
+    """
+
+    contains = graphene.List(
+        graphene.NonNull(graphene.String),
+        description="Array contains all these values",
+    )
+    contained_by = graphene.List(
+        graphene.NonNull(graphene.String),
+        description="Array is contained by these values",
+    )
+    overlaps = graphene.List(
+        graphene.NonNull(graphene.String),
+        name="overlaps",
+        description="Array overlaps with any of these values",
+    )
+    length = graphene.InputField(IntFilterInput, description="Filter by array length")
+    is_null = graphene.Boolean(name="is_null", description="Array is null")
+
+
 class FullTextSearchTypeEnum(graphene.Enum):
     """Supported full-text search query modes."""
 
@@ -817,6 +946,37 @@ class NestedFilterInputGenerator:
                     description="Full-text search (Postgres) with icontains fallback",
                 )
 
+            # Add window function filter if enabled
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_window_filters", False
+            ):
+                fields["_window"] = graphene.InputField(
+                    WindowFilterInput,
+                    name="_window",
+                    description="Filter by window function (rank, percentile, row_number)",
+                )
+
+            # Add subquery filter if enabled
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_subquery_filters", False
+            ):
+                fields["_subquery"] = graphene.InputField(
+                    SubqueryFilterInput,
+                    name="_subquery",
+                    description="Filter by correlated subquery (e.g., latest related record)",
+                )
+                fields["_exists"] = graphene.InputField(
+                    ExistsFilterInput,
+                    name="_exists",
+                    description="Filter by existence of related records",
+                )
+
+            # Add array filter fields for ArrayField columns
+            if self.filtering_settings and getattr(
+                self.filtering_settings, "enable_array_filters", False
+            ):
+                fields.update(self._generate_array_field_filters(model))
+
             # Add include filter for ID union
             fields["include"] = graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.ID)),
@@ -882,6 +1042,29 @@ class NestedFilterInputGenerator:
 
         return fields
 
+    def _generate_array_field_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, graphene.InputField]:
+        """Generate filters for ArrayField columns (PostgreSQL)."""
+        fields = {}
+        try:
+            from django.contrib.postgres.fields import ArrayField
+
+            for field in model._meta.get_fields():
+                if isinstance(field, ArrayField):
+                    field_name = field.name
+                    fields[field_name] = graphene.InputField(
+                        ArrayFilterInput,
+                        description=f"Filter by {field_name} array field",
+                    )
+        except ImportError:
+            # PostgreSQL not available
+            pass
+        except Exception as e:
+            logger.debug(f"Error generating array filters for {model.__name__}: {e}")
+
+        return fields
+
     def _generate_fk_filter(
         self,
         field: models.ForeignKey,
@@ -934,6 +1117,17 @@ class NestedFilterInputGenerator:
             name=agg_name,
             description=f"Filter by aggregated {field_name} values",
         )
+
+        # Conditional aggregation filter (if enabled)
+        if self.filtering_settings and getattr(
+            self.filtering_settings, "enable_conditional_aggregation", False
+        ):
+            cond_agg_name = f"{field_name}_cond_agg"
+            filters[cond_agg_name] = graphene.InputField(
+                ConditionalAggregationFilterInput,
+                name=cond_agg_name,
+                description=f"Filter by conditional aggregation on {field_name}",
+            )
 
         # Count filter
         if self.enable_count_filters:
@@ -995,6 +1189,17 @@ class NestedFilterInputGenerator:
             name=agg_name,
             description=f"Filter by aggregated {accessor_name} values",
         )
+
+        # Conditional aggregation filter (if enabled)
+        if self.filtering_settings and getattr(
+            self.filtering_settings, "enable_conditional_aggregation", False
+        ):
+            cond_agg_name = f"{accessor_name}_cond_agg"
+            filters[cond_agg_name] = graphene.InputField(
+                ConditionalAggregationFilterInput,
+                name=cond_agg_name,
+                description=f"Filter by conditional aggregation on {accessor_name}",
+            )
 
         # Count filter
         if self.enable_count_filters:
@@ -1310,8 +1515,18 @@ class NestedFilterApplicator:
         instance_in = where_input.pop("instance_in", None)
         history_type_in = where_input.pop("history_type_in", None)
 
+        # Extract advanced filter types
+        window_filter = where_input.pop("_window", None)
+        subquery_filter = where_input.pop("_subquery", None)
+        exists_filter = where_input.pop("_exists", None)
+
         # First, prepare queryset with aggregation annotations if needed
         queryset = self.prepare_queryset_for_aggregation_filters(queryset, where_input)
+
+        # Prepare queryset with conditional aggregation annotations if needed
+        queryset = self.prepare_queryset_for_conditional_aggregation_filters(
+            queryset, where_input
+        )
 
         # Then, prepare queryset with count annotations if needed
         queryset = self.prepare_queryset_for_count_filters(queryset, where_input)
@@ -1320,6 +1535,12 @@ class NestedFilterApplicator:
         queryset = self.prepare_queryset_for_computed_filters(
             queryset, where_input, model
         )
+
+        # Prepare queryset with window function annotations if needed
+        if window_filter and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_window_filters", False
+        ):
+            queryset = self.prepare_queryset_for_window_filter(queryset, window_filter)
 
         # Build and apply main Q object
         q_object = self._build_q_from_where(where_input, model)
@@ -1355,6 +1576,34 @@ class NestedFilterApplicator:
             q_object &= self._get_historical_mixin().build_historical_filter_q(
                 "history_type_in", history_type_in
             )
+
+        # Apply window function filter
+        if window_filter and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_window_filters", False
+        ):
+            window_q = self._build_window_filter_q(window_filter)
+            if window_q:
+                q_object &= window_q
+
+        # Apply subquery filter
+        if subquery_filter and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_subquery_filters", False
+        ):
+            subquery_q, subquery_annotations = self._build_subquery_filter_q(
+                subquery_filter, model
+            )
+            if subquery_annotations:
+                queryset = queryset.annotate(**subquery_annotations)
+            if subquery_q:
+                q_object &= subquery_q
+
+        # Apply exists filter
+        if exists_filter and self.filtering_settings and getattr(
+            self.filtering_settings, "enable_subquery_filters", False
+        ):
+            exists_q = self._build_exists_filter_q(exists_filter, model)
+            if exists_q:
+                q_object &= exists_q
 
         if q_object:
             queryset = queryset.filter(q_object)
@@ -1566,10 +1815,27 @@ class NestedFilterApplicator:
             sub_q = self._build_q_from_where(filter_value, model, f"{base_field}__")
             return ~sub_q
 
+        if field_name.endswith("_cond_agg"):
+            # Conditional aggregation filter (must check before _agg)
+            base_field = full_field_path[:-9]
+            return self._build_conditional_aggregation_q(base_field, filter_value)
+
         if field_name.endswith("_agg"):
             # Aggregation filter
             base_field = full_field_path[:-4]
             return self._build_aggregation_q(base_field, filter_value)
+
+        # Check if this is an ArrayField filter
+        try:
+            field_obj = model._meta.get_field(field_name)
+            try:
+                from django.contrib.postgres.fields import ArrayField
+                if isinstance(field_obj, ArrayField):
+                    return self._build_array_field_q(full_field_path, filter_value)
+            except ImportError:
+                pass
+        except FieldDoesNotExist:
+            pass
 
         if field_name.endswith("_count"):
             # Check if this is a real field first (e.g. inventory_count)
@@ -1889,6 +2155,10 @@ class NestedFilterApplicator:
                 )
                 continue
 
+            # Skip conditional aggregation filters - they're handled separately
+            if key.endswith("_cond_agg"):
+                continue
+
             if key.endswith("_agg"):
                 base_field = key[:-4]
                 full_field_path = f"{prefix}{base_field}" if prefix else base_field
@@ -1943,6 +2213,383 @@ class NestedFilterApplicator:
             annotations[annotation_name] = Count(lookup_path)
 
         return annotations
+
+    # =========================================================================
+    # Conditional Aggregation Filter Methods
+    # =========================================================================
+
+    def prepare_queryset_for_conditional_aggregation_filters(
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+    ) -> models.QuerySet:
+        """Prepare queryset with conditional aggregation annotations."""
+        annotations = self._collect_conditional_aggregation_annotations(where_input)
+        if annotations:
+            queryset = queryset.annotate(**annotations)
+        return queryset
+
+    def _collect_conditional_aggregation_annotations(
+        self,
+        where_input: Dict[str, Any],
+        annotations: Optional[Dict[str, Any]] = None,
+        prefix: str = "",
+    ) -> Dict[str, Any]:
+        """Collect all conditional aggregation annotations needed."""
+        if annotations is None:
+            annotations = {}
+
+        for key, value in where_input.items():
+            if value is None:
+                continue
+
+            if key in ("AND", "OR") and isinstance(value, list):
+                for item in value:
+                    self._collect_conditional_aggregation_annotations(item, annotations, prefix)
+                continue
+
+            if key == "NOT" and isinstance(value, dict):
+                self._collect_conditional_aggregation_annotations(value, annotations, prefix)
+                continue
+
+            if not isinstance(value, dict):
+                continue
+
+            if key.endswith("_cond_agg"):
+                base_field = key[:-9]
+                full_field_path = f"{prefix}{base_field}" if prefix else base_field
+                annotations.update(
+                    self._build_conditional_aggregation_annotations(full_field_path, value)
+                )
+
+        return annotations
+
+    def _build_conditional_aggregation_annotations(
+        self,
+        field_path: str,
+        cond_agg_filter: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build annotations for conditional aggregation filters."""
+        import json
+        annotations: Dict[str, Any] = {}
+        target_field = cond_agg_filter.get("field") or "id"
+        condition_json = cond_agg_filter.get("filter")
+
+        # Parse the filter condition JSON
+        condition_q = Q()
+        if condition_json:
+            try:
+                if isinstance(condition_json, str):
+                    condition_dict = json.loads(condition_json)
+                else:
+                    condition_dict = condition_json
+                # Build Q object from the condition (simple key-value for now)
+                for k, v in condition_dict.items():
+                    if isinstance(v, dict):
+                        for op, op_val in v.items():
+                            lookup = self._get_lookup_for_operator(op)
+                            if lookup:
+                                condition_q &= Q(**{f"{field_path}__{k}__{lookup}": op_val})
+                    else:
+                        condition_q &= Q(**{f"{field_path}__{k}": v})
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                logger.debug(f"Failed to parse conditional filter: {e}")
+
+        lookup_path = f"{field_path}__{target_field}"
+
+        if cond_agg_filter.get("sum") is not None:
+            annotation_name = f"{field_path.replace('__', '_')}_cond_sum"
+            annotations[annotation_name] = Sum(lookup_path, filter=condition_q)
+
+        if cond_agg_filter.get("avg") is not None:
+            annotation_name = f"{field_path.replace('__', '_')}_cond_avg"
+            annotations[annotation_name] = Avg(lookup_path, filter=condition_q)
+
+        if cond_agg_filter.get("count") is not None:
+            annotation_name = f"{field_path.replace('__', '_')}_cond_count"
+            annotations[annotation_name] = Count(lookup_path, filter=condition_q)
+
+        return annotations
+
+    def _build_conditional_aggregation_q(
+        self,
+        field_path: str,
+        cond_agg_filter: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for conditional aggregation filters."""
+        q = Q()
+
+        for agg_type in ("sum", "avg", "count"):
+            agg_value = cond_agg_filter.get(agg_type)
+            if not isinstance(agg_value, dict):
+                continue
+            annotation_name = f"{field_path.replace('__', '_')}_cond_{agg_type}"
+            q &= self._build_numeric_q(annotation_name, agg_value)
+
+        return q
+
+    # =========================================================================
+    # Window Function Filter Methods
+    # =========================================================================
+
+    def prepare_queryset_for_window_filter(
+        self,
+        queryset: models.QuerySet,
+        window_filter: Dict[str, Any],
+    ) -> models.QuerySet:
+        """Prepare queryset with window function annotation."""
+        function_name = window_filter.get("function")
+        if isinstance(function_name, str):
+            function_name = function_name.lower()
+        else:
+            # Handle enum value
+            function_name = getattr(function_name, "value", str(function_name)).lower()
+
+        partition_by = window_filter.get("partition_by") or []
+        order_by_fields = window_filter.get("order_by") or []
+
+        # Build order_by expressions
+        order_by_exprs = []
+        for field in order_by_fields:
+            if field.startswith("-"):
+                order_by_exprs.append(F(field[1:]).desc())
+            else:
+                order_by_exprs.append(F(field).asc())
+
+        # Build partition_by expressions
+        partition_exprs = [F(field) for field in partition_by] if partition_by else None
+
+        # Select window function
+        window_func_map = {
+            "rank": Rank,
+            "dense_rank": DenseRank,
+            "row_number": RowNumber,
+            "percent_rank": PercentRank,
+        }
+
+        func_class = window_func_map.get(function_name, Rank)
+        window_expr = Window(
+            expression=func_class(),
+            partition_by=partition_exprs,
+            order_by=order_by_exprs,
+        )
+
+        queryset = queryset.annotate(_window_rank=window_expr)
+        return queryset
+
+    def _build_window_filter_q(
+        self,
+        window_filter: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for window function filter."""
+        q = Q()
+
+        # Filter by rank value
+        if window_filter.get("rank"):
+            q &= self._build_numeric_q("_window_rank", window_filter["rank"])
+
+        # Filter by percentile (for percent_rank)
+        if window_filter.get("percentile"):
+            q &= self._build_numeric_q("_window_rank", window_filter["percentile"])
+
+        return q
+
+    # =========================================================================
+    # Subquery Filter Methods
+    # =========================================================================
+
+    def _build_subquery_filter_q(
+        self,
+        subquery_filter: Dict[str, Any],
+        model: Type[models.Model],
+    ) -> tuple[Q, Dict[str, Any]]:
+        """Build Q object and annotations for subquery filter."""
+        import json
+        annotations = {}
+        q = Q()
+
+        relation_name = subquery_filter.get("relation")
+        if not relation_name:
+            return q, annotations
+
+        order_by_fields = subquery_filter.get("order_by") or ["-pk"]
+        target_field = subquery_filter.get("field") or "id"
+        filter_json = subquery_filter.get("filter")
+
+        try:
+            # Get the related model
+            relation_field = self._get_relation_field(model, relation_name)
+            if relation_field is None:
+                return q, annotations
+
+            related_model = getattr(relation_field, "related_model", None)
+            if related_model is None:
+                return q, annotations
+
+            # Find the FK field pointing back to parent
+            fk_field = self._get_fk_to_parent(related_model, model)
+            if not fk_field:
+                return q, annotations
+
+            # Build base subquery
+            subquery_qs = related_model.objects.filter(
+                **{fk_field: OuterRef("pk")}
+            )
+
+            # Apply additional filter if provided
+            if filter_json:
+                try:
+                    if isinstance(filter_json, str):
+                        filter_dict = json.loads(filter_json)
+                    else:
+                        filter_dict = filter_json
+                    for k, v in filter_dict.items():
+                        if isinstance(v, dict):
+                            for op, op_val in v.items():
+                                lookup = self._get_lookup_for_operator(op)
+                                if lookup == "neq":
+                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
+                                elif lookup:
+                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
+                        else:
+                            subquery_qs = subquery_qs.filter(**{k: v})
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    logger.debug(f"Failed to parse subquery filter: {e}")
+
+            # Apply ordering and limit to first
+            order_by_exprs = []
+            for field in order_by_fields:
+                if field.startswith("-"):
+                    order_by_exprs.append(f"-{field[1:]}")
+                else:
+                    order_by_exprs.append(field)
+
+            subquery_qs = subquery_qs.order_by(*order_by_exprs)
+
+            # Create the subquery annotation
+            annotation_name = f"_subquery_{relation_name}_{target_field}"
+            annotations[annotation_name] = Subquery(
+                subquery_qs.values(target_field)[:1]
+            )
+
+            # Build comparison Q object
+            for op in ("eq", "neq", "gt", "gte", "lt", "lte", "is_null"):
+                op_value = subquery_filter.get(op)
+                if op_value is None:
+                    continue
+
+                if op == "eq":
+                    q &= Q(**{annotation_name: op_value})
+                elif op == "neq":
+                    q &= ~Q(**{annotation_name: op_value})
+                elif op == "is_null":
+                    q &= Q(**{f"{annotation_name}__isnull": op_value})
+                else:
+                    q &= Q(**{f"{annotation_name}__{op}": op_value})
+
+        except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"Failed to build subquery filter: {e}")
+
+        return q, annotations
+
+    def _build_exists_filter_q(
+        self,
+        exists_filter: Dict[str, Any],
+        model: Type[models.Model],
+    ) -> Q:
+        """Build Q object for exists filter."""
+        import json
+        q = Q()
+
+        relation_name = exists_filter.get("relation")
+        if not relation_name:
+            return q
+
+        should_exist = exists_filter.get("exists", True)
+        filter_json = exists_filter.get("filter")
+
+        try:
+            # Get the related model
+            relation_field = self._get_relation_field(model, relation_name)
+            if relation_field is None:
+                return q
+
+            related_model = getattr(relation_field, "related_model", None)
+            if related_model is None:
+                return q
+
+            # Find the FK field pointing back to parent
+            fk_field = self._get_fk_to_parent(related_model, model)
+            if not fk_field:
+                return q
+
+            # Build exists subquery
+            subquery_qs = related_model.objects.filter(
+                **{fk_field: OuterRef("pk")}
+            )
+
+            # Apply filter condition if provided
+            if filter_json:
+                try:
+                    if isinstance(filter_json, str):
+                        filter_dict = json.loads(filter_json)
+                    else:
+                        filter_dict = filter_json
+                    for k, v in filter_dict.items():
+                        if isinstance(v, dict):
+                            for op, op_val in v.items():
+                                lookup = self._get_lookup_for_operator(op)
+                                if lookup == "neq":
+                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
+                                elif lookup:
+                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
+                        else:
+                            subquery_qs = subquery_qs.filter(**{k: v})
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    logger.debug(f"Failed to parse exists filter: {e}")
+
+            exists_expr = Exists(subquery_qs)
+
+            if should_exist:
+                q &= Q(exists_expr)
+            else:
+                q &= ~Q(exists_expr)
+
+        except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"Failed to build exists filter: {e}")
+
+        return q
+
+    # =========================================================================
+    # Array Field Filter Methods
+    # =========================================================================
+
+    def _build_array_field_q(
+        self,
+        field_name: str,
+        array_filter: Dict[str, Any],
+    ) -> Q:
+        """Build Q object for PostgreSQL ArrayField filters."""
+        q = Q()
+
+        if array_filter.get("contains"):
+            q &= Q(**{f"{field_name}__contains": array_filter["contains"]})
+
+        if array_filter.get("contained_by"):
+            q &= Q(**{f"{field_name}__contained_by": array_filter["contained_by"]})
+
+        if array_filter.get("overlaps"):
+            q &= Q(**{f"{field_name}__overlap": array_filter["overlaps"]})
+
+        if array_filter.get("is_null") is not None:
+            q &= Q(**{f"{field_name}__isnull": array_filter["is_null"]})
+
+        # Length filter requires annotation
+        if array_filter.get("length"):
+            # This would need annotation with array_length, handled separately
+            pass
+
+        return q
 
     def _build_temporal_q(
         self,

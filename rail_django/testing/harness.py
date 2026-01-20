@@ -97,18 +97,54 @@ def build_schema(
     apps: Optional[Iterable[str]] = None,
     models: Optional[Iterable[str]] = None,
     settings: Optional[dict[str, Any]] = None,
+    use_global_registry: bool = True,
 ) -> SchemaHarness:
-    registry = SchemaRegistry()
-    registry.register_schema(
-        name=schema_name,
-        apps=list(apps) if apps else None,
-        models=list(models) if models else None,
-        settings=settings or {},
-        auto_discover=False,
-    )
-    builder = registry.get_schema_builder(schema_name)
-    schema = builder.get_schema()
-    return SchemaHarness(schema=schema, builder=builder, registry=registry)
+    if use_global_registry:
+        # Use the global registry so that FilteringSettings.from_schema()
+        # can find the settings when the generator is initialized
+        from rail_django.core.registry import schema_registry as global_registry
+
+        # Clear any existing schema with this name to avoid conflicts
+        if global_registry.get_schema(schema_name):
+            global_registry._schemas.pop(schema_name, None)
+            global_registry._schema_builders.pop(schema_name, None)
+            global_registry._schema_instance_cache.pop(schema_name, None)
+
+        # Clear filter generator and applicator singletons for this schema
+        # so they get re-created with the new settings
+        try:
+            from rail_django.generators.filter_inputs import (
+                _filter_applicator_registry,
+                _filter_generator_registry,
+            )
+            _filter_applicator_registry.pop(schema_name, None)
+            _filter_generator_registry.pop(schema_name, None)
+        except ImportError:
+            pass
+
+        global_registry.register_schema(
+            name=schema_name,
+            apps=list(apps) if apps else None,
+            models=list(models) if models else None,
+            settings=settings or {},
+            auto_discover=False,
+        )
+        builder = global_registry.get_schema_builder(schema_name)
+        schema = builder.get_schema()
+        return SchemaHarness(schema=schema, builder=builder, registry=global_registry)
+    else:
+        # Use a local isolated registry (original behavior)
+        registry = SchemaRegistry()
+        registry.register_schema(
+            name=schema_name,
+            apps=list(apps) if apps else None,
+            models=list(models) if models else None,
+            settings=settings or {},
+            auto_discover=False,
+        )
+        builder = registry.get_schema_builder(schema_name)
+        schema = builder.get_schema()
+        return SchemaHarness(schema=schema, builder=builder, registry=registry)
 
 
 class RailGraphQLTestClient:

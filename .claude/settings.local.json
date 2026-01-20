@@ -7,7 +7,9 @@
       "Bash(.venv311/scripts/python -c:*)",
       "Bash(.venv311Scriptspytest -m integration --tb=short)",
       "Bash(.venv311/Scripts/pytest:*)",
-      "Bash(.venv311/Scripts/python:*)"
+      "Bash(.venv311/Scripts/python:*)",
+      "Bash(python:*)",
+      "Bash(DJANGO_SETTINGS_MODULE=rail_django.conf.test_settings python:*)"
     ]
   }
 }

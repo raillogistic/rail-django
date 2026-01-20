@@ -132,12 +132,18 @@ def _get_library_defaults() -> dict[str, Any]:
         Dict[str, Any]: Library default settings
     """
     try:
-        from ..defaults import LIBRARY_DEFAULTS, get_environment_defaults, merge_settings
+        from ..defaults import (
+            LIBRARY_DEFAULTS,
+            get_environment_defaults,
+            merge_settings,
+        )
 
         environment = getattr(django_settings, "ENVIRONMENT", None)
         if not environment:
             environment = (
-                "production" if not getattr(django_settings, "DEBUG", False) else "development"
+                "production"
+                if not getattr(django_settings, "DEBUG", False)
+                else "development"
             )
 
         env_defaults = get_environment_defaults(environment)
@@ -305,6 +311,12 @@ class FilteringSettings:
     fts_search_type: str = "websearch"
     fts_rank_threshold: Optional[float] = None
 
+    # Advanced filter features
+    enable_window_filters: bool = True
+    enable_subquery_filters: bool = True
+    enable_conditional_aggregation: bool = True
+    enable_array_filters: bool = True
+
     # Security settings for filter validation
     max_filter_depth: int = 10
     max_filter_clauses: int = 50
@@ -328,7 +340,9 @@ class FilteringSettings:
             FilteringSettings: Configured settings instance
         """
         defaults = _get_library_defaults().get("filtering_settings", {})
-        global_settings = _get_global_settings(schema_name).get("filtering_settings", {})
+        global_settings = _get_global_settings(schema_name).get(
+            "filtering_settings", {}
+        )
         schema_settings = _get_schema_registry_settings(schema_name).get(
             "filtering_settings", {}
         )

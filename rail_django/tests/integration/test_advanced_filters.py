@@ -1,0 +1,422 @@
+"""
+Integration tests for advanced filter features.
+
+Tests Window Functions, Subquery Filters, Conditional Aggregation, and Array Filters
+with actual database queries.
+"""
+
+import json
+import pytest
+from decimal import Decimal
+from django.contrib.auth import get_user_model
+
+from rail_django.testing import RailGraphQLTestClient, build_schema
+from test_app.models import Category, Product, OrderItem
+
+pytestmark = [pytest.mark.integration, pytest.mark.django_db]
+
+
+@pytest.fixture
+def gql_client_advanced():
+    """GraphQL client with all advanced filter features enabled."""
+    harness = build_schema(
+        schema_name="test_advanced_filters",
+        apps=["test_app"],
+        settings={
+            "filtering_settings": {
+                "enable_window_filters": True,
+                "enable_subquery_filters": True,
+                "enable_conditional_aggregation": True,
+                "enable_array_filters": True,
+            },
+        },
+    )
+    User = get_user_model()
+    user = User.objects.create_superuser(
+        username="advanced_admin",
+        email="advanced_admin@example.com",
+        password="pass12345",
+    )
+    yield RailGraphQLTestClient(
+        harness.schema, schema_name="test_advanced_filters", user=user
+    )
+
+
+def _create_category(name="General"):
+    return Category.objects.create(name=name)
+
+
+def _create_product(name, price, cost_price=0, category=None, inventory_count=0):
+    return Product.objects.create(
+        name=name,
+        price=Decimal(str(price)),
+        cost_price=Decimal(str(cost_price)),
+        category=category,
+        inventory_count=inventory_count,
+    )
+
+
+def _create_order_item(product, quantity, unit_price):
+    return OrderItem.objects.create(
+        product=product,
+        quantity=quantity,
+        unit_price=Decimal(str(unit_price)),
+    )
+
+
+class TestConditionalAggregationFilters:
+    """Test conditional aggregation filters with actual queries."""
+
+    def test_filter_by_conditional_count(self, gql_client_advanced):
+        """Filter products by conditional count of related order items."""
+        # Create products with varying order items
+        p1 = _create_product("Product A", 100)
+        p2 = _create_product("Product B", 200)
+        p3 = _create_product("Product C", 300)
+
+        # P1: 3 high-value items (unit_price >= 50)
+        _create_order_item(p1, 1, 60)
+        _create_order_item(p1, 2, 70)
+        _create_order_item(p1, 1, 80)
+        _create_order_item(p1, 1, 10)  # Low value
+
+        # P2: 1 high-value item
+        _create_order_item(p2, 1, 55)
+        _create_order_item(p2, 1, 20)
+
+        # P3: 0 high-value items
+        _create_order_item(p3, 1, 30)
+        _create_order_item(p3, 1, 25)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products with at least 2 high-value order items
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "order_items_cond_agg": {
+                        "field": "id",
+                        "filter": json.dumps({"unit_price": {"gte": 50}}),
+                        "count": {"gte": 2},
+                    }
+                }
+            },
+        )
+
+        # Should only include Product A with 3 high-value items
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Product A" in names
+        assert "Product B" not in names
+        assert "Product C" not in names
+
+
+class TestSubqueryFilters:
+    """Test subquery filters with actual queries."""
+
+    def test_filter_by_subquery_latest_value(self, gql_client_advanced):
+        """Filter products by the max unit price of their order items."""
+        p1 = _create_product("Product Alpha", 100)
+        p2 = _create_product("Product Beta", 200)
+        p3 = _create_product("Product Gamma", 300)
+
+        # Product Alpha: max order item price is 150
+        _create_order_item(p1, 1, 50)
+        _create_order_item(p1, 1, 150)
+        _create_order_item(p1, 1, 100)
+
+        # Product Beta: max order item price is 80
+        _create_order_item(p2, 1, 80)
+        _create_order_item(p2, 1, 40)
+
+        # Product Gamma: max order item price is 200
+        _create_order_item(p3, 1, 200)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products whose highest priced order item exceeds 100
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_subquery": {
+                        "relation": "order_items",
+                        "order_by": ["-unit_price"],
+                        "field": "unit_price",
+                        "gt": 100,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        # Product Alpha (150) and Product Gamma (200) should match
+        assert "Product Alpha" in names
+        assert "Product Gamma" in names
+        assert "Product Beta" not in names
+
+
+class TestExistsFilters:
+    """Test exists filters with actual queries."""
+
+    def test_filter_by_exists(self, gql_client_advanced):
+        """Filter products that have at least one order item."""
+        p1 = _create_product("Has Orders", 100)
+        p2 = _create_product("No Orders", 200)
+
+        _create_order_item(p1, 1, 50)
+        _create_order_item(p1, 2, 30)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products that have order items
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_exists": {
+                        "relation": "order_items",
+                        "exists": True,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Has Orders" in names
+        assert "No Orders" not in names
+
+    def test_filter_by_not_exists(self, gql_client_advanced):
+        """Filter products that have no order items."""
+        p1 = _create_product("Has Items", 100)
+        p2 = _create_product("Empty", 200)
+
+        _create_order_item(p1, 1, 50)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products that have NO order items
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_exists": {
+                        "relation": "order_items",
+                        "exists": False,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Empty" in names
+        assert "Has Items" not in names
+
+    def test_filter_by_exists_with_condition(self, gql_client_advanced):
+        """Filter products that have high-quantity order items."""
+        p1 = _create_product("Bulk Seller", 100)
+        p2 = _create_product("Single Units", 200)
+        p3 = _create_product("No Sales", 300)
+
+        # Bulk seller has high quantity items
+        _create_order_item(p1, 10, 50)
+        _create_order_item(p1, 15, 30)
+
+        # Single units only has low quantity items
+        _create_order_item(p2, 1, 100)
+        _create_order_item(p2, 2, 50)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+            }
+        }
+        """
+
+        # Filter products that have order items with quantity >= 10
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_exists": {
+                        "relation": "order_items",
+                        "filter": json.dumps({"quantity": {"gte": 10}}),
+                        "exists": True,
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Bulk Seller" in names
+        assert "Single Units" not in names
+        assert "No Sales" not in names
+
+
+class TestWindowFilters:
+    """Test window function filters with actual queries."""
+
+    def test_window_filter_top_n_overall(self, gql_client_advanced):
+        """Filter products by their overall rank by price."""
+        _create_product("Cheap", 10)
+        _create_product("Mid", 50)
+        _create_product("Expensive", 100)
+        _create_product("Premium", 200)
+        _create_product("Luxury", 500)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["-price"]) {
+                name
+                price
+            }
+        }
+        """
+
+        # Get top 3 most expensive products
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_window": {
+                        "function": "RANK",
+                        "order_by": ["-price"],
+                        "rank": {"lte": 3},
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        products = result["data"]["products"]
+        names = [p["name"] for p in products]
+
+        # Top 3 by price should be Luxury, Premium, Expensive
+        assert "Luxury" in names
+        assert "Premium" in names
+        assert "Expensive" in names
+        assert "Mid" not in names
+        assert "Cheap" not in names
+
+    def test_window_filter_top_per_category(self, gql_client_advanced):
+        """Filter to get top product per category using window function."""
+        cat_electronics = _create_category("Electronics")
+        cat_clothing = _create_category("Clothing")
+
+        _create_product("Phone", 500, category=cat_electronics)
+        _create_product("Laptop", 1000, category=cat_electronics)
+        _create_product("Tablet", 300, category=cat_electronics)
+
+        _create_product("Shirt", 50, category=cat_clothing)
+        _create_product("Pants", 80, category=cat_clothing)
+        _create_product("Jacket", 150, category=cat_clothing)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["category_id", "-price"]) {
+                name
+                price
+                category {
+                    name
+                }
+            }
+        }
+        """
+
+        # Get top 1 product per category
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "_window": {
+                        "function": "ROW_NUMBER",
+                        "partition_by": ["category_id"],
+                        "order_by": ["-price"],
+                        "rank": {"eq": 1},
+                    }
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        products = result["data"]["products"]
+        names = [p["name"] for p in products]
+
+        # Should have Laptop (top Electronics) and Jacket (top Clothing)
+        assert "Laptop" in names
+        assert "Jacket" in names
+        # Should not have lower-ranked products
+        assert "Phone" not in names
+        assert "Shirt" not in names
+
+
+class TestCombinedAdvancedFilters:
+    """Test combining advanced filters with standard filters."""
+
+    def test_combined_exists_and_standard_filters(self, gql_client_advanced):
+        """Combine exists filter with standard price filter."""
+        p1 = _create_product("Expensive with Sales", 500)
+        p2 = _create_product("Cheap with Sales", 50)
+        p3 = _create_product("Expensive no Sales", 600)
+
+        _create_order_item(p1, 1, 100)
+        _create_order_item(p2, 1, 20)
+
+        query = """
+        query($where: ProductWhereInput) {
+            products(where: $where, orderBy: ["name"]) {
+                name
+                price
+            }
+        }
+        """
+
+        # Expensive products (>= 200) that have sales
+        result = gql_client_advanced.execute(
+            query,
+            variables={
+                "where": {
+                    "price": {"gte": 200},
+                    "_exists": {
+                        "relation": "order_items",
+                        "exists": True,
+                    },
+                }
+            },
+        )
+
+        assert result.get("errors") is None
+        names = [p["name"] for p in result["data"]["products"]]
+        assert "Expensive with Sales" in names
+        assert "Cheap with Sales" not in names  # Too cheap
+        assert "Expensive no Sales" not in names  # No sales
