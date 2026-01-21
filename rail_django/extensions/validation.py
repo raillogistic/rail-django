@@ -9,7 +9,7 @@ import graphene
 
 from ..core.exceptions import SecurityError
 from ..core.exceptions import ValidationError as GraphQLValidationError
-from ..security.input_validation import (
+from ..security.validation import (
     FieldValidator,
     GraphQLInputSanitizer,
     InputSanitizer,

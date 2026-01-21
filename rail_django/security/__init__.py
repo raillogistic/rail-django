@@ -9,7 +9,7 @@ Ce module fournit des fonctionnalités de sécurité avancées :
 - Journalisation d'audit
 """
 
-from .audit_logging import (
+from .audit import (
     AuditEvent,
     AuditEventType,
     AuditLogger,
@@ -39,7 +39,7 @@ from .graphql_security import (
     require_introspection_permission,
     security_analyzer,
 )
-from .input_validation import (
+from .validation import (
     GraphQLInputSanitizer,
     InputValidator,
     ValidationReport,

@@ -6,7 +6,7 @@ performance monitoring, query analysis, and error tracking.
 """
 
 from .debug_hooks import DebugHooks, DebugLevel
-from .error_tracker import ErrorTracker
+from .error_tracking import ErrorTracker
 from .performance_monitor import PerformanceMonitor
 from .query_analyzer import QueryAnalyzer, QueryComplexity
 

@@ -1,0 +1,124 @@
+"""
+Schema Builder Package for rail-django library.
+
+This package provides the SchemaBuilder class, which is responsible for assembling
+the unified GraphQL schema from all registered Django apps and models.
+
+Re-exports:
+    - SchemaBuilder: Main schema builder class
+    - AutoSchemaGenerator: Builder for explicit model lists
+    - get_schema: Get schema by name
+    - get_schema_builder: Get schema builder by name
+    - clear_all_schemas: Clear all schema instances
+    - get_all_schema_names: Get list of all schema names
+"""
+
+import logging
+from typing import List, Optional, Type
+
+import graphene
+from django.db import models
+
+from .auto_generator import AutoSchemaGenerator
+from .builder import SchemaBuilderCore
+from .extensions import ExtensionsMixin
+from .query_builder import QueryBuilderMixin
+from .query_integration import QueryIntegrationMixin
+from .registration import RegistrationMixin
+
+logger = logging.getLogger(__name__)
+
+
+class SchemaBuilder(
+    QueryBuilderMixin,
+    QueryIntegrationMixin,
+    RegistrationMixin,
+    ExtensionsMixin,
+    SchemaBuilderCore,
+):
+    """
+    Builds and manages the unified GraphQL schema, combining queries and mutations
+    from all registered Django apps and models.
+
+    This class supports:
+    - Multiple schema configurations
+    - Schema-specific settings
+    - Automatic model discovery
+    - Dynamic schema rebuilding
+    - Integration with the schema registry
+
+    The class is composed of several mixins:
+    - SchemaBuilderCore: Core initialization and settings management
+    - QueryBuilderMixin: Query, mutation, and subscription generation
+    - QueryIntegrationMixin: Security, health, and metadata query integration
+    - RegistrationMixin: App and model registration methods
+    - ExtensionsMixin: Extension integration and rebuild_schema method
+    """
+
+    pass
+
+
+# Global schema management functions
+
+
+def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
+    """
+    Get or create a schema builder instance for the given schema name.
+
+    Args:
+        schema_name: Name of the schema (defaults to "default")
+
+    Returns:
+        SchemaBuilder: Schema builder instance
+    """
+    from ..registry import schema_registry
+
+    schema_registry.discover_schemas()
+    return SchemaBuilder(schema_name=schema_name, registry=schema_registry)
+
+
+def get_schema(schema_name: str = "default") -> graphene.Schema:
+    """
+    Get the GraphQL schema for the given schema name.
+
+    Args:
+        schema_name: Name of the schema (defaults to "default")
+
+    Returns:
+        graphene.Schema: The GraphQL schema
+    """
+    return get_schema_builder(schema_name).get_schema()
+
+
+def clear_all_schemas() -> None:
+    """Clear all schema builder instances."""
+    with SchemaBuilder._lock:
+        builders = list(SchemaBuilder._instances.values())
+        SchemaBuilder._instances.clear()
+    for builder in builders:
+        try:
+            builder.clear_schema()
+        except Exception:
+            logger.debug("Failed to clear schema builder", exc_info=True)
+    logger.info("All schemas cleared")
+
+
+def get_all_schema_names() -> List[str]:
+    """
+    Get all registered schema names.
+
+    Returns:
+        List[str]: List of schema names
+    """
+    return list(SchemaBuilder._instances.keys())
+
+
+# Public API
+__all__ = [
+    "SchemaBuilder",
+    "AutoSchemaGenerator",
+    "get_schema",
+    "get_schema_builder",
+    "clear_all_schemas",
+    "get_all_schema_names",
+]

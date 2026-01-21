@@ -105,7 +105,7 @@ class TestConditionalAggregationFilters:
             query,
             variables={
                 "where": {
-                    "order_items_cond_agg": {
+                    "orderItemsCondAgg": {
                         "field": "id",
                         "filter": json.dumps({"unit_price": {"gte": 50}}),
                         "count": {"gte": 2},
@@ -158,7 +158,7 @@ class TestSubqueryFilters:
                 "where": {
                     "_subquery": {
                         "relation": "order_items",
-                        "order_by": ["-unit_price"],
+                        "orderBy": ["-unit_price"],
                         "field": "unit_price",
                         "gt": 100,
                     }
@@ -314,7 +314,7 @@ class TestWindowFilters:
                 "where": {
                     "_window": {
                         "function": "RANK",
-                        "order_by": ["-price"],
+                        "orderBy": ["-price"],
                         "rank": {"lte": 3},
                     }
                 }
@@ -364,8 +364,8 @@ class TestWindowFilters:
                 "where": {
                     "_window": {
                         "function": "ROW_NUMBER",
-                        "partition_by": ["category_id"],
-                        "order_by": ["-price"],
+                        "partitionBy": ["category_id"],
+                        "orderBy": ["-price"],
                         "rank": {"eq": 1},
                     }
                 }
@@ -486,7 +486,7 @@ class TestFieldComparisonFilters:
                         "left": "price",
                         "operator": "GTE",
                         "right": "cost_price",
-                        "right_multiplier": 1.5,
+                        "rightMultiplier": 1.5,
                     }
                 }
             },
@@ -520,7 +520,7 @@ class TestFieldComparisonFilters:
                         "left": "price",
                         "operator": "GT",
                         "right": "cost_price",
-                        "right_offset": 30,
+                        "rightOffset": 30,
                     }
                 }
             },
@@ -570,9 +570,9 @@ class TestDistinctCountFilters:
             query,
             variables={
                 "where": {
-                    "order_items_agg": {
+                    "orderItemsAgg": {
                         "field": "unit_price",
-                        "count_distinct": {"gte": 3},
+                        "countDistinct": {"gte": 3},
                     }
                 }
             },
@@ -618,9 +618,9 @@ class TestDateTruncFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_trunc": {
+                    "dateCreationTrunc": {
                         "precision": "YEAR",
-                        "this_period": True,
+                        "thisPeriod": True,
                     }
                 }
             },
@@ -651,7 +651,7 @@ class TestDateTruncFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_trunc": {
+                    "dateCreationTrunc": {
                         "precision": "YEAR",
                         "year": current_year,
                     }
@@ -683,7 +683,7 @@ class TestDateTruncFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_trunc": {
+                    "dateCreationTrunc": {
                         "precision": "MONTH",
                         "year": today.year,
                         "month": today.month,
@@ -730,7 +730,7 @@ class TestExtractDateFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_extract": {
+                    "dateCreationExtract": {
                         "day": {"eq": 15}
                     }
                 }
@@ -769,7 +769,7 @@ class TestExtractDateFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_extract": {
+                    "dateCreationExtract": {
                         "quarter": {"eq": 4}
                     }
                 }
@@ -814,8 +814,8 @@ class TestExtractDateFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_extract": {
-                        "day_of_week": {"eq": 2}  # Monday
+                    "dateCreationExtract": {
+                        "dayOfWeek": {"eq": 2}  # Monday
                     }
                 }
             },
@@ -854,7 +854,7 @@ class TestExtractDateFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_extract": {
+                    "dateCreationExtract": {
                         "hour": {"gte": 9, "lt": 17}
                     }
                 }
@@ -893,7 +893,7 @@ class TestExtractDateFilters:
             query,
             variables={
                 "where": {
-                    "date_creation_extract": {
+                    "dateCreationExtract": {
                         "year": {"eq": today.year},
                         "month": {"eq": 6}
                     }

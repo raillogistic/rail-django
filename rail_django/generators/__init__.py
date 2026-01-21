@@ -21,7 +21,9 @@ if TYPE_CHECKING:
     from .introspector import ModelIntrospector
     from .mutations import MutationGenerator
     from .queries import QueryGenerator
+    from .subscriptions import SubscriptionGenerator
     from .types import TypeGenerator
+    from .introspector import ModelIntrospector
     from .filter_inputs import (
         NestedFilterInputGenerator,
         NestedFilterApplicator,

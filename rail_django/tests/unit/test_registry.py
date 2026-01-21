@@ -263,8 +263,8 @@ class TestSchemaRegistry(TestCase):
         self.assertEqual(len(results), 50)
         self.assertEqual(len(self.registry.list_schemas()), 50)
 
-    @patch("rail_django.core.registry.apps")
-    @patch("rail_django.core.registry.import_string")
+    @patch("rail_django.core.registry.discovery.apps")
+    @patch("rail_django.core.registry.discovery.import_string")
     def test_auto_discover_schemas(self, mock_import_string, mock_apps):
         """Test la découverte automatique de schémas."""
         # Mock des applications Django

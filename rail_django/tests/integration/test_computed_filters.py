@@ -17,6 +17,34 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 @pytest.fixture
 def gql_client():
     """GraphQL client."""
+    # Dynamically inject computed_filters into Product model for testing
+    if not hasattr(Product, "GraphQLMeta"):
+         class Meta(RailGraphQLMeta):
+             pass
+         Product.GraphQLMeta = Meta
+    
+    Product.GraphQLMeta.computed_filters = {
+        "profit": {
+            "expression": ExpressionWrapper(
+                F("price") - F("cost_price"),
+                output_field=FloatField()
+            ),
+            "filter_type": "float",
+            "description": "Profit (price - cost)",
+        },
+        "markup_pct": {
+            "expression": ExpressionWrapper(
+                (F("price") - F("cost_price")) / F("cost_price") * 100,
+                output_field=FloatField()
+            ),
+            "filter_type": "float",
+            "description": "Markup Percentage",
+        }
+    }
+    # Re-initialize meta to pick up changes (meta instance is cached)
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+
     harness = build_schema(schema_name="test_computed", apps=["test_app"])
     User = get_user_model()
     user = User.objects.create_superuser(
@@ -34,36 +62,6 @@ def _create_product(name, price, cost_price):
 
 class TestComputedFilters:
     """Test computed filter functionality."""
-
-    def setup_method(self):
-        # Dynamically inject computed_filters into Product model for testing
-        # This simulates defining it in the model class
-        if not hasattr(Product, "GraphQLMeta"):
-             class Meta(RailGraphQLMeta):
-                 pass
-             Product.GraphQLMeta = Meta
-        
-        Product.GraphQLMeta.computed_filters = {
-            "profit": {
-                "expression": ExpressionWrapper(
-                    F("price") - F("cost_price"),
-                    output_field=FloatField()
-                ),
-                "filter_type": "float",
-                "description": "Profit (price - cost)",
-            },
-            "markup_pct": {
-                "expression": ExpressionWrapper(
-                    (F("price") - F("cost_price")) / F("cost_price") * 100,
-                    output_field=FloatField()
-                ),
-                "filter_type": "float",
-                "description": "Markup Percentage",
-            }
-        }
-        # Re-initialize meta to pick up changes (meta instance is cached)
-        if hasattr(Product, "_graphql_meta_instance"):
-            del Product._graphql_meta_instance
 
     def test_computed_filter_simple(self, gql_client):
         """Test filtering by a simple computed field (profit)."""

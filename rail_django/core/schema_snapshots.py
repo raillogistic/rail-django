@@ -13,7 +13,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from graphql.utilities import print_schema
 
 from ..config_proxy import get_setting
-from ..introspection.schema_comparator import SchemaComparator
+from ..introspection.comparison.comparator import SchemaComparator
 from ..introspection.schema_introspector import SchemaIntrospection, SchemaIntrospector
 
 logger = logging.getLogger(__name__)

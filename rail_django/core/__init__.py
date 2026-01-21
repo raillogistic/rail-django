@@ -5,7 +5,7 @@ including configuration management, schema building, error handling, debugging,
 and core utilities.
 """
 
-from .config_loader import ConfigLoader
+from .config import ConfigLoader
 from .debug import (
     GraphQLPerformanceMiddleware,
     GraphQLPerformanceView,
@@ -34,10 +34,12 @@ from .exceptions import (
 )
 from .schema import SchemaBuilder
 from .settings import (
+    FilteringSettings,
     GraphQLAutoConfig,
     MutationGeneratorSettings,
     QueryGeneratorSettings,
     SchemaSettings,
+    SubscriptionGeneratorSettings,
     TypeGeneratorSettings,
 )
 

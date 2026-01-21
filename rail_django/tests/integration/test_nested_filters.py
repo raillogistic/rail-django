@@ -133,7 +133,7 @@ class TestNestedStringFilters:
         }
         """
         result = gql_client_nested.execute(
-            query, variables={"where": {"name": {"starts_with": "Python"}}}
+            query, variables={"where": {"name": {"startsWith": "Python"}}}
         )
         assert result.get("errors") is None
         names = [c["name"] for c in result["data"]["categories"]]
@@ -174,7 +174,7 @@ class TestNestedStringFilters:
         }
         """
         result = gql_client_nested.execute(
-            query, variables={"where": {"name": {"not_in": ["A", "C"]}}}
+            query, variables={"where": {"name": {"notIn": ["A", "C"]}}}
         )
         assert result.get("errors") is None
         names = [c["name"] for c in result["data"]["categories"]]
@@ -409,7 +409,7 @@ class TestNestedRelationFilters:
         """
         result = gql_client_nested.execute(
             query,
-            variables={"where": {"category_rel": {"name": {"eq": "Electronics"}}}},
+            variables={"where": {"categoryRel": {"name": {"eq": "Electronics"}}}},
         )
         assert result.get("errors") is None
         titles = [p["title"] for p in result["data"]["posts"]]
@@ -438,7 +438,7 @@ class TestNestedM2MFilters:
         }
         """
         result = gql_client_nested.execute(
-            query, variables={"where": {"tags_some": {"name": {"eq": "python"}}}}
+            query, variables={"where": {"tagsSome": {"name": {"eq": "python"}}}}
         )
         assert result.get("errors") is None
         titles = [p["title"] for p in result["data"]["posts"]]
@@ -464,7 +464,7 @@ class TestNestedM2MFilters:
         }
         """
         result = gql_client_nested.execute(
-            query, variables={"where": {"tags_none": {"name": {"eq": "deprecated"}}}}
+            query, variables={"where": {"tagsNone": {"name": {"eq": "deprecated"}}}}
         )
         assert result.get("errors") is None
         titles = [p["title"] for p in result["data"]["posts"]]
@@ -496,7 +496,7 @@ class TestNestedAggregationFilters:
             query,
             variables={
                 "where": {
-                    "order_items_agg": {
+                    "orderItemsAgg": {
                         "field": "unit_price",
                         "sum": {"gte": 1000.0},
                     }
@@ -527,7 +527,7 @@ class TestNestedAggregationFilters:
             query,
             variables={
                 "where": {
-                    "order_items_agg": {
+                    "orderItemsAgg": {
                         "field": "id",
                         "count": {"gte": 2},
                     }
@@ -622,7 +622,7 @@ class TestQuickFilter:
         result = gql_client_nested.execute(
             query, variables={"where": {
                 "quick": "electron",
-                "name": {"ends_with": "Games"}
+                "name": {"endsWith": "Games"}
             }}
         )
         assert result.get("errors") is None

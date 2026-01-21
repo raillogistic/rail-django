@@ -6,7 +6,7 @@ lifecycle management, migration tools, and administrative operations.
 """
 
 from .backup_manager import BackupManager, BackupStrategy, SchemaBackup
-from .schema_manager import SchemaLifecycleEvent, SchemaManager, SchemaOperation
+from .schema import SchemaLifecycleEvent, SchemaManager, SchemaOperation
 
 __all__ = [
     'SchemaManager',

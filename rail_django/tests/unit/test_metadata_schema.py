@@ -25,6 +25,7 @@ from rail_django.extensions.metadata import (
     RelationshipMetadataType,
 )
 import rail_django.extensions.metadata as metadata_module
+from rail_django.extensions.metadata import cache as metadata_cache
 
 
 class MetadataTestModel(models.Model):
@@ -141,7 +142,7 @@ class MetadataTestModelMetadataExtractor(TestCase):
         self.assertEqual(metadata.related_app, "test_app")
         self.assertTrue(metadata.has_permission)
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_extract_model_metadata_complete(self, mock_get_model):
         """Test complete model metadata extraction."""
         mock_get_model.return_value = MetadataTestModel
@@ -160,7 +161,7 @@ class MetadataTestModelMetadataExtractor(TestCase):
         self.assertIsNotNone(metadata.relationships)
         self.assertTrue(len(metadata.fields) > 0)
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_extract_model_metadata_no_nested_fields(self, mock_get_model):
         """Test model metadata extraction without nested fields."""
         mock_get_model.return_value = MetadataTestModel
@@ -175,7 +176,7 @@ class MetadataTestModelMetadataExtractor(TestCase):
 
         self.assertEqual(len(metadata.relationships), 0)
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_extract_model_metadata_invalid_model(self, mock_get_model):
         """Test model metadata extraction with invalid model."""
         mock_get_model.side_effect = LookupError("Model not found")
@@ -199,7 +200,7 @@ class MetadataTestModelMetadataQuery(TestCase):
         self.user = User.objects.create_user(username="testuser", password="testpass")
         self.query = ModelMetadataQuery()
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     @patch(
         "rail_django.extensions.metadata.ModelMetadataExtractor.extract_model_metadata"
     )
@@ -240,7 +241,7 @@ class MetadataTestModelMetadataQuery(TestCase):
             include_mutations=True,
         )
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_model_metadata_disabled(self, mock_get_settings):
         """Test model metadata resolution when disabled in settings."""
         # Mock settings to disable metadata exposure
@@ -258,7 +259,7 @@ class MetadataTestModelMetadataQuery(TestCase):
                 info, app_name="test_app", model_name="MetadataTestModel"
             )
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_model_metadata_no_user(self, mock_get_settings):
         """Test model metadata resolution without authenticated user."""
         # Mock settings to allow metadata exposure
@@ -276,7 +277,7 @@ class MetadataTestModelMetadataQuery(TestCase):
                 info, app_name="test_app", model_name="MetadataTestModel"
             )
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     @patch(
         "rail_django.extensions.metadata.ModelMetadataExtractor.extract_model_metadata"
     )
@@ -310,8 +311,8 @@ class TestGraphQLIntegration(TestCase):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", password="testpass")
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_graphql_query_execution(self, mock_get_model, mock_get_settings):
         """Test GraphQL query execution for model metadata."""
         # Mock settings to allow metadata exposure
@@ -401,7 +402,7 @@ class TestPermissionFiltering(TestCase):
         # (adjust based on actual permission logic)
         self.assertTrue(metadata_with_perm.has_permission)
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_model_metadata_permission_filtering(self, mock_get_model):
         """Test that model metadata respects permission filtering."""
         mock_get_model.return_value = MetadataTestModel
@@ -428,7 +429,7 @@ class TestEdgeCases(TestCase):
         self.user = User.objects.create_user(username="testuser", password="testpass")
         self.extractor = ModelMetadataExtractor()
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_nonexistent_model(self, mock_get_model):
         """Test handling of nonexistent model."""
         mock_get_model.side_effect = LookupError("Model not found")
@@ -454,7 +455,7 @@ class TestEdgeCases(TestCase):
         # Should handle anonymous user gracefully
         self.assertIsNotNone(metadata)
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_missing_schema_settings(self, mock_get_settings):
         """Test handling when schema settings are missing."""
         mock_get_settings.return_value = None
@@ -476,7 +477,7 @@ class TestMetadataAccessGating(TestCase):
     def setUp(self):
         self.query = ModelMetadataQuery()
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_available_models_requires_auth(self, mock_get_settings):
         mock_settings = Mock()
         mock_settings.show_metadata = True
@@ -489,7 +490,7 @@ class TestMetadataAccessGating(TestCase):
         with self.assertRaises(GraphQLError):
             self.query.resolve_available_models(info)
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_model_table_requires_auth(self, mock_get_settings):
         mock_settings = Mock()
         mock_settings.show_metadata = True
@@ -504,7 +505,7 @@ class TestMetadataAccessGating(TestCase):
                 info, app_name="test_app", model_name="MetadataTestModel"
             )
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_model_form_metadata_requires_auth(self, mock_get_settings):
         mock_settings = Mock()
         mock_settings.show_metadata = True
@@ -519,7 +520,7 @@ class TestMetadataAccessGating(TestCase):
                 info, app_name="test_app", model_name="MetadataTestModel"
             )
 
-    @patch("rail_django.extensions.metadata.get_core_schema_settings")
+    @patch("rail_django.extensions.metadata.cache.get_core_schema_settings")
     def test_resolve_app_models_requires_auth(self, mock_get_settings):
         mock_settings = Mock()
         mock_settings.show_metadata = True
@@ -537,20 +538,20 @@ class TestMetadataCaching(TestCase):
     """Test caching settings and invalidation behavior."""
 
     def setUp(self):
-        metadata_module._table_cache.clear()
+        metadata_cache._table_cache.clear()
 
     @override_settings(DEBUG=False, RAIL_DJANGO_GRAPHQL={"METADATA": {}})
     def test_table_cache_timeout_default_in_production(self):
-        metadata_module._load_table_cache_policy()
-        self.assertIsNone(metadata_module._get_table_cache_timeout())
+        metadata_cache._load_table_cache_policy()
+        self.assertIsNone(metadata_cache._get_table_cache_timeout())
 
     @override_settings(
         DEBUG=False,
         RAIL_DJANGO_GRAPHQL={"METADATA": {"table_cache_timeout_seconds": 120}},
     )
     def test_table_cache_timeout_respects_override(self):
-        metadata_module._load_table_cache_policy()
-        self.assertEqual(metadata_module._get_table_cache_timeout(), 120)
+        metadata_cache._load_table_cache_policy()
+        self.assertEqual(metadata_cache._get_table_cache_timeout(), 120)
 
     @override_settings(
         DEBUG=False,
@@ -560,7 +561,7 @@ class TestMetadataCaching(TestCase):
         user = User.objects.create_user(username="cacheuser", password="testpass")
         extractor = metadata_module.ModelTableExtractor()
 
-        with patch("rail_django.extensions.metadata.apps.get_model") as mock_get_model:
+        with patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model") as mock_get_model:
             mock_get_model.return_value = MetadataTestModel
             extractor.extract_model_table_metadata(
                 app_name="test_app",
@@ -571,10 +572,10 @@ class TestMetadataCaching(TestCase):
                 include_pdf_templates=False,
             )
 
-        self.assertEqual(len(metadata_module._table_cache), 0)
+        self.assertEqual(len(metadata_cache._table_cache), 0)
 
     def test_invalidate_metadata_cache_removes_model_entries(self):
-        cache_key = metadata_module._make_table_cache_key(
+        cache_key = metadata_cache._make_table_cache_key(
             "default",
             "test_app",
             "MetadataTestModel",
@@ -588,7 +589,7 @@ class TestMetadataCaching(TestCase):
             include_mutations=True,
             include_templates=True,
         )
-        metadata_module._table_cache[cache_key] = {
+        metadata_cache._table_cache[cache_key] = {
             "value": "value",
             "expires_at": None,
             "created_at": 0,
@@ -598,13 +599,13 @@ class TestMetadataCaching(TestCase):
             model_name="MetadataTestModel", app_name="test_app"
         )
 
-        self.assertNotIn(cache_key, metadata_module._table_cache)
+        self.assertNotIn(cache_key, metadata_cache._table_cache)
 
     @override_settings(
         DEBUG=False,
         RAIL_DJANGO_GRAPHQL={"METADATA": {"clear_cache_on_start": False}},
     )
-    @patch("rail_django.extensions.metadata.invalidate_metadata_cache")
+    @patch("rail_django.extensions.metadata.cache.invalidate_metadata_cache")
     def test_invalidate_cache_on_startup_respects_setting(self, mock_invalidate):
         metadata_module.invalidate_cache_on_startup()
         mock_invalidate.assert_not_called()
@@ -613,7 +614,7 @@ class TestMetadataCaching(TestCase):
         DEBUG=False,
         RAIL_DJANGO_GRAPHQL={"METADATA": {"clear_cache_on_start": True}},
     )
-    @patch("rail_django.extensions.metadata.invalidate_metadata_cache")
+    @patch("rail_django.extensions.metadata.cache.invalidate_metadata_cache")
     def test_invalidate_cache_on_startup_runs(self, mock_invalidate):
         metadata_module.invalidate_cache_on_startup()
         mock_invalidate.assert_called_once()
@@ -626,7 +627,7 @@ class TestPolymorphicTableMetadata(TestCase):
         self.user = User.objects.create_user(username="polyuser", password="testpass")
         self.extractor = metadata_module.ModelTableExtractor()
 
-    @patch("rail_django.extensions.metadata.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractors.model_extractor.apps.get_model")
     def test_polymorphic_hides_one_to_one_fields(self, mock_get_model):
         mock_get_model.return_value = PolymorphicChildModel
 

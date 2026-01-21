@@ -10,7 +10,12 @@
       "Bash(.venv311/Scripts/python:*)",
       "Bash(python:*)",
       "Bash(DJANGO_SETTINGS_MODULE=rail_django.conf.test_settings python:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(wc:*)",
+      "Bash(set \"DJANGO_SETTINGS_MODULE=rail_django.conf.test_settings\")",
+      "Bash(ls:*)",
+      "Bash(echo.:*)"
     ]
   }
 }

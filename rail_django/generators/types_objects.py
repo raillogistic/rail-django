@@ -204,20 +204,20 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
                 return lazy_type
 
+            model_name = related_model if isinstance(related_model, str) else related_model.__name__
+
             # Override the field as a direct list with filter arguments
             type_attrs[field_name] = graphene.List(
                 make_lazy_type(related_model),
                 filters=graphene.Argument(graphene.JSONString),
-                description=f"Related {related_model.__name__} objects",
+                description=f"Related {model_name} objects",
             )
 
             # Add count field for ManyToMany relation
             count_field_name = f"{field_name}_count"
             type_attrs[count_field_name] = graphene.Int(
-                description=f"Count of related {related_model.__name__} objects"
-            )
-
-            # Add resolver that handles different relationship types with filtering
+                description=f"Count of related {model_name} objects"
+            )            # Add resolver that handles different relationship types with filtering
             def make_resolver(field_name, rel_info, related_model):
                 def resolver(self, info, filters=None):
                     # Optimization: Use prefetch cache if available and no filters

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 from django.contrib.auth.models import AnonymousUser
 
 from .services import get_rate_limiter as get_unified_rate_limiter
-from ..security.input_validation import InputValidator as UnifiedInputValidator
+from ..security.validation import InputValidator as UnifiedInputValidator
 from ..config_proxy import get_setting
 from ..security.rbac import role_manager
 from .runtime_settings import RuntimeSettings

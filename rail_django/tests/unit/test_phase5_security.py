@@ -13,7 +13,7 @@ from django.test import override_settings
 from rail_django.core.middleware import AccessGuardMiddleware
 from rail_django.extensions.audit import AuditEvent, AuditEventType, AuditLogger, AuditSeverity
 from rail_django.extensions.auth import set_auth_cookies
-from rail_django.security.input_validation import InputValidator
+from rail_django.security.validation import InputValidator
 from rail_django.testing import RailGraphQLTestClient, override_rail_settings
 
 pytestmark = pytest.mark.unit
