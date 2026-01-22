@@ -210,7 +210,7 @@ GraphQL mutation configuration.
     "enable_create": True,
     "enable_update": True,
     "enable_delete": True,
-    "enable_bulk_operations": False,
+    "enable_bulk_operations": True,
 
     # ─── Methods ───
     # Exposes model methods as mutations
@@ -226,6 +226,8 @@ GraphQL mutation configuration.
 
     # ─── Bulk ───
     "bulk_batch_size": 100,
+    "bulk_include_models": [],
+    "bulk_exclude_models": [],
 
     # ─── Required Fields ───
     "required_update_fields": {},

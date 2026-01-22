@@ -410,14 +410,28 @@ class MutationGenerator:
 
         # Generate bulk mutations if enabled
         if self.settings.enable_bulk_operations:
-            bulk_create_class = self.generate_bulk_create_mutation(model)
-            mutations[f"bulk_create_{model_name}"] = bulk_create_class.Field()
+            model_class_name = model.__name__
+            should_generate = False
 
-            bulk_update_class = self.generate_bulk_update_mutation(model)
-            mutations[f"bulk_update_{model_name}"] = bulk_update_class.Field()
+            # Check exclusion first
+            if model_class_name in self.settings.bulk_exclude_models:
+                should_generate = False
+            # Check inclusion
+            elif model_class_name in self.settings.bulk_include_models:
+                should_generate = True
+            # Check global auto-discovery
+            elif self.settings.generate_bulk:
+                should_generate = True
 
-            bulk_delete_class = self.generate_bulk_delete_mutation(model)
-            mutations[f"bulk_delete_{model_name}"] = bulk_delete_class.Field()
+            if should_generate:
+                bulk_create_class = self.generate_bulk_create_mutation(model)
+                mutations[f"bulk_create_{model_name}"] = bulk_create_class.Field()
+
+                bulk_update_class = self.generate_bulk_update_mutation(model)
+                mutations[f"bulk_update_{model_name}"] = bulk_update_class.Field()
+
+                bulk_delete_class = self.generate_bulk_delete_mutation(model)
+                mutations[f"bulk_delete_{model_name}"] = bulk_delete_class.Field()
 
         # Generate method mutations if enabled
 

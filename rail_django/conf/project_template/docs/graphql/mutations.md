@@ -253,8 +253,10 @@ If deletion fails (FK constraint):
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "mutation_settings": {
-        "generate_bulk": True,
-        "enable_bulk_operations": True,
+        "enable_bulk_operations": True, # Master switch (Default: True)
+        "generate_bulk": False,         # Auto-discovery (Default: False)
+        "bulk_include_models": ["Product"], # Opt-in specific models
+        "bulk_exclude_models": [],
         "bulk_batch_size": 100,
     },
 }

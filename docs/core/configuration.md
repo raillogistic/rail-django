@@ -53,7 +53,10 @@ Controls data modification.
 | `generate_create` | `bool` | `True` | Auto-generate create mutations. |
 | `generate_update` | `bool` | `True` | Auto-generate update mutations. |
 | `generate_delete` | `bool` | `True` | Auto-generate delete mutations. |
-| `generate_bulk` | `bool` | `False` | Generate bulk CUD operations (e.g., `bulkUserCreate`). |
+| `generate_bulk` | `bool` | `False` | Generate bulk CUD operations for ALL models (Auto-discovery). |
+| `enable_bulk_operations` | `bool` | `True` | Master switch to enable bulk operations. |
+| `bulk_include_models` | `list` | `[]` | Explicitly generate bulk mutations for these models. |
+| `bulk_exclude_models` | `list` | `[]` | Explicitly exclude bulk mutations for these models. |
 | `enable_nested_relations` | `bool` | `True` | Allow creating/updating related objects in a single mutation. |
 | `require_model_permissions` | `bool` | `True` | Enforce Django model `add/change/delete` permissions. |
 

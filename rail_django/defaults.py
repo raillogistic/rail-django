@@ -86,7 +86,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,
-        "enable_bulk_operations": False,
+        "enable_bulk_operations": True,
         "enable_method_mutations": True,
         "require_model_permissions": True,
         "model_permission_codenames": {
@@ -95,6 +95,8 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
             "delete": "delete",
         },
         "bulk_batch_size": 100,
+        "bulk_include_models": [],
+        "bulk_exclude_models": [],
         "required_update_fields": {},
         "enable_nested_relations": True,
         "nested_relations_config": {},

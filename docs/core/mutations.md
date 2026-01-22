@@ -78,6 +78,12 @@ mutation {
 
 When enabled in `mutation_settings`, bulk operations are generated.
 
+Configuration logic:
+1. `enable_bulk_operations` (default: `True`) must be enabled as a master switch.
+2. `generate_bulk` (default: `False`) controls "auto-discovery" (generating for all models).
+3. Use `bulk_include_models` to strictly opt-in specific models (e.g., `["Product", "Order"]`).
+4. Use `bulk_exclude_models` to opt-out specific models.
+
 ```graphql
 mutation {
   # Update multiple products at once

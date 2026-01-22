@@ -43,7 +43,10 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_create": True,
         "enable_update": True,
         "enable_delete": True,
-        "enable_bulk_operations": False,
+        "enable_bulk_operations": True,
+        "generate_bulk": False,
+        "bulk_include_models": [],
+        "bulk_exclude_models": [],
         "enable_nested_relations": True,
         "require_model_permissions": True,
         "model_permission_codenames": {
