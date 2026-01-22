@@ -34,7 +34,7 @@ Before splitting large files, extract common patterns into reusable utilities.
 Split into `rail_django/extensions/metadata/` package. File removed, package is primary entry point.
 
 ### 1.2 `generators/filter_inputs.py` - ✅ DONE
-Split into `rail_django/generators/filters/` package. Facade maintained at `generators/filter_inputs.py`.
+Split into `rail_django/generators/filters/` package. Facade removed.
 
 ### 1.3 `extensions/exporting.py` - ✅ DONE
 Split into `rail_django/extensions/exporting/` package. File removed.
@@ -46,14 +46,14 @@ Split into `rail_django/extensions/templating/` package. File removed.
 Split into `rail_django/extensions/reporting/` package. File removed.
 
 ### 1.6 `extensions/excel_export.py` - ✅ DONE
-Split into `rail_django/extensions/excel/` package. Facade maintained at `extensions/excel_export.py`.
+Split into `rail_django/extensions/excel/` package. Facade removed.
 
 ---
 
 ## Phase 2: High Priority Files (P1 - 500-1000 lines over limit) - ✅ COMPLETED
 
 ### 2.1 `generators/nested_operations.py` - ✅ DONE
-Split into `rail_django/generators/nested/`. Facade maintained.
+Split into `rail_django/generators/nested/`. Facade removed.
 
 ### 2.2 `core/schema.py` - ✅ DONE
 Split into `rail_django/core/schema/`. Package replaced file.
