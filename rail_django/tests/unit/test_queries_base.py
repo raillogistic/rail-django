@@ -640,3 +640,4 @@ class TestFilterPipelineIntegration:
 
         # Should have called apply_presets
         mock_applicator.apply_presets.assert_called_once()
+

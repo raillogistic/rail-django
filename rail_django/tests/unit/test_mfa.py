@@ -69,3 +69,4 @@ def test_sms_token_verification_round_trip():
     token, _expires = manager._sms_tokens[f"sms_token_{user.id}_{device.id}"]
     assert manager.verify_mfa_token(user, token, device_id=device.id) is True
     assert f"sms_token_{user.id}_{device.id}" not in manager._sms_tokens
+

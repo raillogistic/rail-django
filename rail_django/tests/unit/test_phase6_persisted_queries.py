@@ -169,3 +169,4 @@ def test_persisted_query_hash_mismatch():
         resolution = resolve_persisted_query(payload, schema_name="test")
         assert resolution.has_error()
         assert resolution.error_code == PERSISTED_QUERY_HASH_MISMATCH
+

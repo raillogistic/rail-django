@@ -77,3 +77,4 @@ class TestAuditRetention(TestCase):
 
             assert not model.objects.filter(pk=old_event.pk).exists()
             assert model.objects.filter(pk=recent_event.pk).exists()
+

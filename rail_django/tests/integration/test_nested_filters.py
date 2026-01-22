@@ -718,3 +718,4 @@ class TestIncludeFilter:
         assert result.get("errors") is None
         names = [c["name"] for c in result["data"]["categories"]]
         assert "Alpha" in names
+

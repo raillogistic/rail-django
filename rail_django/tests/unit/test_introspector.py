@@ -286,3 +286,4 @@ class TestIntrospectorIntegration:
         pytest.skip(
             "analyze_model method not found in current ModelIntrospector implementation"
         )
+

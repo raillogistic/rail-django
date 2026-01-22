@@ -307,3 +307,4 @@ class TestQueryGeneratorUseSingleton:
         assert app1 is app2
 
         clear_filter_caches()
+

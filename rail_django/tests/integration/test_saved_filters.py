@@ -169,3 +169,4 @@ class TestSavedFilters:
         products = result["data"]["products"]
         # If filter applied, we'd see 1. If ignored (default all), we see 2.
         assert len(products) == 2
+

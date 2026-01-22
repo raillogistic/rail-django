@@ -98,3 +98,4 @@ def test_webhook_auth_token_provider_sets_header():
     payload_json = "{}"
     headers = _build_headers(endpoint, payload, payload_json)
     assert headers["Authorization"] == "Bearer token-123"
+

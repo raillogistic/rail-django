@@ -149,3 +149,4 @@ class TestSubscriptionGenerator(TestCase):
             fields = generator.generate_model_subscriptions(Category)
 
         assert fields == {}
+

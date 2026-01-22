@@ -44,3 +44,4 @@ def test_webhook_fires_on_model_create():
                 payload = json.loads(payload_json)
                 assert payload["event_type"] == "created"
                 assert payload["model_label"] == "test_app.client"
+

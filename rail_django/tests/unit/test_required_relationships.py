@@ -167,3 +167,4 @@ def test_required_relationship_field_behavior():
     # when the Django field has blank=False (default)
     assert hasattr(field_type._type, "_of_type")
     assert field_type._type.__class__.__name__ == "NonNull"
+

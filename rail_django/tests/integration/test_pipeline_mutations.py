@@ -313,3 +313,4 @@ class TestGraphQLMetaPipelineConfig(TestCase):
         self.assertEqual(config.create_steps, [])
         self.assertEqual(config.update_steps, [])
         self.assertEqual(config.delete_steps, [])
+

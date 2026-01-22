@@ -38,3 +38,4 @@ def test_execution_time_distribution_reports_min_max_avg():
     assert distribution.max_time == 0.5
     assert distribution.avg_time > 0
 
+

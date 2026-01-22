@@ -31,3 +31,4 @@ def test_in_memory_cache_versions_bump():
     assert bumped != first
     assert backend.get_version("schema") == bumped
 
+

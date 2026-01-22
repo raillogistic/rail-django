@@ -97,3 +97,4 @@ def test_query_metrics_collector_flags_repeated_queries():
     candidates = collector.get_n_plus_one_candidates()
     assert len(candidates) == 1
     assert candidates[0]["count"] == 3
+

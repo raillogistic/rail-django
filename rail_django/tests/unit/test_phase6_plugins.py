@@ -49,3 +49,4 @@ def test_plugin_middleware_can_intercept_operation():
         plugin_manager._loaded = original_loaded
 
     assert result["data"]["ping"] == "intercepted"
+

@@ -217,3 +217,4 @@ def test_set_auth_cookies_respects_policy_overrides():
     assert refresh_cookie["samesite"] == "Lax"
     assert refresh_cookie["domain"] == "example.com"
     assert refresh_cookie["path"] == "/refresh"
+

@@ -38,3 +38,4 @@ def test_get_subscription_consumer_returns_class_with_schema():
     assert hasattr(consumer, "schema")
     assert consumer.schema == "schema"
 
+

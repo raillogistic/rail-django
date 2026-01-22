@@ -188,3 +188,4 @@ class TestQueryGenerator(TestCase):
 
         # La requête doit pouvoir gérer les relations self
         self.assertIsNotNone(category_query.type)
+

@@ -117,3 +117,4 @@ class TestMultiTenancy(TestCase):
         data = result["data"]["updateTenantproject"]
         self.assertFalse(data["ok"])
         self.assertTrue(data["errors"])
+

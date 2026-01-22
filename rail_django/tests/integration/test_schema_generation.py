@@ -1,10 +1,10 @@
-ï»¿"""Tests d'intÃ©gration pour la gÃ©nÃ©ration complÃ¨te de schÃ©mas GraphQL.
+"""Tests d'intégration pour la génération complète de schémas GraphQL.
 
 Ce module teste:
-- Le workflow complet de gÃ©nÃ©ration de schÃ©mas
-- L'intÃ©gration entre tous les composants
-- La gÃ©nÃ©ration de schÃ©mas pour des modÃ¨les complexes
-- L'exÃ©cution de requÃªtes et mutations rÃ©elles
+- Le workflow complet de génération de schémas
+- L'intégration entre tous les composants
+- La génération de schémas pour des modèles complexes
+- L'exécution de requêtes et mutations réelles
 """
 
 from typing import Any, Dict, List, Optional
@@ -39,11 +39,11 @@ from rail_django.generators.types import TypeGenerator
 
 
 class TestSchemaGenerationIntegration(TransactionTestCase):
-    """Tests d'intÃ©gration pour la gÃ©nÃ©ration complÃ¨te de schÃ©mas."""
+    """Tests d'intégration pour la génération complète de schémas."""
 
     def setUp(self):
-        """Configuration des tests d'intÃ©gration."""
-        # CrÃ©er les tables de test
+        """Configuration des tests d'intégration."""
+        # Créer les tables de test
         call_command("migrate", verbosity=0, interactive=False)
         self.user = User.objects.create_superuser(
             username="schema_admin",
@@ -51,7 +51,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             password="testpass123",
         )
 
-        # Initialiser les gÃ©nÃ©rateurs avec des paramÃ¨tres appropriÃ©s
+        # Initialiser les générateurs avec des paramètres appropriés
         from rail_django.core.settings import (
             MutationGeneratorSettings,
             TypeGeneratorSettings,
@@ -67,10 +67,10 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             self.type_generator, MutationGeneratorSettings()
         )
 
-        # Initialiser le gÃ©nÃ©rateur de schÃ©ma principal
+        # Initialiser le générateur de schéma principal
         self.schema_generator = SchemaBuilder()
 
-        # ModÃ¨les de test
+        # Modèles de test
         self.test_models = [
             TestCompany,
             TestEmployee,
@@ -81,29 +81,29 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         ]
 
     def test_complete_schema_generation(self):
-        """Test la gÃ©nÃ©ration complÃ¨te d'un schÃ©ma GraphQL."""
-        # GÃ©nÃ©rer le schÃ©ma complet
+        """Test la génération complète d'un schéma GraphQL."""
+        # Générer le schéma complet
         schema = self.schema_generator.get_schema()
 
-        # VÃ©rifier que le schÃ©ma est gÃ©nÃ©rÃ©
+        # Vérifier que le schéma est généré
         self.assertIsNotNone(schema)
         self.assertIsInstance(schema, Schema)
 
-        # VÃ©rifier que le schÃ©ma a des queries et mutations
+        # Vérifier que le schéma a des queries et mutations
         self.assertTrue(hasattr(schema, "query"))
         self.assertTrue(hasattr(schema, "mutation"))
 
     def test_schema_introspection(self):
-        """Test l'introspection du schÃ©ma gÃ©nÃ©rÃ©."""
-        # GÃ©nÃ©rer le schÃ©ma
+        """Test l'introspection du schéma généré."""
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
 
-        # CrÃ©er un client de test
+        # Créer un client de test
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une requÃªte d'introspection
+        # Exécuter une requête d'introspection
         introspection_query = """
         query IntrospectionQuery {
             __schema {
@@ -117,22 +117,22 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         result = client.execute(introspection_query)
 
-        # VÃ©rifier que l'introspection fonctionne
+        # Vérifier que l'introspection fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
         self.assertIn("__schema", result["data"])
         self.assertIn("types", result["data"]["__schema"])
 
     def test_query_execution_with_data(self):
-        """Test l'exÃ©cution de requÃªtes avec des donnÃ©es rÃ©elles."""
-        # CrÃ©er des donnÃ©es de test
+        """Test l'exécution de requêtes avec des données réelles."""
+        # Créer des données de test
         with transaction.atomic():
-            # CrÃ©er un utilisateur
+            # Créer un utilisateur
             user = User.objects.create_user(
                 username="test_user", email="test@example.com", password="testpass123"
             )
 
-            # CrÃ©er une entreprise
+            # Créer une entreprise
             company = TestCompany.objects.create(
                 nom_entreprise="Test Company",
                 secteur_activite="Technology",
@@ -141,12 +141,12 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 nombre_employes=10,
             )
 
-            # CrÃ©er une catÃ©gorie de compÃ©tence
+            # Créer une catégorie de compétence
             skill_category = TestSkillCategory.objects.create(
                 nom_categorie="Programming", description_categorie="Programming skills"
             )
 
-            # CrÃ©er une compÃ©tence
+            # Créer une compétence
             skill = TestSkill.objects.create(
                 nom_competence="Python",
                 description_competence="Python programming",
@@ -154,13 +154,13 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 categorie_competence=skill_category,
             )
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une requÃªte pour rÃ©cupÃ©rer les entreprises
+        # Exécuter une requête pour récupérer les entreprises
         query = """
         query {
             companies {
@@ -176,7 +176,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIsNone(result.get("errors"))
 
-        # VÃ©rifier que la requÃªte fonctionne
+        # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
         self.assertIn("companies", result["data"])
@@ -185,7 +185,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             all(item["secteurActivite"] == "Technology" for item in companies)
         )
 
-        # VÃ©rifier les donnÃ©es retournÃ©es
+        # Vérifier les données retournées
         companies = result["data"]["companies"]
         self.assertEqual(len(companies), 1)
         self.assertEqual(companies[0]["nomEntreprise"], "Test Company")
@@ -194,14 +194,14 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         self.assertTrue(companies[0]["estActive"])
 
     def test_mutation_execution_with_data(self):
-        """Test l'exÃ©cution de mutations avec des donnÃ©es rÃ©elles."""
-        # GÃ©nÃ©rer le schÃ©ma
+        """Test l'exécution de mutations avec des données réelles."""
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une mutation pour crÃ©er une entreprise
+        # Exécuter une mutation pour créer une entreprise
         mutation = """
         mutation {
             createTestCompany(input: {
@@ -229,29 +229,29 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         result = client.execute(mutation)
         self.assertIsNone(result.get("errors"))
 
-        # VÃ©rifier que la mutation fonctionne
+        # Vérifier que la mutation fonctionne
 
         self.assertIn("data", result)
         self.assertIn("createTestCompany", result["data"])
 
-        # VÃ©rifier que l'entreprise a Ã©tÃ© crÃ©Ã©e
+        # Vérifier que l'entreprise a été créée
         creation_result = result["data"]["createTestCompany"]
         if creation_result:
             self.assertTrue(creation_result.get("ok", False))
             self.assertIsNotNone(creation_result.get("object"))
 
     def test_complex_relationship_queries(self):
-        """Test les requÃªtes avec des relations complexes."""
-        # CrÃ©er des donnÃ©es de test avec relations
+        """Test les requêtes avec des relations complexes."""
+        # Créer des données de test avec relations
         with transaction.atomic():
-            # CrÃ©er un utilisateur
+            # Créer un utilisateur
             user = User.objects.create_user(
                 username="manager_user",
                 email="manager@example.com",
                 password="testpass123",
             )
 
-            # CrÃ©er une entreprise
+            # Créer une entreprise
             company = TestCompany.objects.create(
                 nom_entreprise="Complex Company",
                 secteur_activite="Technology",
@@ -260,7 +260,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 nombre_employes=50,
             )
 
-            # CrÃ©er un employÃ©
+            # Créer un employé
             from datetime import date
 
             employee = TestEmployee.objects.create(
@@ -272,13 +272,13 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 est_manager=True,
             )
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une requÃªte avec relations
+        # Exécuter une requête avec relations
         query = """
         query {
             employees {
@@ -298,12 +298,12 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         result = client.execute(query)
 
-        # VÃ©rifier que la requÃªte fonctionne
+        # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
         self.assertIn("employees", result["data"])
 
-        # VÃ©rifier les relations
+        # Vérifier les relations
         employees = result["data"]["employees"]
         if employees:
             employee_data = employees[0]
@@ -313,8 +313,8 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             self.assertTrue(employee_data["estManager"])
 
     def test_business_method_mutations(self):
-        """Test l'exÃ©cution de mutations pour les mÃ©thodes mÃ©tier."""
-        # CrÃ©er des donnÃ©es de test
+        """Test l'exécution de mutations pour les méthodes métier."""
+        # Créer des données de test
         with transaction.atomic():
             company = TestCompany.objects.create(
                 nom_entreprise="Business Company",
@@ -324,13 +324,13 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 nombre_employes=20,
             )
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une mutation de mÃ©thode mÃ©tier
+        # Exécuter une mutation de méthode métier
         mutation = (
             """
         mutation {
@@ -349,19 +349,19 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         result = client.execute(mutation)
 
-        # VÃ©rifier que la mutation fonctionne
+        # Vérifier que la mutation fonctionne
         self.skipTest("Business method mutation not yet implemented")
 
         self.assertIn("data", result)
 
-        # VÃ©rifier que l'entreprise a Ã©tÃ© mise Ã  jour
+        # Vérifier que l'entreprise a été mise à jour
         company.refresh_from_db()
         self.assertEqual(company.nombre_employes, 25)
 
     @pytest.mark.skip("Filtering not generated in test environment")
     def test_filtering_and_pagination(self):
-        """Test le filtrage et la pagination dans les requÃªtes."""
-        # CrÃ©er plusieurs entreprises de test
+        """Test le filtrage et la pagination dans les requêtes."""
+        # Créer plusieurs entreprises de test
         with transaction.atomic():
             for i in range(10):
                 TestCompany.objects.create(
@@ -373,13 +373,13 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                     est_active=i % 3 != 0,
                 )
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # ExÃ©cuter une requÃªte avec filtres
+        # Exécuter une requête avec filtres
         query = """
         query {
             companies(
@@ -397,19 +397,19 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         result = client.execute(query)
         print(f"DEBUG: result={result}")
 
-        # VÃ©rifier que la requÃªte fonctionne
+        # Vérifier que la requête fonctionne
         self.assertIn("data", result)
         self.assertIn("companies", result["data"])
 
     def test_schema_validation(self):
-        """Test la validation du schÃ©ma gÃ©nÃ©rÃ©."""
-        # GÃ©nÃ©rer le schÃ©ma
+        """Test la validation du schéma généré."""
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
 
-        # VÃ©rifier que le schÃ©ma est valide
+        # Vérifier que le schéma est valide
         self.assertIsNotNone(schema)
 
-        # Tester la validation avec une requÃªte invalide
+        # Tester la validation avec une requête invalide
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
@@ -424,14 +424,14 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         result = client.execute(invalid_query)
 
-        # VÃ©rifier que les erreurs sont correctement gÃ©rÃ©es
+        # Vérifier que les erreurs sont correctement gérées
         self.assertIsNotNone(result.get("errors"))
 
     def test_performance_with_large_dataset(self):
         """Test les performances avec un grand dataset."""
         import time
 
-        # CrÃ©er un grand nombre d'entreprises
+        # Créer un grand nombre d'entreprises
         companies = []
         for i in range(100):
             companies.append(
@@ -447,15 +447,15 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         with transaction.atomic():
             TestCompany.objects.bulk_create(companies)
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         start_time = time.time()
         schema = self.schema_generator.get_schema([TestCompany])
         generation_time = time.time() - start_time
 
-        # La gÃ©nÃ©ration doit Ãªtre rapide (moins de 2 secondes)
+        # La génération doit être rapide (moins de 2 secondes)
         self.assertLess(generation_time, 2.0)
 
-        # Tester l'exÃ©cution de requÃªtes
+        # Tester l'exécution de requêtes
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
@@ -473,22 +473,22 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         result = client.execute(query)
         query_time = time.time() - start_time
 
-        # L'exÃ©cution doit Ãªtre rapide (moins de 1 seconde)
+        # L'exécution doit être rapide (moins de 1 seconde)
         self.assertLess(query_time, 1.0)
 
-        # VÃ©rifier que la requÃªte fonctionne
+        # Vérifier que la requête fonctionne
         if not result.get("errors"):
             self.assertIn("data", result)
 
     def test_error_handling_integration(self):
-        """Test la gestion d'erreurs dans l'intÃ©gration complÃ¨te."""
-        # GÃ©nÃ©rer le schÃ©ma
+        """Test la gestion d'erreurs dans l'intégration complète."""
+        # Générer le schéma
         schema = self.schema_generator.get_schema()
         client = RailGraphQLTestClient(
             schema, schema_name="default", user=self.user
         )
 
-        # Tester une mutation avec des donnÃ©es invalides
+        # Tester une mutation avec des données invalides
         mutation = """
         mutation {
             createTestCompany(input: {
@@ -512,7 +512,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         result = client.execute(mutation)
 
-        # VÃ©rifier que les erreurs sont correctement gÃ©rÃ©es
+        # Vérifier que les erreurs sont correctement gérées
         if not result.get("errors"):
             creation_result = result["data"]["createTestCompany"]
             if creation_result:
@@ -520,14 +520,14 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 self.assertIsNotNone(creation_result.get("errors"))
 
     def test_concurrent_schema_access(self):
-        """Test l'accÃ¨s concurrent au schÃ©ma gÃ©nÃ©rÃ©."""
+        """Test l'accès concurrent au schéma généré."""
         import threading
         import time
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = self.schema_generator.get_schema([TestCompany])
 
-        # CrÃ©er des donnÃ©es de test
+        # Créer des données de test
         with transaction.atomic():
             TestCompany.objects.create(
                 nom_entreprise="Concurrent Company",
@@ -540,7 +540,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         errors = []
 
         def execute_query():
-            """ExÃ©cute une requÃªte dans un thread sÃ©parÃ©."""
+            """Exécute une requête dans un thread séparé."""
             try:
                 client = RailGraphQLTestClient(
                     schema, schema_name="default", user=self.user
@@ -568,11 +568,11 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         for thread in threads:
             thread.join()
 
-        # VÃ©rifier qu'il n'y a pas d'erreurs
+        # Vérifier qu'il n'y a pas d'erreurs
         self.assertEqual(len(errors), 0)
         self.assertEqual(len(results), 5)
 
-        # VÃ©rifier que tous les rÃ©sultats sont cohÃ©rents
+        # Vérifier que tous les résultats sont cohérents
         for result in results:
             self.assertIsNone(result.get("errors"))
             self.assertIn("data", result)
@@ -580,51 +580,51 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
 @pytest.mark.integration
 class TestSchemaGeneratorAdvanced:
-    """Tests d'intÃ©gration avancÃ©s pour le gÃ©nÃ©rateur de schÃ©mas."""
+    """Tests d'intégration avancés pour le générateur de schémas."""
 
     def test_schema_caching_integration(self):
-        """Test l'intÃ©gration du cache de schÃ©mas."""
+        """Test l'intégration du cache de schémas."""
         schema_generator = AutoSchemaGenerator()
 
-        # GÃ©nÃ©rer le schÃ©ma une premiÃ¨re fois
+        # Générer le schéma une première fois
         import time
 
         start_time = time.time()
         schema1 = schema_generator.get_schema([TestCompany])
         first_generation_time = time.time() - start_time
 
-        # GÃ©nÃ©rer le schÃ©ma une deuxiÃ¨me fois (devrait utiliser le cache)
+        # Générer le schéma une deuxième fois (devrait utiliser le cache)
         start_time = time.time()
         schema2 = schema_generator.get_schema([TestCompany])
         second_generation_time = time.time() - start_time
 
-        # La deuxiÃ¨me gÃ©nÃ©ration devrait Ãªtre plus rapide
+        # La deuxième génération devrait être plus rapide
         assert second_generation_time < first_generation_time
 
-        # Les schÃ©mas devraient Ãªtre identiques
+        # Les schémas devraient être identiques
         assert schema1 is not None
         assert schema2 is not None
 
     def test_dynamic_model_registration(self):
-        """Test l'enregistrement dynamique de modÃ¨les."""
+        """Test l'enregistrement dynamique de modèles."""
         schema_generator = AutoSchemaGenerator()
 
-        # Enregistrer des modÃ¨les dynamiquement
+        # Enregistrer des modèles dynamiquement
         schema_generator.register_model(TestCompany)
         schema_generator.register_model(TestEmployee)
 
-        # GÃ©nÃ©rer le schÃ©ma
+        # Générer le schéma
         schema = schema_generator.get_schema()
 
-        # VÃ©rifier que le schÃ©ma est gÃ©nÃ©rÃ©
+        # Vérifier que le schéma est généré
         assert schema is not None
         assert isinstance(schema, Schema)
 
     def test_schema_extension_integration(self):
-        """Test l'intÃ©gration d'extensions de schÃ©mas."""
+        """Test l'intégration d'extensions de schémas."""
         schema_generator = AutoSchemaGenerator()
 
-        # Ajouter des extensions personnalisÃ©es
+        # Ajouter des extensions personnalisées
         custom_query = type(
             "CustomQuery",
             (ObjectType,),
@@ -637,9 +637,10 @@ class TestSchemaGeneratorAdvanced:
 
         schema_generator.add_query_extension(custom_query)
 
-        # GÃ©nÃ©rer le schÃ©ma avec extensions
+        # Générer le schéma avec extensions
         schema = schema_generator.get_schema([TestCompany])
 
-        # VÃ©rifier que le schÃ©ma est gÃ©nÃ©rÃ©
+        # Vérifier que le schéma est généré
         assert schema is not None
         assert isinstance(schema, Schema)
+

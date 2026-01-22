@@ -154,3 +154,4 @@ def test_meta_yaml_preferred_over_json(tmp_path):
     clear_meta_configs()
     if hasattr(Category, "_graphql_meta_instance"):
         delattr(Category, "_graphql_meta_instance")
+

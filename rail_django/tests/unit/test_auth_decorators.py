@@ -95,3 +95,4 @@ def test_require_permissions_enforces_permission():
     request = rf.get("/perm", HTTP_AUTHORIZATION=f"Bearer {token}")
     response = view(request)
     assert response.status_code == 200
+

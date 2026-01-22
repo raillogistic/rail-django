@@ -124,3 +124,4 @@ def test_require_permission_uses_input_object_id():
 
     with pytest.raises(PermissionDenied):
         mutation.mutate(info, input={"id": profile.id})
+

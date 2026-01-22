@@ -274,3 +274,4 @@ def test_input_validator_errors_surface_in_mutations():
     assert result.ok is False
     assert result.errors
     assert result.errors[0].field == "name"
+

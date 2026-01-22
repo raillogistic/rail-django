@@ -315,3 +315,4 @@ def test_mutation_dual_field_conflict_returns_error(gql_client):
     assert result.get("errors") is None
     assert result["data"]["createPost"]["ok"] is False
     assert result["data"]["createPost"]["errors"]
+

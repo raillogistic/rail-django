@@ -130,3 +130,4 @@ def test_financial_fields_mask_for_non_privileged_users():
 
     assert visibility == FieldVisibility.MASKED
     assert mask_value == "***CONFIDENTIAL***"
+

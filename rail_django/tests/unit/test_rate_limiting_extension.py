@@ -59,3 +59,4 @@ def test_rate_limit_middleware_checks_login_scope(monkeypatch):
     assert result == "ok"
     assert "graphql_login" in limiter.checked
 
+

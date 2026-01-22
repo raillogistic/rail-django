@@ -126,7 +126,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Lire tous les clients
         query = """
         query {
-            allCustomers {
+            customers {
                 id
                 nomClient
                 prenomClient
@@ -144,7 +144,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
 
-        customers = result["data"]["allCustomers"]
+        customers = result["data"]["customers"]
         self.assertEqual(len(customers), 2)
 
         # Vérifier les données
@@ -267,7 +267,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Lire les données avec relations
         query = """
         query {
-            allCustomers {
+            customers {
                 id
                 nomClient
                 prenomClient
@@ -288,7 +288,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
 
-        customers = result["data"]["allCustomers"]
+        customers = result["data"]["customers"]
         self.assertEqual(len(customers), 1)
 
         customer_data = customers[0]
@@ -525,7 +525,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         start_time = time.time()
         query = """
         query {
-            allCustomers(limit: 50) {
+            customers(limit: 50) {
                 id
                 nomClient
                 prenomClient
@@ -571,7 +571,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Tester via GraphQL avec filtrage
         query = """
         query {
-            allCustomers(filters: { emailClient: "indextest0@example.com" }) {
+            customers(filters: { emailClient: "indextest0@example.com" }) {
                 id
                 nomClient
                 emailClient
@@ -584,7 +584,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Vérifier que le filtrage fonctionne
         if not result.get("errors"):
             self.assertIn("data", result)
-            customers = result["data"]["allCustomers"]
+            customers = result["data"]["customers"]
             if customers:
                 self.assertEqual(len(customers), 1)
                 self.assertEqual(customers[0]["emailClient"], "indextest0@example.com")
@@ -695,3 +695,5 @@ class TestDatabaseOperationsAdvanced:
             nom_client__startswith="Backup"
         ).count()
         assert restored_count == 5
+
+

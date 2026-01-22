@@ -22,3 +22,4 @@ def test_validation_query_rejects_invalid_email():
     assert result.is_valid is False
     assert result.error_message
 
+

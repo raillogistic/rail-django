@@ -253,3 +253,4 @@ class TestAdvancedMutationFeatures(TestCase):
         """Configuration des tests."""
         self.type_generator = TypeGenerator()
         self.input_generator = self.type_generator
+

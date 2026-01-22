@@ -83,3 +83,4 @@ def test_camelcase_filter_operators(gql_client):
     items = result["data"]["categories"]
     assert len(items) == 1
     assert items[0]["name"] == "Alpha"
+

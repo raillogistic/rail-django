@@ -906,3 +906,4 @@ class TestExtractDateFilters:
         assert "Target Product" in names
         assert "Different Month" not in names
 
+

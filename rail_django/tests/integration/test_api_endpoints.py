@@ -196,7 +196,7 @@ class TestAPIEndpointsIntegration(TestCase):
         query = {
             "query": """
             query {
-                allUsers {
+                users {
                     id
                     username
                     email
@@ -797,3 +797,5 @@ class MockMutation(graphene.ObjectType):
 
 
 test_schema = Schema(query=MockQuery, mutation=MockMutation)
+
+

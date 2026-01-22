@@ -208,3 +208,4 @@ class TestTemplatingRendering(TestCase):
         body = response.content.decode("utf-8")
         self.assertIn("Header", body)
         self.assertIn("Content", body)
+

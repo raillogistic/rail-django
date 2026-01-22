@@ -74,3 +74,4 @@ class TestSchemaRegistrySnapshots(TestCase):
         diff_data = diff_payload.get("data", {})
         assert diff_data.get("schema_name") == self.schema_name
         assert isinstance(diff_data.get("diff"), dict)
+

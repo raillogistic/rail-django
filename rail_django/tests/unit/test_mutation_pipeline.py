@@ -635,3 +635,4 @@ class TestPipelineSteps:
         result = step.execute(ctx)
 
         assert result.input_data["status"] == "active"
+

@@ -320,3 +320,4 @@ class TestGeneratorWithAdvancedFilters(TestCase):
 
         # Should have order_items_cond_agg for reverse relation
         self.assertIn("order_items_cond_agg", fields)
+

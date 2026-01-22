@@ -30,6 +30,7 @@ class QueryBuilderMixin:
     def _pluralize_name(self, name: str) -> str:
         """
         Pluralize a name for list queries.
+        Strictly adds an 's' suffix.
 
         Args:
             name: The singular name to pluralize
@@ -40,9 +41,6 @@ class QueryBuilderMixin:
         value = str(name or "").strip()
         if not value:
             return value
-        if value.endswith("y") and len(value) > 1:
-            if value[-2].lower() not in "aeiou":
-                return f"{value[:-1]}ies"
         return f"{value}s"
 
     def _get_list_alias(self, model: type[models.Model]) -> Optional[str]:
@@ -136,11 +134,6 @@ class QueryBuilderMixin:
                             model, manager_name
                         )
                         self._query_fields[plural_name] = list_query
-                        
-                        # Custom alias from verbose_name_plural
-                        alias_name = self._get_list_alias(model)
-                        if alias_name and alias_name not in self._query_fields:
-                            self._query_fields[alias_name] = list_query
 
                         # Grouping query: e.g. 'orderGroups'
                         grouping_query = self.query_generator.generate_grouping_query(
@@ -282,3 +275,5 @@ class QueryBuilderMixin:
                 self.schema_name,
                 exc,
             )
+
+

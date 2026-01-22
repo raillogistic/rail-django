@@ -52,3 +52,4 @@ def test_to_filter_list_normalizes_items():
     assert len(filters) == 1
     assert filters[0].field == "nom_client"
 
+

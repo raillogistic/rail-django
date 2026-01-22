@@ -247,3 +247,4 @@ def test_owner_resolver_override_allows_contextual_access():
 
     assert manager.has_permission(user, "category.update_own", context) is True
 
+

@@ -254,3 +254,4 @@ class TestMutationExceptions:
         assert error.value == "invalid"
         assert "author_id" in str(error)
         assert error.code == "INVALID_ID_FORMAT"
+

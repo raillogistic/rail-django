@@ -371,3 +371,4 @@ class TestReverseRelationCountFields(TestCase):
         # Post has comments reverse relation
         self.assertIn("comments_count", fields)
         self.assertIn("comments", fields)
+

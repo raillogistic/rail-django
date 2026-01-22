@@ -45,3 +45,4 @@ def test_dataset_records_query_returns_rows():
     assert len(payload["rows"]) == 2
     assert payload["rows"][0]["nom_client"] == "Alpha"
 
+

@@ -22,16 +22,16 @@ def gql_client():
 
 
 def test_root_query_camelcase(gql_client):
-    """Test that root queries use camelCase (product vs products, allProducts)."""
+    """Test that root queries use camelCase (product vs products, products)."""
     Product.objects.create(name="P1", price=10.0)
 
     # Single query: product (was product or product__objects)
     # List query: products (was products or products__objects)
-    # Alias: allProducts (was all_products)
+    # Alias: products (was all_products)
 
     query = """
     query {
-        allProducts {
+        products {
             name
         }
         products {
@@ -42,7 +42,7 @@ def test_root_query_camelcase(gql_client):
 
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    assert len(result["data"]["allProducts"]) == 1
+    assert len(result["data"]["products"]) == 1
     assert len(result["data"]["products"]) == 1
 
 
@@ -64,3 +64,5 @@ def test_root_query_pagination_camelcase(gql_client):
     result = gql_client.execute(query)
     assert result.get("errors") is None
     assert len(result["data"]["productsPages"]["items"]) == 1
+
+

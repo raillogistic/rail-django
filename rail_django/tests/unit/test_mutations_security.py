@@ -245,3 +245,4 @@ class TestCircularReferenceHandling:
         assert error.model_name == "Author"
         assert error.path == ""
         assert "Author" in str(error)
+

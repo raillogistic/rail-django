@@ -52,3 +52,4 @@ def test_mock_scanner_quarantines_threat():
         removed = scanner.delete_quarantine_file(quarantine_files[0]["quarantine_path"])
         assert removed is True
 
+

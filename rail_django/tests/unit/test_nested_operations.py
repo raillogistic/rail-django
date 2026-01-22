@@ -294,3 +294,4 @@ class TestHasNestedPayload:
 
         value = [1, 2, 3]
         assert handler._has_nested_payload(value) is False
+

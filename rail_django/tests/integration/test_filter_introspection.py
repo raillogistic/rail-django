@@ -86,3 +86,4 @@ class TestFilterIntrospection:
         result = gql_client.execute(query)
         assert result.get("errors") is None
         assert result["data"]["filterSchema"] is None
+

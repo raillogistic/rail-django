@@ -158,3 +158,4 @@ class TestFilterPresets:
         assert len(products) == 1
         assert products[0]["name"] == "Out of Stock"
 
+

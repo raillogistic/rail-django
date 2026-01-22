@@ -1264,3 +1264,4 @@ class TestNestedFilterApplicatorNewFeatures(TestCase):
 
         self.assertIsInstance(q, Q)
         self.assertEqual(annotations, {})
+

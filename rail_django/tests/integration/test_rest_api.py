@@ -552,3 +552,4 @@ class ErrorHandlingTest(SchemaAPITestCase):
         self.assertEqual(response.status_code, 400)
         data = response.json()
         self.assertIn("Invalid JSON body", data["data"]["message"])
+

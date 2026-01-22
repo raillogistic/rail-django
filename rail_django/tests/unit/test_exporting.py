@@ -153,3 +153,4 @@ class TestExporting(TestCase):
         )
         data = exporter.export_to_excel(["nom_client"], ordering=["nom_client"])
         self.assertTrue(data.startswith(b"PK"))
+

@@ -95,3 +95,4 @@ def test_opentelemetry_plugin_records_span():
     assert spans
     assert spans[0].ended is True
     assert spans[0].exceptions
+

@@ -127,3 +127,4 @@ class TestComputedFilters:
         result = gql_client.execute(query)
         assert result.get("errors") is None
         assert len(result["data"]["products"]) == 1
+
