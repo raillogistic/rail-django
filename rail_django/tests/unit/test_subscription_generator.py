@@ -27,7 +27,7 @@ class TestSubscriptionGenerator(TestCase):
         clear_subscription_registry()
 
     def test_generator_requires_dependency_when_enabled(self):
-        settings = SubscriptionGeneratorSettings(enable_subscriptions=True)
+        settings = SubscriptionGeneratorSettings(enable_subscriptions=True, discover_models=True)
         generator = SubscriptionGenerator(TypeGenerator(), settings=settings)
 
         original_import = __import__
@@ -78,7 +78,7 @@ class TestSubscriptionGenerator(TestCase):
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setitem(sys.modules, "channels_graphql_ws", dummy_module)
-            settings = SubscriptionGeneratorSettings(enable_subscriptions=True)
+            settings = SubscriptionGeneratorSettings(enable_subscriptions=True, discover_models=True)
             generator = SubscriptionGenerator(TypeGenerator(), settings=settings)
             fields = generator.generate_model_subscriptions(Category)
 

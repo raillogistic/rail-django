@@ -15,6 +15,7 @@ class SubscriptionGeneratorSettings:
     enable_update: bool = True
     enable_delete: bool = True
     enable_filters: bool = True
+    discover_models: bool = False
     include_models: List[str] = field(default_factory=list)
     exclude_models: List[str] = field(default_factory=list)
 

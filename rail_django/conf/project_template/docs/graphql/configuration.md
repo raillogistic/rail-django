@@ -257,7 +257,9 @@ Real-time subscription configuration.
     "enable_filters": True,
 
     # Allowlist/Blocklist of models
-    "include_models": [],  # Empty = all
+            "discover_models": False,  # Enable automatic model discovery
+            "include_models": [],      # List of models to include
+    
     "exclude_models": ["audit.AuditEvent"],
 }
 ```

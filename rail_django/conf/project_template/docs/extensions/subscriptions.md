@@ -55,7 +55,8 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_filters": True,
 
         # Model allowlist/blocklist
-        "include_models": [],  # Empty = all
+        "discover_models": False,  # Enable automatic model discovery
+    "include_models": [],      # List of models to include
         "exclude_models": ["audit.AuditEvent"],
     },
 }

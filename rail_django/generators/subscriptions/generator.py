@@ -91,7 +91,11 @@ class SubscriptionGenerator:
         }
         tokens = {t.lower() for t in tokens if t}
 
-        if include_set and not (tokens & include_set): return False
+        if include_set:
+            if not (tokens & include_set): return False
+        elif not getattr(self.settings, "discover_models", True):
+            return False
+
         if exclude_set and (tokens & exclude_set): return False
         return True
 

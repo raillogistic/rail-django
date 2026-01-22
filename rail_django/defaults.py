@@ -106,6 +106,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "enable_update": True,
         "enable_delete": True,
         "enable_filters": True,
+        "discover_models": False,
         "include_models": [],
         "exclude_models": [],
     },
