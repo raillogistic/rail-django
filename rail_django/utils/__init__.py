@@ -50,6 +50,12 @@ from .normalization import (
     normalize_filter_value,
     normalize_ordering,
 )
+from .graphql_meta import (
+    get_model_graphql_meta,
+    get_custom_filters,
+    get_quick_filter_fields,
+    get_filter_fields,
+)
 
 __all__ = [
     # Coercion
@@ -92,4 +98,9 @@ __all__ = [
     "normalize_dict_keys",
     "normalize_filter_value",
     "normalize_ordering",
+    # GraphQL Meta
+    "get_model_graphql_meta",
+    "get_custom_filters",
+    "get_quick_filter_fields",
+    "get_filter_fields",
 ]

@@ -20,6 +20,13 @@ RAIL_DJANGO_GRAPHQL["type_generation_settings"] = _type_settings
 
 MIGRATION_MODULES = {"test_app": None, "tests": None}
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+
 
 def _sqlite_json_valid(value):
     if value is None:

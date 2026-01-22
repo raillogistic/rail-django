@@ -6,8 +6,9 @@ registering and unregistering apps and models from schema generation.
 """
 
 import logging
-from typing import Type, Union
+from typing import Type, Union, Optional
 
+import graphene
 from django.apps import apps
 from django.db import models
 from graphene.utils.str_converters import to_camel_case, to_snake_case
@@ -84,6 +85,26 @@ class RegistrationMixin:
                 f"Model '{model_identifier}' unregistered from schema "
                 f"'{self.schema_name}' generation"
             )
+
+    def register_mutation(self, mutation_class: type[graphene.Mutation], name: Optional[str] = None) -> None:
+        """
+        Registers a custom mutation class.
+
+        Args:
+            mutation_class: Graphene mutation class to register
+            name: Optional name for the mutation field (defaults to snake_case of class name)
+        """
+        if not name:
+            name = to_snake_case(mutation_class.__name__)
+        
+        with self._lock:
+            self._mutation_fields[name] = mutation_class.Field()
+            self.rebuild_schema()
+            
+        logger.info(
+            f"Custom mutation '{name}' registered for schema "
+            f"'{self.schema_name}'"
+        )
 
     def reload_app_schema(self, app_label: str) -> None:
         """

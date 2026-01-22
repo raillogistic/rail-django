@@ -18,7 +18,7 @@ from django.db import models
 from django.db.models import Q
 from django.test import TestCase
 
-from rail_django.generators.queries_base import (
+from rail_django.generators.queries.base import (
     RESERVED_QUERY_ARGS,
     QueryContext,
     QueryFilterPipeline,

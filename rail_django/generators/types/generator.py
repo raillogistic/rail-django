@@ -19,16 +19,18 @@ from ...core.services import get_query_optimizer
 from ...core.scalars import get_custom_scalar, get_enabled_scalars
 from ...core.settings import MutationGeneratorSettings, TypeGeneratorSettings
 from ..introspector import ModelIntrospector
-from ..types_dataloaders import RelatedObjectsLoader
-from ..types_enums import (
+from .dataloaders import RelatedObjectsLoader
+from .enums import (
     build_enum_name as _build_enum_name,
     get_or_create_enum_for_field as _get_or_create_enum_for_field,
 )
-from ..types_inputs import (
+from .inputs import (
     generate_input_type as _generate_input_type,
-    get_or_create_nested_input_type as _get_or_create_nested_input_type,
+    _get_or_create_nested_input_type,
 )
-from ..types_objects import generate_object_type as _generate_object_type
+from .objects import (
+    generate_object_type as _generate_object_type,
+)
 
 from .constants import FIELD_TYPE_MAP, PYTHON_TYPE_MAP
 

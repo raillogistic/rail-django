@@ -28,7 +28,7 @@ from .field_permissions import (
     field_permission_required,
     mask_sensitive_fields,
 )
-from .graphql_security import (
+from .graphql import (
     GraphQLSecurityAnalyzer,
     QueryAnalysisResult,
     QueryComplexityValidationRule,

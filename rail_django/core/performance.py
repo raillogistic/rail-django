@@ -191,7 +191,7 @@ class QueryComplexityAnalyzer:
         enable_complexity = bool(self.settings.enable_query_cost_analysis)
 
         try:
-            from ..security.graphql_security import (
+            from ..security.graphql import (
                 GraphQLSecurityAnalyzer,
                 SecurityConfig,
             )

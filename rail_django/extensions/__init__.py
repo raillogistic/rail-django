@@ -91,7 +91,18 @@ from .excel import (
 )
 
 # Multi-factor authentication
-from .mfa import MFAManager
+from .mfa import (
+    MFAManager,
+    MFADevice,
+    MFABackupCode,
+    TrustedDevice,
+    MFAMutations,
+    SetupTOTPMutation,
+    VerifyTOTPMutation,
+    MFAQueries,
+    MFADeviceType,
+    TrustedDeviceType,
+)
 from .multitenancy import (
     TenantContextMiddleware,
     TenantManager,
@@ -126,18 +137,8 @@ __all__ = [
     "jwt_optional",
     "get_user_from_jwt",
     "require_permissions",
-    # "TOTPSetupMutation",
-    # "TOTPVerifyMutation",
-    # "SMSSetupMutation",
-    # "SMSVerifyMutation",
-    # "BackupCodeGenerateMutation",
-    # "BackupCodeVerifyMutation",
-    # "TrustedDeviceManager",
     # Audit logging
     "AuditLogger",
-    # "SecurityEvent",
-    # "AuditLogEntry",
-    # "get_audit_logger",
     # Model export (JWT protected)
     "ExportView",
     "ExportJobStatusView",
@@ -172,6 +173,15 @@ __all__ = [
     "render_excel",
     # Multi-factor authentication
     "MFAManager",
+    "MFADevice",
+    "MFABackupCode",
+    "TrustedDevice",
+    "MFAMutations",
+    "SetupTOTPMutation",
+    "VerifyTOTPMutation",
+    "MFAQueries",
+    "MFADeviceType",
+    "TrustedDeviceType",
     # Multi-tenancy
     "TenantContextMiddleware",
     "TenantManager",

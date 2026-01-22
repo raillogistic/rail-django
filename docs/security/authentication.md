@@ -18,6 +18,7 @@ In `settings.py`:
 MIDDLEWARE = [
     # ...
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "rail_django.middleware.auth.GraphQLAuthenticationMiddleware",
     "rail_django.middleware.performance.GraphQLPerformanceMiddleware", # Optional but recommended
     # ...
 ]

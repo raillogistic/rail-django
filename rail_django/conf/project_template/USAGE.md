@@ -114,7 +114,7 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     ```bash
     python manage.py runserver
     ```
-    Access GraphiQL at: `http://localhost:8000/graphql/graphiql/`. In production,
+    Access GraphiQL at: `http://localhost:8000/graphql/`. In production,
     GraphiQL is superuser-only; log in and use the auth cookies set by the
     `login` mutation for requests.
 

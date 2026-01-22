@@ -37,7 +37,7 @@ Cookie policies can be set globally (`JWT_COOKIE_*`) or per cookie
 
 Authorization uses a hybrid RBAC system:
 
-- Role definitions live in code (`rail_django.security.rbac.RoleManager`).
+- Role definitions live in code (`rail_django.security.rbac.role_manager`).
 - Assignments use Django `Group` records.
 - The permission manager also checks GraphQLMeta guards (per model).
 - Installed apps can define role definitions in `meta.yaml` (or `meta.json`)
@@ -233,7 +233,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## Input validation
 
-`rail_django.security.input_validation` provides a unified validation pipeline
+`rail_django.security.validation` provides a unified validation pipeline
 that sanitizes strings, applies allowlisted HTML rules, and flags high-risk
 patterns. You can wrap resolvers with `@validate_input` or use
 `InputValidator.validate_payload` directly.

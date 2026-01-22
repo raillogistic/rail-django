@@ -90,6 +90,18 @@ def get_schema(schema_name: str = "default") -> graphene.Schema:
     return get_schema_builder(schema_name).get_schema()
 
 
+def register_mutation(mutation_class: Type[graphene.Mutation], name: Optional[str] = None, schema_name: str = "default") -> None:
+    """
+    Register a custom mutation class to the given schema.
+
+    Args:
+        mutation_class: Graphene mutation class
+        name: Optional field name
+        schema_name: Target schema name
+    """
+    get_schema_builder(schema_name).register_mutation(mutation_class, name)
+
+
 def clear_all_schemas() -> None:
     """Clear all schema builder instances."""
     with SchemaBuilder._lock:
@@ -119,6 +131,7 @@ __all__ = [
     "AutoSchemaGenerator",
     "get_schema",
     "get_schema_builder",
+    "register_mutation",
     "clear_all_schemas",
     "get_all_schema_names",
 ]

@@ -165,7 +165,7 @@ MFA_ENABLED = False
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'KEY_PREFIX': 'graphql_security',
+        'KEY_PREFIX': 'rail_django_security',
         'TIMEOUT': 3600,
     }
 }

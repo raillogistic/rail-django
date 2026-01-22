@@ -15,7 +15,7 @@ class TestBulkSizeLimiting:
 
     def test_bulk_size_error_attributes(self):
         """BulkSizeError should have proper attributes."""
-        from rail_django.generators.mutations_exceptions import BulkSizeError
+        from rail_django.generators.mutations.exceptions import BulkSizeError
 
         error = BulkSizeError(max_size=100, actual_size=150)
         assert error.max_size == 100
@@ -26,7 +26,7 @@ class TestBulkSizeLimiting:
 
     def test_default_max_bulk_size_value(self):
         """DEFAULT_MAX_BULK_SIZE should be reasonable."""
-        from rail_django.generators.mutations_utils import DEFAULT_MAX_BULK_SIZE
+        from rail_django.generators.mutations.utils import DEFAULT_MAX_BULK_SIZE
 
         # Default should be a reasonable value between 50 and 1000
         assert 50 <= DEFAULT_MAX_BULK_SIZE <= 1000
@@ -37,7 +37,7 @@ class TestNestedDepthLimiting:
 
     def test_nested_depth_error_attributes(self):
         """NestedDepthError should have proper attributes."""
-        from rail_django.generators.mutations_exceptions import NestedDepthError
+        from rail_django.generators.mutations.exceptions import NestedDepthError
 
         error = NestedDepthError(max_depth=5, current_depth=6)
         assert error.max_depth == 5
@@ -46,7 +46,7 @@ class TestNestedDepthLimiting:
 
     def test_default_max_nested_depth_value(self):
         """DEFAULT_MAX_NESTED_DEPTH should be reasonable."""
-        from rail_django.generators.mutations_utils import DEFAULT_MAX_NESTED_DEPTH
+        from rail_django.generators.mutations.utils import DEFAULT_MAX_NESTED_DEPTH
 
         # Default should be between 5 and 20
         assert 5 <= DEFAULT_MAX_NESTED_DEPTH <= 20
@@ -57,7 +57,7 @@ class TestErrorMessageSanitization:
 
     def test_validation_error_shown(self):
         """Validation errors should be shown to users."""
-        from rail_django.generators.mutations_utils import sanitize_error_message
+        from rail_django.generators.mutations.utils import sanitize_error_message
 
         error = ValidationError("Name field is required")
         result = sanitize_error_message(error, "create", "User")
@@ -66,7 +66,7 @@ class TestErrorMessageSanitization:
 
     def test_permission_error_shown(self):
         """Permission errors should be shown to users."""
-        from rail_django.generators.mutations_utils import sanitize_error_message
+        from rail_django.generators.mutations.utils import sanitize_error_message
 
         error = PermissionDenied("You don't have permission to edit this resource")
         result = sanitize_error_message(error, "update", "Resource")
@@ -75,7 +75,7 @@ class TestErrorMessageSanitization:
 
     def test_generic_exception_sanitized(self):
         """Generic exceptions should not leak internal details."""
-        from rail_django.generators.mutations_utils import sanitize_error_message
+        from rail_django.generators.mutations.utils import sanitize_error_message
 
         # Simulate internal error with sensitive info
         error = Exception(
@@ -92,7 +92,7 @@ class TestErrorMessageSanitization:
 
     def test_database_error_sanitized(self):
         """Database errors should be sanitized."""
-        from rail_django.generators.mutations_utils import sanitize_error_message
+        from rail_django.generators.mutations.utils import sanitize_error_message
 
         error = Exception(
             "FATAL: password authentication failed for user 'admin'"
@@ -109,7 +109,7 @@ class TestTenantIsolation:
 
     def test_tenant_access_error_attributes(self):
         """TenantAccessError should have proper attributes."""
-        from rail_django.generators.mutations_exceptions import TenantAccessError
+        from rail_django.generators.mutations.exceptions import TenantAccessError
 
         error = TenantAccessError(model_name="Document", operation="update")
         assert error.model_name == "Document"
@@ -124,7 +124,7 @@ class TestMutationBaseMixins:
 
     def test_tenant_mixin_apply_tenant_scope_with_no_extension(self):
         """_apply_tenant_scope should return unmodified queryset if extension not available."""
-        from rail_django.generators.mutations_base import TenantMixin
+        from rail_django.generators.mutations.base import TenantMixin
 
         class TestClass(TenantMixin):
             schema_name = "default"
@@ -141,7 +141,7 @@ class TestMutationBaseMixins:
 
     def test_permission_mixin_has_operation_guard(self):
         """_has_operation_guard should check for guards correctly."""
-        from rail_django.generators.mutations_base import PermissionMixin
+        from rail_django.generators.mutations.base import PermissionMixin
 
         class TestClass(PermissionMixin):
             pass
@@ -172,7 +172,7 @@ class TestMutationBaseMixins:
 
     def test_permission_mixin_build_model_permission_name(self):
         """_build_model_permission_name should build correct permission string."""
-        from rail_django.generators.mutations_base import PermissionMixin
+        from rail_django.generators.mutations.base import PermissionMixin
 
         class TestClass(PermissionMixin):
             pass
@@ -198,7 +198,7 @@ class TestInvalidIdFormatHandling:
 
     def test_invalid_id_format_error(self):
         """InvalidIdFormatError should contain field and value info."""
-        from rail_django.generators.mutations_exceptions import InvalidIdFormatError
+        from rail_django.generators.mutations.exceptions import InvalidIdFormatError
 
         error = InvalidIdFormatError(field_name="author_id", value="not-a-valid-id")
         assert error.field == "author_id"
@@ -208,7 +208,7 @@ class TestInvalidIdFormatHandling:
 
     def test_related_object_not_found_error(self):
         """RelatedObjectNotFoundError should contain model and pk info."""
-        from rail_django.generators.mutations_exceptions import RelatedObjectNotFoundError
+        from rail_django.generators.mutations.exceptions import RelatedObjectNotFoundError
 
         error = RelatedObjectNotFoundError(
             model_name="Author",
@@ -228,7 +228,7 @@ class TestCircularReferenceHandling:
 
     def test_circular_reference_error(self):
         """CircularReferenceError should contain model and path info."""
-        from rail_django.generators.mutations_exceptions import CircularReferenceError
+        from rail_django.generators.mutations.exceptions import CircularReferenceError
 
         error = CircularReferenceError(model_name="Author", path="books.author.books")
         assert error.model_name == "Author"
@@ -239,7 +239,7 @@ class TestCircularReferenceHandling:
 
     def test_circular_reference_error_no_path(self):
         """CircularReferenceError should work without path."""
-        from rail_django.generators.mutations_exceptions import CircularReferenceError
+        from rail_django.generators.mutations.exceptions import CircularReferenceError
 
         error = CircularReferenceError(model_name="Author")
         assert error.model_name == "Author"

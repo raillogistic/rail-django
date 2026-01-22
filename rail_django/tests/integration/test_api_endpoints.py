@@ -31,10 +31,23 @@ from rail_django.middleware import GraphQLPerformanceMiddleware
 
 # Configuration de test pour les endpoints
 TEST_GRAPHQL_SETTINGS = {
+    "MIDDLEWARE": [
+        "django.middleware.security.SecurityMiddleware",
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        "corsheaders.middleware.CorsMiddleware",
+        "django.middleware.common.CommonMiddleware",
+        "django.middleware.csrf.CsrfViewMiddleware",
+        "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "django.contrib.messages.middleware.MessageMiddleware",
+        "django.middleware.clickjacking.XFrameOptionsMiddleware",
+        "rail_django.middleware.performance.GraphQLPerformanceMiddleware",
+        "rail_django.middleware.auth.GraphQLRateLimitMiddleware",
+    ],
     "GRAPHENE": {
         "SCHEMA": "tests.test_integration.test_api_endpoints.test_schema",
         "MIDDLEWARE": [
             "rail_django.middleware.GraphQLPerformanceMiddleware",
+            "rail_django.middleware.auth.GraphQLRateLimitMiddleware",
         ],
     },
     "RAIL_DJANGO_GRAPHQL": {
@@ -386,7 +399,6 @@ class TestAPIEndpointsIntegration(TestCase):
             # Erreurs GraphQL directes
             self.assertGreater(len(response_data["errors"]), 0)
 
-    @unittest.skip("Rate limiting requires specific cache setup")
     def test_rate_limiting_endpoint(self):
         """Test la limitation de taux sur l'endpoint."""
         query = {

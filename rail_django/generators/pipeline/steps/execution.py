@@ -41,7 +41,7 @@ class CreateExecutionStep(OperationFilteredStep):
         Returns:
             Context with result populated
         """
-        from ...mutations_methods import _wrap_with_audit
+        from ...mutations.methods import _wrap_with_audit
 
         def _perform_create(info, payload):
             if self.nested_handler:
@@ -94,7 +94,7 @@ class UpdateExecutionStep(OperationFilteredStep):
             ctx.add_error("Instance not found for update")
             return ctx
 
-        from ...mutations_methods import _wrap_with_audit
+        from ...mutations.methods import _wrap_with_audit
 
         def _perform_update(info, target, payload):
             if self.nested_handler:
@@ -142,7 +142,7 @@ class DeleteExecutionStep(OperationFilteredStep):
             ctx.add_error("Instance not found for delete")
             return ctx
 
-        from ...mutations_methods import _wrap_with_audit
+        from ...mutations.methods import _wrap_with_audit
 
         def _perform_delete(info, target):
             target_pk = target.pk

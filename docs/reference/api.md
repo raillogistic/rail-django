@@ -11,7 +11,7 @@ Registers a schema module or class manually.
 ```python
 from rail_django.core.registry import register_schema
 
-register_schema(schema_instance, schema_name="default")
+register_schema(name="default", description="My API")
 ```
 
 ### `rail_django.core.registry.register_mutation`
@@ -21,7 +21,7 @@ Registers a custom mutation class to the root Mutation.
 ```python
 from rail_django.core.registry import register_mutation
 
-register_mutation(MyMutation, schema_name="default")
+register_mutation(MyMutation, name="custom_mutation", schema_name="default")
 ```
 
 ## Security
@@ -53,3 +53,9 @@ def resolve_mutation(root, info, input): ...
 ### `rail_django.utils.get_model_graphql_meta`
 
 Retrieves the `GraphQLMeta` instance for a given model.
+
+```python
+from rail_django.utils import get_model_graphql_meta
+
+meta = get_model_graphql_meta(MyModel)
+```

@@ -244,7 +244,7 @@ class TestQueryGeneratorUseSingleton:
 
     def test_queries_list_uses_singleton(self):
         """queries_list._get_nested_filter_generator should use singleton."""
-        from rail_django.generators.queries_list import (
+        from rail_django.generators.queries.list import (
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )
@@ -266,7 +266,7 @@ class TestQueryGeneratorUseSingleton:
 
     def test_queries_pagination_uses_singleton(self):
         """queries_pagination._get_nested_filter_generator should use singleton."""
-        from rail_django.generators.queries_pagination import (
+        from rail_django.generators.queries.pagination import (
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )
@@ -288,7 +288,7 @@ class TestQueryGeneratorUseSingleton:
 
     def test_queries_grouping_uses_singleton(self):
         """queries_grouping._get_nested_filter_generator should use singleton."""
-        from rail_django.generators.queries_grouping import (
+        from rail_django.generators.queries.grouping import (
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )

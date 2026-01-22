@@ -72,7 +72,7 @@ class QueryBuilderMixin:
         alias = _GRAPHQL_NAME_INVALID_RE.sub("", alias).strip("_").lower()
         if not alias:
             return None
-        return to_camel_case(f"all_{alias}")
+        return to_camel_case(alias)
 
     def _generate_query_fields(self, models_list: list[type[models.Model]]) -> None:
         """
@@ -89,7 +89,7 @@ class QueryBuilderMixin:
         }
 
         for model in models_list:
-            model_name = to_camel_case(to_snake_case(model.__name__))
+            model_name = to_camel_case(model.__name__)
             plural_name = self._pluralize_name(model_name)
 
             # Get model managers using introspector

@@ -5,34 +5,18 @@ Module: `rail_django.extensions.metadata`
 - Exposes model metadata for frontends (forms, tables).
 - Enable with `schema_settings.show_metadata = True`.
 - Metadata is private and requires an authenticated user.
-- Cache policy lives under `RAIL_DJANGO_GRAPHQL["METADATA"]` in
-  [reference/configuration](../reference/configuration.md).
 
 ## Filter Metadata
 
-The metadata extension exposes filter information that reflects the configured filter style:
+The metadata extension exposes filter information that reflects the standard nested filter style used in Rail Django.
 
-### Filter Styles
+### Filter Style
 
-Rail Django supports two filter input styles:
+Rail Django uses a type-safe nested filter style (Prisma/Hasura style):
 
 | Style | Argument | Type Pattern | Example |
 |-------|----------|--------------|---------|
-| Nested (default) | `where` | `{Model}WhereInput` | `where: { name: { icontains: "x" } }` |
-| Flat (legacy/relay) | `filters` | `{Model}ComplexFilter` | `filters: { name__icontains: "x" }` |
-
-Configure in settings:
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "query_settings": {
-        # "nested" (default) or "flat"
-        "filter_input_style": "nested",
-        # Or enable both styles
-        "enable_dual_filter_styles": True,
-    }
-}
-```
+| Nested | `where` | `{Model}WhereInput` | `where: { name: { icontains: "x" } }` |
 
 ### Nested Filter Operators
 

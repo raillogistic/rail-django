@@ -11,7 +11,7 @@ from typing import Any, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     import graphene
     from django.db import models
-    from ..mutations_errors import MutationError
+    from ..mutations.errors import MutationError
 
 
 @dataclass
@@ -76,7 +76,7 @@ class MutationContext:
             message: Error message
             field_name: Optional field name the error relates to
         """
-        from ..mutations_errors import MutationError
+        from ..mutations.errors import MutationError
 
         self.errors.append(MutationError(field=field_name, message=message))
         self.should_abort = True
@@ -100,7 +100,7 @@ class MutationContext:
             message: Warning message
             field_name: Optional field name the warning relates to
         """
-        from ..mutations_errors import MutationError
+        from ..mutations.errors import MutationError
 
         self.errors.append(MutationError(field=field_name, message=message))
         # Note: Does NOT set should_abort

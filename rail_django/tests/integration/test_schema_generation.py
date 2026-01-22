@@ -163,7 +163,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête pour récupérer les entreprises
         query = """
         query {
-            allCompanies {
+            companies {
                 nomEntreprise
                 secteurActivite
                 nombreEmployes
@@ -179,14 +179,14 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
-        self.assertIn("allCompanies", result["data"])
-        companies = result["data"]["allCompanies"]
+        self.assertIn("companies", result["data"])
+        companies = result["data"]["companies"]
         self.assertTrue(
             all(item["secteurActivite"] == "Technology" for item in companies)
         )
 
         # Vérifier les données retournées
-        companies = result["data"]["allCompanies"]
+        companies = result["data"]["companies"]
         self.assertEqual(len(companies), 1)
         self.assertEqual(companies[0]["nomEntreprise"], "Test Company")
         self.assertEqual(companies[0]["secteurActivite"], "Technology")
@@ -281,7 +281,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête avec relations
         query = """
         query {
-            allEmployees {
+            employees {
                 utilisateurEmploye {
                     username
                     email
@@ -301,10 +301,10 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
-        self.assertIn("allEmployees", result["data"])
+        self.assertIn("employees", result["data"])
 
         # Vérifier les relations
-        employees = result["data"]["allEmployees"]
+        employees = result["data"]["employees"]
         if employees:
             employee_data = employees[0]
             self.assertIn("utilisateurEmploye", employee_data)
@@ -382,7 +382,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête avec filtres
         query = """
         query {
-            allCompanies(
+            companies(
                 secteur_activite: "Technology"
                 est_active: true
                 limit: 3
@@ -399,7 +399,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Vérifier que la requête fonctionne
         self.assertIn("data", result)
-        self.assertIn("allCompanies", result["data"])
+        self.assertIn("companies", result["data"])
 
     def test_schema_validation(self):
         """Test la validation du schéma généré."""
@@ -462,7 +462,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         query = """
         query {
-            allCompanies(limit: 10) {
+            companies(limit: 10) {
                 nomEntreprise
                 secteurActivite
             }
@@ -547,7 +547,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 )
                 query = """
                 query {
-                    allCompanies {
+                    companies {
                         nomEntreprise
                     }
                 }

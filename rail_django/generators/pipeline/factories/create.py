@@ -11,7 +11,7 @@ from django.db import models
 
 from .base import BasePipelineMutation
 from ..builder import PipelineBuilder
-from ...mutations_errors import MutationError
+from ...mutations.errors import MutationError
 
 
 def create_mutation_factory(

@@ -39,15 +39,19 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## 3. DataLoaders
 
-For complex custom resolvers that cannot be optimized via Django ORM (e.g. calling external APIs), Rail Django provides a `DataLoader` integration.
+For complex custom resolvers that cannot be optimized via Django ORM (e.g. calling external APIs), Rail Django provides automatic `DataLoader` integration for reverse relationships and many-to-many fields when enabled.
 
+### Configuration
 ```python
-from rail_django.core.performance import get_loader
-
-def resolve_external_data(root, info):
-    loader = get_loader(info, MyCustomLoader)
-    return loader.load(root.id)
+RAIL_DJANGO_GRAPHQL = {
+    "performance_settings": {
+        "enable_dataloader": True,
+        "dataloader_batch_size": 100,
+    }
+}
 ```
+
+Dataloaders are used automatically by the framework to batch queries for related objects, effectively solving the N+1 problem for deep relationships.
 
 ## 4. Query Caching
 

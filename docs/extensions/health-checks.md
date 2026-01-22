@@ -8,6 +8,8 @@ If enabled in `urls.py`:
 
 *   `/health/live`: Returns 200 OK if the app is running.
 *   `/health/ready`: Returns 200 OK if the app is ready to accept traffic (DB is connected, etc.).
+*   `/health/check/`: Simple status check (returns 200 or 503).
+*   `/health/api/`: JSON endpoint for dashboard data.
 
 ## Setup
 

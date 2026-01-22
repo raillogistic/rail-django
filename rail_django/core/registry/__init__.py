@@ -24,6 +24,7 @@ __all__ = [
     "SchemaRegistry",
     "schema_registry",
     "register_schema",
+    "register_mutation",
     "get_schema",
     "get_schema_builder",
     "list_schemas",
@@ -39,6 +40,12 @@ schema_registry = SchemaRegistry()
 def register_schema(*args, **kwargs) -> SchemaInfo:
     """Register a schema using the global registry."""
     return schema_registry.register_schema(*args, **kwargs)
+
+
+def register_mutation(mutation_class: type, name: Optional[str] = None, schema_name: str = "default") -> None:
+    """Register a custom mutation class."""
+    from ..schema import register_mutation as schema_register_mutation
+    return schema_register_mutation(mutation_class, name, schema_name)
 
 
 def get_schema(name: str) -> Optional[SchemaInfo]:

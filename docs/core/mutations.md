@@ -6,11 +6,11 @@ Mutations in Rail Django automate the creation of Create, Update, and Delete (CU
 
 For a model `Product`, the following mutations are generated:
 
-### 1. Create (`productCreate`)
+### 1. Create (`createProduct`)
 
 ```graphql
 mutation {
-  productCreate(input: { 
+  createProduct(input: { 
     sku: "NEW-SKU-001",
     name: "Wireless Mouse",
     price: 25.00,
@@ -24,21 +24,21 @@ mutation {
 }
 ```
 
-### 2. Update (`productUpdate`)
+### 2. Update (`updateProduct`)
 
 ```graphql
 mutation {
-  productUpdate(id: "1", input: { price: 29.99 }) {
+  updateProduct(id: "1", input: { price: 29.99 }) {
     product { price }
   }
 }
 ```
 
-### 3. Delete (`productDelete`)
+### 3. Delete (`deleteProduct`)
 
 ```graphql
 mutation {
-  productDelete(id: "1") {
+  deleteProduct(id: "1") {
     success
     deletedId
   }
@@ -51,7 +51,7 @@ You can create or link related objects in a single mutation.
 
 ```graphql
 mutation {
-  customerCreate(input: {
+  createCustomer(input: {
     firstName: "John",
     lastName: "Doe",
     email: "john@example.com",
@@ -81,7 +81,7 @@ When enabled in `mutation_settings`, bulk operations are generated.
 ```graphql
 mutation {
   # Update multiple products at once
-  productBulkUpdate(inputs: [
+  bulkUpdateProduct(inputs: [
     { id: "1", input: { inventoryCount: 100 } },
     { id: "2", input: { inventoryCount: 150 } }
   ]) {

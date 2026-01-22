@@ -15,10 +15,11 @@ from rail_django.core.error_handling import ErrorHandler
 from rail_django.extensions.optimization import optimize_query
 from rail_django.generators.queries import QueryGenerator
 from rail_django.generators.types import TypeGenerator
-from rail_django.security.graphql_security import (
+from rail_django.security.graphql import (
     GraphQLSecurityAnalyzer,
     SecurityConfig,
     create_security_middleware,
+    security_analyzer,
 )
 from rail_django.testing import build_context, build_schema
 

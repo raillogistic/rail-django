@@ -97,11 +97,21 @@ You can now query your API. Notice that `created_at` automatically becomes `crea
 
 ```graphql
 query {
-  blogPostList {
+  posts {
     id
     title
     content
     createdAt
+  }
+}
+```
+
+You can also use the plural alias:
+
+```graphql
+query {
+  allPosts {
+    title
   }
 }
 ```

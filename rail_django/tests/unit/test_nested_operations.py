@@ -15,21 +15,21 @@ class TestNestedDepthLimiting:
 
     def test_check_nested_depth_under_limit(self):
         """Depth under the limit should not raise."""
-        from rail_django.generators.mutations_utils import check_nested_depth
+        from rail_django.generators.mutations.utils import check_nested_depth
 
         # Should not raise
         check_nested_depth(5, max_depth=10)
 
     def test_check_nested_depth_at_limit(self):
         """Depth at exactly the limit should not raise."""
-        from rail_django.generators.mutations_utils import check_nested_depth
+        from rail_django.generators.mutations.utils import check_nested_depth
 
         check_nested_depth(10, max_depth=10)
 
     def test_check_nested_depth_over_limit_raises(self):
         """Depth over the limit should raise NestedDepthError."""
-        from rail_django.generators.mutations_utils import check_nested_depth
-        from rail_django.generators.mutations_exceptions import NestedDepthError
+        from rail_django.generators.mutations.utils import check_nested_depth
+        from rail_django.generators.mutations.exceptions import NestedDepthError
 
         with pytest.raises(NestedDepthError) as exc_info:
             check_nested_depth(11, max_depth=10)
@@ -39,11 +39,11 @@ class TestNestedDepthLimiting:
 
     def test_check_nested_depth_default_limit(self):
         """Default depth limit should be used when not specified."""
-        from rail_django.generators.mutations_utils import (
+        from rail_django.generators.mutations.utils import (
             check_nested_depth,
             DEFAULT_MAX_NESTED_DEPTH,
         )
-        from rail_django.generators.mutations_exceptions import NestedDepthError
+        from rail_django.generators.mutations.exceptions import NestedDepthError
 
         # Should not raise for default limit
         check_nested_depth(DEFAULT_MAX_NESTED_DEPTH)

@@ -65,7 +65,7 @@ class DualFieldProcessingStep(MutationStep):
             Context with processed input_data or validation errors
         """
         from django.core.exceptions import ValidationError
-        from ...mutations_errors import build_validation_errors
+        from ...mutations.errors import build_validation_errors
 
         try:
             # Only enforce mandatory fields for create operations

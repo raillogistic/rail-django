@@ -1,5 +1,7 @@
 # Multitenancy
 
+Module: `rail_django.extensions.multitenancy`
+
 Isolate store data (Products, Orders, Customers) for different vendors or regions.
 
 ## Configuration
@@ -20,12 +22,24 @@ RAIL_DJANGO_GRAPHQL = {
 Your models should inherit from `TenantMixin` or include a ForeignKey to your tenant model.
 
 ```python
+from rail_django.extensions.multitenancy import TenantMixin
+
 class Vendor(models.Model):
     name = models.CharField(max_length=100)
 
-class Product(models.Model):
+class Product(TenantMixin):
     name = models.CharField(max_length=100)
+    # 'tenant' field is added by TenantMixin pointing to AUTH_USER_MODEL by default
+```
+
+You can also use a custom tenant field:
+
+```python
+class Order(models.Model):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE)
+
+    class GraphQLMeta:
+        tenant_field = "vendor"
 ```
 
 ## How It Works
