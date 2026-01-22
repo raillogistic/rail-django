@@ -204,7 +204,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une mutation pour créer une entreprise
         mutation = """
         mutation {
-            createTestcompany(input: {
+            createTestCompany(input: {
                 nomEntreprise: "New Company"
                 secteurActivite: "Finance"
                 adresseEntreprise: "456 Finance Ave"
@@ -232,10 +232,10 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Vérifier que la mutation fonctionne
 
         self.assertIn("data", result)
-        self.assertIn("createTestcompany", result["data"])
+        self.assertIn("createTestCompany", result["data"])
 
         # Vérifier que l'entreprise a été créée
-        creation_result = result["data"]["createTestcompany"]
+        creation_result = result["data"]["createTestCompany"]
         if creation_result:
             self.assertTrue(creation_result.get("ok", False))
             self.assertIsNotNone(creation_result.get("object"))
@@ -491,7 +491,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Tester une mutation avec des données invalides
         mutation = """
         mutation {
-            createTestcompany(input: {
+            createTestCompany(input: {
                 nomEntreprise: ""
                 secteurActivite: "Test"
                 adresseEntreprise: "Test Address"
@@ -514,7 +514,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Vérifier que les erreurs sont correctement gérées
         if not result.get("errors"):
-            creation_result = result["data"]["createTestcompany"]
+            creation_result = result["data"]["createTestCompany"]
             if creation_result:
                 self.assertFalse(creation_result.get("ok", True))
                 self.assertIsNotNone(creation_result.get("errors"))

@@ -89,7 +89,8 @@ class QueryBuilderMixin:
         }
 
         for model in models_list:
-            model_name = to_camel_case(model.__name__)
+            # Ensure model_name starts with lowercase (camelCase)
+            model_name = to_camel_case(to_snake_case(model.__name__))
             plural_name = self._pluralize_name(model_name)
 
             # Get model managers using introspector
@@ -124,29 +125,32 @@ class QueryBuilderMixin:
                     # Default manager keeps standard naming
                     # Single and list queries are not exposed for history managers
                     if not is_history_manager:
-                        # Single object query
+                        # Single object query: e.g. 'order'
                         single_query = self.query_generator.generate_single_query(
                             model, manager_name
                         )
                         self._query_fields[model_name] = single_query
 
-                        # List query
+                        # List query: e.g. 'orders'
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
                         self._query_fields[plural_name] = list_query
+                        
+                        # Custom alias from verbose_name_plural
                         alias_name = self._get_list_alias(model)
                         if alias_name and alias_name not in self._query_fields:
                             self._query_fields[alias_name] = list_query
 
+                        # Grouping query: e.g. 'orderGroups'
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
-                        self._query_fields[to_camel_case(f"{plural_name}_groups")] = (
+                        self._query_fields[to_camel_case(f"{model_name}_groups")] = (
                             grouping_query
                         )
 
-                    # Paginated query
+                    # Paginated query: e.g. 'orderPages'
                     if self.settings.enable_pagination:
                         paginated_query = self.query_generator.generate_paginated_query(
                             model,
@@ -156,12 +160,12 @@ class QueryBuilderMixin:
                                 "history" if is_history_manager else "paginated"
                             ),
                         )
-                        self._query_fields[to_camel_case(f"{plural_name}_pages")] = (
+                        self._query_fields[to_camel_case(f"{model_name}_pages")] = (
                             paginated_query
                         )
                 else:
                     # Custom managers use new naming convention
-                    # Single object query: modelname__custommanager
+                    # Single object query: modelnameCustommanager
                     if not is_history_manager:
                         single_query = self.query_generator.generate_single_query(
                             model, manager_name
@@ -170,21 +174,22 @@ class QueryBuilderMixin:
                             to_camel_case(f"{model_name}_{manager_name}")
                         ] = single_query
 
-                        # List query: modelname__custommanager (plural form)
+                        # List query: pluralModelnameCustommanager
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
                         self._query_fields[
                             to_camel_case(f"{plural_name}_{manager_name}")
                         ] = list_query
+                        
                         grouping_query = self.query_generator.generate_grouping_query(
                             model, manager_name
                         )
                         self._query_fields[
-                            to_camel_case(f"{plural_name}_groups_{manager_name}")
+                            to_camel_case(f"{model_name}_groups_{manager_name}")
                         ] = grouping_query
 
-                    # Paginated query: modelname_pages_custommanager
+                    # Paginated query: modelnamePagesCustommanager
                     if self.settings.enable_pagination:
                         paginated_query = self.query_generator.generate_paginated_query(
                             model,
@@ -195,7 +200,7 @@ class QueryBuilderMixin:
                             ),
                         )
                         self._query_fields[
-                            to_camel_case(f"{plural_name}_pages_{manager_name}")
+                            to_camel_case(f"{model_name}_pages_{manager_name}")
                         ] = paginated_query
 
     def _generate_mutation_fields(self, models_list: list[type[models.Model]]) -> None:

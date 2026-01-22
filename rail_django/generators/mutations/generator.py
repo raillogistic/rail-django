@@ -392,8 +392,9 @@ class MutationGenerator:
         """
         Generates all mutations for a model, including CRUD operations and method mutations.
         """
+        from graphene.utils.str_converters import to_snake_case
         mutations = {}
-        model_name = model.__name__.lower()
+        model_name = to_snake_case(model.__name__)
         # Generate CRUD mutations if enabled
         if self.settings.enable_create:
             mutation_class = self.generate_create_mutation(model)
