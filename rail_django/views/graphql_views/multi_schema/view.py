@@ -82,6 +82,8 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
                         return JsonResponse({"errors": [{"message": "Invalid JSON in request body"}]}, status=400)
                     persisted_response = self._apply_persisted_query(request, schema_name)
                     if persisted_response is not None: return persisted_response
+                elif content_type == "application/graphql":
+                    request_is_batch = False
 
             schema_info = self._get_schema_info(schema_name)
             if not schema_info: return self._schema_not_found_response(schema_name)
@@ -113,7 +115,7 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
         except Exception as e:
             if "Invalid boundary" in str(e):
                 return JsonResponse({"errors": [{"message": "Invalid multipart boundary"}]}, status=400)
-            logger.error(f"Error handling request for schema '{schema_name}': {e}")
+            logger.exception(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
 
     def execute_graphql_request(self, request, data, query, variables, operation_name, show_graphiql=False):

@@ -118,7 +118,7 @@ class HealthCheckerTestCase(TestCase):
         failing_conn.cursor.side_effect = Exception("Database connection failed")
 
         with patch(
-            "rail_django.extensions.health.connections",
+            "rail_django.extensions.health.checker.connections",
             {"default": failing_conn},
         ):
             result = self.health_checker.check_database_health()

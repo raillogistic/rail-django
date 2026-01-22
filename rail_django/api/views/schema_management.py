@@ -36,6 +36,8 @@ class SchemaManagementAPIView(BaseAPIView):
                 schema_registry.clear()
                 return self.json_response({'message': 'All schemas cleared successfully'})
             return self.error_response(f'Unknown action: {action}', status=400)
+        except ValueError as e:
+            return self.error_response(str(e), status=400)
         except Exception as e:
             logger.exception(f'Failed to execute management action: {e}')
             return self.error_response('Failed to execute action', status=500)

@@ -285,6 +285,10 @@ class SchemaRegistry:
         from .builders import get_schema_builder
         return get_schema_builder(self, name)
 
+    def get_cached_schema_builder(self, name: str) -> Optional[Any]:
+        """Get cached schema builder if it exists, otherwise return None."""
+        return self._schema_builders.get(name)
+
     def get_schema_instance(self, name: str):
         from .builders import get_schema_instance
         return get_schema_instance(self, name)

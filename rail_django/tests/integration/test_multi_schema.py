@@ -167,16 +167,18 @@ class TestGraphiQLAccess(TestCase):
     """Tests d'integration pour l'acces GraphiQL."""
 
     def _graphiql_schema_info(self):
-        schema_info = Mock()
-        schema_info.name = "graphiql"
-        schema_info.enabled = True
-        schema_info.settings = {
-            "schema_settings": {
+        return SchemaInfo(
+            name="graphiql",
+            enabled=True,
+            settings={
                 "graphiql_allowed_hosts": ["localhost"],
                 "graphiql_superuser_only": True,
+                "schema_settings": {
+                    "graphiql_allowed_hosts": ["localhost"],
+                    "graphiql_superuser_only": True,
+                }
             }
-        }
-        return schema_info
+        )
 
     @patch("rail_django.core.registry.schema_registry")
     def test_graphiql_denied_for_non_localhost(self, mock_registry):
@@ -214,10 +216,7 @@ class TestGraphiQLAccess(TestCase):
     @patch("rail_django.core.registry.schema_registry")
     def test_schema_list_hides_graphiql_when_not_authorized(self, mock_registry):
         schema_info = self._graphiql_schema_info()
-        gql_schema = Mock()
-        gql_schema.name = "gql"
-        gql_schema.enabled = True
-        gql_schema.settings = {}
+        gql_schema = SchemaInfo(name="gql", enabled=True, settings={})
         mock_registry.discover_schemas.return_value = None
         mock_registry.list_schemas.return_value = [gql_schema, schema_info]
 
@@ -236,10 +235,7 @@ class TestGraphiQLAccess(TestCase):
     @patch("rail_django.core.registry.schema_registry")
     def test_schema_list_shows_graphiql_for_superuser_localhost(self, mock_registry):
         schema_info = self._graphiql_schema_info()
-        gql_schema = Mock()
-        gql_schema.name = "gql"
-        gql_schema.enabled = True
-        gql_schema.settings = {}
+        gql_schema = SchemaInfo(name="gql", enabled=True, settings={})
         mock_registry.discover_schemas.return_value = None
         mock_registry.list_schemas.return_value = [gql_schema, schema_info]
 
@@ -292,6 +288,7 @@ class TestMultiSchemaURLIntegration(TestCase):
         with patch(
             "rail_django.views.graphql_views.MultiSchemaGraphQLView.dispatch"
         ) as mock_dispatch:
+            mock_dispatch.__annotations__ = {}
             mock_dispatch.return_value = JsonResponse({"data": {"test": "success"}})
 
             response = self.client.get("/graphql/url_test_schema/")

@@ -13,6 +13,7 @@ from .utils import (
     _get_authenticated_user,
     _get_effective_schema_settings,
     _host_allowed,
+    _get_request_host,
 )
 
 logger = logging.getLogger(__name__)

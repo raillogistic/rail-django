@@ -3,9 +3,12 @@ Helper functions for GraphQL views.
 """
 
 from typing import Any, Optional
+import logging
 
 from django.conf import settings
 from django.http import HttpRequest
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_host(host: str) -> str:
