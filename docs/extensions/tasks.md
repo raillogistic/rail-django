@@ -1,110 +1,70 @@
-# Tasks Extension
+# Background Tasks
 
-Module: `rail_django.extensions.tasks`
+Offload heavy store operations like inventory synchronization or bulk email sending to background workers.
 
-- Run long-running mutations asynchronously.
-- Track status, progress, result, and errors in `TaskExecution`.
-- Query task status via GraphQL or REST.
-- Optional `taskUpdated` subscriptions when `channels-graphql-ws` is installed.
+## Usage
 
-## Enable
+### 1. Define a Task Mutation
 
 ```python
-RAIL_DJANGO_GRAPHQL = {
-    "task_settings": {
-        "enabled": True,
-        "backend": "thread",  # thread, sync, celery, dramatiq, django_q
-        "default_queue": "default",
-        "result_ttl_seconds": 86400,
-        "max_retries": 3,
-        "retry_backoff": True,
-        "track_in_database": True,
-        "emit_subscriptions": True,
-    }
-}
-```
-
-Use `backend = "sync"` to run tasks inline during tests.
-
-## Define a task mutation
-
-```python
-import graphene
+# store/tasks.py
 from rail_django.extensions.tasks import task_mutation
 
-@task_mutation(name="generate_report", track_progress=True)
-def generate_report(root, info, dataset_id: str):
-    info.context.task.update_progress(25)
-    # long-running work here
-    return {"ok": True, "dataset_id": dataset_id}
-
-
-class TaskMutations(graphene.ObjectType):
-    generate_report = generate_report
-
-
-RAIL_DJANGO_GRAPHQL = {
-    "schema_settings": {
-        "mutation_extensions": ["myapp.graphql.TaskMutations"],
-    },
-    "task_settings": {
-        "enabled": True,
-    },
-}
+@task_mutation(name="syncInventory", track_progress=True)
+def sync_inventory_task(info, provider: str):
+    task = info.context.task
+    
+    task.update_progress(10)
+    # Fetch from external API
+    products = external_api.get_stock(provider)
+    
+    task.update_progress(50)
+    # Update local database
+    for p in products:
+        Product.objects.filter(sku=p.sku).update(inventory_count=p.stock)
+        
+    task.update_progress(100)
+    return {"updated": len(products)}
 ```
 
-## GraphQL API
+### 2. Register and Call
 
-GraphQL fields are snake_case by default. If `auto_camelcase` is enabled,
-use camelCase versions like `taskId` and `taskUpdated`.
+```python
+register_mutation(sync_inventory_task)
+```
 
 ```graphql
 mutation {
-  generate_report(dataset_id: "123") {
+  syncInventory(provider: "AMAZON") {
     taskId
     status
   }
 }
-
-query {
-  task(id: "abc-123") {
-    id
-    status
-    progress
-    result
-    error
-    created_at
-    completed_at
-  }
-}
 ```
 
-## Subscriptions
+## Tracking Progress
+
+Use GraphQL Subscriptions to show real-time progress in your frontend.
 
 ```graphql
 subscription {
-  taskUpdated(taskId: "abc-123") {
-    status
+  taskUpdated(taskId: "...") {
     progress
+    status
     result
-    error
   }
 }
 ```
 
-`taskUpdated` uses the same Channels stack as model subscriptions and requires
-`channels-graphql-ws`.
+## Backends
 
-## REST polling
+Configure your preferred worker in `settings.py`:
 
-`GET /api/v1/tasks/<uuid>/` returns status for a task.
-
-## Dependencies
-
-Optional backends:
-
-- `celery`
-- `dramatiq`
-- `django-q`
-
-Subscriptions require `channels-graphql-ws`.
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "task_settings": {
+        "backend": "celery", # or 'thread', 'dramatiq'
+        "default_queue": "store_tasks"
+    }
+}
+```

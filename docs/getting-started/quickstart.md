@@ -1,51 +1,112 @@
-# Quick Start
+# Quickstart Guide
 
-Use these steps to get Rail Django running locally.
+This tutorial will guide you through creating a new Rail Django project, defining a model, and querying it via GraphQL.
 
-## Install the package
+## 1. Create a Project
+
+Rail Django includes a CLI tool `rail-admin` (similar to `django-admin`) that scaffolds a project with optimal defaults and directory structure.
 
 ```bash
-pip install rail-django
+rail-admin startproject my_api
+cd my_api
 ```
 
-## Add apps to `INSTALLED_APPS`
+This creates a project structure like this:
+
+```text
+my_api/
+├── manage.py
+├── my_api/
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+└── apps/
+    └── __init__.py
+```
+
+## 2. Setup Database
+
+Initialize the database and create a superuser for accessing the Django Admin.
+
+```bash
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+## 3. Create an App
+
+Create a new app inside the `apps/` directory.
+
+```bash
+python manage.py startapp blog apps/blog
+```
+
+Add the app to `INSTALLED_APPS` in `my_api/settings.py`:
 
 ```python
 INSTALLED_APPS = [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    "graphene_django",
-    "django_filters",
-    "corsheaders",
+    # ...
     "rail_django",
+    "apps.blog",
 ]
 ```
 
-## Add the library URLs
+## 4. Define a Model
+
+Edit `apps/blog/models.py` to define a simple `Post` model.
 
 ```python
-from django.urls import include, path
+from django.db import models
 
-urlpatterns = [
-    path("", include("rail_django.urls")),
-]
+class Post(models.Model):
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    is_published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Rail Django uses this to enable GraphQL features
+        app_label = "blog" 
 ```
 
-## Configure `RAIL_DJANGO_GRAPHQL`
+Now, make migrations and migrate:
 
-See [configuration](../reference/configuration.md) for the full settings map.
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
 
-## Run the server
+## 5. Enable GraphQL
 
-The GraphQL endpoints are:
+Rail Django automatically discovers models, but explicit registration provides more control. Create a `schema.py` in your app `apps/blog/schema.py` (optional for simple cases if using auto-discovery, but recommended).
 
-- `http://localhost:8000/graphql/` (default schema)
-- `http://localhost:8000/graphql/<schema_name>/` (multi-schema)
+For now, Rail Django's auto-discovery will likely pick it up if you haven't customized the registry.
 
-GraphiQL is served on the same endpoint when `schema_settings.enable_graphiql`
-is enabled. If you register a dedicated `graphiql` schema, it will be available
-at `http://localhost:8000/graphql/graphiql/`.
+## 6. Run the Server
+
+```bash
+python manage.py runserver
+```
+
+Open your browser to `http://127.0.0.1:8000/graphql`.
+
+## 7. Query Your Data
+
+You can now query your API. Notice that `created_at` automatically becomes `createdAt` (camelCase).
+
+```graphql
+query {
+  blogPostList {
+    id
+    title
+    content
+    createdAt
+  }
+}
+```
+
+## Next Steps
+
+*   Learn about **[Configuration](../core/configuration.md)** to tweak settings.
+*   Explore **[Models & Schema](../core/models-and-schema.md)** to see how to customize fields.

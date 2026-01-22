@@ -1,51 +1,55 @@
 # Rail Django Documentation
 
-Rail Django is a GraphQL framework built on Django and Graphene. This index
-organizes the documentation for API consumers and integrators.
+Welcome to the official documentation for **Rail Django**, a production-ready GraphQL framework for Django.
 
-## Supported versions
+Rail Django wraps [Graphene-Django](https://docs.graphene-python.org/projects/django/en/latest/) to provide a battery-included experience with automatic schema generation, enhanced security, and enterprise-grade features.
 
-- Python 3.11+
-- Django 4.2+
-- Graphene 3.3+
-- graphene-django 3.1.5+
+## 📚 Table of Contents
 
-## Getting started
+### Getting Started
+*   [**Installation**](getting-started/installation.md): Set up Rail Django in your environment.
+*   [**Quickstart**](getting-started/quickstart.md): Build your first API in under 5 minutes.
+*   [**Architecture**](getting-started/architecture.md): Understand how Rail Django works under the hood.
 
-- [Quick start](getting-started/quickstart.md)
-- [CLI and management commands](getting-started/cli.md)
-- [Migration notes](getting-started/migration.md)
+### Core Concepts
+*   [**Models & Schema**](core/models-and-schema.md): How Django models map to GraphQL types.
+*   [**Queries**](core/queries.md): Fetching data.
+*   [**Filtering**](core/filtering.md): Deep dive into the `where` argument, operators, and searching.
+*   [**Mutations**](core/mutations.md): Creating, updating, and deleting data.
+*   [**Configuration**](core/configuration.md): Global settings and project configuration.
+*   [**Performance**](core/performance.md): Optimization, caching, and N+1 prevention.
 
-## Guides
+### Security
+*   [**Authentication**](security/authentication.md): Identity verification strategies.
+*   [**Permissions (RBAC)**](security/permissions.md): Role-based and field-level access control.
+*   [**Validation**](security/validation.md): Input validation and data integrity.
 
-- [GraphQL API](guides/graphql.md)
-- [REST API and health endpoints](guides/rest-api.md)
-- [Subscriptions](guides/subscriptions.md)
-- [Webhooks](guides/webhooks.md)
-- [Reporting and BI](guides/reporting.md)
+### Extensions
+*   [**Audit Logging**](extensions/audit-logging.md): Track who did what and when.
+*   [**Webhooks**](extensions/webhooks.md): Event-driven architecture and webhooks.
+*   [**Exporting**](extensions/exporting.md): Data export capabilities (Excel, CSV).
+*   [**Templating**](extensions/templating.md): PDF and Excel generation.
+*   [**Tasks**](extensions/tasks.md): Background task management.
+*   [**Subscriptions**](extensions/subscriptions.md): Real-time events.
+*   [**Multitenancy**](extensions/multitenancy.md): SaaS-ready data isolation.
+*   [**Health Checks**](extensions/health-checks.md): System health monitoring.
+*   [**Observability**](extensions/observability.md): Tracing and metrics with OpenTelemetry/Sentry.
 
-## Extensions
+### Operations
+*   [**Deployment Guide**](operations/deployment.md): Production best practices.
 
-- [Extensions index](extensions/index.md)
+### Reference
+*   [**API Reference**](reference/api.md): Public API documentation.
+*   [**CLI Reference**](reference/cli.md): `rail-admin` command usage.
+*   [**GraphQLMeta**](reference/meta.md): The comprehensive guide to `class GraphQLMeta`.
 
-## Reference
+## 🚀 Key Features
 
-- [Configuration](reference/configuration.md)
-- [GraphQLMeta](reference/meta.md)
-- [Security](reference/security.md)
+*   **Auto-CamelCase**: Automatic conversion of snake_case Python fields to camelCase GraphQL fields.
+*   **Performance**: Automatic `select_related` and `prefetch_related` optimization to prevent N+1 queries.
+*   **Security**: Built-in Rate Limiting, Query Depth Analysis, and Field-Level Permissions.
+*   **Developer Experience**: Custom CLI for project scaffolding and clean architecture.
 
-## Operations
+## 🤝 Contributing
 
-- [Operations index](operations/index.md)
-
-## Contributing
-
-- [Architecture](contributing/architecture.md)
-- [Modules](contributing/modules.md)
-- [Testing](contributing/testing.md)
-
-## Conventions
-
-- Default GraphQL field names are camelCase (`auto_camelcase = True`).
-- If you disable `auto_camelcase`, field names are exposed in snake_case.
-- Multi-schema endpoints live at `/graphql/<schema_name>/`.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/raillogistic/rail-django/blob/main/CONTRIBUTING.md) for details.
