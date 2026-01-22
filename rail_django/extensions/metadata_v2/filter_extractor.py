@@ -20,7 +20,7 @@ class FilterExtractorMixin:
         """Extract all available filters for a model."""
         filters = []
         try:
-            from ...generators.filter_inputs import get_nested_filter_generator
+            from ...generators.filters import get_nested_filter_generator
             generator = get_nested_filter_generator(self.schema_name)
             where_input_type = generator.generate_where_input(model)
 
@@ -39,7 +39,7 @@ class FilterExtractorMixin:
     ) -> Optional[dict]:
         """Extract metadata for a specific filter field."""
         try:
-            from ...generators.filter_inputs import get_nested_filter_generator
+            from ...generators.filters import get_nested_filter_generator
             from graphene.utils.str_converters import to_camel_case
 
             generator = get_nested_filter_generator(self.schema_name)

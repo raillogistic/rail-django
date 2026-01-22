@@ -80,7 +80,7 @@ from .templating import (
 )
 
 # Excel export templating helpers
-from .excel_export import (
+from .excel import (
     ExcelTemplateView,
     ExcelTemplateCatalogView,
     model_excel_template,

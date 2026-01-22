@@ -227,7 +227,7 @@ class TableFilterExtractionMixin:
             List of grouped filter metadata dictionaries.
         """
         try:
-            from ....generators.filter_inputs import AdvancedFilterGenerator
+            from ....generators.filters import AdvancedFilterGenerator
 
             filter_generator = AdvancedFilterGenerator(
                 enable_nested_filters=True, schema_name=self.schema_name

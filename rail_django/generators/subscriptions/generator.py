@@ -12,7 +12,7 @@ from graphql import GraphQLError
 from ...core.meta import get_model_graphql_meta
 from ...core.settings import SchemaSettings, SubscriptionGeneratorSettings
 from ...subscriptions.registry import register_subscription
-from ..filter_inputs import AdvancedFilterGenerator, NestedFilterInputGenerator, NestedFilterApplicator
+from ..filters import AdvancedFilterGenerator, NestedFilterInputGenerator, NestedFilterApplicator
 from ..types import TypeGenerator
 
 from .utils import (

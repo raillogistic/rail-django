@@ -46,7 +46,7 @@ class ModelMetadataExtractor(
             List of grouped filter field metadata dictionaries.
         """
         try:
-            from ....generators.filter_inputs import EnhancedFilterGenerator
+            from ....generators.filters import EnhancedFilterGenerator
             from ....utils.graphql_meta import get_model_graphql_meta
 
             max_depth = self.max_depth

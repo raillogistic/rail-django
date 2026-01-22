@@ -31,7 +31,7 @@ from .formatters import FieldFormatter
 
 # Import GraphQL filter generator
 try:
-    from ....generators.filter_inputs import NestedFilterApplicator
+    from ....generators.filters import NestedFilterApplicator
 except ImportError:
     NestedFilterApplicator = None
 
@@ -128,7 +128,7 @@ class ModelExporterBase:
         self.nested_filter_applicator = None
         if NestedFilterApplicator:
             try:
-                from ....generators.filter_inputs import get_nested_filter_applicator
+                from ....generators.filters import get_nested_filter_applicator
                 self.nested_filter_applicator = get_nested_filter_applicator(
                     self.schema_name
                 )

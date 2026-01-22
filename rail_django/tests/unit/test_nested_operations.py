@@ -58,7 +58,7 @@ class TestNestedOperationHandler:
 
     def test_reset_state_clears_tracking(self):
         """_reset_state should clear all tracking collections."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
         handler._processed_objects.add("test1")
@@ -74,7 +74,7 @@ class TestNestedOperationHandler:
 
     def test_max_depth_from_settings(self):
         """max_depth should be read from mutation settings."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         mock_settings = MagicMock()
         mock_settings.max_nested_depth = 15
@@ -84,7 +84,7 @@ class TestNestedOperationHandler:
 
     def test_max_depth_default(self):
         """max_depth should default to 10."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
         assert handler.max_depth == 10
@@ -95,7 +95,7 @@ class TestCircularReferenceDetection:
 
     def test_has_circular_reference_simple_case(self):
         """Should detect simple circular references."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -117,7 +117,7 @@ class TestCircularReferenceDetection:
 
     def test_has_circular_reference_no_cycle(self):
         """Should not detect circular reference when there is none."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -149,7 +149,7 @@ class TestReverseRelationsProcessing:
 
     def test_get_reverse_relations_single_iteration(self):
         """_get_reverse_relations should not produce duplicates."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -176,7 +176,7 @@ class TestReverseRelationsProcessing:
 
     def test_get_reverse_relations_excludes_hidden(self):
         """_get_reverse_relations should exclude hidden relations."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -197,7 +197,7 @@ class TestNestedFieldProcessing:
 
     def test_process_nested_fields_extracts_prefix(self):
         """_process_nested_fields should extract nested_ prefixed fields."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -217,7 +217,7 @@ class TestNestedFieldProcessing:
 
     def test_process_nested_fields_prioritizes_nested(self):
         """nested_ prefixed fields should take priority."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -237,7 +237,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_with_create(self):
         """Should detect 'create' key as nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -246,7 +246,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_with_update(self):
         """Should detect 'update' key as nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -255,7 +255,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_with_connect_only(self):
         """connect/disconnect/set only should not be nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -270,7 +270,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_with_set_dicts(self):
         """set with dict objects should be nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -279,7 +279,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_list_with_dicts(self):
         """List containing dicts should be nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
@@ -288,7 +288,7 @@ class TestHasNestedPayload:
 
     def test_has_nested_payload_list_with_ids_only(self):
         """List containing only IDs should not be nested payload."""
-        from rail_django.generators.nested_operations import NestedOperationHandler
+        from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 

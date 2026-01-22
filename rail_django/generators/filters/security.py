@@ -230,8 +230,7 @@ def get_nested_filter_applicator(
         NestedFilterApplicator instance for the schema
     """
     # Import here to avoid circular imports
-    from ..filter_inputs import NestedFilterApplicator
-
+    from .applicator import NestedFilterApplicator
     if schema_name not in _filter_applicator_registry:
         _filter_applicator_registry[schema_name] = NestedFilterApplicator(schema_name)
     return _filter_applicator_registry[schema_name]

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .subscriptions import SubscriptionGenerator
     from .types import TypeGenerator
     from .introspector import ModelIntrospector
-    from .filter_inputs import (
+    from .filters import (
         NestedFilterInputGenerator,
         NestedFilterApplicator,
         StringFilterInput,
@@ -156,7 +156,7 @@ def get_nested_filter_generator(schema_name: str = "default", max_depth: int = 3
     Returns:
         NestedFilterInputGenerator: Nested filter generator instance
     """
-    from .filter_inputs import NestedFilterInputGenerator
+    from .filters import NestedFilterInputGenerator
 
     return NestedFilterInputGenerator(
         max_nested_depth=max_depth,

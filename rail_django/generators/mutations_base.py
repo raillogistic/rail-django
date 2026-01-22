@@ -300,7 +300,7 @@ class MutationGeneratorBase(TenantMixin, PermissionMixin):
         Returns:
             NestedOperationHandler instance
         """
-        from .nested_operations import NestedOperationHandler
+        from .nested import NestedOperationHandler
 
         if info and hasattr(info.context, "mutation_generator"):
             handler = getattr(

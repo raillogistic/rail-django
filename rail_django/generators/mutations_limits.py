@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 
 import graphene
 
-from .nested_operations import NestedOperationHandler
+from .nested import NestedOperationHandler
 from .mutations_errors import MutationError, build_mutation_error
 
 

@@ -20,7 +20,7 @@ class FieldFilterApplicatorMixin:
         model: Type[models.Model], prefix: str = ""
     ) -> Q:
         """Build a Q object for a field filter."""
-        from ...filter_inputs import FilterSecurityError, validate_regex_pattern
+        from ..security import FilterSecurityError, validate_regex_pattern
 
         q = Q()
         full_field_path = f"{prefix}{field_name}" if prefix else field_name

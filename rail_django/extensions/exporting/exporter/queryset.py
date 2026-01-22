@@ -167,7 +167,7 @@ class QuerysetMixin:
 
         # Import and use complexity validation from filter_inputs
         try:
-            from ....generators.filter_inputs import validate_filter_complexity
+            from ....generators.filters import validate_filter_complexity
 
             max_depth = export_settings.get("max_or_depth") or 10
             max_clauses = export_settings.get("max_filters") or 50

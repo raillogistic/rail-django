@@ -17,7 +17,7 @@ from ..core.services import get_query_optimizer
 from ..core.settings import QueryGeneratorSettings
 from ..extensions.optimization import get_optimizer, get_performance_monitor
 from ..security.field_permissions import mask_sensitive_fields
-from .filter_inputs import AdvancedFilterGenerator
+from .filters import AdvancedFilterGenerator
 from .queries_grouping import (  # noqa: F401
     GroupingBucketType,
     generate_grouping_query as _generate_grouping_query,

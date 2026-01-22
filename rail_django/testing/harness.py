@@ -113,7 +113,7 @@ def build_schema(
         # Clear filter generator and applicator singletons for this schema
         # so they get re-created with the new settings
         try:
-            from rail_django.generators.filter_inputs import (
+            from rail_django.generators.filters import (
                 _filter_applicator_registry,
                 _filter_generator_registry,
             )

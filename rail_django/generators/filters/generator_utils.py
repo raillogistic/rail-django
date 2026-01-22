@@ -315,7 +315,7 @@ def get_advanced_filter_types() -> Dict[str, Type[graphene.InputObjectType]]:
     Returns:
         Dictionary mapping type names to their corresponding classes
     """
-    from ..filter_inputs import (
+    from .types import (
         AggregationFilterInput,
         ConditionalAggregationFilterInput,
         WindowFilterInput,

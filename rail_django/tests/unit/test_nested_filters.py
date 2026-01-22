@@ -16,7 +16,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
 
-from rail_django.generators.filter_inputs import (
+from rail_django.generators.filters import (
     AggregationFilterInput,
     BooleanFilterInput,
     CountFilterInput,
@@ -905,7 +905,7 @@ class TestQuickFilterMixin(TestCase):
     """Test the QuickFilterMixin functionality."""
 
     def setUp(self):
-        from rail_django.generators.filter_inputs import QuickFilterMixin
+        from rail_django.generators.filters import QuickFilterMixin
         self.mixin = QuickFilterMixin()
 
     def test_get_default_quick_filter_fields_returns_text_fields(self):
@@ -984,7 +984,7 @@ class TestIncludeFilterMixin(TestCase):
     """Test the IncludeFilterMixin functionality."""
 
     def setUp(self):
-        from rail_django.generators.filter_inputs import IncludeFilterMixin
+        from rail_django.generators.filters import IncludeFilterMixin
         self.mixin = IncludeFilterMixin()
 
     def test_apply_include_filter_empty_ids(self):
@@ -1015,7 +1015,7 @@ class TestHistoricalModelMixin(TestCase):
     """Test the HistoricalModelMixin functionality."""
 
     def setUp(self):
-        from rail_django.generators.filter_inputs import HistoricalModelMixin
+        from rail_django.generators.filters import HistoricalModelMixin
         self.mixin = HistoricalModelMixin()
 
     def test_is_historical_model_false_for_regular_model(self):
@@ -1054,7 +1054,7 @@ class TestPerformanceAnalyzer(TestCase):
     """Test the PerformanceAnalyzer functionality."""
 
     def setUp(self):
-        from rail_django.generators.filter_inputs import PerformanceAnalyzer
+        from rail_django.generators.filters import PerformanceAnalyzer
         self.analyzer = PerformanceAnalyzer()
 
     def test_analyze_simple_filter(self):
@@ -1109,7 +1109,7 @@ class TestFilterMetadataGenerator(TestCase):
     """Test the FilterMetadataGenerator functionality."""
 
     def setUp(self):
-        from rail_django.generators.filter_inputs import FilterMetadataGenerator
+        from rail_django.generators.filters import FilterMetadataGenerator
         self.generator = FilterMetadataGenerator()
 
     def test_get_grouped_filters_returns_list(self):
@@ -1155,12 +1155,12 @@ class TestLegacyCompatibility(TestCase):
 
     def test_advanced_filter_generator_exists(self):
         """AdvancedFilterGenerator should be importable."""
-        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+        from rail_django.generators.filters import AdvancedFilterGenerator
         self.assertIsNotNone(AdvancedFilterGenerator)
 
     def test_advanced_filter_generator_generate_filter_set(self):
         """generate_filter_set should return a FilterSet-like class."""
-        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+        from rail_django.generators.filters import AdvancedFilterGenerator
 
         generator = AdvancedFilterGenerator()
         filter_set = generator.generate_filter_set(Category)
@@ -1170,7 +1170,7 @@ class TestLegacyCompatibility(TestCase):
 
     def test_advanced_filter_generator_generate_where_input(self):
         """generate_where_input should return InputObjectType."""
-        from rail_django.generators.filter_inputs import AdvancedFilterGenerator
+        from rail_django.generators.filters import AdvancedFilterGenerator
 
         generator = AdvancedFilterGenerator()
         where_input = generator.generate_where_input(Category)
@@ -1179,12 +1179,12 @@ class TestLegacyCompatibility(TestCase):
 
     def test_enhanced_filter_generator_exists(self):
         """EnhancedFilterGenerator should be importable."""
-        from rail_django.generators.filter_inputs import EnhancedFilterGenerator
+        from rail_django.generators.filters import EnhancedFilterGenerator
         self.assertIsNotNone(EnhancedFilterGenerator)
 
     def test_enhanced_filter_generator_get_grouped_filters(self):
         """get_grouped_filters should return list of GroupedFieldFilter."""
-        from rail_django.generators.filter_inputs import EnhancedFilterGenerator
+        from rail_django.generators.filters import EnhancedFilterGenerator
 
         generator = EnhancedFilterGenerator()
         filters = generator.get_grouped_filters(Category)

@@ -34,21 +34,21 @@ class BaseFilterApplicatorMixin:
     def _get_quick_mixin(self):
         """Get or create the quick filter mixin instance."""
         if self._quick_mixin is None:
-            from ...filter_inputs import QuickFilterMixin
+            from ..mixins import QuickFilterMixin
             self._quick_mixin = QuickFilterMixin()
         return self._quick_mixin
 
     def _get_include_mixin(self):
         """Get or create the include filter mixin instance."""
         if self._include_mixin is None:
-            from ...filter_inputs import IncludeFilterMixin
+            from ..mixins import IncludeFilterMixin
             self._include_mixin = IncludeFilterMixin()
         return self._include_mixin
 
     def _get_historical_mixin(self):
         """Get or create the historical model mixin instance."""
         if self._historical_mixin is None:
-            from ...filter_inputs import HistoricalModelMixin
+            from ..mixins import HistoricalModelMixin
             self._historical_mixin = HistoricalModelMixin()
         return self._historical_mixin
 
@@ -94,7 +94,7 @@ class BaseFilterApplicatorMixin:
         quick_filter_fields: Optional[List[str]] = None,
     ) -> models.QuerySet:
         """Apply a where filter to a queryset. Main entry point for filter application."""
-        from ...filter_inputs import FilterSecurityError, validate_filter_complexity
+        from ..security import FilterSecurityError, validate_filter_complexity
 
         if not where_input:
             return queryset

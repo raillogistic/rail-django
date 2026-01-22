@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 
 def _get_nested_filter_generator(schema_name: str):
     """Lazy import to avoid circular dependencies. Returns singleton instance."""
-    from .filter_inputs import get_nested_filter_generator
+    from .filters import get_nested_filter_generator
 
     return get_nested_filter_generator(schema_name)
 
 
 def _get_nested_filter_applicator(schema_name: str):
     """Lazy import to avoid circular dependencies. Returns singleton instance."""
-    from .filter_inputs import get_nested_filter_applicator
+    from .filters import get_nested_filter_applicator
 
     return get_nested_filter_applicator(schema_name)
 

@@ -11,7 +11,7 @@ import graphene
 from django.db.models import Q
 from django.test import TestCase
 
-from rail_django.generators.filter_inputs import (
+from rail_django.generators.filters import (
     ArrayFilterInput,
     ConditionalAggregationFilterInput,
     ExistsFilterInput,

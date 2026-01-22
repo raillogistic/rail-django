@@ -16,7 +16,7 @@ class TestFilterSingletonRegistry:
 
     def test_get_nested_filter_generator_returns_same_instance(self):
         """get_nested_filter_generator should return the same instance for same schema."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_generator,
             clear_filter_caches,
         )
@@ -35,7 +35,7 @@ class TestFilterSingletonRegistry:
 
     def test_get_nested_filter_generator_different_schemas(self):
         """get_nested_filter_generator should return different instances for different schemas."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_generator,
             clear_filter_caches,
         )
@@ -53,7 +53,7 @@ class TestFilterSingletonRegistry:
 
     def test_get_nested_filter_applicator_returns_same_instance(self):
         """get_nested_filter_applicator should return the same instance for same schema."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_applicator,
             clear_filter_caches,
         )
@@ -69,7 +69,7 @@ class TestFilterSingletonRegistry:
 
     def test_get_nested_filter_applicator_different_schemas(self):
         """get_nested_filter_applicator should return different instances for different schemas."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_applicator,
             clear_filter_caches,
         )
@@ -87,7 +87,7 @@ class TestFilterSingletonRegistry:
 
     def test_clear_filter_caches_all(self):
         """clear_filter_caches() should clear all cached instances."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_generator,
             get_nested_filter_applicator,
             clear_filter_caches,
@@ -114,7 +114,7 @@ class TestFilterSingletonRegistry:
 
     def test_clear_filter_caches_specific_schema(self):
         """clear_filter_caches(schema_name) should clear only that schema."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_generator,
             get_nested_filter_applicator,
             clear_filter_caches,
@@ -142,7 +142,7 @@ class TestFilterSingletonRegistry:
 
     def test_default_schema_name(self):
         """Default schema name should be 'default'."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             get_nested_filter_generator,
             get_nested_filter_applicator,
             clear_filter_caches,
@@ -164,7 +164,7 @@ class TestFilterGeneratorBoundedCache:
 
     def test_instance_level_cache(self):
         """Filter input cache should be instance-level, not class-level."""
-        from rail_django.generators.filter_inputs import NestedFilterInputGenerator
+        from rail_django.generators.filters import NestedFilterInputGenerator
 
         gen1 = NestedFilterInputGenerator(schema_name="instance_test_1")
         gen2 = NestedFilterInputGenerator(schema_name="instance_test_2")
@@ -175,7 +175,7 @@ class TestFilterGeneratorBoundedCache:
 
     def test_clear_cache_method(self):
         """Generator should have a clear_cache method."""
-        from rail_django.generators.filter_inputs import NestedFilterInputGenerator
+        from rail_django.generators.filters import NestedFilterInputGenerator
 
         gen = NestedFilterInputGenerator(schema_name="cache_test")
 
@@ -191,7 +191,7 @@ class TestFilterGeneratorBoundedCache:
 
     def test_cache_max_size_parameter(self):
         """Generator should accept cache_max_size parameter."""
-        from rail_django.generators.filter_inputs import NestedFilterInputGenerator
+        from rail_django.generators.filters import NestedFilterInputGenerator
 
         gen = NestedFilterInputGenerator(schema_name="size_test", cache_max_size=50)
 
@@ -199,7 +199,7 @@ class TestFilterGeneratorBoundedCache:
 
     def test_evict_cache_if_needed(self):
         """Cache eviction should remove oldest entries when full."""
-        from rail_django.generators.filter_inputs import NestedFilterInputGenerator
+        from rail_django.generators.filters import NestedFilterInputGenerator
 
         # Create generator with small cache size for testing
         gen = NestedFilterInputGenerator(schema_name="evict_test", cache_max_size=10)
@@ -222,7 +222,7 @@ class TestFilterGeneratorBoundedCache:
 
     def test_eviction_minimum_one_entry(self):
         """Eviction should remove at least one entry even with small cache."""
-        from rail_django.generators.filter_inputs import NestedFilterInputGenerator
+        from rail_django.generators.filters import NestedFilterInputGenerator
 
         # Create generator with very small cache
         gen = NestedFilterInputGenerator(schema_name="min_evict", cache_max_size=3)
@@ -248,7 +248,7 @@ class TestQueryGeneratorUseSingleton:
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )
-        from rail_django.generators.filter_inputs import clear_filter_caches
+        from rail_django.generators.filters import clear_filter_caches
 
         clear_filter_caches()
 
@@ -270,7 +270,7 @@ class TestQueryGeneratorUseSingleton:
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )
-        from rail_django.generators.filter_inputs import clear_filter_caches
+        from rail_django.generators.filters import clear_filter_caches
 
         clear_filter_caches()
 
@@ -292,7 +292,7 @@ class TestQueryGeneratorUseSingleton:
             _get_nested_filter_generator,
             _get_nested_filter_applicator,
         )
-        from rail_django.generators.filter_inputs import clear_filter_caches
+        from rail_django.generators.filters import clear_filter_caches
 
         clear_filter_caches()
 

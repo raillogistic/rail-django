@@ -15,7 +15,7 @@ class TestRegexValidation:
 
     def test_valid_regex_passes(self):
         """Valid regex patterns should pass validation."""
-        from rail_django.generators.filter_inputs import validate_regex_pattern
+        from rail_django.generators.filters import validate_regex_pattern
 
         # Simple patterns
         assert validate_regex_pattern("hello") == "hello"
@@ -26,14 +26,14 @@ class TestRegexValidation:
 
     def test_empty_pattern_passes(self):
         """Empty patterns should pass through."""
-        from rail_django.generators.filter_inputs import validate_regex_pattern
+        from rail_django.generators.filters import validate_regex_pattern
 
         assert validate_regex_pattern("") == ""
         assert validate_regex_pattern(None) is None
 
     def test_invalid_regex_rejected(self):
         """Invalid regex syntax should raise FilterSecurityError."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_regex_pattern,
             FilterSecurityError,
         )
@@ -50,7 +50,7 @@ class TestRegexValidation:
 
     def test_too_long_regex_rejected(self):
         """Regex patterns exceeding max length should be rejected."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_regex_pattern,
             FilterSecurityError,
             DEFAULT_MAX_REGEX_LENGTH,
@@ -63,7 +63,7 @@ class TestRegexValidation:
 
     def test_custom_max_length(self):
         """Custom max length should be respected."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_regex_pattern,
             FilterSecurityError,
         )
@@ -79,7 +79,7 @@ class TestRegexValidation:
 
     def test_redos_patterns_rejected(self):
         """Known ReDoS patterns should be rejected."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_regex_pattern,
             FilterSecurityError,
         )
@@ -98,7 +98,7 @@ class TestRegexValidation:
 
     def test_redos_check_can_be_disabled(self):
         """ReDoS checking can be disabled via parameter."""
-        from rail_django.generators.filter_inputs import validate_regex_pattern
+        from rail_django.generators.filters import validate_regex_pattern
 
         # This would normally be rejected
         pattern = "(.*)*"
@@ -113,7 +113,7 @@ class TestFilterDepthValidation:
 
     def test_shallow_filter_passes(self):
         """Shallow filters should pass validation."""
-        from rail_django.generators.filter_inputs import validate_filter_depth
+        from rail_django.generators.filters import validate_filter_depth
 
         where = {"name": {"eq": "test"}}
         depth = validate_filter_depth(where)
@@ -121,7 +121,7 @@ class TestFilterDepthValidation:
 
     def test_nested_filter_tracks_depth(self):
         """Depth tracking should work correctly for nested filters."""
-        from rail_django.generators.filter_inputs import validate_filter_depth
+        from rail_django.generators.filters import validate_filter_depth
 
         # Depth 1: field filter
         where1 = {"name": {"eq": "test"}}
@@ -133,7 +133,7 @@ class TestFilterDepthValidation:
 
     def test_and_or_increases_depth(self):
         """AND/OR operators should increase nesting depth."""
-        from rail_django.generators.filter_inputs import validate_filter_depth
+        from rail_django.generators.filters import validate_filter_depth
 
         where = {
             "AND": [
@@ -146,7 +146,7 @@ class TestFilterDepthValidation:
 
     def test_not_increases_depth(self):
         """NOT operator should increase nesting depth."""
-        from rail_django.generators.filter_inputs import validate_filter_depth
+        from rail_django.generators.filters import validate_filter_depth
 
         where = {"NOT": {"AND": [{"name": {"eq": "test"}}]}}
         depth = validate_filter_depth(where)
@@ -154,7 +154,7 @@ class TestFilterDepthValidation:
 
     def test_exceeds_depth_rejected(self):
         """Filters exceeding max depth should raise FilterSecurityError."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_filter_depth,
             FilterSecurityError,
         )
@@ -170,7 +170,7 @@ class TestFilterDepthValidation:
 
     def test_custom_max_depth(self):
         """Custom max depth should be respected."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_filter_depth,
             FilterSecurityError,
         )
@@ -190,7 +190,7 @@ class TestFilterClauseCount:
 
     def test_simple_filter_count(self):
         """Simple filters should count correctly."""
-        from rail_django.generators.filter_inputs import count_filter_clauses
+        from rail_django.generators.filters import count_filter_clauses
 
         # Single clause
         assert count_filter_clauses({"name": {"eq": "test"}}) == 2
@@ -204,7 +204,7 @@ class TestFilterClauseCount:
 
     def test_nested_filter_count(self):
         """Nested filters should count all clauses."""
-        from rail_django.generators.filter_inputs import count_filter_clauses
+        from rail_django.generators.filters import count_filter_clauses
 
         where = {
             "AND": [
@@ -218,7 +218,7 @@ class TestFilterClauseCount:
 
     def test_empty_values_not_counted(self):
         """None values should not be counted."""
-        from rail_django.generators.filter_inputs import count_filter_clauses
+        from rail_django.generators.filters import count_filter_clauses
 
         where = {"name": None, "status": {"eq": "test"}}
         count = count_filter_clauses(where)
@@ -230,21 +230,21 @@ class TestFilterComplexityValidation:
 
     def test_simple_filter_passes(self):
         """Simple filters should pass complexity validation."""
-        from rail_django.generators.filter_inputs import validate_filter_complexity
+        from rail_django.generators.filters import validate_filter_complexity
 
         where = {"name": {"eq": "test"}, "status": {"in": ["a", "b"]}}
         validate_filter_complexity(where)  # Should not raise
 
     def test_empty_filter_passes(self):
         """Empty filters should pass."""
-        from rail_django.generators.filter_inputs import validate_filter_complexity
+        from rail_django.generators.filters import validate_filter_complexity
 
         validate_filter_complexity({})
         validate_filter_complexity(None)
 
     def test_too_many_clauses_rejected(self):
         """Filters with too many clauses should be rejected."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_filter_complexity,
             FilterSecurityError,
         )
@@ -259,7 +259,7 @@ class TestFilterComplexityValidation:
 
     def test_custom_limits(self):
         """Custom depth and clause limits should work."""
-        from rail_django.generators.filter_inputs import (
+        from rail_django.generators.filters import (
             validate_filter_complexity,
             FilterSecurityError,
         )
@@ -280,13 +280,13 @@ class TestFilterSecurityError:
 
     def test_is_value_error(self):
         """FilterSecurityError should be a ValueError subclass."""
-        from rail_django.generators.filter_inputs import FilterSecurityError
+        from rail_django.generators.filters import FilterSecurityError
 
         assert issubclass(FilterSecurityError, ValueError)
 
     def test_can_be_raised_and_caught(self):
         """FilterSecurityError should work like normal exception."""
-        from rail_django.generators.filter_inputs import FilterSecurityError
+        from rail_django.generators.filters import FilterSecurityError
 
         with pytest.raises(FilterSecurityError):
             raise FilterSecurityError("test error")
@@ -302,7 +302,7 @@ class TestApplyWhereFilterSecurity:
 
     def test_complex_filter_rejected_returns_empty(self):
         """Filters exceeding limits should return empty queryset."""
-        from rail_django.generators.filter_inputs import NestedFilterApplicator
+        from rail_django.generators.filters import NestedFilterApplicator
         from unittest.mock import MagicMock
 
         applicator = NestedFilterApplicator(schema_name="test")
@@ -324,7 +324,7 @@ class TestApplyWhereFilterSecurity:
 
     def test_valid_filter_proceeds(self):
         """Valid filters should proceed to normal filtering."""
-        from rail_django.generators.filter_inputs import NestedFilterApplicator
+        from rail_django.generators.filters import NestedFilterApplicator
         from unittest.mock import MagicMock, patch
 
         applicator = NestedFilterApplicator(schema_name="test")
@@ -352,7 +352,7 @@ class TestRegexValidationInBuildFieldQ:
 
     def test_valid_regex_applied(self):
         """Valid regex patterns should be applied to queries."""
-        from rail_django.generators.filter_inputs import NestedFilterApplicator
+        from rail_django.generators.filters import NestedFilterApplicator
         from unittest.mock import MagicMock
 
         applicator = NestedFilterApplicator(schema_name="test")
@@ -366,7 +366,7 @@ class TestRegexValidationInBuildFieldQ:
 
     def test_dangerous_regex_skipped(self):
         """Dangerous regex patterns should be skipped."""
-        from rail_django.generators.filter_inputs import NestedFilterApplicator
+        from rail_django.generators.filters import NestedFilterApplicator
         from unittest.mock import MagicMock
 
         applicator = NestedFilterApplicator(schema_name="test")

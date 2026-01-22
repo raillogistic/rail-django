@@ -31,7 +31,7 @@ from .mutations_methods import (
     convert_method_to_mutation as _convert_method_to_mutation,
     generate_method_mutation as _generate_method_mutation,
 )
-from .nested_operations import NestedOperationHandler
+from .nested import NestedOperationHandler
 from .types import TypeGenerator
 from ..core.error_handling import get_error_handler
 from ..core.meta import get_model_graphql_meta
