@@ -29,7 +29,9 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         if not self._is_graphql_request(request): return None
-        if self.debug_mode:
+        
+        # Check DEBUG at runtime to allow overriding in tests
+        if getattr(settings, "DEBUG", False):
             logger.info("Rate limiting bypassed for GraphQL request (DEBUG=True)")
             return None
 

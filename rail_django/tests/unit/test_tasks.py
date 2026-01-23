@@ -48,7 +48,8 @@ class TestTaskOrchestration(TestCase):
         }
         harness = build_schema(
             schema_name="task_test",
-            models=[TaskExecution],
+            models=["rail_django.TaskExecution"],
+            apps=["rail_django"],
             settings=settings,
         )
         self.schema = harness.schema

@@ -17,6 +17,7 @@ def generate_input_type(
     partial: bool = False,
     include_reverse_relations: bool = True,
     exclude_fields: Optional[List[str]] = None,
+    depth: int = 0,
 ) -> type[graphene.InputObjectType]:
     """
     Generates a GraphQL input type for mutations.
@@ -33,7 +34,7 @@ def generate_input_type(
         partial = False
 
     exclude_tuple = tuple(sorted(exclude_fields)) if exclude_fields else ()
-    cache_key = (model, partial, mutation_type, include_reverse_relations, exclude_tuple)
+    cache_key = (model, partial, mutation_type, include_reverse_relations, exclude_tuple, depth)
     if cache_key in self._input_type_registry:
         return self._input_type_registry[cache_key]
 
@@ -111,7 +112,7 @@ def generate_input_type(
             related_model=rel_info.related_model,
             relation_type=relation_type,
             parent_model=model,
-            depth=0 
+            depth=depth
         )
         
         # Determine if required
@@ -166,7 +167,7 @@ def generate_input_type(
                 related_model=related_model,
                 relation_type="reverse",
                 parent_model=model,
-                depth=0,
+                depth=depth,
                 remote_field_name=remote_field_name
             )
             
@@ -183,6 +184,10 @@ def generate_input_type(
     suffix = ""
     if exclude_fields:
         suffix = "Exclude" + "".join(sorted([f.title() for f in exclude_fields]))
+    
+    # Append depth to prevent name collisions
+    if depth > 0:
+        suffix += f"Level{depth}"
         
     class_name = f"{prefix}{model.__name__}{suffix}Input"
     if not prefix and not suffix:

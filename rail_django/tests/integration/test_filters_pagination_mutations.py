@@ -107,7 +107,7 @@ def test_paginated_query_returns_page_info(gql_client):
 
     query = """
     query {
-        postsPages(page: 2, perPage: 2, orderBy: ["title"]) {
+        postPages(page: 2, perPage: 2, orderBy: ["title"]) {
             items {
                 title
             }
@@ -125,7 +125,7 @@ def test_paginated_query_returns_page_info(gql_client):
     result = gql_client.execute(query)
     assert result.get("errors") is None
 
-    page = result["data"]["postsPages"]
+    page = result["data"]["postPages"]
     assert len(page["items"]) == 2
     assert page["pageInfo"]["totalCount"] == 5
     assert page["pageInfo"]["pageCount"] == 3
@@ -173,7 +173,7 @@ def test_mutation_crud_cycle(gql_client):
         }
     }
     """
-    create_input = {"title": "First Post", "category": str(category.id)}
+    create_input = {"title": "First Post", "category": {"connect": str(category.id)}}
     create_result = gql_client.execute(create_mutation, variables={"input": create_input})
     assert create_result.get("errors") is None
 
@@ -198,7 +198,7 @@ def test_mutation_crud_cycle(gql_client):
     """
     update_result = gql_client.execute(
         update_mutation,
-        variables={"id": post_id, "input": {"id": post_id, "title": "Updated Post"}},
+        variables={"id": post_id, "input": {"title": "Updated Post"}},
     )
     assert update_result.get("errors") is None
     assert update_result["data"]["updatePost"]["object"]["title"] == "Updated Post"
@@ -247,9 +247,9 @@ def test_mutation_nested_create_with_tags_and_comments(gql_client):
     variables = {
         "input": {
             "title": "Nested Post",
-            "category": str(category.id),
-            "nestedTags": [{"name": "django"}, {"name": "graphql"}],
-            "nestedComments": [{"content": "First"}, {"content": "Second"}],
+            "category": {"connect": str(category.id)},
+            "tags": {"create": [{"name": "django"}, {"name": "graphql"}]},
+            "comments": {"create": [{"content": "First"}, {"content": "Second"}]},
         }
     }
     result = gql_client.execute(mutation, variables=variables)
@@ -307,8 +307,7 @@ def test_mutation_dual_field_conflict_returns_error(gql_client):
     variables = {
         "input": {
             "title": "Conflict Post",
-            "category": str(category.id),
-            "nestedCategory": {"name": "Nested"},
+            "category": {"connect": str(category.id), "create": {"name": "Nested"}},
         }
     }
     result = gql_client.execute(mutation, variables=variables)

@@ -39,7 +39,7 @@ class MockModel(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        app_label = "tests"
+        app_label = "tests_queries_base"
         managed = False
 
 
@@ -49,7 +49,7 @@ class MockRelatedModel(models.Model):
     title = models.CharField(max_length=100)
 
     class Meta:
-        app_label = "tests"
+        app_label = "tests_queries_base"
         managed = False
 
 

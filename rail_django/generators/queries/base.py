@@ -142,7 +142,7 @@ class QueryFilterPipeline:
             return
 
         try:
-            from ..saved_filter import SavedFilter
+            from ...saved_filter import SavedFilter
 
             saved = self._load_saved_filter(saved_filter_id)
             if saved and saved.filter_json:
@@ -179,7 +179,7 @@ class QueryFilterPipeline:
         Returns:
             SavedFilter instance or None
         """
-        from ..saved_filter import SavedFilter
+        from ...saved_filter import SavedFilter
 
         # Try ID first
         if str(name_or_id).isdigit():
@@ -205,7 +205,7 @@ class QueryFilterPipeline:
         Args:
             saved: SavedFilter instance
         """
-        from ..saved_filter import SavedFilter
+        from ...saved_filter import SavedFilter
 
         SavedFilter.objects.filter(pk=saved.pk).update(
             use_count=models.F("use_count") + 1,

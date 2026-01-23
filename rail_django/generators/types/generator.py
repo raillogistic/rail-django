@@ -10,6 +10,7 @@ from django.db import models
 from django.db.models.fields import Field
 from graphene_django import DjangoObjectType
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
+from graphql import GraphQLError
 
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter, FilterSet
@@ -281,6 +282,7 @@ class TypeGenerator:
         partial: bool = False,
         include_reverse_relations: bool = True,
         exclude_fields: Optional[List[str]] = None,
+        depth: int = 0,
     ) -> type[graphene.InputObjectType]:
         return _generate_input_type(
             self,
@@ -289,6 +291,7 @@ class TypeGenerator:
             partial=partial,
             include_reverse_relations=include_reverse_relations,
             exclude_fields=exclude_fields,
+            depth=depth,
         )
 
     def _build_enum_name(self, model: type[models.Model], field_name: str) -> str:
@@ -437,9 +440,12 @@ class TypeGenerator:
 
     def _apply_tenant_scope(self, queryset: models.QuerySet, info: Any, model: type[models.Model], *, operation: str = "read") -> models.QuerySet:
         try:
-            from ..extensions.multitenancy import apply_tenant_queryset
+            from ...extensions.multitenancy import apply_tenant_queryset
             return apply_tenant_queryset(queryset, info, model, schema_name=self.schema_name, operation=operation)
-        except Exception:
+        except GraphQLError:
+            raise
+        except Exception as e:
+            logger.warning(f"Failed to apply tenant scope: {e}")
             return queryset
 
     def _get_tenant_filter_for_model(self, context: Any, model: type[models.Model]) -> tuple[Optional[str], Optional[Any], Optional[Any]]:

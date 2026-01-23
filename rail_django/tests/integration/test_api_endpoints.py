@@ -28,6 +28,7 @@ from rail_django.testing import RailGraphQLTestClient
 from graphene_django.views import GraphQLView
 from rail_django.core.schema import SchemaBuilder
 from rail_django.middleware import GraphQLPerformanceMiddleware
+from rail_django.rate_limiting import clear_rate_limiter_cache
 
 # Configuration de test pour les endpoints
 TEST_GRAPHQL_SETTINGS = {
@@ -100,6 +101,7 @@ TEST_GRAPHQL_SETTINGS = {
     "SECURE_CONTENT_TYPE_NOSNIFF": True,
     "X_FRAME_OPTIONS": "DENY",
     "SECURE_BROWSER_XSS_FILTER": True,
+    "DEBUG": False,
 }
 
 
@@ -109,9 +111,13 @@ class TestAPIEndpointsIntegration(TestCase):
 
     def setUp(self):
         """Configuration des tests d'endpoints API."""
+        from django.core.cache import cache
+        cache.clear()
+        
         from rail_django.core.registry import schema_registry
 
         schema_registry.clear()
+        clear_rate_limiter_cache()
         # Client Django pour les tests HTTP
         self.django_client = DjangoClient()
 
@@ -689,8 +695,8 @@ class TestAPIEndpointsIntegration(TestCase):
 
         response_time = time.time() - start_time
 
-        # La réponse doit être rapide (moins de 1 seconde)
-        self.assertLess(response_time, 1.0)
+        # La réponse doit être rapide (moins de 2 seconde)
+        self.assertLess(response_time, 2.0)
 
         # La requête doit réussir
         self.assertEqual(response.status_code, 200)

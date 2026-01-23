@@ -44,7 +44,8 @@ class TestMultiTenancy(TestCase):
         self.user.user_permissions.add(*perms)
         harness = build_schema(
             schema_name="tenant_test",
-            models=[TenantOrganization, TenantProject],
+            models=["tests.TenantOrganization", "tests.TenantProject"],
+            apps=["tests"],
             settings=settings,
         )
         self.schema = harness.schema
@@ -105,7 +106,7 @@ class TestMultiTenancy(TestCase):
         client = self._client(self.org1.id)
         mutation = f"""
         mutation {{
-            updateTenantproject(id: "{self.p2.id}", input: {{ name: "New Name" }}) {{
+            updateTenantProject(id: "{self.p2.id}", input: {{ name: "New Name" }}) {{
                 ok
                 errors {{
                     message
@@ -114,7 +115,7 @@ class TestMultiTenancy(TestCase):
         }}
         """
         result = client.execute(mutation)
-        data = result["data"]["updateTenantproject"]
+        data = result["data"]["updateTenantProject"]
         self.assertFalse(data["ok"])
         self.assertTrue(data["errors"])
 

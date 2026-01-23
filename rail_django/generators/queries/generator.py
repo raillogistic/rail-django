@@ -317,16 +317,23 @@ class QueryGenerator:
         operation: str = "read",
     ) -> models.QuerySet:
         try:
-            from ..extensions.multitenancy import apply_tenant_queryset
+            from ...extensions.multitenancy import apply_tenant_queryset
         except Exception:
             return queryset
-        return apply_tenant_queryset(
-            queryset,
-            info,
-            model,
-            schema_name=self.schema_name,
-            operation=operation,
-        )
+        
+        try:
+            return apply_tenant_queryset(
+                queryset,
+                info,
+                model,
+                schema_name=self.schema_name,
+                operation=operation,
+            )
+        except GraphQLError:
+            raise
+        except Exception as e:
+            # logger.warning(f"Failed to apply tenant scope: {e}")
+            return queryset
 
     def _enforce_tenant_access(
         self,

@@ -10,15 +10,15 @@ from rail_django.generators.types.generator import TypeGenerator
 
 class MockModel(models.Model):
     class Meta:
-        app_label = "test_app"
+        app_label = "test_bulk_isolated"
 
 class MockModelIncluded(models.Model):
     class Meta:
-        app_label = "test_app"
+        app_label = "test_bulk_isolated"
 
 class MockModelExcluded(models.Model):
     class Meta:
-        app_label = "test_app"
+        app_label = "test_bulk_isolated"
 
 class DummyMutation(graphene.Mutation):
     ok = graphene.Boolean()

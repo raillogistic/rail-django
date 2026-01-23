@@ -155,7 +155,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "max_query_length": 0,
     },
     "multitenancy_settings": {
-        "enabled": False,
+        "enabled": True,
         "isolation_mode": "row",
         "tenant_header": "X-Tenant-ID",
         "tenant_claim": "tenant_id",

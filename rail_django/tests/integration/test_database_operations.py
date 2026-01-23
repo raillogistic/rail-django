@@ -65,7 +65,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Créer un client via GraphQL
         mutation = """
         mutation {
-            createTestcustomer(input: {
+            createTestCustomer(input: {
                 nomClient: "Dupont"
                 prenomClient: "Jean"
                 emailClient: "jean.dupont@example.com"
@@ -94,7 +94,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Vérifier que la création fonctionne
         self.assertIsNone(result.get("errors"))
-        payload = result["data"]["createTestcustomer"]
+        payload = result["data"]["createTestCustomer"]
         self.assertTrue(payload["ok"])
         self.assertIsNotNone(payload["object"])
         self.assertTrue(
@@ -168,7 +168,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         mutation = (
             """
         mutation {
-            updateTestcustomer(
+            updateTestCustomer(
                 id: "%s"
                 input: {
                     villeClient: "Cannes"
@@ -197,7 +197,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Vérifier que la mise à jour fonctionne
         self.assertIsNone(result.get("errors"))
-        payload = result["data"]["updateTestcustomer"]
+        payload = result["data"]["updateTestCustomer"]
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["object"]["villeClient"], "Cannes")
 
@@ -216,7 +216,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         mutation = (
             """
         mutation {
-            deleteTestcustomer(id: "%s") {
+            deleteTestCustomer(id: "%s") {
                 ok
                 object {
                     id
@@ -235,7 +235,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Vérifier que la suppression fonctionne
         self.assertIsNone(result.get("errors"))
-        payload = result["data"]["deleteTestcustomer"]
+        payload = result["data"]["deleteTestCustomer"]
         self.assertTrue(payload["ok"])
         self.assertFalse(TestCustomer.objects.filter(id=customer_id).exists())
 
@@ -391,7 +391,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Tenter de créer un client avec des données invalides
         mutation = """
         mutation {
-            createTestcustomer(input: {
+            createTestCustomerinput: {
                 nomClient: ""
                 prenomClient: "Test"
                 emailClient: "invalid-email"
@@ -413,7 +413,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
 
         # Vérifier que les erreurs de validation sont gérées
         if not result.get("errors"):
-            creation_result = result["data"]["createTestcustomer"]
+            creation_result = result["data"]["createTestCustomer"]
             if creation_result:
                 # La création devrait échouer
                 self.assertFalse(creation_result.get("ok", True))

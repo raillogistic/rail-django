@@ -53,7 +53,7 @@ def test_root_query_pagination_camelcase(gql_client):
     # Was products_pages
     query = """
     query {
-        productsPages {
+        productPages {
             items {
                 name
             }
@@ -63,6 +63,4 @@ def test_root_query_pagination_camelcase(gql_client):
 
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    assert len(result["data"]["productsPages"]["items"]) == 1
-
-
+    assert len(result["data"]["productPages"]["items"]) == 1

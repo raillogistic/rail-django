@@ -44,7 +44,8 @@ class TenantMixin:
             return queryset
 
         try:
-            from ..extensions.multitenancy import apply_tenant_queryset
+            from ...extensions.multitenancy import apply_tenant_queryset
+            from graphql import GraphQLError
 
             return apply_tenant_queryset(
                 queryset,
@@ -56,6 +57,8 @@ class TenantMixin:
         except ImportError:
             logger.debug("Multitenancy extension not available")
             return queryset
+        except GraphQLError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to apply tenant scope: {e}")
             return queryset

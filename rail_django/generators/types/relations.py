@@ -39,6 +39,8 @@ class RelationInputTypeGenerator:
             cache_key += f"_from_{parent_model._meta.model_name}"
         if remote_field_name:
             cache_key += f"_exclude_{remote_field_name}"
+        
+        cache_key += f"_depth{depth}"
 
         if cache_key in self._registry:
             return self._registry[cache_key]
@@ -81,7 +83,8 @@ class RelationInputTypeGenerator:
                 mutation_type="create",
                 partial=False,
                 include_reverse_relations=False,  # Prevent explosion
-                exclude_fields=exclude_fields
+                exclude_fields=exclude_fields,
+                depth=depth + 1
             )
 
             if is_list:
@@ -98,7 +101,8 @@ class RelationInputTypeGenerator:
                 related_model,
                 mutation_type="update",
                 partial=True,
-                include_reverse_relations=False
+                include_reverse_relations=False,
+                depth=depth + 1
             )
 
             if is_list:
@@ -112,6 +116,9 @@ class RelationInputTypeGenerator:
             type_name = f"{parent_model.__name__}{related_model.__name__}RelationInput"
         if remote_field_name:
             type_name += f"Exclude{remote_field_name.title()}"
+        
+        if depth > 0:
+            type_name += f"Level{depth}"
 
         relation_input = type(
             type_name,
