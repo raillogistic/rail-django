@@ -16,6 +16,15 @@ from .health_views import (
     health_metrics_endpoint,
 )
 
+from .audit_views import (
+    AuditAPIView,
+    AuditStatsView,
+    SecurityReportView,
+    AuditEventDetailView,
+    AuditEventTypesView,
+    get_audit_urls,
+)
+
 __all__ = [
     "HealthDashboardView",
     "HealthAPIView",
@@ -25,4 +34,11 @@ __all__ = [
     "HealthHistoryView",
     "MultiSchemaGraphQLView",
     "SchemaListView",
+    # Audit views
+    "AuditAPIView",
+    "AuditStatsView",
+    "SecurityReportView",
+    "AuditEventDetailView",
+    "AuditEventTypesView",
+    "get_audit_urls",
 ]
