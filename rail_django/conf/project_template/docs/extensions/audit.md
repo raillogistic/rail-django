@@ -15,8 +15,9 @@ Rail Django includes a comprehensive audit system for tracking data modification
 5. [Logging API](#logging-api)
 6. [Security Reports](#security-reports)
 7. [GraphQL Query](#graphql-query)
-8. [Retention and Archiving](#retention-and-archiving)
-9. [Best Practices](#best-practices)
+8. [REST API Endpoints](#rest-api-endpoints)
+9. [Retention and Archiving](#retention-and-archiving)
+10. [Best Practices](#best-practices)
 
 ---
 
@@ -391,6 +392,340 @@ query ObjectHistory(
     changed_fields
     timestamp
   }
+}
+```
+
+---
+
+## REST API Endpoints
+
+Rail Django provides protected REST API endpoints for accessing audit logs programmatically. These endpoints require authentication and admin/staff privileges or the `rail_django.view_auditeventmodel` permission.
+
+### URL Configuration
+
+```python
+# root/urls.py
+from django.urls import path, include
+from rail_django.views.audit_views import get_audit_urls
+
+urlpatterns = [
+    # ... other URLs
+    path("api/v1/", include(get_audit_urls())),
+]
+```
+
+This registers the following endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/audit/` | List audit events with filtering |
+| `GET /api/v1/audit/stats/` | Audit statistics and aggregations |
+| `GET /api/v1/audit/security-report/` | Security threat analysis |
+| `GET /api/v1/audit/event/<id>/` | Single audit event detail |
+| `GET /api/v1/audit/meta/` | Available event types and severities |
+
+### Authentication
+
+All endpoints require:
+- **Authentication**: User must be logged in (returns 401 if not)
+- **Authorization**: User must be superuser, staff, or have `rail_django.view_auditeventmodel` permission (returns 403 if not)
+
+### List Audit Events
+
+**GET /api/v1/audit/**
+
+Query audit events with rich filtering capabilities.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `event_type` | string | Filter by single event type |
+| `event_types` | list | Filter by multiple event types |
+| `severity` | string | Filter by severity (low, medium, high, critical) |
+| `severities` | list | Filter by multiple severities |
+| `user_id` | integer | Filter by user ID |
+| `username` | string | Filter by username (partial match) |
+| `client_ip` | string | Filter by client IP address |
+| `success` | boolean | Filter by success status (true/false) |
+| `date_from` | ISO datetime | Filter events from this date |
+| `date_to` | ISO datetime | Filter events until this date |
+| `hours` | integer | Filter events from last N hours |
+| `request_path` | string | Filter by request path (partial match) |
+| `session_id` | string | Filter by session ID |
+| `search` | string | Full-text search in additional_data, error_message, request_path |
+| `page` | integer | Page number (default: 1) |
+| `page_size` | integer | Items per page (default: 50, max: 500) |
+| `order_by` | string | Sort field: timestamp, -timestamp, event_type, severity, user_id |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit/?event_type=login_failure&hours=24&page_size=10" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json"
+```
+
+**Response:**
+
+```json
+{
+  "events": [
+    {
+      "id": 1234,
+      "event_type": "login_failure",
+      "severity": "medium",
+      "user_id": null,
+      "username": "unknown_user",
+      "client_ip": "192.168.1.100",
+      "user_agent": "Mozilla/5.0...",
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "request_path": "/graphql/",
+      "request_method": "POST",
+      "additional_data": {"reason": "invalid_password"},
+      "session_id": null,
+      "success": false,
+      "error_message": "Invalid credentials"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 10,
+    "total_count": 45,
+    "total_pages": 5,
+    "has_next": true,
+    "has_previous": false
+  },
+  "timestamp": "2024-01-15T12:00:00+00:00"
+}
+```
+
+### Audit Statistics
+
+**GET /api/v1/audit/stats/**
+
+Get aggregated statistics for the specified time period.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hours` | integer | Time period in hours (default: 24) |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit/stats/?hours=24" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response:**
+
+```json
+{
+  "period_hours": 24,
+  "total_events": 1250,
+  "by_event_type": {
+    "login_success": 500,
+    "login_failure": 45,
+    "create": 300,
+    "update": 350,
+    "delete": 55
+  },
+  "by_severity": {
+    "low": 800,
+    "medium": 400,
+    "high": 45,
+    "critical": 5
+  },
+  "by_success": {
+    "successful": 1150,
+    "failed": 100
+  },
+  "top_failed_ips": [
+    {"client_ip": "192.168.1.100", "count": 15},
+    {"client_ip": "10.0.0.50", "count": 8}
+  ],
+  "top_users": [
+    {"username": "admin", "user_id": 1, "count": 200},
+    {"username": "john_doe", "user_id": 5, "count": 150}
+  ],
+  "top_event_types": [
+    {"event_type": "login_success", "count": 500},
+    {"event_type": "update", "count": 350}
+  ],
+  "high_severity_count": 50,
+  "timestamp": "2024-01-15T12:00:00+00:00"
+}
+```
+
+### Security Report
+
+**GET /api/v1/audit/security-report/**
+
+Generate a comprehensive security report with threat analysis.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hours` | integer | Time period in hours (default: 24) |
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit/security-report/?hours=24" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response:**
+
+```json
+{
+  "period_hours": 24,
+  "brute_force_suspects": [
+    {"client_ip": "192.168.1.100", "attempts": 25},
+    {"client_ip": "10.0.0.50", "attempts": 12}
+  ],
+  "suspicious_events": [
+    {
+      "client_ip": "192.168.1.100",
+      "username": null,
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "additional_data": {"pattern": "credential_stuffing"}
+    }
+  ],
+  "rate_limited_ips": [
+    {"client_ip": "192.168.1.100", "count": 50}
+  ],
+  "high_severity_timeline": [
+    {
+      "event_type": "suspicious_activity",
+      "severity": "high",
+      "client_ip": "192.168.1.100",
+      "username": null,
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "success": false
+    }
+  ],
+  "generated_at": "2024-01-15T12:00:00+00:00"
+}
+```
+
+### Single Event Detail
+
+**GET /api/v1/audit/event/<id>/**
+
+Retrieve full details of a single audit event.
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit/event/1234/" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response:**
+
+```json
+{
+  "event": {
+    "id": 1234,
+    "event_type": "login_failure",
+    "severity": "medium",
+    "user_id": null,
+    "username": "unknown_user",
+    "client_ip": "192.168.1.100",
+    "user_agent": "Mozilla/5.0...",
+    "timestamp": "2024-01-15T10:30:00+00:00",
+    "request_path": "/graphql/",
+    "request_method": "POST",
+    "additional_data": {"reason": "invalid_password"},
+    "session_id": null,
+    "success": false,
+    "error_message": "Invalid credentials"
+  },
+  "timestamp": "2024-01-15T12:00:00+00:00"
+}
+```
+
+### Event Types Metadata
+
+**GET /api/v1/audit/meta/**
+
+List all available event types and severity levels.
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/audit/meta/" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response:**
+
+```json
+{
+  "event_types": [
+    "login_success",
+    "login_failure",
+    "logout",
+    "password_change",
+    "mfa_setup",
+    "mfa_verify",
+    "permission_denied",
+    "rate_limited",
+    "suspicious_activity",
+    "create",
+    "update",
+    "delete"
+  ],
+  "severities": ["low", "medium", "high", "critical"],
+  "timestamp": "2024-01-15T12:00:00+00:00"
+}
+```
+
+### Error Responses
+
+All endpoints return consistent error responses:
+
+**401 Unauthorized:**
+```json
+{
+  "error": "Authentication required",
+  "code": "UNAUTHENTICATED"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "error": "Admin privileges required to access audit logs",
+  "code": "FORBIDDEN"
+}
+```
+
+**404 Not Found (event detail only):**
+```json
+{
+  "error": "Audit event not found",
+  "code": "NOT_FOUND"
+}
+```
+
+**400 Bad Request:**
+```json
+{
+  "error": "Invalid parameter: ...",
+  "code": "INVALID_PARAMETER"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Internal server error",
+  "code": "INTERNAL_ERROR"
 }
 ```
 
