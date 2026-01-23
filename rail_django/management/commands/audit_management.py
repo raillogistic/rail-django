@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db.models import Count
 
+from rail_django.extensions.audit import audit_logger
 from rail_django.extensions.audit.models import get_audit_event_model
 from rail_django.security.events.types import EventType
 
@@ -168,6 +169,42 @@ class Command(BaseCommand):
 
     def _handle_summary(self, options: dict[str, Any]):
         hours = options["hours"]
+        report = None
+        if hasattr(audit_logger, "get_security_report"):
+            report = audit_logger.get_security_report(hours=hours)
+
+        if isinstance(report, dict):
+            if report.get("error"):
+                self.stdout.write(self.style.ERROR(f"Error generating report: {report['error']}"))
+                return
+            total_events = report.get("total_events", 0)
+            successful_logins = report.get("successful_logins", 0)
+            failed_logins = report.get("failed_logins", 0)
+            suspicious = report.get("suspicious_activities", 0)
+            top_failed_ips = report.get("top_failed_ips", [])
+            top_targeted_users = report.get("top_targeted_users", [])
+
+            self.stdout.write(self.style.SUCCESS(f"=== Security Summary (Last {report.get('period_hours', hours)} hours) ==="))
+            self.stdout.write(f"Total Events: {total_events}")
+            self.stdout.write(f"Successful Logins: {successful_logins}")
+
+            style = self.style.ERROR if failed_logins > 0 else self.style.SUCCESS
+            self.stdout.write(style(f"Failed Logins: {failed_logins}"))
+
+            if suspicious > 0:
+                self.stdout.write(self.style.ERROR(f"Suspicious Activities: {suspicious}"))
+
+            if top_failed_ips:
+                self.stdout.write("\nTop Failed Login IPs:")
+                for item in top_failed_ips:
+                    self.stdout.write(f"  - {item['client_ip']}: {item['count']}")
+
+            if top_targeted_users:
+                self.stdout.write("\nTop Targeted Users:")
+                for item in top_targeted_users:
+                    self.stdout.write(f"  - {item['username']}: {item['count']}")
+            return
+
         since = timezone.now() - timedelta(hours=hours)
         AuditModel = get_audit_event_model()
         events = AuditModel.objects.filter(timestamp__gte=since)

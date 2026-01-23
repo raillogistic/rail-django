@@ -52,7 +52,8 @@ _Note: Apps are created inside an `apps/` directory by default._
 
 - `rail_django/api/`: REST API endpoints for schema management and discovery.
 - `rail_django/bin/`: CLI entry points (`rail_admin`).
-- `rail_django/conf/`: Framework configuration and project templates.
+- `rail_django/scaffolding/`: Project/app templates.
+- `rail_django/config/`: Framework configuration.
 - `rail_django/core/`: Core logic (Registry, SettingsProxy, Schema building, Snapshots).
 - `rail_django/generators/`: Logic for auto-generating GraphQL schemas from models with camelCase field names.
 - `rail_django/extensions/`: Pluggable features (Auth, Audit, Health, Exporting, Observability, Subscriptions).
@@ -68,17 +69,17 @@ _Note: Apps are created inside an `apps/` directory by default._
 
 ## Conventions
 
-- **Configuration:** Uses a hierarchical settings system (`SettingsProxy`). Project settings inherit from `rail_django.conf.framework_settings`.
+- **Configuration:** Uses a hierarchical settings system (`SettingsProxy`). Project settings inherit from `rail_django.config.framework_settings`.
 - **Schema Registry:** All schemas are registered via `rail_django.core.registry`.
 
 ## Dependencies
 
-Defined in `setup.py` and `rail_django/conf/project_template/requirements/base.txt-tpl` (requirements.txt is deprecated). Key libs: `Django`, `graphene-django`, `django-filter`, `pyjwt`.
+Defined in `setup.py` and `rail_django/scaffolding/project_template/requirements/base.txt-tpl` (requirements.txt is deprecated). Key libs: `Django`, `graphene-django`, `django-filter`, `pyjwt`.
 
 ## Gemini Added Memories
 
 - The rail_django framework's TypeGenerator automatically creates custom list fields for reverse relationships (e.g., user_set) to avoid Relay connections. It previously also added these to the exclude list, causing redundant configuration warnings in Graphene-Django. The fix was to stop excluding them since the custom field definition takes precedence.
 - Optimized rail-django performance by implementing recursive GraphQL field extraction for nested select_related/prefetch_related, using prefetch cache in resolvers to avoid N+1 queries, and using field.attname for field masking to prevent unnecessary DB hits.
-- Merged the content of 'rail_django/conf/project_template/deploy/USAGE.md' into 'rail_django/conf/project_template/USAGE.md' as section "12. Manual Deployment Guide", consolidating the project documentation.
+- Merged the content of 'rail_django/scaffolding/project_template/deploy/USAGE.md' into 'rail_django/scaffolding/project_template/USAGE.md' as section "12. Manual Deployment Guide", consolidating the project documentation.
 - Analyzed the codebase and identified that **Webhooks**, **Permissions**, **Observability**, and **Schema Management** are well-implemented.
 - Identified a gap in **Subscriptions**: The current implementation is minimal. Recommended **Subscription Enhancements** (Payload filtering, Authorization, Broadcasting) as the next key feature.

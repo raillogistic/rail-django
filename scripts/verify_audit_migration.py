@@ -42,7 +42,7 @@ def check_patterns():
             if result.stdout.strip():
                 # Filter out false positives if needed
                 lines = result.stdout.strip().split('\n')
-                real_matches = [line for line in lines if "rail_django/tests/" not in line] # Ignore tests for now if we haven't updated all tests
+                real_matches = [line for line in lines if "tests/" not in line] # Ignore tests for now if we haven't updated all tests
 
                 if real_matches:
                     errors.append(f"Found deprecated pattern '{pattern}':\n" + "\n".join(real_matches))

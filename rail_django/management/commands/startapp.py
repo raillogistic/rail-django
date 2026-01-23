@@ -1,6 +1,7 @@
 import os
+from importlib import resources
+
 from django.core.management.commands.startapp import Command as StartAppCommand
-import rail_django
 
 class Command(StartAppCommand):
     help = (
@@ -18,12 +19,11 @@ class Command(StartAppCommand):
 
     def handle(self, **options):
         if not options.get("template") and not options.get("minimal"):
-            template_path = os.path.join(
-                os.path.dirname(rail_django.__file__),
-                "conf",
+            template_path = resources.files("rail_django").joinpath(
+                "scaffolding",
                 "app_template",
             )
-            options["template"] = template_path
+            options["template"] = os.fspath(template_path)
         if options.get("minimal"):
             # If minimal flag is set, force the template to our minimal one
             # unless the user explicitly provided another template (which would be ambiguous, 
@@ -32,11 +32,10 @@ class Command(StartAppCommand):
             # If user provided --template, we might want to warn or error, 
             # but simply overriding it is effective for this specific flag.
             
-            template_path = os.path.join(
-                os.path.dirname(rail_django.__file__),
-                "conf",
-                "app_template_minimal"
+            template_path = resources.files("rail_django").joinpath(
+                "scaffolding",
+                "app_template_minimal",
             )
-            options["template"] = template_path
+            options["template"] = os.fspath(template_path)
 
         super().handle(**options)

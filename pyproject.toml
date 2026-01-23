@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "rail_django.conf.test_settings"
+DJANGO_SETTINGS_MODULE = "rail_django.config.test_settings"
 django_find_project = false
 pythonpath = ["."]
 markers = [

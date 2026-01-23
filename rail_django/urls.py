@@ -12,9 +12,9 @@ Supports multi-schema functionality.
 """
 
 from django.urls import include, path
-from .health_urls import health_urlpatterns
-from .audit_urls import audit_urlpatterns
-from .views.graphql_views import MultiSchemaGraphQLView, SchemaListView
+from .http.urls.health import health_urlpatterns
+from .http.urls.audit import audit_urlpatterns
+from .graphql.views import MultiSchemaGraphQLView, SchemaListView
 
 urlpatterns = [
     # Main GraphQL endpoint (alias for the primary schema)
@@ -27,7 +27,7 @@ urlpatterns = [
     ),
     path("schemas/", SchemaListView.as_view(), name="schema-list"),
     # REST API for schema management
-    path("api/v1/", include("rail_django.api.urls", namespace="schema_api")),
+    path("api/v1/", include("rail_django.http.api.urls", namespace="schema_api")),
 ]
 urlpatterns += health_urlpatterns
 urlpatterns += audit_urlpatterns

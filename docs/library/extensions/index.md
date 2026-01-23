@@ -91,7 +91,7 @@ Extensions that provide REST endpoints need URL configuration:
 ```python
 # root/urls.py
 from django.urls import path, include
-from rail_django.views.audit_views import get_audit_urls
+from rail_django.http.views.audit import get_audit_urls
 
 urlpatterns = [
     # GraphQL endpoints
@@ -101,7 +101,7 @@ urlpatterns = [
     path("api/v1/", include(get_audit_urls())),  # Audit API
     path("api/v1/export/", include("rail_django.extensions.exporting.urls")),
     path("api/templates/", include("rail_django.extensions.templating.urls")),
-    path("health/", include("rail_django.health_urls")),
+    path("health/", include("rail_django.http.urls.health")),
 ]
 ```
 

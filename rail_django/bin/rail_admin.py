@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+from importlib import resources
 from django.core.management import execute_from_command_line
 
 
@@ -17,10 +18,10 @@ def main():
         if not has_template:
             import rail_django
 
-            template_path = os.path.join(
-                os.path.dirname(rail_django.__file__), "conf", "project_template"
+            template_path = resources.files("rail_django").joinpath(
+                "scaffolding", "project_template"
             )
-            argv.append(f"--template={template_path}")
+            argv.append(f"--template={os.fspath(template_path)}")
             
             # Ensure our custom template extensions are processed and renamed
             # .py-tpl -> .py and .txt-tpl -> .txt

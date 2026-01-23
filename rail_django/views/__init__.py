@@ -4,10 +4,10 @@ Package d'initialisation pour les vues de rail_django.
 Ce module permet d'importer les vues pour différents composants du système.
 """
 
-from .graphql_views import MultiSchemaGraphQLView, SchemaListView
+from rail_django.graphql.views import MultiSchemaGraphQLView, SchemaListView
 
 # Rendre les imports disponibles au niveau du package
-from .health_views import (
+from rail_django.http.views.health import (
     HealthAPIView,
     HealthDashboardView,
     HealthHistoryView,
@@ -16,7 +16,7 @@ from .health_views import (
     health_metrics_endpoint,
 )
 
-from .audit_views import (
+from rail_django.http.views.audit import (
     AuditAPIView,
     AuditDashboardView,
     AuditStatsView,

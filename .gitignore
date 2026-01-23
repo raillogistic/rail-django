@@ -175,6 +175,8 @@ local_settings.py
 *.tmp
 *.temp
 *.bak
+.tmp/
+*.xlsx
 
 # Coverage reports
 htmlcov/

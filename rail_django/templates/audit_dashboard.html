@@ -986,6 +986,45 @@
         let charts = {};
         let debounceTimer = null;
         let eventTypes = [];
+        const CANONICAL_EVENT_TYPES = [
+            "auth.login.success",
+            "auth.login.failure",
+            "auth.logout",
+            "auth.token.issued",
+            "auth.token.refreshed",
+            "auth.token.revoked",
+            "auth.token.invalid",
+            "auth.mfa.success",
+            "auth.mfa.failure",
+            "authz.permission.granted",
+            "authz.permission.denied",
+            "authz.role.assigned",
+            "authz.role.revoked",
+            "data.read",
+            "data.create",
+            "data.update",
+            "data.delete",
+            "data.bulk",
+            "data.sensitive.access",
+            "data.export",
+            "query.blocked.depth",
+            "query.blocked.complexity",
+            "query.blocked.introspection",
+            "query.validation.failed",
+            "query.injection.attempt",
+            "rate.limit.exceeded",
+            "rate.limit.warning",
+            "system.error",
+            "system.config.change",
+            "ui.action"
+        ];
+        const EVENT_TYPE_SHORT_MAP = CANONICAL_EVENT_TYPES.reduce((acc, value) => {
+            const shortName = value.split(".").slice(1).join(".");
+            if (!acc[shortName]) {
+                acc[shortName] = value;
+            }
+            return acc;
+        }, {});
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -1105,19 +1144,42 @@
         async function loadEventTypes() {
             try {
                 const response = await fetch('/audit/meta/');
+                const select = document.getElementById('filterEventType');
+                if (!select) return;
+
                 if (response.ok) {
                     const data = await response.json();
-                    eventTypes = data.event_types || [];
-                    const select = document.getElementById('filterEventType');
-                    eventTypes.forEach(type => {
+                    const rawTypes = data.event_types || [];
+                    eventTypes = rawTypes.map(type => {
+                        if (type.includes(".")) return type;
+                        const normalized = type.replace(/_/g, ".").replace(/^auth\./, "");
+                        return EVENT_TYPE_SHORT_MAP[normalized] || normalized;
+                    }).filter(Boolean);
+                } else {
+                    eventTypes = [...CANONICAL_EVENT_TYPES];
+                }
+
+                if (!eventTypes.length) {
+                    eventTypes = [...CANONICAL_EVENT_TYPES];
+                }
+
+                eventTypes.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type.replace(/\./g, ' ').toUpperCase();
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading event types:', error);
+                const select = document.getElementById('filterEventType');
+                if (select && select.options.length <= 1) {
+                    CANONICAL_EVENT_TYPES.forEach(type => {
                         const option = document.createElement('option');
                         option.value = type;
                         option.textContent = type.replace(/\./g, ' ').toUpperCase();
                         select.appendChild(option);
                     });
                 }
-            } catch (error) {
-                console.error('Error loading event types:', error);
             }
         }
 
@@ -1216,6 +1278,83 @@
                     data.by_success.failed || 0
                 ];
                 charts.success.update();
+            }
+        }
+
+        function normalizeEventTypeFilter(value) {
+            if (!value) return "";
+            if (value.includes(".")) return value;
+            const normalized = value.replace(/_/g, ".").replace(/^auth\./, "");
+            return EVENT_TYPE_SHORT_MAP[normalized] || normalized;
+        }
+
+        // Load events with filters and pagination
+        async function loadEvents() {
+            const params = new URLSearchParams();
+            params.set("page", currentPage);
+            params.set("page_size", pageSize);
+
+            const eventType = document.getElementById('filterEventType')?.value;
+            const severity = document.getElementById('filterSeverity')?.value;
+            const success = document.getElementById('filterSuccess')?.value;
+            const hours = document.getElementById('filterHours')?.value;
+            const username = document.getElementById('filterUsername')?.value;
+            const clientIp = document.getElementById('filterIP')?.value;
+
+            if (eventType) params.set("event_type", normalizeEventTypeFilter(eventType));
+            if (severity) params.set("severity", severity);
+            if (hours) params.set("hours", hours);
+            if (username) params.set("username", username);
+            if (clientIp) params.set("client_ip", clientIp);
+            if (success) {
+                params.set("outcome", success === "true" ? "success" : "failure");
+            }
+
+            const response = await fetch(`/audit/?${params.toString()}`);
+            if (!response.ok) throw new Error('Failed to load events');
+
+            const data = await response.json();
+            const events = data.events || [];
+
+            updateEventsTable(events);
+            updatePagination(data.pagination || {});
+            updateEventCount(data.pagination?.total_count || events.length);
+
+            if (currentPage === 1) {
+                updateRecentTimeline(events);
+            }
+        }
+
+        // Update pagination UI
+        function updatePagination(pagination) {
+            const container = document.getElementById('pagination');
+            if (!pagination || !container) return;
+
+            totalPages = pagination.total_pages || 1;
+            currentPage = pagination.page || 1;
+            pageSize = pagination.page_size || pageSize;
+
+            container.innerHTML = `
+                <button class="pagination-btn" onclick="gotoPage(${currentPage - 1})" ${pagination.has_previous ? "" : "disabled"}>
+                    Previous
+                </button>
+                <span class="pagination-info">Page ${currentPage} of ${totalPages}</span>
+                <button class="pagination-btn" onclick="gotoPage(${currentPage + 1})" ${pagination.has_next ? "" : "disabled"}>
+                    Next
+                </button>
+            `;
+        }
+
+        function gotoPage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            loadEvents();
+        }
+
+        function updateEventCount(total) {
+            const countEl = document.getElementById('eventCount');
+            if (countEl) {
+                countEl.textContent = total ? `(${total} total)` : '';
             }
         }
 

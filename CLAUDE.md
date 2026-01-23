@@ -20,7 +20,7 @@ pytest -m integration             # DB-backed tests
 pytest                            # All tests
 
 # Django test runner (CI path)
-DJANGO_SETTINGS_MODULE=rail_django.conf.framework_settings python -m django test rail_django.tests.unit
+DJANGO_SETTINGS_MODULE=rail_django.config.framework_settings python -m django test tests.unit
 
 # Formatting
 python -m black --check rail_django/
@@ -49,7 +49,8 @@ cd my_api && python manage.py migrate && python manage.py runserver
 - **`rail_django/security/`**: Unified security system (Events, RBAC, Validation, Field Permissions, Anomaly Detection)
 - **`rail_django/extensions/`**: Pluggable features (auth, audit, health, export, observability, subscriptions, webhooks)
 - **`rail_django/plugins/`**: Plugin manager with pre/post hooks for schema build and execution
-- **`rail_django/conf/`**: Framework settings and project/app templates for CLI scaffolder
+- **`rail_django/scaffolding/`**: Project/app templates for CLI scaffolder
+- **`rail_django/config/`**: Framework settings used by CLI scaffolder and tests
 
 ### GraphQLMeta
 
@@ -69,12 +70,12 @@ Testing helpers in `rail_django.testing`:
 - `RailGraphQLTestClient` - execute GraphQL with request context
 - `override_rail_settings(...)` - isolate settings in test scope
 
-Test settings default to `rail_django.conf.test_settings` (SQLite).
+Test settings default to `rail_django.config.test_settings` (SQLite).
 
 ## Coding Conventions
 
 - GraphQL fields are camelCase by default (`auto_camelcase = True`)
-- Tests under `rail_django/tests/unit/` and `rail_django/tests/integration/`
+- Tests under `tests/unit/` and `tests/integration/`
 - TypeGenerator auto-creates custom list fields for reverse relationships to avoid Relay connections
 
 ## Performance Notes

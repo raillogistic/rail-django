@@ -132,7 +132,7 @@ def get_security_context(request: HttpRequest) -> SecurityContext:
 
 ### 1.3 Update Django Settings Template
 
-**File:** `rail_django/conf/project_template/project_name/settings.py` (update MIDDLEWARE)
+**File:** `rail_django/scaffolding/project_template/project_name/settings.py` (update MIDDLEWARE)
 
 Add to middleware list:
 ```python
@@ -145,7 +145,7 @@ MIDDLEWARE = [
 
 ### 1.4 Tests
 
-**File:** `rail_django/tests/unit/security/test_context.py`
+**File:** `tests/unit/security/test_context.py`
 
 ```python
 import pytest
@@ -539,7 +539,7 @@ def event(event_type: EventType) -> EventBuilder:
 
 ### 2.3 Tests
 
-**File:** `rail_django/tests/unit/security/test_events.py`
+**File:** `tests/unit/security/test_events.py`
 
 ```python
 import pytest
@@ -1054,7 +1054,7 @@ class SecurityConfig(AppConfig):
 
 ### 3.8 Tests
 
-**File:** `rail_django/tests/unit/security/test_event_bus.py`
+**File:** `tests/unit/security/test_event_bus.py`
 
 ```python
 import pytest
@@ -1470,7 +1470,7 @@ def audit(
 
 ### 4.4 Tests
 
-**File:** `rail_django/tests/unit/security/test_api.py`
+**File:** `tests/unit/security/test_api.py`
 
 ```python
 import pytest
@@ -1848,7 +1848,7 @@ def auth_failure(
 
 ### 5.4 Tests
 
-**File:** `rail_django/tests/unit/security/test_anomaly.py`
+**File:** `tests/unit/security/test_anomaly.py`
 
 ```python
 import pytest
@@ -2362,9 +2362,9 @@ class SecurityReportView(View):
 Delete old test files:
 
 ```bash
-rm -rf rail_django/tests/unit/extensions/audit/
-rm -rf rail_django/tests/unit/security/audit/
-rm -rf rail_django/tests/integration/audit/
+rm -rf tests/unit/extensions/audit/
+rm -rf tests/unit/security/audit/
+rm -rf tests/integration/audit/
 ```
 
 Update any tests that import old audit APIs to use new security API.
@@ -2496,7 +2496,7 @@ rail_django/
 
 ### 8.1 Settings Reference
 
-**File:** `rail_django/conf/framework_settings.py` (update)
+**File:** `rail_django/config/framework_settings.py` (update)
 
 ```python
 # Security Event Bus

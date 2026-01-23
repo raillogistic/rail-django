@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import logging
+from typing import Iterable
+
+from django.conf import settings
+from django.db.models.signals import post_delete, post_save, m2m_changed
+from django.dispatch import receiver
+
+from rail_django.security import security, EventType, Outcome
+from .middleware import get_current_request
+
+logger = logging.getLogger(__name__)
+
+
+EXCLUDED_APP_LABELS = {
+    "admin",
+    "auth",
+    "contenttypes",
+    "sessions",
+    "messages",
+    "staticfiles",
+    "rail_django",
+    "graphene_django",
+    "django_filters",
+    "corsheaders",
+    "channels",
+    "daphne",
+}
+
+
+def _get_allowed_labels() -> set[str]:
+    configured = getattr(settings, "AUDIT_SIGNAL_APP_LABELS", None)
+    if configured:
+        return {str(label) for label in configured}
+
+    allowed = set()
+    for app_path in getattr(settings, "INSTALLED_APPS", []):
+        if not isinstance(app_path, str):
+            continue
+        label = app_path.rsplit(".", 1)[-1]
+        if label and label not in EXCLUDED_APP_LABELS:
+            allowed.add(label)
+    return allowed
+
+
+def _should_audit(instance) -> bool:
+    if not getattr(settings, "GRAPHQL_ENABLE_AUDIT_LOGGING", True):
+        return False
+    app_label = getattr(getattr(instance, "_meta", None), "app_label", None)
+    if not app_label:
+        return False
+    return app_label in _get_allowed_labels()
+
+
+def _emit_event(
+    event_type: EventType,
+    instance,
+    *,
+    action: str,
+    context: dict | None = None,
+):
+    request = get_current_request()
+    model_label = instance._meta.label
+    security.emit(
+        event_type,
+        request=request,
+        outcome=Outcome.SUCCESS,
+        action=action,
+        resource_type="model",
+        resource_name=model_label,
+        resource_id=str(instance.pk) if instance.pk is not None else None,
+        context=context or {},
+    )
+
+
+@receiver(post_save)
+def audit_model_save(sender, instance, created, update_fields=None, **kwargs):
+    if not _should_audit(instance):
+        return
+    event_type = EventType.DATA_CREATE if created else EventType.DATA_UPDATE
+    context = {"model": instance._meta.label}
+    if update_fields:
+        context["update_fields"] = sorted(list(update_fields))
+    _emit_event(
+        event_type,
+        instance,
+        action="create" if created else "update",
+        context=context,
+    )
+
+
+@receiver(post_delete)
+def audit_model_delete(sender, instance, **kwargs):
+    if not _should_audit(instance):
+        return
+    _emit_event(
+        EventType.DATA_DELETE,
+        instance,
+        action="delete",
+        context={"model": instance._meta.label},
+    )
+
+
+@receiver(m2m_changed)
+def audit_m2m_changed(sender, instance, action, reverse, model, pk_set, **kwargs):
+    if not _should_audit(instance):
+        return
+    if action not in {"post_add", "post_remove", "post_clear"}:
+        return
+    context = {
+        "model": instance._meta.label,
+        "m2m_action": action,
+        "related_model": getattr(model, "_meta", None).label if model else None,
+    }
+    if isinstance(pk_set, Iterable):
+        context["related_ids"] = sorted([str(pk) for pk in pk_set])[:200]
+    _emit_event(
+        EventType.DATA_UPDATE,
+        instance,
+        action="m2m_update",
+        context=context,
+    )
+

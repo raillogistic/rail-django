@@ -1,6 +1,7 @@
 include requirements.txt
 include LICENSE
-recursive-include rail_django/conf *
+recursive-include rail_django/scaffolding *
+recursive-include rail_django/config *
 recursive-include rail_django/templates *
 recursive-include rail_django/static *
 include rail_django/py.typed

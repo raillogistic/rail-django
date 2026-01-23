@@ -1,3 +1,3 @@
-# Deprecated: use rail_django/conf/project_template/requirements/base.txt-tpl.
+# Deprecated: use rail_django/scaffolding/project_template/requirements/base.txt-tpl.
 # Keep this file as a compatibility shim for tooling that expects requirements.txt.
--r rail_django/conf/project_template/requirements/base.txt-tpl
+-r rail_django/scaffolding/project_template/requirements/base.txt-tpl

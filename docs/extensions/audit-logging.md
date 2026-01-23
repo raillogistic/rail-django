@@ -23,6 +23,26 @@ RAIL_DJANGO_GRAPHQL = {
 2.  **Analysis**: It checks if the operation is a mutation or a flagged query.
 3.  **Recording**: It saves an `AuditLog` entry.
 
+## Tracking Admin and ORM Changes
+
+GraphQL audit logging does not cover Django admin or direct ORM writes. The
+project template ships with a small signal handler that emits security events
+for model creates, updates, deletes, and many-to-many changes. This makes
+admin edits show up in the audit logs without extra coding.
+
+The signal handler:
+
+- Emits `EventType.DATA_*` events for `post_save`, `post_delete`, and `m2m_changed`.
+- Limits auditing to project apps by default (excludes Django and third-party apps).
+- Can be scoped using `AUDIT_SIGNAL_APP_LABELS` in settings.
+
+Example configuration:
+
+```python
+# settings.py
+AUDIT_SIGNAL_APP_LABELS = ["root", "store"]
+```
+
 ## Accessing Logs
 
 If `store_in_database` is True, you can query logs via the `AuditLog` model.

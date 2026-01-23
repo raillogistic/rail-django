@@ -20,7 +20,7 @@ from django.urls import path, include
 
 urlpatterns = [
     # ...
-    path("health/", include("rail_django.health_urls")),
+    path("health/", include("rail_django.http.urls.health")),
 ]
 ```
 
