@@ -23,6 +23,7 @@ from .queries import (
     _get_safe_settings_type,
 )
 from .utils import _get_effective_permissions
+from ..audit.logger import audit_logger
 
 logger = logging.getLogger(__name__)
 
@@ -151,16 +152,31 @@ class LoginMutation(graphene.Mutation):
         Returns:
             AuthPayload with token and user information.
         """
+        request = info.context
         try:
             # Authenticate the user
             user = authenticate(username=username, password=password)
 
             if not user:
+                # Log failed login attempt
+                audit_logger.log_login_attempt(
+                    request=request,
+                    user=None,
+                    success=False,
+                    error_message=f"Invalid credentials for username: {username}",
+                )
                 return AuthPayload(
                     ok=False, errors=["Nom d'utilisateur ou mot de passe incorrect"]
                 )
 
             if not user.is_active:
+                # Log failed login attempt for inactive user
+                audit_logger.log_login_attempt(
+                    request=request,
+                    user=user,
+                    success=False,
+                    error_message="Account is disabled",
+                )
                 return AuthPayload(ok=False, errors=["Compte utilisateur desactive"])
 
             # Generate JWT token
@@ -170,6 +186,13 @@ class LoginMutation(graphene.Mutation):
             # Update last login
             user.last_login = timezone.now()
             user.save(update_fields=["last_login"])
+
+            # Log successful login
+            audit_logger.log_login_attempt(
+                request=request,
+                user=user,
+                success=True,
+            )
 
             logger.info(f"Connexion reussie pour l'utilisateur: {username}")
 
@@ -192,6 +215,13 @@ class LoginMutation(graphene.Mutation):
 
         except Exception as e:
             logger.error(f"Erreur lors de la connexion: {e}")
+            # Log error
+            audit_logger.log_login_attempt(
+                request=request,
+                user=None,
+                success=False,
+                error_message=str(e),
+            )
             return AuthPayload(ok=False, errors=["Erreur interne lors de la connexion"])
 
 
@@ -252,6 +282,10 @@ class RegisterMutation(graphene.Mutation):
         Returns:
             AuthPayload with token and user information.
         """
+        from ..audit.types import AuditEvent, AuditEventType, AuditSeverity
+        from datetime import datetime, timezone as tz
+
+        request = info.context
         try:
             # Get the User model dynamically
             User = get_user_model()
@@ -288,6 +322,21 @@ class RegisterMutation(graphene.Mutation):
             # Generate JWT token
             token_data = JWTManager.generate_token(user)
             permissions = token_data.get("permissions", [])
+
+            # Log successful registration
+            event = AuditEvent(
+                event_type=AuditEventType.REGISTRATION,
+                severity=AuditSeverity.LOW,
+                user_id=user.id,
+                username=user.username,
+                client_ip=audit_logger._get_client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", "Unknown"),
+                timestamp=datetime.now(tz.utc),
+                request_path=request.path,
+                request_method=request.method,
+                success=True,
+            )
+            audit_logger.log_event(event)
 
             logger.info(f"Inscription reussie pour l'utilisateur: {username}")
 
@@ -352,6 +401,10 @@ class RefreshTokenMutation(graphene.Mutation):
         Returns:
             AuthPayload with new token.
         """
+        from ..audit.types import AuditEvent, AuditEventType, AuditSeverity
+        from datetime import datetime, timezone as tz
+
+        request = info.context
         try:
             # Try to get refresh token from cookie if not provided
             if not refresh_token:
@@ -359,6 +412,14 @@ class RefreshTokenMutation(graphene.Mutation):
                 refresh_token = info.context.COOKIES.get(cookie_name)
 
             if not refresh_token:
+                # Log invalid token refresh attempt
+                audit_logger.log_token_event(
+                    request=request,
+                    user=None,
+                    event_type=AuditEventType.TOKEN_INVALID,
+                    success=False,
+                    error_message="Missing refresh token",
+                )
                 return AuthPayload(
                     ok=False, errors=["Token de rafraichissement manquant"]
                 )
@@ -366,6 +427,14 @@ class RefreshTokenMutation(graphene.Mutation):
             token_data = JWTManager.refresh_token(refresh_token)
 
             if not token_data:
+                # Log invalid token refresh attempt
+                audit_logger.log_token_event(
+                    request=request,
+                    user=None,
+                    event_type=AuditEventType.TOKEN_INVALID,
+                    success=False,
+                    error_message="Invalid or expired refresh token",
+                )
                 return AuthPayload(
                     ok=False, errors=["Token de rafraichissement invalide ou expire"]
                 )
@@ -379,6 +448,14 @@ class RefreshTokenMutation(graphene.Mutation):
             permissions = token_data.get(
                 "permissions", []
             ) or _get_effective_permissions(user)
+
+            # Log successful token refresh
+            audit_logger.log_token_event(
+                request=request,
+                user=user,
+                event_type=AuditEventType.TOKEN_REFRESH,
+                success=True,
+            )
 
             # Set new HttpOnly cookies
             set_auth_cookies(
@@ -441,14 +518,15 @@ class LogoutMutation(graphene.Mutation):
             LogoutMutation with success status.
         """
         try:
+            request = info.context
+            user = getattr(request, "user", None)
+
+            # Log the logout event
+            if user and getattr(user, "is_authenticated", False):
+                audit_logger.log_logout(request=request, user=user)
+
             # Clear cookies
             delete_auth_cookies(info.context)
-
-            # For now, return success
-            # In a more advanced implementation, we could:
-            # - Add the token to a blacklist
-            # - Invalidate all user tokens
-            # - Log the logout
 
             return LogoutMutation(ok=True, errors=[])
 
