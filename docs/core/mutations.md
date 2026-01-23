@@ -45,32 +45,55 @@ mutation {
 }
 ```
 
-## Nested Relations
+## Nested Relations (Unified Input)
 
-You can create or link related objects in a single mutation.
+Rail Django uses a "Unified Input" format for handling relationships (Foreign Keys, Many-to-Many, Reverse Relations). This provides a structured and explicit way to manage connections.
+
+Each relation field accepts an object with operation keys: `connect`, `create`, `update`, `disconnect`, `set`.
+
+### 1. One-to-Many / Foreign Key
 
 ```graphql
 mutation {
-  createCustomer(input: {
-    firstName: "John",
-    lastName: "Doe",
-    email: "john@example.com",
-    # Create addresses along with the customer
-    addresses: [
-      { 
-        label: "Home", 
-        line1: "123 Main St", 
-        city: "New York", 
-        postalCode: "10001", 
-        isPrimary: true 
-      }
-    ]
-  }) {
-    customer {
-      firstName
-      addresses { city }
+  createPost(input: {
+    title: "My Post",
+    # Link to existing Category
+    category: { connect: "1" } 
+    # OR Create new Category
+    # category: { create: { name: "New Category" } }
+  }) { ... }
+}
+```
+
+### 2. Many-to-Many / Reverse Relations
+
+For list-based relations (like `tags` on `Post`), you can combine operations.
+
+```graphql
+mutation {
+  updatePost(id: "1", input: {
+    tags: {
+      # Add existing tags
+      connect: ["1", "2"],
+      # Create and add new tags
+      create: [{ name: "GraphQL" }],
+      # Remove specific tags
+      disconnect: ["3"]
     }
-  }
+  }) { ... }
+}
+```
+
+To replace the entire collection, use `set`:
+
+```graphql
+mutation {
+  updatePost(id: "1", input: {
+    tags: {
+      # Replaces all existing tags with just these two
+      set: ["1", "2"]
+    }
+  }) { ... }
 }
 ```
 

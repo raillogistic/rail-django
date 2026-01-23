@@ -16,7 +16,7 @@ from .permissions import ModelPermissionStep, OperationGuardStep
 from .sanitization import InputSanitizationStep
 from .normalization import (
     EnumNormalizationStep,
-    DualFieldProcessingStep,
+    RelationOperationProcessingStep,
     ReadOnlyFieldFilterStep,
 )
 from .validation import (
@@ -38,7 +38,7 @@ __all__ = [
     # Input Processing
     "InputSanitizationStep",
     "EnumNormalizationStep",
-    "DualFieldProcessingStep",
+    "RelationOperationProcessingStep",
     "ReadOnlyFieldFilterStep",
     "CreatedByStep",
     # Validation

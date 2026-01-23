@@ -13,7 +13,7 @@ from .steps.permissions import ModelPermissionStep, OperationGuardStep
 from .steps.sanitization import InputSanitizationStep
 from .steps.normalization import (
     EnumNormalizationStep,
-    DualFieldProcessingStep,
+    RelationOperationProcessingStep,
     ReadOnlyFieldFilterStep,
 )
 from .steps.validation import (
@@ -157,7 +157,7 @@ class PipelineBuilder:
             OperationGuardStep(),
             InputSanitizationStep(),
             EnumNormalizationStep(),
-            DualFieldProcessingStep(),
+            RelationOperationProcessingStep(),
             ReadOnlyFieldFilterStep(),
             CreatedByStep(),
             TenantInjectionStep(tenant_applicator),
@@ -196,7 +196,7 @@ class PipelineBuilder:
             OperationGuardStep(),  # Guard can check instance
             InputSanitizationStep(),
             EnumNormalizationStep(),
-            DualFieldProcessingStep(),
+            RelationOperationProcessingStep(),
             ReadOnlyFieldFilterStep(),
             TenantInjectionStep(tenant_applicator),
             InputValidationStep(input_validator),

@@ -99,8 +99,8 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "bulk_exclude_models": [],
         "required_update_fields": {},
         "enable_nested_relations": True,
+        "relation_max_nesting_depth": 3,
         "nested_relations_config": {},
-        "nested_field_config": {},
     },
     "subscription_settings": {
         "enable_subscriptions": True,

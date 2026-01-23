@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models
 
 import graphene
-
+from .operations import RelationOperationProcessor
 
 class NestedCreateMixin:
     """
@@ -49,8 +49,8 @@ class NestedCreateMixin:
         """
         try:
             self._ensure_operation_access(model, "create", info)
-            # First, process nested_ prefixed fields and extract them
-            processed_input = self._process_nested_fields(input_data)
+            # First, process nested_ prefixed fields (now Unified Input pass-through)
+            processed_input = self.process_relation_input(input_data)
             processed_input = self._apply_tenant_input(
                 processed_input, info, model, operation="create"
             )
@@ -101,15 +101,18 @@ class NestedCreateMixin:
             instance = model(**regular_fields)
             self._save_instance(instance)
 
-            # Handle reverse relationships after instance creation
-            self._handle_create_reverse_relations(
-                model, instance, reverse_fields, info
-            )
+            # Handle relations using Processor
+            processor = RelationOperationProcessor(self)
 
-            # Handle many-to-many relationships after instance creation
-            self._handle_create_m2m(
-                model, instance, m2m_fields, info
-            )
+            # Handle reverse relationships
+            for field_name, (rel, value) in reverse_fields.items():
+                if value:
+                     processor.process_relation(instance, field_name, value, info, is_reverse=True)
+
+            # Handle many-to-many relationships
+            for field_name, (field, value) in m2m_fields.items():
+                if value:
+                     processor.process_relation(instance, field_name, value, info, is_m2m=True)
 
             return instance
 
@@ -129,43 +132,16 @@ class NestedCreateMixin:
         regular_fields: dict[str, Any],
         info: Optional[graphene.ResolveInfo],
     ) -> None:
-        """Handle foreign key relationships during create."""
+        """Handle foreign key relationships during create (Unified Input)."""
         for field_name, (field, value) in nested_fields.items():
             if value is None:
                 continue
-
-            use_nested = self._should_use_nested_operations(model, field_name)
-            if isinstance(value, dict):
-                if not use_nested:
-                    raise ValidationError(
-                        f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                        f"Use ID references instead."
-                    )
-                # Nested create
-                if "id" in value:
-                    # Update existing object
-                    related_queryset = self._get_tenant_queryset(
-                        field.related_model, info, operation="retrieve"
-                    )
-                    related_instance = related_queryset.get(pk=value["id"])
-                    regular_fields[field_name] = self.handle_nested_update(
-                        field.related_model, value, related_instance, info=info
-                    )
-                else:
-                    # Create new object
-                    regular_fields[field_name] = self.handle_nested_create(
-                        field.related_model, value, info=info
-                    )
-            elif isinstance(value, (str, int, uuid.UUID)):
-                # Reference to existing object - convert ID to model instance
-                pk_value = value
-                # Try to coerce to int if it looks like a digit string
-                if isinstance(value, str) and value.isdigit():
-                    try:
-                        pk_value = int(value)
-                    except (TypeError, ValueError):
-                        pass
-
+                
+            if not isinstance(value, dict):
+                 continue
+                 
+            if "connect" in value:
+                pk_value = self._coerce_pk(value["connect"])
                 try:
                     related_queryset = self._get_tenant_queryset(
                         field.related_model, info, operation="retrieve"
@@ -179,263 +155,31 @@ class NestedCreateMixin:
                     )
                     regular_fields[field_name] = related_instance
                 except field.related_model.DoesNotExist:
-                    # Explicitly map error to the input field name
                     raise ValidationError(
                         {
-                            field_name: f"{field.related_model.__name__} with id '{value}' does not exist."
+                            field_name: f"{field.related_model.__name__} with id '{pk_value}' does not exist."
                         }
                     )
-                except (TypeError, ValueError):
-                    # Ensure numeric coercion issues are mapped to the correct field
-                    raise ValidationError(
-                        {
-                            field_name: f"Field '{field_name}' invalid ID format: '{value}'."
-                        }
+            elif "create" in value:
+                create_data = value["create"]
+                related_instance = self.handle_nested_create(
+                    field.related_model, create_data, info=info
+                )
+                regular_fields[field_name] = related_instance
+            elif "update" in value:
+                # Update existing and link
+                update_payload = value["update"]
+                if "id" not in update_payload:
+                     continue # Cannot identify object to update
+                pk_value = self._coerce_pk(update_payload["id"])
+                try:
+                    related_queryset = self._get_tenant_queryset(
+                        field.related_model, info, operation="retrieve"
                     )
-            elif hasattr(value, "pk"):
-                # Already a model instance, use directly
-                regular_fields[field_name] = value
-            else:
-                # For other types, try direct assignment
-                regular_fields[field_name] = value
-
-    def _handle_create_reverse_relations(
-        self,
-        model: type[models.Model],
-        instance: models.Model,
-        reverse_fields: dict[str, tuple],
-        info: Optional[graphene.ResolveInfo],
-    ) -> None:
-        """Handle reverse relationships after instance creation."""
-        for field_name, (related_field, value) in reverse_fields.items():
-            if value is None:
-                continue
-            use_nested = self._should_use_nested_operations(model, field_name)
-
-            # Handle different types of reverse relationship data
-            if isinstance(value, list):
-                if not use_nested and self._has_nested_payload(value):
-                    raise ValidationError(
-                        f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                        f"Use ID references instead."
+                    related_instance = related_queryset.get(pk=pk_value)
+                    updated_instance = self.handle_nested_update(
+                        field.related_model, update_payload, related_instance, info=info
                     )
-                # List can contain either IDs or dicts
-                for item in value:
-                    if isinstance(item, dict):
-                        # Create new object and set the foreign key to point to our instance
-                        item[related_field.field.name] = instance.pk
-                        self.handle_nested_create(
-                            related_field.related_model, item, info=info
-                        )
-                    elif isinstance(item, (str, int, uuid.UUID)):
-                        # Connect existing object to this instance
-                        self._connect_existing_to_instance(
-                            related_field, item, instance, field_name, info
-                        )
-
-            elif isinstance(value, dict):
-                if not use_nested and self._has_nested_payload(value):
-                    raise ValidationError(
-                        f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                        f"Use ID references instead."
-                    )
-                # Handle operations like create, connect, disconnect
-                if "create" in value:
-                    create_data = value["create"]
-                    if isinstance(create_data, list):
-                        for item in create_data:
-                            if isinstance(item, dict):
-                                # Set the foreign key to point to our instance
-                                item[related_field.field.name] = instance.pk
-                                self.handle_nested_create(
-                                    related_field.related_model, item, info=info
-                                )
-                    elif isinstance(create_data, dict):
-                        # Single object to create
-                        create_data[related_field.field.name] = instance.pk
-                        self.handle_nested_create(
-                            related_field.related_model, create_data, info=info
-                        )
-
-                if "connect" in value:
-                    # Connect existing objects to this instance
-                    connect_ids = value["connect"]
-                    if isinstance(connect_ids, list):
-                        related_queryset = self._get_tenant_queryset(
-                            related_field.related_model,
-                            info,
-                            operation="update",
-                        )
-                        related_objects = related_queryset.filter(
-                            pk__in=connect_ids
-                        )
-                        for related_obj in related_objects:
-                            self._ensure_operation_access(
-                                related_field.related_model,
-                                "update",
-                                info,
-                                instance=related_obj,
-                            )
-                            setattr(
-                                related_obj,
-                                related_field.field.name,
-                                instance,
-                            )
-                            self._save_instance(related_obj)
-
-    def _connect_existing_to_instance(
-        self,
-        related_field,
-        item_id,
-        instance: models.Model,
-        field_name: str,
-        info: Optional[graphene.ResolveInfo],
-    ) -> None:
-        """Connect an existing object to the instance."""
-        pk_value = item_id
-        if isinstance(item_id, str) and item_id.isdigit():
-            try:
-                pk_value = int(item_id)
-            except (TypeError, ValueError):
-                pass
-
-        try:
-            related_queryset = self._get_tenant_queryset(
-                related_field.related_model,
-                info,
-                operation="update",
-            )
-            related_obj = related_queryset.get(pk=pk_value)
-            self._ensure_operation_access(
-                related_field.related_model,
-                "update",
-                info,
-                instance=related_obj,
-            )
-            setattr(
-                related_obj, related_field.field.name, instance
-            )
-            self._save_instance(related_obj)
-        except Exception as e:
-            raise ValidationError(
-                {
-                    field_name: f"Failed to connect {related_field.related_model.__name__} with id {item_id}: {str(e)}"
-                }
-            )
-
-    def _handle_create_m2m(
-        self,
-        model: type[models.Model],
-        instance: models.Model,
-        m2m_fields: dict[str, tuple],
-        info: Optional[graphene.ResolveInfo],
-    ) -> None:
-        """Handle many-to-many relationships after instance creation."""
-        for field_name, (field, value) in m2m_fields.items():
-            if value is None:
-                continue
-
-            m2m_manager = getattr(instance, field_name)
-
-            # Check if nested operations should be used for this field
-            use_nested = self._should_use_nested_operations(model, field_name)
-
-            if isinstance(value, list):
-                related_objects = []
-                for item in value:
-                    if isinstance(item, dict) and use_nested:
-                        if "id" in item:
-                            # Reference existing object
-                            related_queryset = self._get_tenant_queryset(
-                                field.related_model, info, operation="retrieve"
-                            )
-                            related_obj = related_queryset.get(pk=item["id"])
-                            self._ensure_operation_access(
-                                field.related_model,
-                                "retrieve",
-                                info,
-                                instance=related_obj,
-                            )
-                        else:
-                            # Create new object only if nested operations are enabled
-                            related_obj = self.handle_nested_create(
-                                field.related_model, item, info=info
-                            )
-                        related_objects.append(related_obj)
-                    elif isinstance(item, (str, int, uuid.UUID)):
-                        # Direct ID reference - always allowed
-                        related_queryset = self._get_tenant_queryset(
-                            field.related_model, info, operation="retrieve"
-                        )
-                        related_obj = related_queryset.get(pk=item)
-                        self._ensure_operation_access(
-                            field.related_model,
-                            "retrieve",
-                            info,
-                            instance=related_obj,
-                        )
-                        related_objects.append(related_obj)
-                    elif isinstance(item, dict) and not use_nested:
-                        # If nested is disabled but dict is provided, raise error
-                        raise ValidationError(
-                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                            f"Use ID references instead."
-                        )
-
-                m2m_manager.set(related_objects)
-
-            elif isinstance(value, dict):
-                if not use_nested:
-                    if self._has_nested_payload(value):
-                        raise ValidationError(
-                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
-                            f"Use ID references instead."
-                        )
-
-                # Handle operations like connect, create, disconnect
-                if "connect" in value:
-                    connect_ids = value["connect"]
-                    if isinstance(connect_ids, list):
-                        related_queryset = self._get_tenant_queryset(
-                            field.related_model, info, operation="retrieve"
-                        )
-                        existing_objects = related_queryset.filter(
-                            pk__in=connect_ids
-                        )
-                        for related_obj in existing_objects:
-                            self._ensure_operation_access(
-                                field.related_model,
-                                "retrieve",
-                                info,
-                                instance=related_obj,
-                            )
-                        m2m_manager.add(*existing_objects)
-
-                if "create" in value:
-                    create_data = value["create"]
-                    if isinstance(create_data, list):
-                        new_objects = [
-                            self.handle_nested_create(
-                                field.related_model, item, info=info
-                            )
-                            for item in create_data
-                        ]
-                        m2m_manager.add(*new_objects)
-
-                if "disconnect" in value:
-                    disconnect_ids = value["disconnect"]
-                    if isinstance(disconnect_ids, list):
-                        related_queryset = self._get_tenant_queryset(
-                            field.related_model, info, operation="retrieve"
-                        )
-                        objects_to_remove = related_queryset.filter(
-                            pk__in=disconnect_ids
-                        )
-                        for related_obj in objects_to_remove:
-                            self._ensure_operation_access(
-                                field.related_model,
-                                "retrieve",
-                                info,
-                                instance=related_obj,
-                            )
-                        m2m_manager.remove(*objects_to_remove)
+                    regular_fields[field_name] = updated_instance
+                except field.related_model.DoesNotExist:
+                     raise ValidationError({field_name: f"Object not found for update."})

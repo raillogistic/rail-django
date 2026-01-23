@@ -26,8 +26,8 @@ from .enums import (
 )
 from .inputs import (
     generate_input_type as _generate_input_type,
-    _get_or_create_nested_input_type,
 )
+from .relations import RelationInputTypeGenerator
 from .objects import (
     generate_object_type as _generate_object_type,
 )
@@ -78,6 +78,8 @@ class TypeGenerator:
         ] = {}
         self._enum_registry: dict[str, type[graphene.Enum]] = {}
         self._meta_cache: dict[type[models.Model], Any] = {}
+        
+        self.relation_input_generator = RelationInputTypeGenerator(self)
 
     def _update_field_type_map(self) -> None:
         """Update field type map with custom scalars based on settings."""
@@ -278,6 +280,7 @@ class TypeGenerator:
         mutation_type: str = "create",
         partial: bool = False,
         include_reverse_relations: bool = True,
+        exclude_fields: Optional[List[str]] = None,
     ) -> type[graphene.InputObjectType]:
         return _generate_input_type(
             self,
@@ -285,6 +288,7 @@ class TypeGenerator:
             mutation_type=mutation_type,
             partial=partial,
             include_reverse_relations=include_reverse_relations,
+            exclude_fields=exclude_fields,
         )
 
     def _build_enum_name(self, model: type[models.Model], field_name: str) -> str:
@@ -455,9 +459,6 @@ class TypeGenerator:
         except Exception:
             return None, None, None
 
-    def _get_or_create_nested_input_type(self, model: type[models.Model], mutation_type: str = "create", exclude_parent_field: Optional[type[models.Model]] = None) -> type[graphene.InputObjectType]:
-        return _get_or_create_nested_input_type(self, model, mutation_type=mutation_type, exclude_parent_field=exclude_parent_field)
-
     def _should_include_nested_relations(self, model: type[models.Model]) -> bool:
         model_name = model.__name__
         if not self.mutation_settings.enable_nested_relations:
@@ -468,10 +469,6 @@ class TypeGenerator:
 
     def _should_include_nested_field(self, model: type[models.Model], field_name: str) -> bool:
         model_name = model.__name__
-        if model_name in self.mutation_settings.nested_field_config:
-            field_config = self.mutation_settings.nested_field_config[model_name]
-            if field_name in field_config:
-                return field_config[field_name]
         if model_name in self.mutation_settings.nested_relations_config:
             return self.mutation_settings.nested_relations_config[model_name]
         return getattr(self.mutation_settings, "enable_nested_relations", False)

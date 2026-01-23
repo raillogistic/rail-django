@@ -94,34 +94,25 @@ def normalize_enum_inputs(
     return normalized
 
 
-def process_dual_fields(
+def process_relation_operations(
     input_data: dict[str, Any],
     model: type["models.Model"],
     introspector=None,
-    mandatory_fields: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """
-    Process dual fields (nested_X vs X) with validation.
-
-    For OneToManyRel (ForeignKey, OneToOneField):
-    - Validates mutual exclusivity: only one of nested_<field> or <field> should be provided
-    - Enforces mandatory fields if specified
-    - Transforms nested_<field> to <field> for processing
-
-    For ManyToManyRel:
-    - Transforms nested_<field> to <field> for processing
+    Process unified relation inputs.
+    Validates structure of relation operations.
 
     Args:
         input_data: The input data to process
         model: The Django model
         introspector: Optional ModelIntrospector instance
-        mandatory_fields: Optional list of mandatory field names
 
     Returns:
-        Dict with processed dual fields
+        Dict with validated relation operations
 
     Raises:
-        ValidationError: If mutual exclusivity is violated
+        ValidationError: If operation constraints are violated
     """
     from django.core.exceptions import ValidationError
     from rail_django.generators.introspector import ModelIntrospector
@@ -131,48 +122,47 @@ def process_dual_fields(
 
     processed = input_data.copy()
     relationships = introspector.get_model_relationships()
-    mandatory = set(mandatory_fields or [])
-
-    for field_name, rel_info in relationships.items():
-        nested_field_name = f"nested_{field_name}"
-
-        if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
-            has_direct = field_name in processed and processed[field_name] is not None
-            has_nested = (
-                nested_field_name in processed
-                and processed[nested_field_name] is not None
-            )
-
-            # Validate mutual exclusivity
-            if has_direct and has_nested:
-                raise ValidationError(
-                    {
-                        field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'."
-                    }
-                )
-
-            # Check mandatory field requirement
-            if field_name in mandatory and not has_direct and not has_nested:
-                raise ValidationError(
-                    {
-                        field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
-                    }
-                )
-
-            # Transform nested field to direct field
-            if has_nested:
-                processed[field_name] = processed.pop(nested_field_name)
-
-        elif rel_info.relationship_type == "ManyToManyField":
-            if nested_field_name in processed:
-                processed[field_name] = processed.pop(nested_field_name)
-
-    # Handle reverse relationships
     reverse_relations = introspector.get_reverse_relations()
-    for field_name, _ in reverse_relations.items():
-        nested_field_name = f"nested_{field_name}"
-        if nested_field_name in processed:
-            processed[field_name] = processed.pop(nested_field_name)
+    
+    # Merge relationships and reverse relations for checking
+    # Note: reverse_relations values are dicts or objects depending on implementation
+    all_relations = {}
+    for k, v in relationships.items():
+        all_relations[k] = v
+    for k, v in reverse_relations.items():
+        all_relations[k] = v
+
+    for field_name, value in processed.items():
+        if field_name not in all_relations:
+            continue
+            
+        if not isinstance(value, dict):
+            continue
+            
+        rel_info = all_relations[field_name]
+        is_list = False
+        
+        # Check if relation is list-based (M2M or Reverse)
+        if isinstance(rel_info, dict): # Reverse relation usually
+             is_list = True
+        elif hasattr(rel_info, "relationship_type") and rel_info.relationship_type == "ManyToManyField":
+             is_list = True
+             
+        ops = set(value.keys())
+        
+        if not is_list:
+            # FK/OneToOne: Only ONE operation allowed (connect, create, OR update)
+            count = sum(1 for op in ["connect", "create", "update"] if op in value)
+            if count > 1:
+                raise ValidationError({
+                    field_name: f"For singular relation '{field_name}', provide exactly one of: connect, create, update."
+                })
+        else:
+            # M2M/Reverse: 'set' cannot combine with others
+            if "set" in value and (len(ops) > 1):
+                 raise ValidationError({
+                    field_name: f"For relation '{field_name}', 'set' cannot be combined with other operations."
+                })
 
     return processed
 
@@ -182,9 +172,6 @@ def get_mandatory_fields(
 ) -> list[str]:
     """
     Get mandatory fields from model's GraphQLMeta configuration.
-
-    This replaces the hardcoded model name checks with configuration-based
-    mandatory field detection.
 
     Args:
         model: The Django model

@@ -44,6 +44,8 @@ from .config import (
     PipelineConfig,
     ResolverConfig,
     RoleConfig,
+    RelationOperationConfig,
+    FieldRelationConfig,
 )
 from .security_loader import load_security_components
 
@@ -93,6 +95,8 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
     AccessControl = AccessControlConfig
     Classification = ClassificationConfig
     Pipeline = PipelineConfig
+    RelationOperation = RelationOperationConfig
+    FieldRelation = FieldRelationConfig
 
     def __init__(self, model_class: type[models.Model]):
         """
@@ -126,6 +130,8 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
             self._meta_config
         )
         self.pipeline_config: PipelineConfig = build_pipeline_config(self._meta_config)
+        
+        self.relations_config: dict[str, FieldRelationConfig] = getattr(self._meta_config, "relations", {})
 
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom
@@ -159,6 +165,21 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         self._register_classifications()
 
         self._validate_configuration()
+
+    def get_relation_config(self, field_name: str) -> Optional[FieldRelationConfig]:
+        """Get configuration for a specific relation field."""
+        return self.relations_config.get(field_name)
+
+    def is_operation_allowed(self, field_name: str, operation: str) -> bool:
+        """Check if a specific operation (connect/create/etc) is allowed for a field."""
+        config = self.get_relation_config(field_name)
+        if not config:
+            return True
+        
+        op_config = getattr(config, operation, None)
+        if op_config and hasattr(op_config, "enabled"):
+            return op_config.enabled
+        return True
 
     def _resolve_meta_class(self, model_class: type[models.Model]) -> Any:
         """Return the declared GraphQL meta configuration class if it exists."""

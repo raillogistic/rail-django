@@ -343,8 +343,24 @@ class InputValidator:
         if isinstance(value, Enum):
             return value.value
 
+        # Handle graphene InputObjectType instances
+        # These have _meta.fields and store values as instance attributes
+        if hasattr(value, "_meta") and hasattr(getattr(value, "_meta", None), "fields"):
+            try:
+                # Convert InputObjectType to dict using its fields
+                value_dict = {}
+                for field_name in value._meta.fields:
+                    field_value = getattr(value, field_name, None)
+                    if field_value is not None:
+                        value_dict[field_name] = field_value
+                return self._sanitize_value(value_dict, issues, path)
+            except Exception:
+                pass  # Fall through to other handlers
+
         if hasattr(value, "__dict__") and not isinstance(value, dict):
-            return self._sanitize_value(dict(value.__dict__), issues, path)
+            # Skip graphene types that were already handled above
+            if not hasattr(value, "_meta"):
+                return self._sanitize_value(dict(value.__dict__), issues, path)
 
         if isinstance(value, dict):
             return {

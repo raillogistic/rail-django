@@ -134,10 +134,13 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## Mutation settings
 
-Nested relation writes are controlled by `mutation_settings.enable_nested_relations`
-and can be overridden per model/field via `nested_relations_config` and
-`nested_field_config`. When disabled, `nested_*` inputs are not generated and
-nested payloads are rejected during mutation execution.
+Nested relation writes are controlled by `mutation_settings.enable_nested_relations`.
+When enabled, Unified Input Types are generated for relationships (Foreign Keys, M2M, Reverse).
+
+Key options:
+- `enable_nested_relations` (default: `True`): master toggle.
+- `relation_max_nesting_depth` (default: 3): Max depth for nested create/update inputs to prevent infinite recursion.
+- `nested_relations_config` (dict): Per-model enable/disable override (e.g. `{"Post": False}`).
 
 Rail Django uses a pipeline-based architecture for mutation handling. Each mutation
 step is a separate class that can be customized, skipped, or reordered. See

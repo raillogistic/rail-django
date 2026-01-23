@@ -192,51 +192,55 @@ class TestReverseRelationsProcessing:
         assert "hidden_relation" not in result
 
 
-class TestNestedFieldProcessing:
-    """Tests for nested field processing."""
+class TestProcessRelationInput:
+    """Tests for relation input processing (unified inputs)."""
 
-    def test_process_nested_fields_extracts_prefix(self):
-        """_process_nested_fields should extract nested_ prefixed fields."""
+    def test_process_relation_input_passthrough(self):
+        """process_relation_input should pass through unified input data."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
         input_data = {
             "name": "Test",
-            "nested_author": {"name": "Author Name"},
-            "description": "A description",
+            "author": {"connect": "123"},
+            "tags": {"create": [{"name": "Tag1"}]},
         }
 
-        result = handler._process_nested_fields(input_data)
+        result = handler.process_relation_input(input_data)
 
+        # Unified inputs should pass through unchanged
+        assert result == input_data
         assert "author" in result
-        assert result["author"] == {"name": "Author Name"}
-        assert "name" in result
-        assert "description" in result
-        assert "nested_author" not in result
+        assert result["author"] == {"connect": "123"}
+        assert "tags" in result
+        assert result["tags"] == {"create": [{"name": "Tag1"}]}
 
-    def test_process_nested_fields_prioritizes_nested(self):
-        """nested_ prefixed fields should take priority."""
+    def test_process_relation_input_regular_fields(self):
+        """process_relation_input should preserve regular fields."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
         input_data = {
-            "author": 123,  # ID reference
-            "nested_author": {"name": "Nested Author"},  # Full object
+            "name": "Test",
+            "description": "A description",
+            "price": 10.0,
         }
 
-        result = handler._process_nested_fields(input_data)
+        result = handler.process_relation_input(input_data)
 
-        # nested_author should override author
-        assert result["author"] == {"name": "Nested Author"}
+        assert result == input_data
+        assert result["name"] == "Test"
+        assert result["description"] == "A description"
+        assert result["price"] == 10.0
 
 
 class TestHasNestedPayload:
-    """Tests for nested payload detection."""
+    """Tests for unified operation payload detection."""
 
     def test_has_nested_payload_with_create(self):
-        """Should detect 'create' key as nested payload."""
+        """Should detect 'create' key as unified operation payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
@@ -245,7 +249,7 @@ class TestHasNestedPayload:
         assert handler._has_nested_payload(value) is True
 
     def test_has_nested_payload_with_update(self):
-        """Should detect 'update' key as nested payload."""
+        """Should detect 'update' key as unified operation payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
@@ -253,45 +257,62 @@ class TestHasNestedPayload:
         value = {"update": {"id": 1, "name": "Updated"}}
         assert handler._has_nested_payload(value) is True
 
-    def test_has_nested_payload_with_connect_only(self):
-        """connect/disconnect/set only should not be nested payload."""
+    def test_has_nested_payload_with_connect(self):
+        """Should detect 'connect' key as unified operation payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
-        # Connect only - not nested
-        assert handler._has_nested_payload({"connect": [1, 2, 3]}) is False
+        # Connect is a unified operation
+        assert handler._has_nested_payload({"connect": [1, 2, 3]}) is True
+        assert handler._has_nested_payload({"connect": "123"}) is True
 
-        # Disconnect only - not nested
-        assert handler._has_nested_payload({"disconnect": [1]}) is False
-
-        # Set with IDs only - not nested
-        assert handler._has_nested_payload({"set": [1, 2, 3]}) is False
-
-    def test_has_nested_payload_with_set_dicts(self):
-        """set with dict objects should be nested payload."""
+    def test_has_nested_payload_with_disconnect(self):
+        """Should detect 'disconnect' key as unified operation payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
-        value = {"set": [{"name": "New Item"}]}
-        assert handler._has_nested_payload(value) is True
+        # Disconnect is a unified operation
+        assert handler._has_nested_payload({"disconnect": [1]}) is True
 
-    def test_has_nested_payload_list_with_dicts(self):
-        """List containing dicts should be nested payload."""
+    def test_has_nested_payload_with_set(self):
+        """Should detect 'set' key as unified operation payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
-        value = [{"name": "Item 1"}, {"name": "Item 2"}]
-        assert handler._has_nested_payload(value) is True
+        # Set is a unified operation
+        assert handler._has_nested_payload({"set": [1, 2, 3]}) is True
+        assert handler._has_nested_payload({"set": [{"name": "New Item"}]}) is True
 
-    def test_has_nested_payload_list_with_ids_only(self):
-        """List containing only IDs should not be nested payload."""
+    def test_has_nested_payload_regular_dict(self):
+        """Regular dict without operation keys should not be unified payload."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
 
-        value = [1, 2, 3]
+        # Regular data dict without unified operation keys
+        value = {"name": "Item", "description": "Test"}
         assert handler._has_nested_payload(value) is False
+
+    def test_has_nested_payload_list(self):
+        """List values should not be detected as unified payload."""
+        from rail_django.generators.nested import NestedOperationHandler
+
+        handler = NestedOperationHandler()
+
+        # Lists (legacy format) are not unified payloads
+        assert handler._has_nested_payload([1, 2, 3]) is False
+        assert handler._has_nested_payload([{"name": "Item 1"}]) is False
+
+    def test_has_nested_payload_scalar(self):
+        """Scalar values should not be detected as unified payload."""
+        from rail_django.generators.nested import NestedOperationHandler
+
+        handler = NestedOperationHandler()
+
+        assert handler._has_nested_payload("123") is False
+        assert handler._has_nested_payload(123) is False
+        assert handler._has_nested_payload(None) is False
 

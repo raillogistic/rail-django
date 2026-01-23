@@ -50,16 +50,12 @@ class NestedOperationHandlerBase:
         self._validation_errors.clear()
         self.circular_reference_tracker.clear()
 
+    # ... (other methods same as before) ...
     def _should_use_nested_operations(self, model, field_name) -> bool:
         """Check if nested operations should be used for a specific field."""
         if not self.mutation_settings:
             return True
         model_name = model.__name__
-
-        if hasattr(self.mutation_settings, "nested_field_config"):
-            cfg = self.mutation_settings.nested_field_config
-            if model_name in cfg and field_name in cfg[model_name]:
-                return cfg[model_name][field_name]
 
         if hasattr(self.mutation_settings, "nested_relations_config"):
             cfg = self.mutation_settings.nested_relations_config
@@ -74,29 +70,23 @@ class NestedOperationHandlerBase:
         self, model: type[models.Model], operation: str,
         info: Optional[graphene.ResolveInfo], instance: Optional[models.Model] = None,
     ) -> None:
-        """Ensure the user has access to perform the operation."""
-        if info is None:
-            return
+        if info is None: return
         graphql_meta = get_model_graphql_meta(model)
         self._enforce_model_permission(info, model, operation, graphql_meta)
         graphql_meta.ensure_operation_access(operation, info=info, instance=instance)
 
     def _has_operation_guard(self, graphql_meta, operation: str) -> bool:
-        """Check if an operation guard exists."""
         guards = getattr(graphql_meta, "_operation_guards", None) or {}
         return operation in guards or "*" in guards
 
     def _build_model_permission_name(self, model: type[models.Model], codename: str) -> str:
-        """Build the full permission name for a model operation."""
         return f"{model._meta.app_label}.{codename}_{model._meta.model_name}"
 
     def _normalize_permission_operation(self, operation: str) -> str:
-        """Normalize operation name by removing bulk_ prefix."""
         normalized = str(operation or "").strip().lower()
         return normalized[5:] if normalized.startswith("bulk_") else normalized
 
     def _get_permission_codename(self, operation: str) -> Optional[str]:
-        """Get the permission codename for an operation."""
         normalized = self._normalize_permission_operation(operation)
         mapping = getattr(self.mutation_settings, "model_permission_codenames", None)
         if isinstance(mapping, dict):
@@ -109,36 +99,29 @@ class NestedOperationHandlerBase:
         self, info: graphene.ResolveInfo, model: type[models.Model],
         operation: str, graphql_meta=None,
     ) -> None:
-        """Enforce model-level permissions for an operation."""
         from graphql import GraphQLError
-
         if not getattr(self.authorization_manager.settings, "enable_authorization", True):
             return
         if not getattr(self.mutation_settings, "require_model_permissions", True):
             return
-
         normalized = self._normalize_permission_operation(operation)
         if graphql_meta is not None:
             if self._has_operation_guard(graphql_meta, operation):
                 return
             if normalized and self._has_operation_guard(graphql_meta, normalized):
                 return
-
         user = getattr(getattr(info, "context", None), "user", None)
         if not user or not getattr(user, "is_authenticated", False):
             raise GraphQLError("Authentication required")
-
         codename = self._get_permission_codename(operation)
         if not codename:
             return
-
         perm_name = self._build_model_permission_name(model, codename)
         has_perm = getattr(user, "has_perm", None)
         if not callable(has_perm) or not has_perm(perm_name):
             raise GraphQLError(f"Permission required: {perm_name}")
 
     def _save_instance(self, instance: models.Model) -> None:
-        """Validate and save a model instance."""
         instance.full_clean()
         instance.save()
 
@@ -146,7 +129,6 @@ class NestedOperationHandlerBase:
         self, queryset: models.QuerySet, info: Optional[graphene.ResolveInfo],
         model: type[models.Model], *, operation: str = "read",
     ) -> models.QuerySet:
-        """Apply tenant scoping to a queryset."""
         try:
             from ...extensions.multitenancy import apply_tenant_queryset
         except Exception:
@@ -159,7 +141,6 @@ class NestedOperationHandlerBase:
         self, input_data: dict[str, Any], info: Optional[graphene.ResolveInfo],
         model: type[models.Model], *, operation: str = "create",
     ) -> dict[str, Any]:
-        """Apply tenant context to input data."""
         try:
             from ...extensions.multitenancy import apply_tenant_to_input
         except Exception:
@@ -172,7 +153,6 @@ class NestedOperationHandlerBase:
         self, instance: models.Model, info: Optional[graphene.ResolveInfo],
         model: type[models.Model], *, operation: str = "read",
     ) -> None:
-        """Enforce tenant access for an instance."""
         try:
             from ...extensions.multitenancy import ensure_tenant_access
         except Exception:
@@ -185,27 +165,14 @@ class NestedOperationHandlerBase:
         self, model: type[models.Model], info: Optional[graphene.ResolveInfo],
         *, operation: str = "read",
     ) -> models.QuerySet:
-        """Get a queryset with tenant scoping applied."""
         return self._apply_tenant_scope(model.objects.all(), info, model, operation=operation)
 
     def _has_nested_payload(self, value: Any) -> bool:
-        """Check if a value contains nested operation payload."""
         if isinstance(value, dict):
-            if "create" in value or "update" in value:
-                return True
-            if "set" in value:
-                sv = value.get("set")
-                if isinstance(sv, dict) or (isinstance(sv, list) and any(isinstance(i, dict) for i in sv)):
-                    return True
-            if set(value.keys()).issubset({"connect", "disconnect", "set"}):
-                return False
-            return True
-        if isinstance(value, list):
-            return any(isinstance(item, dict) for item in value)
+            return any(k in value for k in ("create", "update", "connect", "disconnect", "set"))
         return False
 
     def _extract_unique_constraint_fields(self, model: type[models.Model], error: Exception) -> list[str]:
-        """Extract field names from unique constraint errors."""
         msg = str(error)
         fields = []
         m = re.search(r"UNIQUE constraint failed: ([\w\., ]+)", msg)
@@ -221,7 +188,6 @@ class NestedOperationHandlerBase:
         return fields
 
     def _map_column_to_field(self, model: type[models.Model], column: str) -> Optional[str]:
-        """Map a DB column name to the Django model field name."""
         try:
             for f in model._meta.get_fields():
                 if hasattr(f, "column") and f.column == column:
@@ -231,7 +197,6 @@ class NestedOperationHandlerBase:
         return None
 
     def _get_field_verbose_name(self, model: type[models.Model], field_name: str) -> Optional[str]:
-        """Retrieve the verbose_name for a Django field."""
         try:
             field = model._meta.get_field(field_name)
             label = getattr(field, "verbose_name", None)
@@ -240,7 +205,6 @@ class NestedOperationHandlerBase:
             return None
 
     def _get_reverse_relations(self, model: type[models.Model]) -> dict[str, Any]:
-        """Get reverse relationships for a model."""
         reverse_relations = {}
         if hasattr(model._meta, "related_objects"):
             for rel in model._meta.related_objects:
@@ -260,7 +224,6 @@ class NestedOperationHandlerBase:
         return reverse_relations
 
     def _should_include_reverse_field(self, rel) -> bool:
-        """Determine if a reverse relationship field should be included."""
         if hasattr(rel, "through") and rel.through and not rel.through._meta.auto_created:
             return False
         if hasattr(rel, "hidden") and rel.hidden:
@@ -269,22 +232,10 @@ class NestedOperationHandlerBase:
             return False
         return True
 
-    def _process_nested_fields(self, input_data: dict[str, Any]) -> dict[str, Any]:
-        """Process nested_ prefixed fields and map them to actual field names."""
-        processed = {}
-        for field_name, value in input_data.items():
-            if field_name.startswith("nested_"):
-                actual = field_name[7:]
-                if actual in input_data:
-                    logger.warning(f"Both '{field_name}' and '{actual}' provided. Using nested.")
-                processed[actual] = value
-            else:
-                if f"nested_{field_name}" not in input_data:
-                    processed[field_name] = value
-        return processed
+    def process_relation_input(self, input_data: dict[str, Any]) -> dict[str, Any]:
+        return input_data
 
     def _coerce_pk(self, value: Any) -> Any:
-        """Coerce a value to an appropriate primary key type."""
         if isinstance(value, str) and value.isdigit():
             try:
                 return int(value)
@@ -295,7 +246,6 @@ class NestedOperationHandlerBase:
     def _handle_integrity_error(
         self, model: type[models.Model], error: Exception, operation: str = "create",
     ) -> None:
-        """Handle IntegrityError and raise appropriate ValidationError."""
         error_msg = str(error)
         match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
         if match:
@@ -314,6 +264,171 @@ class NestedOperationHandlerBase:
 
         msg = f"Echec de la {'creation' if operation == 'create' else 'mise a jour'} de {model.__name__} : {error}"
         raise ValidationError(msg)
+
+    # --- Unified Operation Handlers ---
+
+    def handle_connect(self, instance, field_name, data, info, is_m2m, is_reverse):
+        """Handle 'connect' operation."""
+        model = type(instance)
+        if is_m2m:
+            field = model._meta.get_field(field_name)
+            manager = getattr(instance, field_name)
+            ids = data if isinstance(data, list) else [data]
+            for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+                 manager.add(obj)
+        elif is_reverse:
+             # Reverse relation (OneToMany): set FK on related objects
+             # We need to find the related model and the FK field pointing to us
+             rel = self._get_reverse_relations(model).get(field_name)
+             if not rel: return
+             related_model = rel.related_model
+             remote_field_name = rel.field.name
+             ids = data if isinstance(data, list) else [data]
+             for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(related_model, info, operation="update").get(pk=pk)
+                 setattr(obj, remote_field_name, instance)
+                 self._save_instance(obj)
+        else:
+             # Singular FK/O2O: set the related object
+             field = model._meta.get_field(field_name)
+             pk = self._coerce_pk(data)
+             obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+             setattr(instance, field_name, obj)
+             self._save_instance(instance)
+
+    def handle_disconnect(self, instance, field_name, data, info, is_m2m, is_reverse):
+        """Handle 'disconnect' operation."""
+        model = type(instance)
+        if is_m2m:
+            field = model._meta.get_field(field_name)
+            manager = getattr(instance, field_name)
+            ids = data if isinstance(data, list) else [data]
+            for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+                 manager.remove(obj)
+        elif is_reverse:
+             rel = self._get_reverse_relations(model).get(field_name)
+             if not rel: return
+             related_model = rel.related_model
+             remote_field_name = rel.field.name
+             ids = data if isinstance(data, list) else [data]
+             for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(related_model, info, operation="update").get(pk=pk)
+                 setattr(obj, remote_field_name, None)
+                 self._save_instance(obj)
+        else:
+             # Singular FK/O2O: set field to None (disconnect)
+             # data could be boolean True or an ID to verify
+             setattr(instance, field_name, None)
+             self._save_instance(instance)
+
+    def handle_set(self, instance, field_name, data, info, is_m2m, is_reverse):
+        """Handle 'set' operation (replace all)."""
+        model = type(instance)
+        if is_m2m:
+            field = model._meta.get_field(field_name)
+            manager = getattr(instance, field_name)
+            ids = data if isinstance(data, list) else [data]
+            objs = []
+            for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+                 objs.append(obj)
+            manager.set(objs)
+        elif is_reverse:
+             # For reverse, "set" implies:
+             # 1. Disconnect all existing
+             # 2. Connect new ones
+             # OR if relation is non-nullable, delete existing? (Prisma deletes)
+             # Here we try to nullify first.
+             rel = self._get_reverse_relations(model).get(field_name)
+             if not rel: return
+             related_model = rel.related_model
+             remote_field_name = rel.field.name
+
+             # clear existing
+             getattr(instance, field_name).all().update(**{remote_field_name: None})
+
+             ids = data if isinstance(data, list) else [data]
+             for item in ids:
+                 pk = self._coerce_pk(item)
+                 obj = self._get_tenant_queryset(related_model, info, operation="update").get(pk=pk)
+                 setattr(obj, remote_field_name, instance)
+                 self._save_instance(obj)
+        else:
+             # Singular FK/O2O: 'set' is same as 'connect' for singular
+             self.handle_connect(instance, field_name, data, info, is_m2m=False, is_reverse=False)
+
+    def handle_create(self, instance, field_name, data, info, is_m2m, is_reverse):
+        """Handle 'create' operation."""
+        model = type(instance)
+        if is_m2m:
+            field = model._meta.get_field(field_name)
+            manager = getattr(instance, field_name)
+            items = data if isinstance(data, list) else [data]
+            for item_data in items:
+                # self.handle_nested_create is available via Mixin
+                obj = self.handle_nested_create(field.related_model, item_data, info=info)
+                manager.add(obj)
+        elif is_reverse:
+             rel = self._get_reverse_relations(model).get(field_name)
+             if not rel: return
+             related_model = rel.related_model
+             remote_field_name = rel.field.name
+             items = data if isinstance(data, list) else [data]
+             for item_data in items:
+                 # Set the back-link using Unified Input format
+                 item_data[remote_field_name] = {"connect": str(instance.pk)}
+                 self.handle_nested_create(related_model, item_data, info=info)
+        else:
+             # Singular FK/O2O: create a new object and set it
+             field = model._meta.get_field(field_name)
+             obj = self.handle_nested_create(field.related_model, data, info=info)
+             setattr(instance, field_name, obj)
+             self._save_instance(instance)
+
+    def handle_update(self, instance, field_name, data, info, is_m2m, is_reverse):
+        """Handle 'update' operation."""
+        model = type(instance)
+        # Update usually implies: find object (by ID in data?) and update it.
+        # Unified input for update is usually: { where: {id: ...}, data: {...} } or just {id: ..., ...}
+        if is_m2m:
+             field = model._meta.get_field(field_name)
+             items = data if isinstance(data, list) else [data]
+             for item_data in items:
+                 if "id" in item_data:
+                     pk = self._coerce_pk(item_data["id"])
+                     obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+                     self.handle_nested_update(field.related_model, item_data, obj, info=info)
+        elif is_reverse:
+             rel = self._get_reverse_relations(model).get(field_name)
+             if not rel: return
+             related_model = rel.related_model
+             items = data if isinstance(data, list) else [data]
+             for item_data in items:
+                 if "id" in item_data:
+                     pk = self._coerce_pk(item_data["id"])
+                     obj = self._get_tenant_queryset(related_model, info, operation="retrieve").get(pk=pk)
+                     self.handle_nested_update(related_model, item_data, obj, info=info)
+        else:
+             # Singular FK/O2O: update the linked object (or specified by id)
+             field = model._meta.get_field(field_name)
+             if "id" in data:
+                 pk = self._coerce_pk(data["id"])
+                 obj = self._get_tenant_queryset(field.related_model, info, operation="retrieve").get(pk=pk)
+                 updated = self.handle_nested_update(field.related_model, data, obj, info=info)
+                 setattr(instance, field_name, updated)
+                 self._save_instance(instance)
+             else:
+                 # Update currently linked object
+                 current = getattr(instance, field_name)
+                 if current:
+                     self.handle_nested_update(field.related_model, data, current, info=info)
 
 
 from .create import NestedCreateMixin

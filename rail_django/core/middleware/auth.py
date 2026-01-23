@@ -219,17 +219,22 @@ class FieldPermissionMiddleware(BaseMiddleware):
             return None
         if isinstance(payload, dict):
             return payload
-        if hasattr(payload, "items"):
+        # Ensure 'items' is the dict-like method, not a GraphQL field named 'items'
+        if hasattr(payload, "items") and callable(getattr(payload, "items", None)):
             try:
                 return dict(payload.items())
             except Exception:
-                return dict(payload)
+                pass
         if hasattr(payload, "__dict__"):
             return {
                 key: value
                 for key, value in vars(payload).items()
                 if not key.startswith("_")
             }
+        try:
+            return dict(payload)
+        except Exception:
+            pass
         return None
 
     @staticmethod
@@ -277,25 +282,44 @@ class FieldPermissionMiddleware(BaseMiddleware):
     def _iter_nested_payloads(value: Any) -> list[dict[str, Any]]:
         """Iterate over nested payloads in a value."""
         nested_payloads: list[dict[str, Any]] = []
-        if isinstance(value, dict):
-            for key in ("create", "update", "set"):
-                if key in value:
-                    nested_payloads.extend(
-                        FieldPermissionMiddleware._iter_nested_payloads(value[key])
-                    )
-            if set(value.keys()).issubset({"connect", "disconnect", "set"}):
-                if nested_payloads:
-                    return nested_payloads
-                return []
-            if nested_payloads:
-                return nested_payloads
-            nested_payloads.append(value)
-            return nested_payloads
+        if value is None:
+            return []
+
+        # Handle lists directly
         if isinstance(value, list):
             for item in value:
-                if isinstance(item, dict):
-                    nested_payloads.append(item)
+                normalized = FieldPermissionMiddleware._normalize_payload(item)
+                if isinstance(normalized, dict):
+                    nested_payloads.append(normalized)
             return nested_payloads
+
+        # Normalize value (could be a dict or Graphene object)
+        data = FieldPermissionMiddleware._normalize_payload(value)
+        if not isinstance(data, dict):
+            return []
+
+        # Check for unified operation keys
+        found_op = False
+        for key in ("create", "update", "set"):
+            if key in data:
+                found_op = True
+                val = data[key]
+                if isinstance(val, list):
+                    for item in val:
+                        norm = FieldPermissionMiddleware._normalize_payload(item)
+                        if isinstance(norm, dict):
+                            nested_payloads.append(norm)
+                else:
+                    norm = FieldPermissionMiddleware._normalize_payload(val)
+                    if isinstance(norm, dict):
+                        nested_payloads.append(norm)
+
+        # If no operation key found, check if it's a direct creation payload
+        if not found_op:
+            # Skip if it only contains connection/disconnection keys
+            if not set(data.keys()).issubset({"connect", "disconnect", "set"}):
+                nested_payloads.append(data)
+
         return nested_payloads
 
     def _enforce_input_permissions(
@@ -330,6 +354,13 @@ class FieldPermissionMiddleware(BaseMiddleware):
                 if isinstance(payload_dict.get("data"), dict)
                 else payload_dict
             )
+            # Ensure we are working with a real dict to avoid AttrDict attribute collisions
+            if not isinstance(target_payload, dict) or type(target_payload) is not dict:
+                try:
+                    target_payload = dict(target_payload)
+                except Exception:
+                    pass
+
             instance = None
             if object_id is not None:
                 instance = self._resolve_instance(model_class, object_id)

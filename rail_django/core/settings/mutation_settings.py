@@ -26,8 +26,8 @@ class MutationGeneratorSettings:
     bulk_exclude_models: List[str] = field(default_factory=list)
     required_update_fields: Dict[str, List[str]] = field(default_factory=dict)
     enable_nested_relations: bool = True
+    relation_max_nesting_depth: int = 3
     nested_relations_config: Dict[str, bool] = field(default_factory=dict)
-    nested_field_config: Dict[str, Dict[str, bool]] = field(default_factory=dict)
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "MutationGeneratorSettings":

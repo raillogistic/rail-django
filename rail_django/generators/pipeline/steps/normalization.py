@@ -1,16 +1,15 @@
 """
 Input normalization pipeline steps.
 
-Handles enum conversion, dual field processing, and read-only field filtering.
+Handles enum conversion, relation operation processing, and read-only field filtering.
 """
 
 from ..base import MutationStep
 from ..context import MutationContext
 from ..utils import (
     normalize_enum_inputs,
-    process_dual_fields,
+    process_relation_operations,
     filter_read_only_fields,
-    get_mandatory_fields,
 )
 
 
@@ -39,24 +38,21 @@ class EnumNormalizationStep(MutationStep):
         return ctx
 
 
-class DualFieldProcessingStep(MutationStep):
+class RelationOperationProcessingStep(MutationStep):
     """
-    Process nested_X vs X field priority.
+    Process relation operation inputs (connect/create/update/disconnect/set).
 
-    Handles the dual field pattern where users can provide either:
-    - A direct ID reference (field_name: "123")
-    - A nested object to create (nested_field_name: {data})
-
-    Validates mutual exclusivity and transforms nested fields
-    to direct fields for downstream processing.
+    Validates that relation operations follow the defined structure:
+    - Singular relations (FK/O2O): Max one operation (connect, create, update)
+    - List relations (M2M/Reverse): 'set' cannot be combined with others
     """
 
     order = 45
-    name = "dual_field_processing"
+    name = "relation_operation_processing"
 
     def execute(self, ctx: MutationContext) -> MutationContext:
         """
-        Process dual fields with validation.
+        Process relation operations with validation.
 
         Args:
             ctx: Mutation context
@@ -68,16 +64,9 @@ class DualFieldProcessingStep(MutationStep):
         from ...mutations.errors import build_validation_errors
 
         try:
-            # Only enforce mandatory fields for create operations
-            # Update operations should not require mandatory fields
-            mandatory = None
-            if ctx.operation == "create":
-                mandatory = get_mandatory_fields(ctx.model, ctx.graphql_meta)
-
-            ctx.input_data = process_dual_fields(
+            ctx.input_data = process_relation_operations(
                 ctx.input_data,
                 ctx.model,
-                mandatory_fields=mandatory,
             )
         except ValidationError as e:
             ctx.add_errors(build_validation_errors(e))
