@@ -10,7 +10,8 @@ from typing import Any
 
 from django.conf import settings
 from django.db.models import Count, Q
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -32,8 +33,27 @@ def require_audit_access(view_func):
 
         # Check authentication
         if not user or not getattr(user, "is_authenticated", False):
-            return JsonResponse(
-                {"error": "Authentication required", "code": "UNAUTHENTICATED"},
+            # Check if this is an API request or HTML request
+            if request.headers.get("Accept", "").find("application/json") != -1:
+                return JsonResponse(
+                    {"error": "Authentication required", "code": "UNAUTHENTICATED"},
+                    status=401,
+                )
+            # For HTML requests, redirect to login or show error page
+            return HttpResponse(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Required</title></head>
+                <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1e3a5f;">
+                    <div style="text-align: center; color: #fff;">
+                        <h1>Authentication Required</h1>
+                        <p>Please log in to access the audit dashboard.</p>
+                        <a href="/admin/login/?next=/audit/dashboard/" style="color: #00d4ff;">Go to Login</a>
+                    </div>
+                </body>
+                </html>
+                """,
                 status=401,
             )
 
@@ -47,17 +67,93 @@ def require_audit_access(view_func):
             has_audit_permission = user.has_perm("rail_django.view_auditeventmodel")
 
         if not (is_superuser or is_staff or has_audit_permission):
-            return JsonResponse(
-                {
-                    "error": "Admin privileges required to access audit logs",
-                    "code": "FORBIDDEN",
-                },
+            if request.headers.get("Accept", "").find("application/json") != -1:
+                return JsonResponse(
+                    {
+                        "error": "Admin privileges required to access audit logs",
+                        "code": "FORBIDDEN",
+                    },
+                    status=403,
+                )
+            return HttpResponse(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Access Denied</title></head>
+                <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1e3a5f;">
+                    <div style="text-align: center; color: #fff;">
+                        <h1>Access Denied</h1>
+                        <p>You do not have permission to access the audit dashboard.</p>
+                        <p style="color: #a0a0a0;">Admin or staff privileges are required.</p>
+                    </div>
+                </body>
+                </html>
+                """,
                 status=403,
             )
 
         return view_func(request, *args, **kwargs)
 
     return wrapper
+
+
+class AuditDashboardView(View):
+    """
+    Protected view for the audit dashboard HTML interface.
+
+    Serves the beautiful HTML/CSS/JS dashboard for viewing audit logs
+    and security information.
+    """
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the audit dashboard."""
+        user = getattr(request, "user", None)
+
+        # Check authentication
+        if not user or not getattr(user, "is_authenticated", False):
+            return HttpResponse(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Required</title></head>
+                <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1e3a5f;">
+                    <div style="text-align: center; color: #fff;">
+                        <h1>Authentication Required</h1>
+                        <p>Please log in to access the audit dashboard.</p>
+                        <a href="/admin/login/?next=/audit/dashboard/" style="color: #00d4ff;">Go to Login</a>
+                    </div>
+                </body>
+                </html>
+                """,
+                status=401,
+            )
+
+        # Check authorization
+        is_superuser = getattr(user, "is_superuser", False)
+        is_staff = getattr(user, "is_staff", False)
+        has_audit_permission = False
+        if hasattr(user, "has_perm"):
+            has_audit_permission = user.has_perm("rail_django.view_auditeventmodel")
+
+        if not (is_superuser or is_staff or has_audit_permission):
+            return HttpResponse(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Access Denied</title></head>
+                <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1e3a5f;">
+                    <div style="text-align: center; color: #fff;">
+                        <h1>Access Denied</h1>
+                        <p>You do not have permission to access the audit dashboard.</p>
+                        <p style="color: #a0a0a0;">Admin or staff privileges are required.</p>
+                    </div>
+                </body>
+                </html>
+                """,
+                status=403,
+            )
+
+        return render(request, "audit_dashboard.html")
 
 
 class AuditAPIView(View):
@@ -567,6 +663,7 @@ def get_audit_urls():
     from django.urls import path
 
     return [
+        path("audit/dashboard/", AuditDashboardView.as_view(), name="audit_dashboard"),
         path("audit/", AuditAPIView.as_view(), name="audit_api"),
         path("audit/stats/", AuditStatsView.as_view(), name="audit_stats"),
         path("audit/security-report/", SecurityReportView.as_view(), name="audit_security_report"),

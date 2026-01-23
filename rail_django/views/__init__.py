@@ -18,6 +18,7 @@ from .health_views import (
 
 from .audit_views import (
     AuditAPIView,
+    AuditDashboardView,
     AuditStatsView,
     SecurityReportView,
     AuditEventDetailView,
@@ -35,6 +36,7 @@ __all__ = [
     "MultiSchemaGraphQLView",
     "SchemaListView",
     # Audit views
+    "AuditDashboardView",
     "AuditAPIView",
     "AuditStatsView",
     "SecurityReportView",
