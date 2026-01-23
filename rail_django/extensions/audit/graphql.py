@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 import graphene
 from graphql import GraphQLError
 
-from .types import AuditEventType, AuditSeverity, AuditEvent
-from .logger import audit_logger
+from ...security import security, EventType, Severity, Outcome
+from ...security.context import get_client_ip
 
 
 class FrontendAuditEventInput(graphene.InputObjectType):
@@ -22,7 +22,7 @@ class FrontendAuditEventInput(graphene.InputObjectType):
     description = graphene.String(description="Description libre de l'action")
     severity = graphene.String(
         description="Niveau de gravité (low, medium, high, critical)",
-        default_value=AuditSeverity.LOW.value,
+        default_value="info",
     )
     metadata = graphene.JSONString(
         description="Données additionnelles pour aider à la corrélation"
@@ -59,8 +59,19 @@ class LogFrontendAuditMutation(graphene.Mutation):
             raise GraphQLError(
                 "Authentification requise pour journaliser cette action."
             )
-        severity_raw = str(input.get("severity") or AuditSeverity.LOW.value).upper()
-        severity = AuditSeverity.__members__.get(severity_raw, AuditSeverity.LOW)
+
+        severity_raw = str(input.get("severity") or "info").lower()
+        severity_map = {
+            "low": Severity.INFO,
+            "medium": Severity.WARNING,
+            "high": Severity.ERROR,
+            "critical": Severity.CRITICAL,
+            "info": Severity.INFO,
+            "warning": Severity.WARNING,
+            "error": Severity.ERROR,
+            "debug": Severity.DEBUG,
+        }
+        severity = severity_map.get(severity_raw, Severity.INFO)
 
         additional_data = {
             "app_name": input.get("app_name"),
@@ -70,23 +81,20 @@ class LogFrontendAuditMutation(graphene.Mutation):
             "roles": input.get("roles") or [],
             "metadata": input.get("metadata") or {},
             "description": input.get("description"),
+            "source_route": input.get("source_route"),
         }
 
-        event = AuditEvent(
-            event_type=AuditEventType.UI_ACTION,
-            severity=severity,
-            user_id=getattr(user, "id", None),
-            username=getattr(user, "get_username", lambda: None)(),
-            client_ip=audit_logger._get_client_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", "Unknown"),
-            timestamp=datetime.now(timezone.utc),
-            request_path=input.get("source_route") or getattr(request, "path", "/"),
-            request_method=getattr(request, "method", "UI"),
-            additional_data=additional_data,
-            success=bool(input.get("success", True)),
-        )
         try:
-            audit_logger.log_event(event)
+            security.emit(
+                EventType.UI_ACTION,
+                request=request,
+                severity=severity,
+                outcome=Outcome.SUCCESS if input.get("success", True) else Outcome.FAILURE,
+                context=additional_data,
+                resource_type="ui_component",
+                resource_name=input.get("component"),
+                action=input.get("operation"),
+            )
             return LogFrontendAuditMutation(ok=True, error=None)
         except Exception as exc:
             return LogFrontendAuditMutation(

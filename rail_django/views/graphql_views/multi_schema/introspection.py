@@ -86,21 +86,20 @@ class IntrospectionMixin:
 
     def _audit_introspection_attempt(self, request: HttpRequest, schema_info: dict[str, Any], query_text: str) -> None:
         try:
-            from ....security.audit_logging import AuditEvent, AuditEventType, AuditSeverity, audit_logger, get_client_ip
+            from ....security import security, EventType, Outcome
         except Exception: return
 
         user = getattr(request, "user", None)
         details = {
             "schema_name": getattr(schema_info, "name", None),
-            "request_path": getattr(request, "path", None),
-            "request_method": getattr(request, "method", None),
             "query_length": len(query_text or ""),
         }
-        event = AuditEvent(
-            event_type=AuditEventType.INTROSPECTION_ATTEMPT, severity=AuditSeverity.WARNING, timestamp=django_timezone.now(),
-            user_id=user.id if user and user.is_authenticated else None,
-            username=user.username if user and user.is_authenticated else None,
-            ip_address=get_client_ip(request), user_agent=request.META.get("HTTP_USER_AGENT"),
-            message="Introspection disabled for schema", details=details,
+
+        security.emit(
+            EventType.QUERY_BLOCKED_INTROSPECTION,
+            request=request,
+            outcome=Outcome.BLOCKED,
+            action="Introspection blocked",
+            context=details,
+            error="Introspection disabled for schema"
         )
-        audit_logger.log_event(event)

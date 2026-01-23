@@ -17,7 +17,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from ..extensions.audit.models import get_audit_event_model
-from ..extensions.audit.logger import audit_logger
+from ..security.events.types import EventType, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -159,21 +159,6 @@ class AuditDashboardView(View):
 class AuditAPIView(View):
     """
     Protected API endpoint for accessing audit logs with rich filtering.
-
-    Supports filtering by:
-    - event_type: Filter by event type (login_success, login_failure, etc.)
-    - severity: Filter by severity level (low, medium, high, critical)
-    - user_id: Filter by user ID
-    - username: Filter by username (partial match)
-    - client_ip: Filter by client IP address
-    - success: Filter by success status (true/false)
-    - date_from: Filter events from this date (ISO format)
-    - date_to: Filter events until this date (ISO format)
-    - hours: Filter events from the last N hours
-    - search: Full-text search in additional_data
-    - page: Page number (default: 1)
-    - page_size: Number of items per page (default: 50, max: 500)
-    - order_by: Field to order by (default: -timestamp)
     """
 
     @method_decorator(csrf_exempt)
@@ -255,20 +240,10 @@ class AuditAPIView(View):
         if event_type:
             queryset = queryset.filter(event_type=event_type)
 
-        # Filter by multiple event types
-        event_types = request.GET.getlist("event_types")
-        if event_types:
-            queryset = queryset.filter(event_type__in=event_types)
-
         # Filter by severity
         severity = request.GET.get("severity")
         if severity:
             queryset = queryset.filter(severity=severity)
-
-        # Filter by multiple severities
-        severities = request.GET.getlist("severities")
-        if severities:
-            queryset = queryset.filter(severity__in=severities)
 
         # Filter by user_id
         user_id = request.GET.get("user_id")
@@ -285,10 +260,15 @@ class AuditAPIView(View):
         if client_ip:
             queryset = queryset.filter(client_ip=client_ip)
 
-        # Filter by success status
-        success = request.GET.get("success")
-        if success is not None and success.lower() in ("true", "false"):
-            queryset = queryset.filter(success=success.lower() == "true")
+        # Filter by correlation_id (in additional_data)
+        correlation_id = request.GET.get("correlation_id")
+        if correlation_id:
+            queryset = queryset.filter(additional_data__correlation_id=correlation_id)
+
+        # Filter by outcome (in additional_data)
+        outcome = request.GET.get("outcome")
+        if outcome:
+            queryset = queryset.filter(additional_data__outcome=outcome)
 
         # Filter by date range
         date_from = request.GET.get("date_from")
@@ -316,17 +296,7 @@ class AuditAPIView(View):
             except ValueError:
                 pass
 
-        # Filter by request_path (partial match)
-        request_path = request.GET.get("request_path")
-        if request_path:
-            queryset = queryset.filter(request_path__icontains=request_path)
-
-        # Filter by session_id
-        session_id = request.GET.get("session_id")
-        if session_id:
-            queryset = queryset.filter(session_id=session_id)
-
-        # Full-text search in additional_data (JSON field)
+        # Full-text search
         search = request.GET.get("search")
         if search:
             queryset = queryset.filter(
@@ -339,6 +309,10 @@ class AuditAPIView(View):
 
     def _serialize_event(self, event) -> dict[str, Any]:
         """Serialize an audit event to a dictionary."""
+        additional_data = event.additional_data or {}
+        if not isinstance(additional_data, dict):
+            additional_data = {}
+
         return {
             "id": event.id,
             "event_type": event.event_type,
@@ -350,9 +324,12 @@ class AuditAPIView(View):
             "timestamp": event.timestamp.isoformat() if event.timestamp else None,
             "request_path": event.request_path,
             "request_method": event.request_method,
-            "additional_data": event.additional_data,
-            "session_id": event.session_id,
-            "success": event.success,
+            "correlation_id": additional_data.get("correlation_id"),
+            "outcome": additional_data.get("outcome"),
+            "action": additional_data.get("action"),
+            "resource": additional_data.get("resource"),
+            "risk_score": additional_data.get("risk_score", 0),
+            "context": additional_data.get("context"),
             "error_message": event.error_message,
         }
 
@@ -360,8 +337,6 @@ class AuditAPIView(View):
 class AuditStatsView(View):
     """
     Protected API endpoint for audit statistics and aggregations.
-
-    Provides summary statistics for the specified time period.
     """
 
     @method_decorator(csrf_exempt)
@@ -372,9 +347,6 @@ class AuditStatsView(View):
     def get(self, request: HttpRequest) -> JsonResponse:
         """
         Get audit statistics for the specified period.
-
-        Query parameters:
-        - hours: Time period in hours (default: 24)
         """
         try:
             hours = int(request.GET.get("hours", 24))
@@ -397,39 +369,25 @@ class AuditStatsView(View):
                 .values_list("severity", "count")
             )
 
-            # Get counts by success/failure
-            success_counts = dict(
-                queryset.values("success")
-                .annotate(count=Count("id"))
-                .values_list("success", "count")
-            )
-
-            # Top IPs with failed events
-            top_failed_ips = list(
-                queryset.filter(success=False)
+            # Top IPs with high risk events
+            top_risky_ips = list(
+                queryset.filter(additional_data__risk_score__gte=50)
                 .values("client_ip")
-                .annotate(count=Count("client_ip"))
+                .annotate(count=Count("id"))
                 .order_by("-count")[:10]
             )
 
             # Top users by event count
             top_users = list(
                 queryset.filter(username__isnull=False)
-                .values("username", "user_id")
-                .annotate(count=Count("id"))
-                .order_by("-count")[:10]
-            )
-
-            # Top event types
-            top_event_types = list(
-                queryset.values("event_type")
+                .values("username")
                 .annotate(count=Count("id"))
                 .order_by("-count")[:10]
             )
 
             # Recent high severity events
             high_severity_count = queryset.filter(
-                severity__in=["high", "critical"]
+                severity__in=[Severity.ERROR.value, Severity.CRITICAL.value]
             ).count()
 
             return JsonResponse(
@@ -438,23 +396,13 @@ class AuditStatsView(View):
                     "total_events": queryset.count(),
                     "by_event_type": event_type_counts,
                     "by_severity": severity_counts,
-                    "by_success": {
-                        "successful": success_counts.get(True, 0),
-                        "failed": success_counts.get(False, 0),
-                    },
-                    "top_failed_ips": top_failed_ips,
+                    "top_risky_ips": top_risky_ips,
                     "top_users": top_users,
-                    "top_event_types": top_event_types,
                     "high_severity_count": high_severity_count,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             )
 
-        except ValueError as e:
-            return JsonResponse(
-                {"error": f"Invalid parameter: {e}", "code": "INVALID_PARAMETER"},
-                status=400,
-            )
         except Exception as e:
             logger.error(f"Error generating audit stats: {e}")
             return JsonResponse(
@@ -466,8 +414,6 @@ class AuditStatsView(View):
 class SecurityReportView(View):
     """
     Protected API endpoint for security reports.
-
-    Generates comprehensive security reports with threat analysis.
     """
 
     @method_decorator(csrf_exempt)
@@ -478,46 +424,32 @@ class SecurityReportView(View):
     def get(self, request: HttpRequest) -> JsonResponse:
         """
         Generate a security report for the specified period.
-
-        Query parameters:
-        - hours: Time period in hours (default: 24)
         """
         try:
             hours = int(request.GET.get("hours", 24))
-
-            # Use the audit_logger's built-in security report
-            report = audit_logger.get_security_report(hours=hours)
-
-            if "error" in report:
-                return JsonResponse(
-                    {"error": report["error"], "code": "REPORT_ERROR"},
-                    status=500,
-                )
-
-            # Add additional security metrics
             since = datetime.now(timezone.utc) - timedelta(hours=hours)
             AuditModel = get_audit_event_model()
             queryset = AuditModel.objects.filter(timestamp__gte=since)
 
-            # Detect potential brute force attempts
+            # Detect potential brute force attempts (failed logins)
             brute_force_suspects = list(
-                queryset.filter(event_type="login_failure")
+                queryset.filter(event_type=EventType.AUTH_LOGIN_FAILURE.value)
                 .values("client_ip")
                 .annotate(attempts=Count("id"))
                 .filter(attempts__gte=5)
                 .order_by("-attempts")[:20]
             )
 
-            # Detect suspicious activity patterns
-            suspicious_events = list(
-                queryset.filter(event_type="suspicious_activity")
-                .values("client_ip", "username", "timestamp", "additional_data")
+            # Detect blocked queries
+            blocked_queries = list(
+                queryset.filter(event_type__startswith="query.blocked")
+                .values("event_type", "client_ip", "timestamp")
                 .order_by("-timestamp")[:20]
             )
 
             # Get rate limited requests
             rate_limited = list(
-                queryset.filter(event_type="rate_limited")
+                queryset.filter(event_type=EventType.RATE_LIMIT_EXCEEDED.value)
                 .values("client_ip")
                 .annotate(count=Count("id"))
                 .order_by("-count")[:10]
@@ -525,7 +457,7 @@ class SecurityReportView(View):
 
             # Timeline of high severity events
             high_severity_timeline = list(
-                queryset.filter(severity__in=["high", "critical"])
+                queryset.filter(severity__in=[Severity.ERROR.value, Severity.CRITICAL.value])
                 .order_by("-timestamp")
                 .values(
                     "event_type",
@@ -533,37 +465,29 @@ class SecurityReportView(View):
                     "client_ip",
                     "username",
                     "timestamp",
-                    "success",
                 )[:50]
             )
 
-            # Format timeline timestamps
+            # Format timestamps
             for event in high_severity_timeline:
                 if event.get("timestamp"):
                     event["timestamp"] = event["timestamp"].isoformat()
 
-            # Format suspicious events timestamps
-            for event in suspicious_events:
+            for event in blocked_queries:
                 if event.get("timestamp"):
                     event["timestamp"] = event["timestamp"].isoformat()
 
-            report.update(
-                {
-                    "brute_force_suspects": brute_force_suspects,
-                    "suspicious_events": suspicious_events,
-                    "rate_limited_ips": rate_limited,
-                    "high_severity_timeline": high_severity_timeline,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            )
+            report = {
+                "period_hours": hours,
+                "brute_force_suspects": brute_force_suspects,
+                "blocked_queries": blocked_queries,
+                "rate_limited_ips": rate_limited,
+                "high_severity_timeline": high_severity_timeline,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
 
             return JsonResponse(report)
 
-        except ValueError as e:
-            return JsonResponse(
-                {"error": f"Invalid parameter: {e}", "code": "INVALID_PARAMETER"},
-                status=400,
-            )
         except Exception as e:
             logger.error(f"Error generating security report: {e}")
             return JsonResponse(
@@ -642,12 +566,10 @@ class AuditEventTypesView(View):
         """
         List all available event types and severities.
         """
-        from ..extensions.audit.types import AuditEventType, AuditSeverity
-
         return JsonResponse(
             {
-                "event_types": [e.value for e in AuditEventType],
-                "severities": [s.value for s in AuditSeverity],
+                "event_types": [e.value for e in EventType],
+                "severities": [s.value for s in Severity],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )

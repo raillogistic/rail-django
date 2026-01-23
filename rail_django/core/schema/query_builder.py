@@ -30,7 +30,10 @@ class QueryBuilderMixin:
     def _pluralize_name(self, name: str) -> str:
         """
         Pluralize a name for list queries.
-        Strictly adds an 's' suffix.
+        Handles common English pluralization rules including:
+        - Words ending in y
+        - Words ending in s, x, z, ch, sh
+        - Common irregulars
 
         Args:
             name: The singular name to pluralize
@@ -41,6 +44,41 @@ class QueryBuilderMixin:
         value = str(name or "").strip()
         if not value:
             return value
+
+        # Handle common irregular plurals
+        irregulars = {
+            "person": "people",
+            "child": "children",
+            "foot": "feet",
+            "tooth": "teeth",
+            "mouse": "mice",
+            "goose": "geese",
+            "man": "men",
+            "woman": "women",
+        }
+
+        # Check for case-insensitive match
+        lower_val = value.lower()
+        if lower_val in irregulars:
+            plural = irregulars[lower_val]
+            if value.isupper():
+                return plural.upper()
+            if value[0].isupper():
+                # Handle Title Case (e.g. Person -> People)
+                # Note: istitle() might be false for "PersonProfile" but we are checking exact match so "Person" is title.
+                return plural.capitalize()
+            return plural
+
+        # Words ending in 'y'
+        if lower_val.endswith("y"):
+            # If the letter before 'y' is a consonant, change to 'ies'
+            if len(value) > 1 and lower_val[-2] not in "aeiou":
+                return f"{value[:-1]}ies"
+
+        # Words ending in s, x, z, ch, sh
+        if lower_val.endswith(("s", "x", "z", "ch", "sh")):
+            return f"{value}es"
+
         return f"{value}s"
 
     def _get_list_alias(self, model: type[models.Model]) -> Optional[str]:

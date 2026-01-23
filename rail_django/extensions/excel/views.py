@@ -43,10 +43,11 @@ except ImportError:
     jwt_required = None
 
 try:
-    from ..audit import AuditEventType, log_audit_event
+    from ...security import security, EventType, Outcome
 except ImportError:
-    AuditEventType = None
-    log_audit_event = None
+    security = None
+    EventType = None
+    Outcome = None
 
 logger = logging.getLogger(__name__)
 
@@ -289,15 +290,30 @@ class ExcelTemplateView(View):
         template_path: Optional[str] = None, pk: Optional[str] = None,
     ) -> None:
         """Log an audit event for template rendering."""
-        if not log_audit_event or not AuditEventType:
+        if not security or not EventType:
             return
-        details: Dict[str, Any] = {"action": "excel_template_render", "template_path": template_path, "pk": pk}
+
+        details: Dict[str, Any] = {"template_path": template_path, "pk": pk}
+        resource_name = template_path
+
         if template_def:
             if template_def.model:
                 details["model"] = template_def.model._meta.label
+                resource_name = template_def.model._meta.label
             details["title"] = template_def.title
             details["source"] = template_def.source
-        log_audit_event(request, AuditEventType.DATA_ACCESS, success=success, error_message=error_message, additional_data=details)
+
+        security.emit(
+            EventType.DATA_EXPORT,
+            request=request,
+            outcome=Outcome.SUCCESS if success else Outcome.FAILURE,
+            action="Excel template export",
+            resource_type="template",
+            resource_name=resource_name,
+            resource_id=pk,
+            context=details,
+            error=error_message
+        )
 
 
 @method_decorator(csrf_exempt, name="dispatch")

@@ -10,9 +10,10 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.db.models import Count
 
 from rail_django.extensions.audit.models import get_audit_event_model
-from rail_django.extensions.audit.logger.loggers import audit_logger
+from rail_django.security.events.types import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -167,31 +168,42 @@ class Command(BaseCommand):
 
     def _handle_summary(self, options: dict[str, Any]):
         hours = options["hours"]
-        report = audit_logger.get_security_report(hours=hours)
+        since = timezone.now() - timedelta(hours=hours)
+        AuditModel = get_audit_event_model()
+        events = AuditModel.objects.filter(timestamp__gte=since)
 
-        if "error" in report:
-            self.stdout.write(self.style.ERROR(f"Error generating report: {report['error']}"))
-            return
+        total_events = events.count()
+        successful_logins = events.filter(event_type=EventType.AUTH_LOGIN_SUCCESS.value).count()
+        failed_logins = events.filter(event_type=EventType.AUTH_LOGIN_FAILURE.value).count()
+        suspicious = events.filter(event_type="suspicious_activity").count() # Keep old type for backward compat
 
         self.stdout.write(self.style.SUCCESS(f"=== Security Summary (Last {hours} hours) ==="))
-        self.stdout.write(f"Total Events: {report.get('total_events', 0)}")
-        self.stdout.write(f"Successful Logins: {report.get('successful_logins', 0)}")
-        
-        failed_logins = report.get('failed_logins', 0)
+        self.stdout.write(f"Total Events: {total_events}")
+        self.stdout.write(f"Successful Logins: {successful_logins}")
+
         style = self.style.ERROR if failed_logins > 0 else self.style.SUCCESS
         self.stdout.write(style(f"Failed Logins: {failed_logins}"))
-        
-        suspicious = report.get('suspicious_activities', 0)
+
         if suspicious > 0:
             self.stdout.write(self.style.ERROR(f"Suspicious Activities: {suspicious}"))
 
-        top_ips = report.get("top_failed_ips", [])
+        top_ips = list(
+            events.filter(event_type=EventType.AUTH_LOGIN_FAILURE.value)
+            .values("client_ip")
+            .annotate(count=Count("client_ip"))
+            .order_by("-count")[:10]
+        )
         if top_ips:
             self.stdout.write("\nTop Failed Login IPs:")
             for item in top_ips:
                 self.stdout.write(f"  - {item['client_ip']}: {item['count']}")
 
-        top_users = report.get("top_targeted_users", [])
+        top_users = list(
+            events.filter(event_type=EventType.AUTH_LOGIN_FAILURE.value, username__isnull=False)
+            .values("username")
+            .annotate(count=Count("username"))
+            .order_by("-count")[:10]
+        )
         if top_users:
             self.stdout.write("\nTop Targeted Users:")
             for item in top_users:

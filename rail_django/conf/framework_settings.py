@@ -61,6 +61,7 @@ if _should_include_rail_test_apps():
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "rail_django.security.middleware.context.SecurityContextMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -186,3 +187,32 @@ APPEND_SLASH = True
 
 # Audit logging defaults
 AUDIT_STORE_IN_DATABASE = True
+
+# Security Event Bus
+SECURITY_EVENT_ASYNC = True  # Process events in background thread
+SECURITY_METRICS_ENABLED = False  # Enable Prometheus metrics sink
+
+# Audit Storage
+AUDIT_STORE_IN_FILE = True
+AUDIT_WEBHOOK_URL = None  # e.g., "https://siem.example.com/webhook"
+AUDIT_RETENTION_DAYS = 90
+
+# Redaction
+AUDIT_REDACTION_FIELDS = [
+    "password", "token", "secret", "key", "credential",
+    "authorization", "ssn", "credit_card", "cvv",
+]
+AUDIT_REDACTION_MASK = "***REDACTED***"
+
+# Anomaly Detection (requires Redis)
+SECURITY_REDIS_URL = None  # e.g., "redis://localhost:6379/0"
+SECURITY_REDIS_PREFIX = "rail:security:"
+SECURITY_ANOMALY_THRESHOLDS = {
+    "login_failure_per_ip": 10,
+    "login_failure_per_user": 5,
+    "login_failure_window": 300,  # seconds
+    "rate_limit_per_ip": 100,
+    "rate_limit_window": 60,
+    "auto_block_enabled": True,
+    "block_duration": 3600,  # seconds
+}

@@ -118,26 +118,38 @@ class BaseAPIView(View):
     def _audit_request(self, request: HttpRequest, response: JsonResponse, *, path_params: Optional[dict[str, Any]] = None, extra_data: Optional[dict[str, Any]] = None) -> None:
         if request.method == "OPTIONS": return
         try:
-            from ...extensions.audit import AuditEventType, log_audit_event
+            from ...security import security, EventType, Outcome
             body_data = self.parse_json_body(request) if request.method in {"POST", "PUT", "PATCH", "DELETE"} else None
-            event_type = self._get_audit_event_type(request, body_data, AuditEventType)
+            event_type = self._get_audit_event_type(request, body_data, EventType)
             additional_data = {"component": "schema_api", "view": self.__class__.__name__, "status_code": response.status_code}
             if path_params: additional_data["path_params"] = path_params
             if isinstance(body_data, dict) and body_data.get("action"): additional_data["action"] = body_data.get("action")
             if extra_data: additional_data.update(extra_data)
-            log_audit_event(request, event_type, success=response.status_code < 400, error_message=self._extract_error_message(response), additional_data=additional_data)
+
+            outcome = Outcome.SUCCESS if response.status_code < 400 else Outcome.FAILURE
+            if response.status_code == 401 or response.status_code == 403:
+                outcome = Outcome.DENIED
+
+            security.emit(
+                event_type,
+                request=request,
+                outcome=outcome,
+                action=f"API Request {request.method} {request.path}",
+                context=additional_data,
+                error=self._extract_error_message(response) if outcome != Outcome.SUCCESS else None
+            )
         except Exception: pass
 
     def _get_audit_event_type(self, request: HttpRequest, body_data: Optional[dict[str, Any]], audit_enum: Any) -> Any:
         method, view_name = request.method.upper(), self.__class__.__name__
-        if method in {"GET", "HEAD", "OPTIONS"}: return audit_enum.DATA_ACCESS
-        if method in {"PUT", "PATCH"}: return audit_enum.UPDATE
-        if method == "DELETE": return audit_enum.DELETE
+        if method in {"GET", "HEAD", "OPTIONS"}: return audit_enum.DATA_READ
+        if method in {"PUT", "PATCH"}: return audit_enum.DATA_UPDATE
+        if method == "DELETE": return audit_enum.DATA_DELETE
         if method == "POST":
             if view_name in {"SchemaManagementAPIView", "SchemaDiscoveryAPIView"}:
-                if isinstance(body_data, dict) and body_data.get("action") == "clear_all": return audit_enum.DELETE
-                return audit_enum.UPDATE
-            return audit_enum.CREATE
+                if isinstance(body_data, dict) and body_data.get("action") == "clear_all": return audit_enum.DATA_DELETE
+                return audit_enum.DATA_UPDATE
+            return audit_enum.DATA_CREATE
         return audit_enum.DATA_ACCESS
 
     def _extract_error_message(self, response: JsonResponse) -> Optional[str]:

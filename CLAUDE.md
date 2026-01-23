@@ -46,7 +46,7 @@ cd my_api && python manage.py migrate && python manage.py runserver
 - **`rail_django/core/registry.py`**: SchemaRegistry - source of truth for registered schemas
 - **`rail_django/core/schema.py`**: SchemaBuilder - builds Graphene schema from models
 - **`rail_django/generators/`**: TypeGenerator, QueryGenerator, MutationGenerator - auto-generate GraphQL from Django models
-- **`rail_django/security/`**: RBAC, input validation, field masking
+- **`rail_django/security/`**: Unified security system (Events, RBAC, Validation, Field Permissions, Anomaly Detection)
 - **`rail_django/extensions/`**: Pluggable features (auth, audit, health, export, observability, subscriptions, webhooks)
 - **`rail_django/plugins/`**: Plugin manager with pre/post hooks for schema build and execution
 - **`rail_django/conf/`**: Framework settings and project/app templates for CLI scaffolder

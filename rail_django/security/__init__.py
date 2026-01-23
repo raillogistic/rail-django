@@ -6,18 +6,24 @@ Ce module fournit des fonctionnalités de sécurité avancées :
 - Contrôle d'accès basé sur les rôles (RBAC)
 - Permissions au niveau des champs
 - Sécurité spécifique à GraphQL
-- Journalisation d'audit
+- Journalisation d'audit unifiée (Security Events)
 """
 
-from .audit import (
-    AuditEvent,
-    AuditEventType,
-    AuditLogger,
-    AuditSeverity,
-    audit_data_modification,
-    audit_graphql_operation,
-    audit_logger,
+from .api import security, SecurityAPI
+from .middleware.context import get_security_context
+from .context import SecurityContext, Actor
+from .events.types import (
+    SecurityEvent,
+    EventType,
+    EventCategory,
+    Severity,
+    Outcome,
+    Resource,
 )
+from .events.builder import event, EventBuilder
+from .events.bus import get_event_bus, EventBus
+from .anomaly.detector import get_anomaly_detector, AnomalyDetector
+
 from .field_permissions import (
     FieldAccessLevel,
     FieldContext,
@@ -68,6 +74,23 @@ from .rbac import (
 )
 
 __all__ = [
+    # New Security API & Events
+    "security",
+    "SecurityAPI",
+    "SecurityContext",
+    "get_security_context",
+    "Actor",
+    "SecurityEvent",
+    "EventType",
+    "EventCategory",
+    "Severity",
+    "Outcome",
+    "Resource",
+    "event",
+    "EventBuilder",
+    "get_event_bus",
+    "EventBus",
+
     # Input Validation
     'ValidationSeverity',
     'ValidationReport',
@@ -115,13 +138,4 @@ __all__ = [
     'require_introspection_permission',
     'default_security_config',
     'security_analyzer',
-
-    # Audit Logging
-    'AuditEventType',
-    'AuditSeverity',
-    'AuditEvent',
-    'AuditLogger',
-    'audit_logger',
-    'audit_graphql_operation',
-    'audit_data_modification',
 ]

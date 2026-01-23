@@ -52,8 +52,8 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
                 and not self._is_csrf_token_valid(request)):
                 return self._csrf_failed_response()
             user = self._authenticate_jwt_token(token, request)
-            if user: auth_method = "jwt"; self._log_authentication_event(request, user, "success", auth_method)
-            else: self._log_authentication_event(request, None, "invalid_token", "jwt")
+            if user: auth_method = "jwt"; self._audit_auth_event(request, user, "success", auth_method)
+            else: self._audit_auth_event(request, None, "invalid_token", "jwt")
 
         request.user, request.auth_method = user or _get_anonymous_user(), auth_method
         request.auth_timestamp = datetime.now(timezone.utc)
@@ -113,26 +113,33 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             if not user_id: return None
             user = get_user_model().objects.get(id=user_id)
             if not getattr(user, "is_active", True):
-                self._log_authentication_event(request, user, "inactive_user", "jwt")
+                self._audit_auth_event(request, user, "inactive_user", "jwt")
                 return None
             self._jwt_user_cache[cache_key] = (user.id, time.time() + float(self.user_cache_timeout))
             return user
         except Exception: return None
 
-    def _log_authentication_event(self, request: HttpRequest, user: Optional[Any], event_type: str, auth_method: str) -> None:
+    def _audit_auth_event(self, request: HttpRequest, user: Optional[Any], event_type: str, auth_method: str) -> None:
         if not self.enable_audit_logging: return
         try:
-            from ...extensions.audit import audit_logger, AuditEventType
-            if event_type == "success": audit_logger.log_login_attempt(request, user, success=True)
-            elif event_type == "invalid_token": audit_logger.log_token_event(request, user, AuditEventType.TOKEN_INVALID, success=False, error_message="Token JWT invalide")
-            elif event_type == "inactive_user": audit_logger.log_login_attempt(request, user, success=False, error_message="Compte utilisateur inactif")
-            else: self._legacy_log_authentication_event(request, user, event_type, auth_method)
-        except Exception: self._legacy_log_authentication_event(request, user, event_type, auth_method)
-
-    def _legacy_log_authentication_event(self, request: HttpRequest, user: Optional[Any], event_type: str, auth_method: str) -> None:
-        log_data = {"event_type": event_type, "auth_method": auth_method, "user_id": user.id if user else None, "username": user.username if user else None, "client_ip": get_client_ip(request), "user_agent": request.META.get("HTTP_USER_AGENT", "Unknown"), "timestamp": datetime.now(timezone.utc).isoformat(), "request_path": request.path, "request_method": request.method}
-        if event_type == "success": logger.info(f"Authentification rÇ¸ussie: {log_data}")
-        else: logger.warning(f"Tentative d'authentification Ç¸chouÇ¸e: {log_data}")
+            from ...security import security, EventType, Outcome
+            if event_type == "success":
+                security.auth_success(request, user.id, user.username)
+            elif event_type == "invalid_token":
+                security.emit(
+                    EventType.AUTH_TOKEN_INVALID,
+                    request=request,
+                    outcome=Outcome.FAILURE,
+                    error="Token JWT invalide"
+                )
+            elif event_type == "inactive_user":
+                security.auth_failure(
+                    request,
+                    user.username if user else None,
+                    "Compte utilisateur inactif"
+                )
+        except Exception as e:
+            logger.warning(f"Error auditing auth event: {e}")
 
     def _is_csrf_token_valid(self, request: HttpRequest) -> bool:
         return request.META.get("HTTP_X_CSRFTOKEN") == request.COOKIES.get(self.csrf_cookie_name)

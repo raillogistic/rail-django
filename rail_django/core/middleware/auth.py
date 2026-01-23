@@ -15,6 +15,8 @@ from .base import BaseMiddleware
 from ..security import get_auth_manager
 from ..exceptions import ValidationError as GraphQLValidationError
 from ...config_proxy import get_setting
+from ...security import security, EventType, Outcome
+from ...security.anomaly.detector import get_anomaly_detector
 from ...security.field_permissions import (
     FieldAccessLevel,
     FieldContext,
@@ -55,6 +57,20 @@ class AuthenticationMiddleware(BaseMiddleware):
         """
         if not self.settings.enable_authentication_middleware:
             return next_resolver(root, info, **kwargs)
+
+        # Check if IP is blocked
+        request = getattr(info.context, "request", None) or info.context
+        if request and hasattr(request, "META"):
+            client_ip = request.META.get("REMOTE_ADDR", "unknown")
+            detector = get_anomaly_detector()
+            if detector.is_ip_blocked(client_ip):
+                security.emit(
+                    EventType.AUTH_TOKEN_INVALID,
+                    request=request,
+                    outcome=Outcome.BLOCKED,
+                    action="Request blocked: IP in blocklist",
+                )
+                raise GraphQLError("Access denied")
 
         # Authenticate user if not already done
         if not hasattr(info.context, 'user'):

@@ -1,36 +1,13 @@
 """
-Audit package for Django GraphQL Auto-Generation.
+Audit extension - provides AuditEventModel for storing security events.
 
-This package provides a comprehensive audit system for authentication,
-security events, and UI actions.
+For logging events, use the security API:
+
+    from rail_django.security import security, EventType
+    security.emit(EventType.AUTH_LOGIN_SUCCESS, request=request)
 """
 
-from .graphql import FrontendAuditEventInput, LogFrontendAuditMutation
-from .logger import (
-    AuditLogger,
-    audit_logger,
-    get_security_dashboard_data,
-    log_audit_event,
-    log_authentication_event,
-)
 from .models import AuditEventModel, get_audit_event_model
-from .types import AuditEvent, AuditEventType, AuditSeverity
+from .graphql import LogFrontendAuditMutation
 
-__all__ = [
-    # Types
-    "AuditEvent",
-    "AuditEventType",
-    "AuditSeverity",
-    # Logger
-    "AuditLogger",
-    "audit_logger",
-    "log_audit_event",
-    "log_authentication_event",
-    "get_security_dashboard_data",
-    # Models
-    "AuditEventModel",
-    "get_audit_event_model",
-    # GraphQL
-    "FrontendAuditEventInput",
-    "LogFrontendAuditMutation",
-]
+__all__ = ["AuditEventModel", "get_audit_event_model", "LogFrontendAuditMutation"]

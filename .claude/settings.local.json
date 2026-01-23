@@ -15,7 +15,9 @@
       "Bash(wc:*)",
       "Bash(set \"DJANGO_SETTINGS_MODULE=rail_django.conf.test_settings\")",
       "Bash(ls:*)",
-      "Bash(echo.:*)"
+      "Bash(echo.:*)",
+      "Bash(pytest rail_django/tests/unit/security/test_context.py:*)",
+      "Bash(pytest:*)"
     ]
   }
 }

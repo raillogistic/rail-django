@@ -154,19 +154,16 @@ class GraphQLAuditMiddleware(BaseMiddleware):
             return next_resolver(root, info, **kwargs)
 
         try:
-            from ...extensions.audit import AuditEventType, log_audit_event
+            from ...security import security, EventType, Outcome
         except Exception:
             return next_resolver(root, info, **kwargs)
 
         audit_wrapper = None
-        try:
-            from ...security.audit_logging import audit_graphql_operation
-            audit_wrapper = audit_graphql_operation
-        except Exception:
-            audit_wrapper = None
+        # We don't need audit_wrapper anymore as we use security.emit directly
+        # but kept structure if needed for future extensions
 
         operation_type = info.operation.operation.value if info.operation else "unknown"
-        event_type = self._resolve_event_type(operation_type, info.field_name, AuditEventType)
+        event_type = self._resolve_event_type(operation_type, info.field_name, EventType)
 
         additional_data = {
             "graphql_operation": operation_type,
@@ -183,12 +180,14 @@ class GraphQLAuditMiddleware(BaseMiddleware):
             additional_data["variable_keys"] = sorted(variables.keys())
 
         request = getattr(info, "context", None)
+        # Handle case where context is not a request (e.g. tests)
+        if request and not hasattr(request, "META") and hasattr(request, "request"):
+             request = request.request
+
         success = True
         error_message = None
 
         resolver = next_resolver
-        if audit_wrapper is not None:
-            resolver = audit_wrapper(operation_type)(next_resolver)
 
         try:
             result = resolver(root, info, **kwargs)
@@ -198,12 +197,15 @@ class GraphQLAuditMiddleware(BaseMiddleware):
             error_message = str(exc)
             raise
         finally:
-            log_audit_event(
-                request,
+            security.emit(
                 event_type,
-                success=success,
-                error_message=error_message,
-                additional_data=additional_data,
+                request=request if hasattr(request, "META") else None,
+                outcome=Outcome.SUCCESS if success else Outcome.FAILURE,
+                error=error_message,
+                context=additional_data,
+                resource_type="graphql_field",
+                resource_name=info.field_name,
+                action=f"GraphQL {operation_type}"
             )
 
     def _is_root_field(self, info: Any) -> bool:
@@ -227,28 +229,33 @@ class GraphQLAuditMiddleware(BaseMiddleware):
         """Resolve the audit event type for an operation."""
         op = (operation_type or "").lower()
         if op != "mutation":
-            return audit_enum.DATA_ACCESS
+            return getattr(audit_enum, "DATA_READ", getattr(audit_enum, "DATA_ACCESS", None))
         return self._resolve_mutation_event_type(field_name or "", audit_enum)
 
     def _resolve_mutation_event_type(self, field_name: str, audit_enum: Any) -> Any:
         """Resolve the audit event type for a mutation."""
         name = field_name.lower()
 
+        # Helper to safely get enum value
+        def get_type(name):
+            # Try new names (DATA_CREATE) then old names (CREATE)
+            return getattr(audit_enum, f"DATA_{name}", getattr(audit_enum, name, None))
+
         if name.startswith(("create", "add", "register", "signup", "import")):
-            return audit_enum.CREATE
+            return get_type("CREATE")
         if name.startswith(("delete", "remove", "archive", "purge", "clear")):
-            return audit_enum.DELETE
+            return get_type("DELETE")
         if name.startswith(("update", "set", "edit", "patch", "upsert", "enable", "disable")):
-            return audit_enum.UPDATE
+            return get_type("UPDATE")
 
         if "delete" in name or "remove" in name:
-            return audit_enum.DELETE
+            return get_type("DELETE")
         if "create" in name or "add" in name:
-            return audit_enum.CREATE
+            return get_type("CREATE")
         if "update" in name or "set" in name or "edit" in name:
-            return audit_enum.UPDATE
+            return get_type("UPDATE")
 
-        return audit_enum.UPDATE
+        return get_type("UPDATE")
 
 
 class ErrorHandlingMiddleware(BaseMiddleware):

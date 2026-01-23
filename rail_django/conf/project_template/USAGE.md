@@ -1075,11 +1075,12 @@ Tracks who did what.
 - Permission Denials
 
 **Querying Logs:**
-The logs are stored in `AuditEventModel`. You can build an admin dashboard using the built-in helper:
+The logs are stored in `AuditEventModel`. You can query them using standard Django ORM:
 
 ```python
-from rail_django.extensions.audit import audit_logger
-dashboard_data = audit_logger.get_security_report(hours=24)
+from rail_django.extensions.audit.models import get_audit_event_model
+AuditEvent = get_audit_event_model()
+events = AuditEvent.objects.filter(event_type="auth.login.failure")
 ```
 
 ### Webhooks

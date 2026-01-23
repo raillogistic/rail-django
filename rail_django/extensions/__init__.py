@@ -21,10 +21,7 @@ functionality while providing enterprise-grade security and monitoring capabilit
 # BackupCodeVerifyMutation,
 # TrustedDeviceManager,
 # Audit logging system
-from .audit import AuditLogger  # AuditLogEntry,
-
-# SecurityEvent,
-# get_audit_logger,
+# AuditLogger, AuditLogEntry, SecurityEvent, get_audit_logger
 from .auth import (  # ChangePasswordMutation,
     AuthPayload,
     JWTManager,
@@ -138,7 +135,7 @@ __all__ = [
     "get_user_from_jwt",
     "require_permissions",
     # Audit logging
-    "AuditLogger",
+    # "AuditLogger",
     # Model export (JWT protected)
     "ExportView",
     "ExportJobStatusView",

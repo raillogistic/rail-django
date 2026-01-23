@@ -6,6 +6,7 @@ import logging
 from graphql import DocumentNode, GraphQLError, GraphQLResolveInfo
 
 from ...core.services import get_rate_limiter
+from ..api import security, EventType, Outcome
 from .analyzer import GraphQLSecurityAnalyzer
 from .config import SecurityConfig
 
@@ -45,6 +46,8 @@ def create_security_middleware(config: SecurityConfig = None):
             limiter = get_rate_limiter(schema_name)
             result = limiter.check("graphql", request=info.context)
             if not result.allowed:
+                request = getattr(info.context, "request", None) or info.context
+                security.rate_limited(request, limit_type="graphql_global")
                 raise GraphQLError("Limite de taux depassee")
 
         # Analyser la requete si c'est le champ racine
@@ -52,18 +55,30 @@ def create_security_middleware(config: SecurityConfig = None):
             try:
                 fragments = list(getattr(info, "fragments", {}).values())
                 document = DocumentNode(definitions=[info.operation] + fragments)
-                result = analyzer.analyze_query(
+                analysis = analyzer.analyze_query(
                     document,
                     info.schema,
                     user,
                     info.variable_values,
                 )
 
-                if result.blocked_reasons:
-                    raise GraphQLError(f"Requête bloquée: {'; '.join(result.blocked_reasons)}")
+                if analysis.blocked_reasons:
+                    request = getattr(info.context, "request", None) or info.context
+                    security.emit(
+                        EventType.QUERY_BLOCKED_COMPLEXITY,
+                        request=request,
+                        outcome=Outcome.BLOCKED,
+                        action=f"Query blocked: {'; '.join(analysis.blocked_reasons)}",
+                        context={
+                            "complexity": analysis.complexity,
+                            "depth": analysis.depth,
+                            "reasons": analysis.blocked_reasons
+                        }
+                    )
+                    raise GraphQLError(f"Requête bloquée: {'; '.join(analysis.blocked_reasons)}")
 
                 # Ajouter les métriques au contexte
-                info.context.security_analysis = result
+                info.context.security_analysis = analysis
 
             except GraphQLError:
                 raise

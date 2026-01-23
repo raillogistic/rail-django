@@ -371,7 +371,7 @@ class PermissionEvaluationMixin:
         if explanation is None:
             return
         try:
-            from ..extensions.audit import AuditEventType, log_audit_event
+            from ..api import security, EventType, Outcome
         except Exception:
             return
 
@@ -413,12 +413,22 @@ class PermissionEvaluationMixin:
                 "reason": explanation.policy_decision.reason,
             }
 
-        log_audit_event(
-            request,
-            AuditEventType.DATA_ACCESS,
-            user=user,
-            success=bool(explanation.allowed),
-            additional_data=additional_data,
+        event_type = (
+            EventType.AUTHZ_PERMISSION_GRANTED
+            if explanation.allowed
+            else EventType.AUTHZ_PERMISSION_DENIED
+        )
+        outcome = Outcome.SUCCESS if explanation.allowed else Outcome.DENIED
+
+        security.emit(
+            event_type,
+            request=request,
+            outcome=outcome,
+            context=additional_data,
+            resource_type="model" if model_label else "permission",
+            resource_name=model_label or permission,
+            resource_id=object_id,
+            action=f"Permission {'granted' if explanation.allowed else 'denied'}: {permission}",
         )
 
     # --- Public API ---

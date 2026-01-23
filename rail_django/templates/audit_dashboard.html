@@ -323,12 +323,13 @@
             text-transform: uppercase;
         }
 
-        .event-type-badge.login_success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .event-type-badge.login_failure { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .event-type-badge.logout { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        .event-type-badge.suspicious_activity { background: rgba(239, 68, 68, 0.3); color: #f87171; }
-        .event-type-badge.rate_limited { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-        .event-type-badge.ui_action { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .event-type-badge.auth_login_success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .event-type-badge.auth_login_failure { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .event-type-badge.auth_logout { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .event-type-badge.authz_permission_denied { background: rgba(239, 68, 68, 0.3); color: #f87171; }
+        .event-type-badge.rate_limit_exceeded { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .event-type-badge.data_sensitive_access { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .event-type-badge.query_blocked_complexity { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .event-type-badge.default { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
 
         .severity-badge {
@@ -1111,7 +1112,7 @@
                     eventTypes.forEach(type => {
                         const option = document.createElement('option');
                         option.value = type;
-                        option.textContent = type.replace(/_/g, ' ').toUpperCase();
+                        option.textContent = type.replace(/\./g, ' ').toUpperCase();
                         select.appendChild(option);
                     });
                 }
@@ -1218,42 +1219,12 @@
             }
         }
 
-        // Load events
-        async function loadEvents() {
-            const params = new URLSearchParams({
-                page: currentPage,
-                page_size: pageSize,
-                hours: document.getElementById('filterHours')?.value || 24
-            });
-
-            const eventType = document.getElementById('filterEventType')?.value;
-            const severity = document.getElementById('filterSeverity')?.value;
-            const success = document.getElementById('filterSuccess')?.value;
-            const username = document.getElementById('filterUsername')?.value;
-            const ip = document.getElementById('filterIP')?.value;
-
-            if (eventType) params.append('event_type', eventType);
-            if (severity) params.append('severity', severity);
-            if (success) params.append('success', success);
-            if (username) params.append('username', username);
-            if (ip) params.append('client_ip', ip);
-
-            const response = await fetch(`/audit/?${params}`);
-            if (!response.ok) throw new Error('Failed to load events');
-
-            const data = await response.json();
-            updateEventsTable(data.events);
-            updatePagination(data.pagination);
-            updateRecentTimeline(data.events.slice(0, 10));
-
-            document.getElementById('eventCount').textContent = `(${data.pagination.total_count} total)`;
-        }
-
         // Update events table
         function updateEventsTable(events) {
             const tbody = document.getElementById('eventsTableBody');
 
             if (!events || events.length === 0) {
+                // ... empty state ...
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" class="empty-state">
@@ -1266,12 +1237,14 @@
                 return;
             }
 
-            tbody.innerHTML = events.map(event => `
+            tbody.innerHTML = events.map(event => {
+                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
+                return `
                 <tr>
                     <td>${formatDateTime(event.timestamp)}</td>
                     <td>
-                        <span class="event-type-badge ${event.event_type || 'default'}">
-                            ${(event.event_type || 'unknown').replace(/_/g, ' ')}
+                        <span class="event-type-badge ${typeClass}">
+                            ${(event.event_type || 'unknown').replace(/\./g, ' ')}
                         </span>
                     </td>
                     <td>
@@ -1282,8 +1255,8 @@
                     <td>${event.username || '-'}</td>
                     <td><code>${event.client_ip || '-'}</code></td>
                     <td>
-                        <span class="success-indicator ${event.success}"></span>
-                        ${event.success ? 'Success' : 'Failed'}
+                        <span class="success-indicator ${event.outcome === 'success' || event.success}"></span>
+                        ${event.outcome || (event.success ? 'Success' : 'Failed')}
                     </td>
                     <td>
                         <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.8rem;"
@@ -1292,29 +1265,10 @@
                         </button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
-        // Update pagination
-        function updatePagination(pagination) {
-            totalPages = pagination.total_pages;
-            const container = document.getElementById('pagination');
-
-            container.innerHTML = `
-                <button class="pagination-btn" onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''}>First</button>
-                <button class="pagination-btn" onclick="goToPage(${currentPage - 1})" ${!pagination.has_previous ? 'disabled' : ''}>Prev</button>
-                <span class="pagination-info">Page ${currentPage} of ${totalPages}</span>
-                <button class="pagination-btn" onclick="goToPage(${currentPage + 1})" ${!pagination.has_next ? 'disabled' : ''}>Next</button>
-                <button class="pagination-btn" onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>Last</button>
-            `;
-        }
-
-        // Go to page
-        function goToPage(page) {
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            loadEvents();
-        }
+        // ... existing code ...
 
         // Update recent timeline
         function updateRecentTimeline(events) {
@@ -1325,11 +1279,13 @@
                 return;
             }
 
-            container.innerHTML = events.map(event => `
+            container.innerHTML = events.map(event => {
+                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
+                return `
                 <div class="timeline-item">
                     <div class="timeline-dot ${event.severity || 'low'}"></div>
                     <div class="timeline-content">
-                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/_/g, ' ').toUpperCase()}</div>
+                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/\./g, ' ').toUpperCase()}</div>
                         <div class="timeline-details">
                             ${event.username ? `User: ${event.username}` : 'Anonymous'}
                             ${event.client_ip ? `from ${event.client_ip}` : ''}
@@ -1337,7 +1293,7 @@
                         <div class="timeline-time">${formatDateTime(event.timestamp)}</div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Load security report
@@ -1394,11 +1350,13 @@
                 return;
             }
 
-            container.innerHTML = events.map(event => `
+            container.innerHTML = events.map(event => {
+                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
+                return `
                 <div class="timeline-item">
                     <div class="timeline-dot ${event.severity || 'high'}"></div>
                     <div class="timeline-content">
-                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/_/g, ' ').toUpperCase()}</div>
+                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/\./g, ' ').toUpperCase()}</div>
                         <div class="timeline-details">
                             ${event.username ? `User: ${event.username}` : 'Anonymous'}
                             from ${event.client_ip || 'Unknown IP'}
@@ -1407,7 +1365,7 @@
                         <div class="timeline-time">${formatDateTime(event.timestamp)}</div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // View event detail
@@ -1419,6 +1377,7 @@
 
                 const data = await response.json();
                 const event = data.event;
+                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
 
                 const content = document.getElementById('eventModalContent');
                 content.innerHTML = `
@@ -1430,8 +1389,8 @@
                         <div class="detail-item">
                             <div class="detail-label">Event Type</div>
                             <div class="detail-value">
-                                <span class="event-type-badge ${event.event_type || 'default'}">
-                                    ${(event.event_type || 'unknown').replace(/_/g, ' ')}
+                                <span class="event-type-badge ${typeClass}">
+                                    ${(event.event_type || 'unknown').replace(/\./g, ' ')}
                                 </span>
                             </div>
                         </div>
@@ -1478,10 +1437,16 @@
                             <div class="detail-value mono" style="color: #ef4444;">${event.error_message}</div>
                         </div>
                         ` : ''}
-                        ${event.additional_data && Object.keys(event.additional_data).length > 0 ? `
+                        ${event.context && Object.keys(event.context).length > 0 ? `
                         <div class="detail-item full-width">
-                            <div class="detail-label">Additional Data</div>
-                            <div class="detail-value mono">${JSON.stringify(event.additional_data, null, 2)}</div>
+                            <div class="detail-label">Context Data</div>
+                            <div class="detail-value mono">${JSON.stringify(event.context, null, 2)}</div>
+                        </div>
+                        ` : ''}
+                        ${event.resource ? `
+                        <div class="detail-item full-width">
+                            <div class="detail-label">Resource</div>
+                            <div class="detail-value mono">${JSON.stringify(event.resource, null, 2)}</div>
                         </div>
                         ` : ''}
                     </div>

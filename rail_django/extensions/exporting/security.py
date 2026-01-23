@@ -28,10 +28,11 @@ except ImportError:
 
 # Import audit logging
 try:
-    from ..audit import AuditEventType, log_audit_event
+    from ...security import security, EventType, Outcome
 except ImportError:
-    AuditEventType = None
-    log_audit_event = None
+    security = None
+    EventType = None
+    Outcome = None
 
 # Import field permissions
 try:
@@ -263,19 +264,20 @@ def log_export_event(
         error_message: Error message if failed.
         details: Additional audit details.
     """
-    if not log_audit_event or not AuditEventType:
+    if not security or not EventType:
         return
 
     audit_details = {"action": "export"}
     if details:
         audit_details.update(details)
 
-    log_audit_event(
-        request,
-        AuditEventType.DATA_ACCESS,
-        success=success,
-        error_message=error_message,
-        additional_data=audit_details,
+    security.emit(
+        EventType.DATA_EXPORT,
+        request=request,
+        outcome=Outcome.SUCCESS if success else Outcome.FAILURE,
+        action="Data export",
+        context=audit_details,
+        error=error_message
     )
 
 

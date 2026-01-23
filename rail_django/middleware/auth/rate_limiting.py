@@ -61,8 +61,9 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
 
     def _create_rate_limit_response(self, message: str, retry_after: Optional[int] = None) -> HttpResponse:
         try:
-            from ...extensions.audit import audit_logger
-            if hasattr(self, "_current_request"): audit_logger.log_rate_limit_exceeded(self._current_request, "GraphQL rate limit")
+            from ...security import security
+            if hasattr(self, "_current_request"):
+                security.rate_limited(self._current_request, limit_type="graphql_auth")
         except Exception: pass
         response = HttpResponse(json.dumps({"errors": [{"message": message, "code": "RATE_LIMITED"}]}), content_type="application/json", status=429)
         if retry_after is not None: response["Retry-After"] = str(int(retry_after))
