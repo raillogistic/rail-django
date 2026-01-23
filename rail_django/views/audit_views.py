@@ -575,6 +575,91 @@ class AuditEventTypesView(View):
         )
 
 
+class LogDashboardView(View):
+    """
+    Protected view for the raw log viewer interface.
+    """
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the log viewer."""
+        user = getattr(request, "user", None)
+
+        # Reuse authentication check from AuditDashboardView logic
+        if not user or not getattr(user, "is_authenticated", False):
+            return HttpResponse("Authentication Required", status=401)
+
+        is_superuser = getattr(user, "is_superuser", False)
+        is_staff = getattr(user, "is_staff", False)
+        has_audit_permission = False
+        if hasattr(user, "has_perm"):
+            has_audit_permission = user.has_perm("rail_django.view_auditeventmodel")
+
+        if not (is_superuser or is_staff or has_audit_permission):
+            return HttpResponse("Access Denied", status=403)
+
+        return render(request, "log_viewer.html")
+
+
+class LogViewerAPIView(View):
+    """
+    Protected API endpoint for reading raw log files.
+    """
+
+    @method_decorator(csrf_exempt)
+    @method_decorator(require_audit_access)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get(self, request: HttpRequest) -> JsonResponse:
+        """
+        Read the last N lines of a log file.
+        """
+        import os
+        from pathlib import Path
+
+        filename = request.GET.get("file", "django.log")
+        lines_count = int(request.GET.get("lines", 100))
+        if lines_count > 5000:
+            lines_count = 5000
+
+        # Whitelist allowed log files for security
+        ALLOWED_LOGS = {"django.log", "security.log", "audit.log", "celery.log"}
+        if filename not in ALLOWED_LOGS:
+            return JsonResponse({"error": "Invalid log file"}, status=400)
+
+        # Resolve log path
+        # Try to find LOG_PATH env var via settings or default to BASE_DIR/logs
+        log_dir = getattr(settings, "LOGGING_DIR", None)
+        if not log_dir:
+            base_dir = getattr(settings, "BASE_DIR", Path.cwd())
+            log_dir = base_dir / "logs"
+
+        file_path = Path(log_dir) / filename
+
+        if not file_path.exists():
+            return JsonResponse({"error": "Log file not found", "path": str(file_path)}, status=404)
+
+        try:
+            # Read last N lines efficiently
+            lines = self._tail(file_path, lines_count)
+            return JsonResponse({"logs": lines, "file": filename})
+        except Exception as e:
+            logger.error(f"Error reading log file: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
+
+    def _tail(self, file_path, n):
+        """Read the last n lines of a file."""
+        # Simple implementation using readlines for now.
+        # For huge files, a seek-based approach is better.
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                # Read all lines is memory intensive for massive files but fine for rotated logs < 10MB
+                # Optimization: Seek to end and read backwards if needed
+                return f.readlines()[-n:]
+        except Exception:
+            return []
+
+
 def get_audit_urls():
     """
     Return URL patterns for audit views.
@@ -586,6 +671,8 @@ def get_audit_urls():
 
     return [
         path("audit/dashboard/", AuditDashboardView.as_view(), name="audit_dashboard"),
+        path("audit/logs/", LogDashboardView.as_view(), name="log_viewer"),
+        path("audit/logs/api/", LogViewerAPIView.as_view(), name="log_viewer_api"),
         path("audit/", AuditAPIView.as_view(), name="audit_api"),
         path("audit/stats/", AuditStatsView.as_view(), name="audit_stats"),
         path("audit/security-report/", SecurityReportView.as_view(), name="audit_security_report"),

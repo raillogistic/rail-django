@@ -69,7 +69,7 @@ RUN addgroup --system app && adduser --system --group app
 # create the appropriate directories
 ENV HOME=/home/app
 ENV APP_HOME=/home/app/web
-RUN mkdir -p $APP_HOME/staticfiles $APP_HOME/mediafiles
+RUN mkdir -p $APP_HOME/staticfiles $APP_HOME/mediafiles $APP_HOME/logs
 WORKDIR $APP_HOME
 
 # install dependencies

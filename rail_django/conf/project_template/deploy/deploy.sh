@@ -177,6 +177,16 @@ else
   ensure_dir "$SCRIPT_DIR/docker/$backup_path"
 fi
 
+log_path="$(read_env LOG_PATH)"
+if [ -z "$log_path" ]; then
+  log_path="../../logs"
+fi
+if [[ "$log_path" = /* ]]; then
+  ensure_dir "$log_path"
+else
+  ensure_dir "$SCRIPT_DIR/docker/$log_path"
+fi
+
 note "Building and starting containers..."
 build_args=()
 build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")

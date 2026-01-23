@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Log Viewer</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --term-bg: #010409;
+            --border-color: #30363d;
+            --accent-color: #58a6ff;
+            --error-color: #f85149;
+            --warn-color: #d29922;
+            --info-color: #58a6ff;
+            --success-color: #2ea043;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background-color: #161b22;
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+
+        .header h1 { font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .live-indicator {
+            width: 10px; height: 10px; border-radius: 50%;
+            background-color: #3fb950;
+            display: inline-block;
+            box-shadow: 0 0 8px #3fb950;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        select, input, button {
+            background-color: #0d1117;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        button { cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: #30363d; }
+
+        .btn-primary { background-color: #238636; color: white; border-color: rgba(240,246,252,0.1); }
+        .btn-primary:hover { background-color: #2ea043; }
+
+        /* Terminal Window */
+        .terminal-container {
+            flex: 1;
+            background-color: var(--term-bg);
+            padding: 10px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        .log-line {
+            padding: 2px 5px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.4;
+            font-size: 0.9rem;
+            border-left: 3px solid transparent;
+        }
+
+        .log-line:hover { background-color: rgba(110, 118, 129, 0.1); }
+
+        /* Log Level Coloring */
+        .log-line.error { color: #ff7b72; border-left-color: var(--error-color); }
+        .log-line.warning { color: #d29922; border-left-color: var(--warn-color); }
+        .log-line.info { color: #79c0ff; border-left-color: var(--info-color); }
+        .log-line.debug { color: #8b949e; }
+        .log-line.critical { background-color: rgba(248, 81, 73, 0.1); color: #ff7b72; border-left-color: #ff0000; font-weight: bold; }
+
+        /* Status Bar */
+        .status-bar {
+            background-color: #161b22;
+            border-top: 1px solid var(--border-color);
+            padding: 5px 20px;
+            font-size: 0.8rem;
+            color: #8b949e;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Loading */
+        .loader {
+            display: none;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--accent-color);
+            border-radius: 50%;
+            width: 14px; height: 14px;
+            animation: spin 1s linear infinite;
+            margin-right: 5px;
+        }
+        .loading .loader { display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Scroll Lock Button */
+        #scrollLockBtn.active { background-color: #1f6feb; border-color: #1f6feb; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span class="live-indicator"></span>
+            Server Logs
+        </h1>
+        <div class="controls">
+            <div id="loadingIndicator" class="loading" style="display: none; align-items: center; gap: 5px;">
+                <span class="loader"></span> Syncing...
+            </div>
+
+            <select id="logFileSelect" onchange="changeLogFile()">
+                <option value="django.log">django.log</option>
+                <option value="security.log">security.log</option>
+                <option value="audit.log">audit.log</option>
+                <option value="celery.log">celery.log</option>
+            </select>
+
+            <input type="text" id="filterInput" placeholder="Grep..." onkeyup="filterLogs()">
+
+            <select id="linesSelect" onchange="refreshLogs()">
+                <option value="100">100 lines</option>
+                <option value="500">500 lines</option>
+                <option value="1000">1000 lines</option>
+                <option value="5000">5000 lines</option>
+            </select>
+
+            <button id="scrollLockBtn" class="active" onclick="toggleScrollLock()" title="Auto-scroll to bottom">
+                ⬇ Lock
+            </button>
+            <button onclick="refreshLogs()" class="btn-primary">Refresh</button>
+            <button onclick="clearView()">Clear</button>
+        </div>
+    </div>
+
+    <div class="terminal-container" id="terminal">
+        <div style="padding: 20px; text-align: center; color: #8b949e;">Select a log file to view...</div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusText">Ready</span>
+        <span id="lastUpdated"></span>
+    </div>
+
+    <script>
+        let scrollLock = true;
+        let pollingInterval = null;
+        let currentFile = 'django.log';
+        let allLogs = [];
+
+        function toggleScrollLock() {
+            scrollLock = !scrollLock;
+            const btn = document.getElementById('scrollLockBtn');
+            if (scrollLock) {
+                btn.classList.add('active');
+                scrollToBottom();
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        function scrollToBottom() {
+            const terminal = document.getElementById('terminal');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function clearView() {
+            document.getElementById('terminal').innerHTML = '';
+            allLogs = [];
+        }
+
+        function changeLogFile() {
+            currentFile = document.getElementById('logFileSelect').value;
+            clearView();
+            refreshLogs();
+        }
+
+        function detectLogLevel(line) {
+            line = line.toLowerCase();
+            if (line.includes('critical')) return 'critical';
+            if (line.includes('error') || line.includes('exception')) return 'error';
+            if (line.includes('warning') || line.includes('warn')) return 'warning';
+            if (line.includes('debug')) return 'debug';
+            return 'info';
+        }
+
+        function renderLogs(lines) {
+            const terminal = document.getElementById('terminal');
+            const filter = document.getElementById('filterInput').value.toLowerCase();
+
+            // Only append new lines if we have them, usually we just replace for simplicity in this MVP
+            // Ideally we'd diff, but for tailing log files, replacing is okay for small n
+
+            const html = lines
+                .filter(line => !filter || line.toLowerCase().includes(filter))
+                .map(line => {
+                    const level = detectLogLevel(line);
+                    // Basic highlighting for timestamps [YYYY-MM-DD...]
+                    const formatted = line.replace(/^(\[.*?\]|\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}[,\.]\d+)/, '<span style="color: #8b949e;">$1</span>');
+                    return `<div class="log-line ${level}">${formatted}</div>`;
+                })
+                .join('');
+
+            terminal.innerHTML = html;
+
+            if (scrollLock) {
+                scrollToBottom();
+            }
+        }
+
+        async function refreshLogs() {
+            const loading = document.getElementById('loadingIndicator');
+            const status = document.getElementById('statusText');
+            const lines = document.getElementById('linesSelect').value;
+
+            loading.style.display = 'flex';
+            status.textContent = `Fetching ${currentFile}...`;
+
+            try {
+                const response = await fetch(`/audit/logs/api/?file=${currentFile}&lines=${lines}`);
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                allLogs = data.logs || [];
+                renderLogs(allLogs);
+
+                status.textContent = `Showing last ${allLogs.length} lines from ${currentFile}`;
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                document.getElementById('terminal').innerHTML += `<div class="log-line error">Failed to fetch logs: ${error.message}</div>`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function filterLogs() {
+            renderLogs(allLogs);
+        }
+
+        // Auto-refresh every 5 seconds
+        setInterval(refreshLogs, 5000);
+
+        // Initial load
+        refreshLogs();
+
+        // Handle scroll events to disable lock if user scrolls up
+        document.getElementById('terminal').addEventListener('scroll', function() {
+            const t = this;
+            if (t.scrollHeight - t.scrollTop - t.clientHeight > 50) {
+                if (scrollLock) toggleScrollLock();
+            }
+        });
+    </script>
+</body>
+</html>
