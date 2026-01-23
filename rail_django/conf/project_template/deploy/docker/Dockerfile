@@ -89,8 +89,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/requirements/ requirements/
 RUN pip install --no-cache-dir --no-index /wheels/*
+
+COPY requirements/ requirements/
 ARG RAIL_GIT_CACHE_BUST=0
 RUN echo "Rail git cache bust: ${RAIL_GIT_CACHE_BUST}" > $APP_HOME/.rail_git_cache_bust
 RUN pip install --no-cache-dir --upgrade --no-deps -r requirements/rail-django.txt
