@@ -4,10 +4,10 @@ This module provides the ExportJobStatusView for checking async export job statu
 """
 
 from django.http import Http404, JsonResponse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from ...async_job_views import ensure_job_access, get_job_or_404, handle_job_expiry
 from ..jobs import (
     cleanup_export_job_files,
     delete_export_job,
@@ -49,17 +49,30 @@ class ExportJobStatusView(View):
             Http404: If job is not found.
         """
         job_id = str(job_id)
-        job = get_export_job(job_id)
-        if not job:
-            raise Http404("Export job not found")
-        if not job_access_allowed(request, job):
-            return JsonResponse({"error": "Export job not permitted"}, status=403)
-
-        expires_at = parse_iso_datetime(job.get("expires_at"))
-        if expires_at and timezone.now() > expires_at:
-            cleanup_export_job_files(job)
-            delete_export_job(job_id)
-            return JsonResponse({"error": "Export job expired"}, status=410)
+        job = get_job_or_404(
+            job_id,
+            get_export_job,
+            not_found_message="Export job not found",
+        )
+        forbidden = ensure_job_access(
+            request,
+            job,
+            access_allowed=job_access_allowed,
+            forbidden_message="Export job not permitted",
+        )
+        if forbidden:
+            return forbidden
+        expired = handle_job_expiry(
+            job,
+            job_id,
+            parse_expires=parse_iso_datetime,
+            cleanup_files=cleanup_export_job_files,
+            delete_job=delete_export_job,
+            expired_message="Export job expired",
+            expired_status=410,
+        )
+        if expired:
+            return expired
 
         base_path = request.path.rstrip("/")
         download_path = f"{base_path}/download/"

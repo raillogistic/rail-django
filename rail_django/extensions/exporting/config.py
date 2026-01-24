@@ -9,6 +9,8 @@ from typing import Any, Iterable, Optional
 
 from django.conf import settings
 
+from ...utils.sanitization import sanitize_filename_basic
+
 # Default list of sensitive field names that should never be exported
 DEFAULT_SENSITIVE_FIELDS = [
     "password",
@@ -431,5 +433,4 @@ def sanitize_filename(filename: str) -> str:
     Returns:
         Sanitized filename, or 'export' if result would be empty.
     """
-    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._")
-    return cleaned or "export"
+    return sanitize_filename_basic(filename, default="export")

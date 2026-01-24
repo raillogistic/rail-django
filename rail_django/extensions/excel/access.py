@@ -12,6 +12,7 @@ from django.db import models
 from django.http import HttpRequest, JsonResponse
 
 from .config import ExcelTemplateAccessDecision, ExcelTemplateDefinition
+from ...utils.request import resolve_request_user
 
 # Optional imports
 try:
@@ -48,30 +49,7 @@ def _resolve_request_user(request: HttpRequest):
     Returns:
         The authenticated user or None.
     """
-    user = getattr(request, "user", None)
-    if user and getattr(user, "is_authenticated", False):
-        return user
-
-    if not get_user_from_token:
-        return user
-
-    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-    if auth_header and (
-        auth_header.startswith("Bearer ") or auth_header.startswith("Token ")
-    ):
-        parts = auth_header.split(" ", 1)
-        if len(parts) == 2:
-            token = parts[1].strip()
-            if token:
-                try:
-                    fallback_user = get_user_from_token(token)
-                except Exception:  # pragma: no cover
-                    fallback_user = None
-                if fallback_user and getattr(fallback_user, "is_authenticated", False):
-                    request.user = fallback_user
-                    return fallback_user
-
-    return user
+    return resolve_request_user(request, get_user_from_token=get_user_from_token)
 
 
 def evaluate_excel_template_access(

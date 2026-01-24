@@ -6,10 +6,10 @@ This module provides the ExportJobDownloadView for downloading completed export 
 from pathlib import Path
 
 from django.http import FileResponse, Http404, JsonResponse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from ...async_job_views import ensure_job_access, get_job_or_404, handle_job_expiry
 from ..config import sanitize_filename
 from ..jobs import (
     cleanup_export_job_files,
@@ -53,17 +53,30 @@ class ExportJobDownloadView(View):
             Http404: If job or file is not found.
         """
         job_id = str(job_id)
-        job = get_export_job(job_id)
-        if not job:
-            raise Http404("Export job not found")
-        if not job_access_allowed(request, job):
-            return JsonResponse({"error": "Export job not permitted"}, status=403)
-
-        expires_at = parse_iso_datetime(job.get("expires_at"))
-        if expires_at and timezone.now() > expires_at:
-            cleanup_export_job_files(job)
-            delete_export_job(job_id)
-            return JsonResponse({"error": "Export job expired"}, status=410)
+        job = get_job_or_404(
+            job_id,
+            get_export_job,
+            not_found_message="Export job not found",
+        )
+        forbidden = ensure_job_access(
+            request,
+            job,
+            access_allowed=job_access_allowed,
+            forbidden_message="Export job not permitted",
+        )
+        if forbidden:
+            return forbidden
+        expired = handle_job_expiry(
+            job,
+            job_id,
+            parse_expires=parse_iso_datetime,
+            cleanup_files=cleanup_export_job_files,
+            delete_job=delete_export_job,
+            expired_message="Export job expired",
+            expired_status=410,
+        )
+        if expired:
+            return expired
 
         if job.get("status") != "completed":
             return JsonResponse({"error": "Export job not completed"}, status=409)

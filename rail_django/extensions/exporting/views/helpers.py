@@ -7,10 +7,9 @@ import csv
 import io
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, List, Optional, Union
 
-from django.core.cache import cache
 from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 
@@ -21,8 +20,8 @@ from ..config import (
 )
 from ..exporter import ModelExporter
 from ..jobs import (
-    export_job_payload_key,
     export_job_task,
+    set_export_job_payload,
     set_export_job,
     start_export_job_thread,
     update_export_job,
@@ -185,7 +184,7 @@ def enqueue_export_job(
     }
 
     set_export_job(job_id, job, timeout=expires_seconds)
-    cache.set(export_job_payload_key(job_id), payload, timeout=expires_seconds)
+    set_export_job_payload(job_id, payload, timeout=expires_seconds)
 
     if backend == "thread":
         start_export_job_thread(job_id)

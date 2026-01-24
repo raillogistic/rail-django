@@ -5,9 +5,8 @@ This module provides Django views for serving PDF templates, previews,
 and catalog endpoints.
 """
 
-import ipaddress
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 from django.conf import settings
 from django.core.cache import cache
@@ -48,6 +47,7 @@ from .jobs import (
     _build_pdf_cache_key,
     generate_pdf_async,
 )
+from ...utils.network import get_rate_limit_identifier
 
 # Re-export job views
 from .job_views import PdfTemplateJobStatusView, PdfTemplateJobDownloadView
@@ -262,34 +262,9 @@ class PdfTemplateView(View):
         return None
 
     def _get_rate_limit_identifier(self, request: HttpRequest, rate_limit: dict[str, Any]) -> str:
-        user = _resolve_request_user(request)
-        if user and getattr(user, "is_authenticated", False):
-            return f"user:{user.id}"
         trusted_proxies = rate_limit.get("trusted_proxies") or []
-        remote_addr = request.META.get("REMOTE_ADDR", "")
-        ip_address = remote_addr or "unknown"
-        if self._is_trusted_proxy(remote_addr, trusted_proxies):
-            forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-            if forwarded_for:
-                ip_address = forwarded_for.split(",")[0].strip()
-        return f"ip:{ip_address}"
-
-    def _is_trusted_proxy(self, remote_addr: str, trusted_proxies: Iterable[str]) -> bool:
-        if not remote_addr:
-            return False
-        for proxy in trusted_proxies:
-            proxy = str(proxy).strip()
-            if not proxy:
-                continue
-            if "/" in proxy:
-                try:
-                    if ipaddress.ip_address(remote_addr) in ipaddress.ip_network(proxy, strict=False):
-                        return True
-                except ValueError:
-                    continue
-            if remote_addr == proxy:
-                return True
-        return False
+        _resolve_request_user(request)
+        return get_rate_limit_identifier(request, trusted_proxies)
 
     def _render_pdf(self, template_def: TemplateDefinition, context: dict[str, Any], *,
                     base_url: Optional[str] = None, renderer: Optional[str] = None) -> bytes:

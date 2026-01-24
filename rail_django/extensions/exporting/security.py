@@ -4,13 +4,15 @@ This module provides security functions for access control, rate limiting,
 and permission checking in the exporting package.
 """
 
-import ipaddress
 from typing import Any, Iterable, Optional
 
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.http import JsonResponse
 
+from ...utils.network import get_rate_limit_identifier as _get_rate_limit_identifier
+from ...utils.network import is_trusted_proxy as _is_trusted_proxy
+from ..async_jobs import job_access_allowed as _job_access_allowed
 from .config import get_export_settings, is_model_allowed
 
 # Import auth decorators
@@ -74,13 +76,7 @@ def job_access_allowed(request: Any, job: dict[str, Any]) -> bool:
     Returns:
         True if access is allowed, False otherwise.
     """
-    user = getattr(request, "user", None)
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if getattr(user, "is_superuser", False):
-        return True
-    owner_id = job.get("owner_id")
-    return owner_id is not None and str(owner_id) == str(user.id)
+    return _job_access_allowed(request, job)
 
 
 def is_trusted_proxy(remote_addr: str, trusted_proxies: Iterable[str]) -> bool:
@@ -95,23 +91,7 @@ def is_trusted_proxy(remote_addr: str, trusted_proxies: Iterable[str]) -> bool:
     Returns:
         True if the address is a trusted proxy, False otherwise.
     """
-    if not remote_addr:
-        return False
-    for proxy in trusted_proxies:
-        proxy = str(proxy).strip()
-        if not proxy:
-            continue
-        if "/" in proxy:
-            try:
-                if ipaddress.ip_address(remote_addr) in ipaddress.ip_network(
-                    proxy, strict=False
-                ):
-                    return True
-            except ValueError:
-                continue
-        if remote_addr == proxy:
-            return True
-    return False
+    return _is_trusted_proxy(remote_addr, trusted_proxies)
 
 
 def get_rate_limit_identifier(request: Any, export_settings: dict[str, Any]) -> str:
@@ -127,21 +107,9 @@ def get_rate_limit_identifier(request: Any, export_settings: dict[str, Any]) -> 
     Returns:
         Rate limit identifier string (e.g., "user:123" or "ip:192.168.1.1").
     """
-    user = getattr(request, "user", None)
-    if user and getattr(user, "is_authenticated", False):
-        return f"user:{user.id}"
-
     rate_limit = export_settings.get("rate_limit") or {}
     trusted_proxies = rate_limit.get("trusted_proxies") or []
-    remote_addr = request.META.get("REMOTE_ADDR", "")
-    ip_address = remote_addr or "unknown"
-
-    if is_trusted_proxy(remote_addr, trusted_proxies):
-        forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        if forwarded_for:
-            ip_address = forwarded_for.split(",")[0].strip()
-
-    return f"ip:{ip_address}"
+    return _get_rate_limit_identifier(request, trusted_proxies)
 
 
 def check_rate_limit(

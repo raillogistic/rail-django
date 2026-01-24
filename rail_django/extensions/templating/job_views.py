@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
+from ..async_job_views import ensure_job_access, get_job_or_404, handle_job_expiry
 from .config import _url_prefix
 from .jobs import (
     _sanitize_filename,
@@ -47,18 +47,30 @@ class PdfTemplateJobStatusView(View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, job_id: str) -> JsonResponse:
-        job = _get_pdf_job(str(job_id))
-        if not job:
-            raise Http404("PDF job not found")
-
-        expires_at = _parse_iso_datetime(job.get("expires_at"))
-        if expires_at and expires_at <= timezone.now():
-            _cleanup_pdf_job_files(job)
-            _delete_pdf_job(str(job_id))
-            raise Http404("PDF job not found")
-
-        if not _job_access_allowed(request, job):
-            return JsonResponse({"error": "PDF job not permitted"}, status=403)
+        job_id = str(job_id)
+        job = get_job_or_404(
+            job_id,
+            _get_pdf_job,
+            not_found_message="PDF job not found",
+        )
+        handle_job_expiry(
+            job,
+            job_id,
+            parse_expires=_parse_iso_datetime,
+            cleanup_files=_cleanup_pdf_job_files,
+            delete_job=_delete_pdf_job,
+            expired_message="PDF job not found",
+            expired_status=404,
+            not_found_message="PDF job not found",
+        )
+        forbidden = ensure_job_access(
+            request,
+            job,
+            access_allowed=_job_access_allowed,
+            forbidden_message="PDF job not permitted",
+        )
+        if forbidden:
+            return forbidden
 
         payload = {
             "job_id": job.get("id"),
@@ -85,18 +97,30 @@ class PdfTemplateJobDownloadView(View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, job_id: str) -> HttpResponse:
-        job = _get_pdf_job(str(job_id))
-        if not job:
-            raise Http404("PDF job not found")
-
-        expires_at = _parse_iso_datetime(job.get("expires_at"))
-        if expires_at and expires_at <= timezone.now():
-            _cleanup_pdf_job_files(job)
-            _delete_pdf_job(str(job_id))
-            raise Http404("PDF job not found")
-
-        if not _job_access_allowed(request, job):
-            return JsonResponse({"error": "PDF job not permitted"}, status=403)
+        job_id = str(job_id)
+        job = get_job_or_404(
+            job_id,
+            _get_pdf_job,
+            not_found_message="PDF job not found",
+        )
+        handle_job_expiry(
+            job,
+            job_id,
+            parse_expires=_parse_iso_datetime,
+            cleanup_files=_cleanup_pdf_job_files,
+            delete_job=_delete_pdf_job,
+            expired_message="PDF job not found",
+            expired_status=404,
+            not_found_message="PDF job not found",
+        )
+        forbidden = ensure_job_access(
+            request,
+            job,
+            access_allowed=_job_access_allowed,
+            forbidden_message="PDF job not permitted",
+        )
+        if forbidden:
+            return forbidden
 
         if job.get("status") != "completed":
             return JsonResponse({"error": "PDF job not completed"}, status=409)

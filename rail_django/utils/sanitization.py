@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 # Characters allowed in filenames
 FILENAME_SAFE_PATTERN = re.compile(r"[^\w\s\-_\.]")
+FILENAME_BASIC_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -56,6 +57,23 @@ def sanitize_filename(filename: str) -> str:
             filename = name_part
 
     return filename or "unnamed"
+
+
+def sanitize_filename_basic(filename: str, *, default: str = "export") -> str:
+    """
+    Sanitize a filename using a strict ASCII-safe allowlist.
+
+    Args:
+        filename: Raw filename.
+        default: Fallback name when the cleaned value is empty.
+
+    Returns:
+        Sanitized filename using only letters, numbers, dot, underscore, and dash.
+    """
+    if not filename:
+        return default
+    cleaned = FILENAME_BASIC_PATTERN.sub("_", str(filename)).strip("._")
+    return cleaned or default
 
 
 def sanitize_query(query: str) -> str:

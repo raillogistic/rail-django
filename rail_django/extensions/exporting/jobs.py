@@ -5,19 +5,19 @@ for the exporting package.
 """
 
 import logging
-import tempfile
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-from django.conf import settings
-from django.core.cache import cache
 from django.utils import timezone
 
+from ..async_jobs import JobCache, build_storage_dir, parse_iso_datetime as parse_iso_datetime_util
 from .config import get_export_settings
 
 logger = logging.getLogger(__name__)
+
+_EXPORT_JOB_CACHE = JobCache("rail:export_job", "rail:export_job_payload")
 
 
 def export_job_cache_key(job_id: str) -> str:
@@ -29,7 +29,7 @@ def export_job_cache_key(job_id: str) -> str:
     Returns:
         Cache key string.
     """
-    return f"rail:export_job:{job_id}"
+    return _EXPORT_JOB_CACHE.job_key(job_id)
 
 
 def export_job_payload_key(job_id: str) -> str:
@@ -41,7 +41,19 @@ def export_job_payload_key(job_id: str) -> str:
     Returns:
         Cache key string.
     """
-    return f"rail:export_job_payload:{job_id}"
+    return _EXPORT_JOB_CACHE.payload_key(job_id)
+
+
+def get_export_job_payload(job_id: str) -> Optional[dict[str, Any]]:
+    """Retrieve export job payload from cache."""
+    return _EXPORT_JOB_CACHE.get_payload(job_id)
+
+
+def set_export_job_payload(
+    job_id: str, payload: dict[str, Any], *, timeout: int
+) -> None:
+    """Store export job payload in cache."""
+    _EXPORT_JOB_CACHE.set_payload(job_id, payload, timeout=timeout)
 
 
 def get_export_storage_dir(export_settings: dict[str, Any]) -> Path:
@@ -57,15 +69,11 @@ def get_export_storage_dir(export_settings: dict[str, Any]) -> Path:
         Path to the export storage directory (created if needed).
     """
     async_settings = export_settings.get("async_jobs") or {}
-    storage_dir = async_settings.get("storage_dir")
-    if storage_dir:
-        path = Path(str(storage_dir))
-    elif getattr(settings, "MEDIA_ROOT", None):
-        path = Path(settings.MEDIA_ROOT) / "rail_exports"
-    else:
-        path = Path(tempfile.gettempdir()) / "rail_exports"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return build_storage_dir(
+        async_settings.get("storage_dir"),
+        media_subdir="rail_exports",
+        temp_subdir="rail_exports",
+    )
 
 
 def get_export_job(job_id: str) -> Optional[dict[str, Any]]:
@@ -77,7 +85,7 @@ def get_export_job(job_id: str) -> Optional[dict[str, Any]]:
     Returns:
         Job metadata dictionary, or None if not found.
     """
-    return cache.get(export_job_cache_key(job_id))
+    return _EXPORT_JOB_CACHE.get_job(job_id)
 
 
 def set_export_job(job_id: str, job: dict[str, Any], *, timeout: int) -> None:
@@ -88,7 +96,7 @@ def set_export_job(job_id: str, job: dict[str, Any], *, timeout: int) -> None:
         job: Job metadata dictionary.
         timeout: Cache timeout in seconds.
     """
-    cache.set(export_job_cache_key(job_id), job, timeout=timeout)
+    _EXPORT_JOB_CACHE.set_job(job_id, job, timeout=timeout)
 
 
 def update_export_job(
@@ -104,12 +112,7 @@ def update_export_job(
     Returns:
         Updated job dictionary, or None if job not found.
     """
-    job = get_export_job(job_id)
-    if not job:
-        return None
-    job.update(updates)
-    set_export_job(job_id, job, timeout=timeout)
-    return job
+    return _EXPORT_JOB_CACHE.update_job(job_id, updates, timeout=timeout)
 
 
 def delete_export_job(job_id: str) -> None:
@@ -118,8 +121,7 @@ def delete_export_job(job_id: str) -> None:
     Args:
         job_id: Unique job identifier.
     """
-    cache.delete(export_job_cache_key(job_id))
-    cache.delete(export_job_payload_key(job_id))
+    _EXPORT_JOB_CACHE.delete_job(job_id)
 
 
 def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -131,15 +133,7 @@ def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
     Returns:
         Timezone-aware datetime object, or None if parsing fails.
     """
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if timezone.is_naive(parsed):
-        return timezone.make_aware(parsed, timezone.get_default_timezone())
-    return parsed
+    return parse_iso_datetime_util(value, make_aware=True)
 
 
 def cleanup_export_job_files(job: dict[str, Any]) -> None:
@@ -179,7 +173,7 @@ def run_export_job(job_id: str) -> None:
     export_settings = get_export_settings()
     async_settings = export_settings.get("async_jobs") or {}
     timeout = int(async_settings.get("expires_seconds", 3600))
-    payload = cache.get(export_job_payload_key(job_id))
+    payload = get_export_job_payload(job_id)
     if not payload:
         update_export_job(
             job_id,

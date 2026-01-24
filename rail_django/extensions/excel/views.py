@@ -5,9 +5,8 @@ This module provides the Django views for serving Excel exports,
 including the main template view and catalog.
 """
 
-import ipaddress
 import logging
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
@@ -32,6 +31,7 @@ from .jobs import (
     _sanitize_filename,
     generate_excel_async,
 )
+from ...utils.network import get_rate_limit_identifier
 
 # Re-export job views for backward compatibility
 from .job_views import ExcelTemplateJobDownloadView, ExcelTemplateJobStatusView
@@ -229,35 +229,9 @@ class ExcelTemplateView(View):
     def _get_rate_limit_identifier(self, request: HttpRequest, rate_limit: Dict[str, Any]) -> str:
         """Get the rate limit identifier for a request."""
         from .access import _resolve_request_user
-        user = _resolve_request_user(request)
-        if user and getattr(user, "is_authenticated", False):
-            return f"user:{user.id}"
+        _resolve_request_user(request)
         trusted_proxies = rate_limit.get("trusted_proxies") or []
-        remote_addr = request.META.get("REMOTE_ADDR", "")
-        ip_address = remote_addr or "unknown"
-        if self._is_trusted_proxy(remote_addr, trusted_proxies):
-            forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-            if forwarded_for:
-                ip_address = forwarded_for.split(",")[0].strip()
-        return f"ip:{ip_address}"
-
-    def _is_trusted_proxy(self, remote_addr: str, trusted_proxies: Iterable[str]) -> bool:
-        """Check if a remote address is a trusted proxy."""
-        if not remote_addr:
-            return False
-        for proxy in trusted_proxies:
-            proxy = str(proxy).strip()
-            if not proxy:
-                continue
-            if "/" in proxy:
-                try:
-                    if ipaddress.ip_address(remote_addr) in ipaddress.ip_network(proxy, strict=False):
-                        return True
-                except ValueError:
-                    continue
-            if remote_addr == proxy:
-                return True
-        return False
+        return get_rate_limit_identifier(request, trusted_proxies)
 
     def _check_rate_limit(self, request: HttpRequest, template_def: ExcelTemplateDefinition) -> Optional[JsonResponse]:
         """Check rate limits for the request."""

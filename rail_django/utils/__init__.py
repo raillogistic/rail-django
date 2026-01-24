@@ -23,6 +23,7 @@ from .datetime_utils import (
 )
 from .sanitization import (
     sanitize_filename,
+    sanitize_filename_basic,
     sanitize_query,
     sanitize_variables,
     sanitize_html,
@@ -74,6 +75,7 @@ __all__ = [
     "format_date",
     # Sanitization
     "sanitize_filename",
+    "sanitize_filename_basic",
     "sanitize_query",
     "sanitize_variables",
     "sanitize_html",

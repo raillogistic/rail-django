@@ -5,21 +5,13 @@ This module provides functions for managing asynchronous PDF generation jobs
 including job creation, status tracking, and background processing.
 """
 
-import hashlib
-import json
 import logging
-import re
-import tempfile
 import threading
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest
@@ -35,8 +27,19 @@ from .config import (
 from .registry import template_registry, TemplateDefinition
 from .access import _resolve_request_user, _build_template_context
 from .rendering import render_pdf
+from ..async_jobs import (
+    JobCache,
+    build_job_request,
+    build_storage_dir,
+    hash_payload,
+    job_access_allowed,
+    parse_iso_datetime,
+)
+from ...utils.sanitization import sanitize_filename_basic
 
 logger = logging.getLogger(__name__)
+
+_PDF_JOB_CACHE = JobCache("rail:pdf_job", "rail:pdf_job_payload")
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 def _sanitize_filename(filename: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._")
-    return cleaned or "document"
+    return sanitize_filename_basic(filename, default="document")
 
 
 # ---------------------------------------------------------------------------
@@ -55,8 +57,7 @@ def _sanitize_filename(filename: str) -> str:
 
 
 def _hash_payload(payload: dict[str, Any]) -> str:
-    serialized = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(serialized).hexdigest()
+    return hash_payload(payload)
 
 
 def _cache_settings_for_template(template_def: TemplateDefinition) -> dict[str, Any]:
@@ -98,66 +99,45 @@ def _build_pdf_cache_key(
 
 
 def _pdf_job_cache_key(job_id: str) -> str:
-    return f"rail:pdf_job:{job_id}"
+    return _PDF_JOB_CACHE.job_key(job_id)
 
 
 def _pdf_job_payload_key(job_id: str) -> str:
-    return f"rail:pdf_job_payload:{job_id}"
+    return _PDF_JOB_CACHE.payload_key(job_id)
 
 
 def _get_pdf_storage_dir(async_settings: dict[str, Any]) -> Path:
-    storage_dir = async_settings.get("storage_dir")
-    if storage_dir:
-        path = Path(str(storage_dir))
-    elif getattr(settings, "MEDIA_ROOT", None):
-        path = Path(settings.MEDIA_ROOT) / "rail_pdfs"
-    else:
-        path = Path(tempfile.gettempdir()) / "rail_pdfs"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return build_storage_dir(
+        async_settings.get("storage_dir"),
+        media_subdir="rail_pdfs",
+        temp_subdir="rail_pdfs",
+    )
 
 
 def _get_pdf_job(job_id: str) -> Optional[dict[str, Any]]:
-    return cache.get(_pdf_job_cache_key(job_id))
+    return _PDF_JOB_CACHE.get_job(job_id)
 
 
 def _set_pdf_job(job_id: str, job: dict[str, Any], *, timeout: int) -> None:
-    cache.set(_pdf_job_cache_key(job_id), job, timeout=timeout)
+    _PDF_JOB_CACHE.set_job(job_id, job, timeout=timeout)
 
 
 def _update_pdf_job(
     job_id: str, updates: dict[str, Any], *, timeout: int
 ) -> Optional[dict[str, Any]]:
-    job = _get_pdf_job(job_id)
-    if not job:
-        return None
-    job.update(updates)
-    _set_pdf_job(job_id, job, timeout=timeout)
-    return job
+    return _PDF_JOB_CACHE.update_job(job_id, updates, timeout=timeout)
 
 
 def _delete_pdf_job(job_id: str) -> None:
-    cache.delete(_pdf_job_cache_key(job_id))
-    cache.delete(_pdf_job_payload_key(job_id))
+    _PDF_JOB_CACHE.delete_job(job_id)
 
 
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
+    return parse_iso_datetime(value)
 
 
 def _job_access_allowed(request: Any, job: dict[str, Any]) -> bool:
-    user = _resolve_request_user(request)
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if getattr(user, "is_superuser", False):
-        return True
-    owner_id = job.get("owner_id")
-    return bool(owner_id and str(owner_id) == str(getattr(user, "id", "")))
+    return job_access_allowed(request, job, resolve_user=_resolve_request_user)
 
 
 def _notify_pdf_job_webhook(
@@ -180,16 +160,7 @@ def _notify_pdf_job_webhook(
 
 
 def _build_job_request(owner_id: Optional[Any]) -> HttpRequest:
-    request = HttpRequest()
-    user = None
-    if owner_id:
-        try:
-            user_model = get_user_model()
-            user = user_model.objects.filter(pk=owner_id).first()
-        except Exception:
-            user = None
-    request.user = user or AnonymousUser()
-    return request
+    return build_job_request(owner_id)
 
 
 def _cleanup_pdf_job_files(job: dict[str, Any]) -> None:
@@ -214,7 +185,7 @@ def _run_pdf_job(job_id: str) -> None:
 
     async_settings = _templating_async()
     timeout = int(async_settings.get("expires_seconds", 3600))
-    payload = cache.get(_pdf_job_payload_key(job_id))
+    payload = _PDF_JOB_CACHE.get_payload(job_id)
     if not payload:
         _update_pdf_job(
             job_id, {"status": "failed", "error": "Missing job payload"}, timeout=timeout
@@ -379,7 +350,7 @@ def generate_pdf_async(
     }
 
     _set_pdf_job(job_id, job, timeout=expires_seconds)
-    cache.set(_pdf_job_payload_key(job_id), payload, timeout=expires_seconds)
+    _PDF_JOB_CACHE.set_payload(job_id, payload, timeout=expires_seconds)
 
     if backend == "thread":
         thread = threading.Thread(target=_run_pdf_job, args=(job_id,), daemon=True)
