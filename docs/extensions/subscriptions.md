@@ -1,81 +1,126 @@
-# Subscriptions
+# GraphQL Subscriptions
 
-Rail Django supports GraphQL subscriptions via `channels-graphql-ws`.
+Rail Django supports real-time GraphQL subscriptions via WebSocket, allowing clients to receive instant updates when data changes in the system.
+
+## Overview
+
+The subscription system is built on top of **Django Channels** and provides:
+- Automatic generation of CRUD events for your models.
+- Advanced event filtering using the same syntax as queries.
+- Granular permission control.
+- Integration with major GraphQL clients like Apollo and Relay.
 
 ## Installation
 
-You need to install the optional dependencies.
+Subscriptions require Django Channels and a channel layer (like Redis).
 
 ```bash
+# Install with optional subscription dependencies
 pip install rail-django[subscriptions]
-# or
-pip install channels channels-graphql-ws daphne
+
+# Or install manually
+pip install channels channels-redis daphne
 ```
 
 ## Configuration
 
 ### 1. Enable Subscriptions
+Enable and configure the subscription generator in your settings:
 
 ```python
-# settings.py
 RAIL_DJANGO_GRAPHQL = {
     "subscription_settings": {
         "enable_subscriptions": True,
-        "enable_create": True, # Auto-generate create events
-        "enable_update": True, # Auto-generate update events
-        "enable_delete": True, # Auto-generate delete events
-    }
+        # Auto-generate events for these operations
+        "enable_create": True,
+        "enable_update": True,
+        "enable_delete": True,
+
+        # Enable Prisma-style filters on subscriptions
+        "enable_filters": True,
+
+        # Model discovery
+        "discover_models": True,
+        "exclude_models": ["audit.AuditEvent"],
+    },
+}
+
+# Configure Channel Layers (Redis recommended)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("localhost", 6379)],
+        },
+    },
 }
 ```
 
 ### 2. Setup ASGI
-
-You need to configure Django Channels.
+You must configure your Django project to use ASGI for WebSocket support.
 
 ```python
 # asgi.py
 import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
-from django.urls import path
-from rail_django.subscriptions import MyGraphqlConsumer
+from channels.auth import AuthMiddlewareStack
+from rail_django.subscriptions import GraphQLWebsocketConsumer
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'my_project.settings')
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
-    "websocket": URLRouter([
-        path("graphql/", MyGraphqlConsumer.as_asgi()),
-    ]),
+    "websocket": AuthMiddlewareStack(
+        URLRouter([
+            path("graphql/", GraphQLWebsocketConsumer.as_asgi()),
+        ])
+    ),
 })
 ```
 
-## Auto-Generated Events
+## Generated Subscriptions
 
-If enabled, Rail Django automatically broadcasts events for your models.
+For each registered model, Rail Django can generate the following subscriptions:
 
+| Event | Subscription Name | Description |
+|-------|-------------------|-------------|
+| Created | `<model>Created` | Notifies when a new instance is created. |
+| Updated | `<model>Updated` | Notifies when an instance is modified. |
+| Deleted | `<model>Deleted` | Notifies when an instance is removed. |
+| Changed | `<model>Changed` | Notifies on any of the above events. |
+
+### Example Usage
 ```graphql
-subscription {
-  # Subscribe to all user updates
-  userUpdated {
-    user {
+subscription OnOrderCreated {
+  orderCreated(filters: { status: { eq: "pending" } }) {
+    event # "created"
+    timestamp
+    node {
       id
-      username
+      reference
+      total
     }
   }
 }
 ```
 
-### Filtering Subscriptions
+## Event Filtering
 
-You can subscribe to specific events using filters.
+Rail Django supports advanced filtering on subscriptions, allowing clients to subscribe only to relevant events.
 
 ```graphql
-subscription {
-  # Only notify when a user in the 'staff' group is updated
-  userUpdated(filters: { isStaff: true }) {
-    user {
-      username
+subscription SpecificOrders {
+  # Only notify for high-value orders from a specific customer
+  orderChanged(filters: {
+    AND: [
+      { total: { gte: 1000 } },
+      { customer: { id: { eq: "Cust_1" } } }
+    ]
+  }) {
+    event
+    node {
+      reference
     }
   }
 }
@@ -83,37 +128,71 @@ subscription {
 
 ## Custom Subscriptions
 
-You can register custom subscriptions in `schema.py`.
+You can define custom subscriptions by registering them in your schema.
 
 ```python
 import graphene
 from rail_django.core.registry import register_subscription
-import asyncio
 
 class MySubscription(graphene.ObjectType):
-    time_update = graphene.String()
-    
-    async def subscribe_time_update(root, info):
-        # Return the group name to subscribe to (managed by Channels)
-        return ["time_events"]
+    custom_event = graphene.String()
+
+    async def subscribe_custom_event(root, info):
+        # Return the list of channel groups to subscribe to
+        return ["custom_notifications"]
 
 register_subscription(MySubscription)
 ```
 
-### Broadcasting Events
+To broadcast to this subscription:
+```python
+from rail_django.subscriptions import broadcast
+broadcast("custom_notifications", {"custom_event": "Hello World!"})
+```
 
-To trigger the custom subscription from anywhere in your Django code:
+## Permissions and Security
+
+Subscriptions respect the same permission rules as queries and mutations. You can also define subscription-specific permissions in `GraphQLMeta`:
 
 ```python
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-
-channel_layer = get_channel_layer()
-async_to_sync(channel_layer.group_send)(
-    "time_events",
-    {
-        "type": "broadcast", # Must match the handler in your consumer if custom
-        "payload": {"time_update": "12:00 PM"}
-    }
-)
+class Order(models.Model):
+    class GraphQLMeta:
+        subscription_permissions = {
+            "created": {"roles": ["sales", "admin"]},
+            "deleted": {"roles": ["admin"]},
+        }
 ```
+
+## Apollo Client Integration
+
+To use subscriptions with Apollo Client, use `split` to route subscription requests over WebSocket:
+
+```typescript
+import { split, HttpLink } from '@apollo/client';
+import { WebSocketLink } from '@apollo/client/link/ws';
+import { getMainDefinition } from '@apollo/client/utilities';
+
+const httpLink = new HttpLink({ uri: '/graphql/' });
+const wsLink = new WebSocketLink({
+  uri: `ws://${window.location.host}/graphql/`,
+  options: { reconnect: true }
+});
+
+const splitLink = split(
+  ({ query }) => {
+    const definition = getMainDefinition(query);
+    return (
+      definition.kind === 'OperationDefinition' &&
+      definition.operation === 'subscription'
+    );
+  },
+  wsLink,
+  httpLink,
+);
+```
+
+## See Also
+
+- [Webhooks](./webhooks.md) - For server-to-server event notifications.
+- [Permissions](../security/permissions.md) - For authorization details.
+- [Production Deployment](../operations/deployment.md) - For ASGI server setup.

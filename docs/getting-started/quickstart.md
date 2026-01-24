@@ -1,122 +1,123 @@
 # Quickstart Guide
 
-This tutorial will guide you through creating a new Rail Django project, defining a model, and querying it via GraphQL.
+Build a complete, secured GraphQL API with Rail Django in just a few minutes. This guide will walk you through creating a simple store API with Products and Categories.
 
-## 1. Create a Project
+## 1. Create the Application
 
-Rail Django includes a CLI tool `rail-admin` (similar to `django-admin`) that scaffolds a project with optimal defaults and directory structure.
-
-```bash
-rail-admin startproject my_api
-cd my_api
-```
-
-This creates a project structure like this:
-
-```text
-my_api/
-├── manage.py
-├── my_api/
-│   ├── __init__.py
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-└── apps/
-    └── __init__.py
-```
-
-## 2. Setup Database
-
-Initialize the database and create a superuser for accessing the Django Admin.
+Assuming you have already [installed](../getting-started/installation.md) Rail Django and created a project:
 
 ```bash
-python manage.py migrate
-python manage.py createsuperuser
+python manage.py startapp store apps/store
 ```
 
-## 3. Create an App
+## 2. Define the Models
 
-Create a new app inside the `apps/` directory.
+Edit `apps/store/models.py` to define your data structure. We'll use `GraphQLMeta` to configure how these models appear in the API.
 
-```bash
-python manage.py startapp blog apps/blog
+```python
+from django.db import models
+from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        filtering = ["name"] # Enable simple filtering
+        ordering = ["name"]
+
+class Product(models.Model):
+    name = models.CharField(max_length=200)
+    sku = models.CharField(max_length=50, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+
+    class GraphQLMeta(GraphQLMetaConfig):
+        # Configure advanced filtering
+        filtering = GraphQLMetaConfig.Filtering(
+            quick=["name", "sku"],
+            fields={"price": ["gt", "lt", "between"]}
+        )
+        # Mark SKU as read-only for updates
+        fields = GraphQLMetaConfig.Fields(read_only=["sku"])
 ```
 
-Add the app to `INSTALLED_APPS` in `my_api/settings.py`:
+## 3. Register the App
+
+Add the new app to your `INSTALLED_APPS` in `settings.py`:
 
 ```python
 INSTALLED_APPS = [
     # ...
     "rail_django",
-    "apps.blog",
+    "apps.store",
 ]
 ```
 
-## 4. Define a Model
-
-Edit `apps/blog/models.py` to define a simple `Post` model.
-
-```python
-from django.db import models
-
-class Post(models.Model):
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    is_published = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        # Rail Django uses this to enable GraphQL features
-        app_label = "blog" 
-```
-
-Now, make migrations and migrate:
+## 4. Run Migrations
 
 ```bash
-python manage.py makemigrations
+python manage.py makemigrations store
 python manage.py migrate
 ```
 
-## 5. Enable GraphQL
+## 5. Explore the API
 
-Rail Django automatically discovers models, but explicit registration provides more control. Create a `schema.py` in your app `apps/blog/schema.py` (optional for simple cases if using auto-discovery, but recommended).
+Start your server (`python manage.py runserver`) and open `http://localhost:8000/graphql/`.
 
-For now, Rail Django's auto-discovery will likely pick it up if you haven't customized the registry.
-
-## 6. Run the Server
-
-```bash
-python manage.py runserver
-```
-
-Open your browser to `http://127.0.0.1:8000/graphql`.
-
-## 7. Query Your Data
-
-You can now query your API. Notice that `created_at` automatically becomes `createdAt` (camelCase).
+### Querying Data
+Rail Django has automatically created `products` and `categories` queries.
 
 ```graphql
-query {
-  posts {
+query ListActiveProducts {
+  products(where: { isActive: { eq: true } }) {
     id
-    title
-    content
-    createdAt
+    name
+    price
+    category {
+      name
+    }
   }
 }
 ```
 
-You can also use the plural alias:
+### Mutating Data
+Rail Django has also created CRUD mutations like `createProduct` and `updateProduct`.
 
 ```graphql
-query {
-  allPosts {
-    title
+mutation CreateProduct {
+  createProduct(input: {
+    name: "Wireless Headphones",
+    sku: "HEAD-001",
+    price: 150.00,
+    categoryId: "1"
+  }) {
+    ok
+    object { id }
   }
 }
+```
+
+## 6. Secure the API
+
+By default, Rail Django uses Django's permission system. You can restrict access in `GraphQLMeta`:
+
+```python
+class Product(models.Model):
+    # ...
+    class GraphQLMeta:
+        access = {
+            "operations": {
+                "create": {"roles": ["admin"]},
+                "delete": {"roles": ["admin"]},
+            }
+        }
 ```
 
 ## Next Steps
 
-*   Learn about **[Configuration](../core/configuration.md)** to tweak settings.
-*   Explore **[Models & Schema](../core/models-and-schema.md)** to see how to customize fields.
+- Learn about [Advanced Filtering](../core/filtering.md).
+- Set up [Authentication & MFA](../security/authentication.md).
+- Configure [Webhooks](../extensions/webhooks.md) for event notifications.
+- Dive into [Performance Optimization](../core/performance.md).

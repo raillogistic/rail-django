@@ -176,6 +176,7 @@ local_settings.py
 *.temp
 *.bak
 .tmp/
+tests/artifacts/
 *.xlsx
 
 # Coverage reports

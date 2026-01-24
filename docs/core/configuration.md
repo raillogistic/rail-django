@@ -1,109 +1,110 @@
-# Configuration
+# Complete Configuration
 
-Rail Django is highly configurable via the `RAIL_DJANGO_GRAPHQL` setting in your project's `settings.py`.
+Rail Django is highly configurable via the `RAIL_DJANGO_GRAPHQL` dictionary in your project's `settings.py`. This document serves as the authoritative reference for all available configuration options.
 
-## Structure
+## General Structure
 
-The configuration is a nested dictionary grouped by feature area.
+Settings are grouped into logical sections. You only need to define the sections and keys you wish to override from the defaults.
 
 ```python
 # settings.py
-
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": { ... },
+    "query_settings": { ... },
+    "mutation_settings": { ... },
     "security_settings": { ... },
     "performance_settings": { ... },
-    # ...
+    "middleware_settings": { ... },
+    "error_handling": { ... },
 }
 ```
 
-## Reference
+## Schema Settings (`schema_settings`)
 
-### Schema Settings (`schema_settings`)
-
-Controls the general behavior of the generated schema.
+Controls global schema behavior and discovery.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `auto_camelcase` | `bool` | `True` | Convert snake_case Python fields to camelCase GraphQL fields. |
-| `enable_introspection` | `bool` | `True` | Allow schema introspection (queries to `__schema`). |
-| `enable_graphiql` | `bool` | `True` | Enable the GraphiQL IDE interface. |
-| `graphiql_superuser_only` | `bool` | `False` | Restrict GraphiQL access to superusers. |
-| `enable_pagination` | `bool` | `True` | Enable pagination by default on list queries. |
-| `authentication_required` | `bool` | `False` | Require authentication for all queries by default. |
-| `disable_security_mutations` | `bool` | `False` | specific security mutations (login, etc.). |
+| `auto_camelcase` | `bool` | `True` | Automatically convert snake_case Python names to camelCase GraphQL names. |
+| `enable_introspection` | `bool` | `True` | Enable the `__schema` and `__type` queries. |
+| `enable_graphiql` | `bool` | `True` | Enable the interactive GraphiQL IDE. |
+| `authentication_required` | `bool` | `False` | Require a valid user for ALL GraphQL operations by default. |
+| `show_metadata` | `bool` | `False` | Enable the Schema Metadata extension. |
+| `excluded_apps` | `list` | `[]` | Django apps to completely ignore during schema discovery. |
+| `query_extensions` | `list` | `[]` | Dotted paths to additional Query classes to merge into the root schema. |
+| `mutation_extensions` | `list` | `[]` | Dotted paths to additional Mutation classes. |
 
-### Query Settings (`query_settings`)
+## Query Settings (`query_settings`)
 
-Controls how data is fetched.
+Configures how data is fetched and presented.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `default_page_size` | `int` | `20` | Default number of items per page. |
-| `max_page_size` | `int` | `100` | Maximum items allowed per page. |
-| `use_relay` | `bool` | `False` | Use Relay-style connections (Edges/Nodes) instead of offset pagination. |
+| `default_page_size` | `int` | `20` | Items returned per page when no limit is specified. |
+| `max_page_size` | `int` | `100` | Hard limit on items per page. |
+| `use_relay` | `bool` | `False` | Use Relay-style Connections instead of simple lists and offset pagination. |
 | `require_model_permissions` | `bool` | `True` | Enforce Django model `view` permissions for queries. |
+| `generate_filters` | `bool` | `True` | Automatically generate the `where` argument for list queries. |
+| `additional_lookup_fields`| `dict` | `{}` | Map of models to lists of fields that can be used for single item lookups. |
 
-### Mutation Settings (`mutation_settings`)
+## Mutation Settings (`mutation_settings`)
 
-Controls data modification.
-
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `generate_create` | `bool` | `True` | Auto-generate create mutations. |
-| `generate_update` | `bool` | `True` | Auto-generate update mutations. |
-| `generate_delete` | `bool` | `True` | Auto-generate delete mutations. |
-| `generate_bulk` | `bool` | `False` | Generate bulk CUD operations for ALL models (Auto-discovery). |
-| `enable_bulk_operations` | `bool` | `True` | Master switch to enable bulk operations. |
-| `bulk_include_models` | `list` | `[]` | Explicitly generate bulk mutations for these models. |
-| `bulk_exclude_models` | `list` | `[]` | Explicitly exclude bulk mutations for these models. |
-| `enable_nested_relations` | `bool` | `True` | Allow creating/updating related objects in a single mutation. |
-| `require_model_permissions` | `bool` | `True` | Enforce Django model `add/change/delete` permissions. |
-
-### Security Settings (`security_settings`)
-
-Controls the security posture.
+Configures data modification operations.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `enable_authentication` | `bool` | `True` | Enable authentication integration. |
-| `enable_query_depth_limiting` | `bool` | `True` | Block queries deeper than `max_query_depth`. |
-| `enable_input_validation` | `bool` | `True` | Sanitize strings and validate inputs. |
-| `enable_sql_injection_protection`| `bool` | `True` | Scan inputs for SQL injection patterns. |
+| `generate_create` | `bool` | `True` | Auto-generate `create<Model>` mutations. |
+| `generate_update` | `bool` | `True` | Auto-generate `update<Model>` mutations. |
+| `generate_delete` | `bool` | `True` | Auto-generate `delete<Model>` mutations. |
+| `enable_bulk_operations` | `bool` | `True` | Enable bulk CUD operations. |
+| `enable_nested_relations`| `bool` | `True` | Enable the "Unified Input" format for managing relationships. |
+| `require_model_permissions`| `bool` | `True` | Enforce `add`, `change`, and `delete` permissions. |
+| `enable_method_mutations` | `bool` | `True` | Allow exposing model methods as mutations via `GraphQLMeta`. |
+
+## Security Settings (`security_settings`)
+
+Controls the security posture and validation.
+
+| Setting | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `enable_authentication` | `bool` | `True` | Integrate with Django's authentication system. |
+| `enable_authorization` | `bool` | `True` | Enable granular RBAC and operation guards. |
+| `enable_field_permissions`| `bool` | `True` | Enable field-level visibility and access control. |
+| `enable_policy_engine` | `bool` | `True` | Enable the allow/deny policy manager. |
+| `enable_input_validation`| `bool` | `True` | Sanitize and validate all incoming GraphQL inputs. |
 | `enable_rate_limiting` | `bool` | `False` | Enable request rate limiting. |
-| `introspection_roles` | `list` | `['admin', 'developer']` | Roles allowed to perform introspection if restricted. |
 
-### Performance Settings (`performance_settings`)
+## Performance Settings (`performance_settings`)
 
-Controls optimization features.
-
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enable_select_related` | `bool` | `True` | Auto-optimize ForeignKey fetches. |
-| `enable_prefetch_related` | `bool` | `True` | Auto-optimize ManyToMany fetches. |
-| `enable_n_plus_one_detection` | `bool` | `True` | Log warnings when N+1 queries are detected. |
-| `max_query_depth` | `int` | `10` | Maximum allowed query nesting depth. |
-| `max_query_complexity` | `int` | `1000` | Maximum allowed query complexity score. |
-
-### Filtering Settings (`filtering_settings`)
+Optimizes database and query execution.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `max_filter_depth` | `int` | `5` | Maximum depth for relationship filters (e.g., `user__profile__group__name`). |
-| `enable_full_text_search` | `bool` | `True` | Enable PostgreSQL-specific full-text search features. |
+| `enable_select_related` | `bool` | `True` | Automatically optimize ForeignKey relationships. |
+| `enable_prefetch_related`| `bool` | `True` | Automatically optimize ManyToMany relationships. |
+| `enable_dataloader` | `bool` | `True` | Use DataLoaders for batching deep relationship queries. |
+| `max_query_depth` | `int` | `10` | Maximum allowed nesting depth for queries. |
+| `max_query_complexity` | `int` | `1000` | Maximum allowed calculated complexity score. |
 
-### Multitenancy Settings (`multitenancy_settings`)
+## Middleware Settings (`middleware_settings`)
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enabled` | `bool` | `False` | Enable multi-tenancy support. |
-| `tenant_header` | `str` | `X-Tenant-ID` | HTTP header to identify the tenant. |
-| `isolation_mode` | `str` | `row` | Isolation strategy (`row` or `schema`). |
-
-### Webhook Settings (`webhook_settings`)
+Enables/disables specific middleware layers.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `enabled` | `bool` | `False` | Enable the webhook dispatcher. |
-| `signing_secret` | `str` | `None` | Secret key for HMAC signing of payloads. |
-| `retry_count` | `int` | `3` | Number of retries for failed webhooks. |
+| `enable_performance_middleware` | `bool` | `True` | Track and log execution time. |
+| `enable_logging_middleware` | `bool` | `True` | Log GraphQL operations and errors. |
+| `performance_threshold_ms` | `int` | `1000` | Threshold for logging "slow" queries. |
+
+## Environment Variables
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `GRAPHQL_PERFORMANCE_HEADERS` | Include execution metrics in HTTP headers. | `False` |
+| `JWT_SECRET_KEY` | Key used for signing JWT tokens. | `SECRET_KEY` |
+
+## See Also
+
+- [Queries Reference](./queries.md)
+- [Mutations Reference](./mutations.md)
+- [Performance Optimization](./performance.md)

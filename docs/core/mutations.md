@@ -1,97 +1,67 @@
 # Mutations
 
-Mutations in Rail Django automate the creation of Create, Update, and Delete (CUD) operations for your models.
+Rail Django automates the creation of Create, Update, and Delete (CUD) operations for your models, providing a robust and consistent API for data modification.
 
-## Standard Mutations
+## Auto-Generated Mutations
 
-For a model `Product`, the following mutations are generated:
+For every model registered in the schema, Rail Django can generate a standard set of mutations:
 
-### 1. Create (`createProduct`)
+| Mutation | Name Format | Description |
+|----------|-------------|-------------|
+| **Create** | `create<Model>` | Creates a new instance. |
+| **Update** | `update<Model>` | Modifies an existing instance. |
+| **Delete** | `delete<Model>` | Deletes an instance by ID. |
+| **Bulk Create** | `bulkCreate<Model>` | Creates multiple instances at once. |
+| **Bulk Update** | `bulkUpdate<Model>` | Modifies multiple instances in one request. |
+| **Bulk Delete** | `bulkDelete<Model>` | Deletes multiple instances by ID. |
+
+### Example Usage
 
 ```graphql
-mutation {
-  createProduct(input: { 
-    sku: "NEW-SKU-001",
-    name: "Wireless Mouse",
-    price: 25.00,
-    costPrice: 10.00,
-    categoryId: "1",
-    inventoryCount: 50
+mutation CreateNewProduct {
+  createProduct(input: {
+    name: "Mechanical Keyboard",
+    sku: "KB-900",
+    price: 120.00,
+    categoryId: "5"
   }) {
-    product { id, name }
-    errors { field, messages }
-  }
-}
-```
-
-### 2. Update (`updateProduct`)
-
-```graphql
-mutation {
-  updateProduct(id: "1", input: { price: 29.99 }) {
-    product { price }
-  }
-}
-```
-
-### 3. Delete (`deleteProduct`)
-
-```graphql
-mutation {
-  deleteProduct(id: "1") {
-    success
-    deletedId
+    ok
+    object { id, name }
+    errors { field, message }
   }
 }
 ```
 
 ## Nested Relations (Unified Input)
 
-Rail Django uses a "Unified Input" format for handling relationships (Foreign Keys, Many-to-Many, Reverse Relations). This provides a structured and explicit way to manage connections.
+Rail Django uses a "Unified Input" format for managing relationships (Foreign Keys, Many-to-Many, etc.). This allows you to perform complex related-data operations in a single request.
 
-Each relation field accepts an object with operation keys: `connect`, `create`, `update`, `disconnect`, `set`.
+Each relation field accepts an object with the following operators:
 
-### 1. One-to-Many / Foreign Key
+- **`connect`**: Link to an existing object by ID.
+- **`create`**: Create a new related object and link it.
+- **`update`**: Modify an existing related object.
+- **`disconnect`**: Remove the link to a related object.
+- **`set`**: Replace the entire collection with a new set of IDs (for many-to-many).
 
+### Example: One-to-Many (Foreign Key)
 ```graphql
 mutation {
   createPost(input: {
-    title: "My Post",
-    # Link to existing Category
-    category: { connect: "1" } 
-    # OR Create new Category
-    # category: { create: { name: "New Category" } }
+    title: "Learning GraphQL",
+    category: { connect: "10" } # Link to category ID 10
   }) { ... }
 }
 ```
 
-### 2. Many-to-Many / Reverse Relations
-
-For list-based relations (like `tags` on `Post`), you can combine operations.
-
+### Example: Many-to-Many
 ```graphql
 mutation {
   updatePost(id: "1", input: {
     tags: {
-      # Add existing tags
-      connect: ["1", "2"],
-      # Create and add new tags
-      create: [{ name: "GraphQL" }],
-      # Remove specific tags
-      disconnect: ["3"]
-    }
-  }) { ... }
-}
-```
-
-To replace the entire collection, use `set`:
-
-```graphql
-mutation {
-  updatePost(id: "1", input: {
-    tags: {
-      # Replaces all existing tags with just these two
-      set: ["1", "2"]
+      connect: ["1", "2"], # Add existing tags
+      create: [{ name: "NewTag" }], # Create and add new tag
+      disconnect: ["5"] # Remove tag ID 5
     }
   }) { ... }
 }
@@ -99,58 +69,74 @@ mutation {
 
 ## Bulk Operations
 
-When enabled in `mutation_settings`, bulk operations are generated.
-
-Configuration logic:
-1. `enable_bulk_operations` (default: `True`) must be enabled as a master switch.
-2. `generate_bulk` (default: `False`) controls "auto-discovery" (generating for all models).
-3. Use `bulk_include_models` to strictly opt-in specific models (e.g., `["Product", "Order"]`).
-4. Use `bulk_exclude_models` to opt-out specific models.
+Bulk operations allow you to perform multiple CUD actions efficiently.
 
 ```graphql
 mutation {
-  # Update multiple products at once
   bulkUpdateProduct(inputs: [
-    { id: "1", input: { inventoryCount: 100 } },
-    { id: "2", input: { inventoryCount: 150 } }
+    { id: "1", input: { inventoryCount: 50 } },
+    { id: "2", input: { inventoryCount: 100 } }
   ]) {
-    successCount
-    errors { index, messages }
+    ok
+    count # Number of successfully updated items
+    errors { index, message }
   }
 }
 ```
 
-## Mutation Pipeline
+Enable bulk operations in your settings:
+```python
+"mutation_settings": {
+    "enable_bulk_operations": True,
+    "bulk_batch_size": 100,
+}
+```
 
-Customize the execution logic via `GraphQLMeta.Pipeline`.
+## Method Mutations
+
+You can expose existing model methods as GraphQL mutations using `GraphQLMeta`.
 
 ```python
 class Order(models.Model):
+    # ...
+    def mark_as_shipped(self, tracking_number):
+        self.status = "shipped"
+        self.tracking_number = tracking_number
+        self.save()
+        return self
+
     class GraphQLMeta:
-        pipeline_config = GraphQLMeta.Pipeline(
-            # Add steps to run after saving
-            extra_steps=[NotifyFulfillmentStep, LogStockChangeStep]
-        )
+        method_mutations = ["mark_as_shipped"]
 ```
 
 ## Custom Mutations
 
-Define standard Graphene mutations for custom business logic.
+For complex business logic that doesn't map directly to a model, you can define custom Graphene mutations and register them:
 
 ```python
+import graphene
 from rail_django.core.registry import register_mutation
 
-class MarkOrderPaid(graphene.Mutation):
-    class Arguments:
-        order_id = graphene.ID(required=True)
-    
-    success = graphene.Boolean()
+class ProcessPayment(graphene.Mutation):
+    # ... definition ...
 
-    def mutate(root, info, order_id):
-        order = Order.objects.get(pk=order_id)
-        order.status = OrderStatus.PAID
-        order.save()
-        return MarkOrderPaid(success=True)
-
-register_mutation(MarkOrderPaid)
+register_mutation(ProcessPayment)
 ```
+
+## Pipeline & Hooks
+
+Customize mutation execution using the pipeline system in `GraphQLMeta`. You can add custom validation steps or post-save triggers.
+
+```python
+class Product(models.Model):
+    class GraphQLMeta:
+        pipeline_config = {
+            "extra_steps": [MyCustomValidationStep],
+        }
+```
+
+## See Also
+
+- [Queries Reference](./queries.md)
+- [Filtering & Search](./filtering.md)
+- [Permissions & RBAC](../security/permissions.md)

@@ -1,56 +1,110 @@
-# Templating
+# PDF & Excel Templating
 
-Generate invoices, receipts, and reports directly from your store models using PDF or Excel templates.
+Rail Django provides a powerful templating extension that allows you to generate professional PDF documents and Excel spreadsheets directly from your Django models.
 
-## PDF Invoices
+## Overview
 
-Turn a model method into a printable PDF endpoint.
+The templating system allows you to:
+- Generate PDFs from HTML/CSS using **WeasyPrint** or **wkhtmltopdf**.
+- Create dynamic Excel reports from model data.
+- Serve generated documents via REST endpoints.
+- Handle complex document generation asynchronously.
+- Add watermarks, encryption, and digital signatures to PDFs.
 
-### 1. Model Definition
+## Configuration
 
+Enable the templating extension in your settings:
+
+```python
+RAIL_DJANGO_TEMPLATING = {
+    "enabled": True,
+    # Rendering engine: 'weasyprint' (recommended) or 'wkhtmltopdf'
+    "engine": "weasyprint",
+    "template_dirs": [
+        BASE_DIR / "templates" / "pdf",
+    ],
+    "require_authentication": True,
+    "async_rendering": False, # Enable for heavy documents
+}
+```
+
+### Installation
+
+```bash
+# For WeasyPrint
+pip install weasyprint
+
+# For Excel support
+pip install openpyxl
+```
+
+## PDF Generation
+
+### 1. Defining a Model Template
+
+You can link a PDF template to a specific model using a class-based approach or a decorator.
+
+**Class-based approach:**
+```python
+from rail_django.extensions.templating import ModelPDFTemplate
+
+class InvoiceTemplate(ModelPDFTemplate):
+    name = "invoice"
+    model = "store.Order"
+    template_path = "pdf/invoice.html"
+
+    def get_context(self, instance):
+        return {
+            "order": instance,
+            "items": instance.items.all(),
+            "company": get_company_info(),
+        }
+```
+
+**Decorator approach:**
 ```python
 from rail_django.extensions.templating import model_pdf_template
 
 class Order(models.Model):
     # ...
-    @model_pdf_template(
-        content="pdf/order_invoice.html", 
-        title="Order Invoice"
-    )
+    @model_pdf_template(content="pdf/invoice.html", title="Invoice")
     def invoice_pdf(self, request=None):
-        # Return context for the HTML template
-        return {
-            "order": self,
-            "items": self.items.all(),
-            "customer": self.customer
-        }
+        return {"order": self}
 ```
 
-### 2. HTML Template (`pdf/order_invoice.html`)
+### 2. HTML Template Structure
+Use standard Django template syntax. For PDF styling, use standard CSS.
 
 ```html
-<h1>Invoice for Order {{ order.order_number }}</h1>
-<p>Customer: {{ customer.full_name }}</p>
-<table>
-    {% for item in items %}
-    <tr>
-        <td>{{ item.product.name }}</td>
-        <td>{{ item.quantity }}</td>
-        <td>{{ item.unit_price }}</td>
-    </tr>
-    {% endfor %}
-</table>
-<p>Total: {{ order.total_amount }}</p>
+<!-- templates/pdf/invoice.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page { size: A4; margin: 20mm; }
+        body { font-family: serif; }
+        .header { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Invoice #{{ order.reference }}</h1>
+    </div>
+    <!-- ... -->
+</body>
+</html>
 ```
 
 ### 3. Accessing the PDF
+PDFs are served at generated URLs:
+`GET /api/v1/templates/<app>/<model>/<template_name>/<pk>/`
 
-The PDF is served at a generated URL:
-`GET /api/templates/store/order/invoice_pdf/<pk>/`
+Or via a generic generation endpoint:
+`POST /api/v1/pdf/generate/` with `{"template": "invoice", "object_id": "42"}`
 
-## Excel Reports
+## Excel Generation
 
-Generate stock reports or sales data.
+Generate spreadsheets easily from your models.
 
 ```python
 from rail_django.extensions.templating import model_excel_template
@@ -63,3 +117,35 @@ class Product(models.Model):
             [self.sku, self.name, self.inventory_count]
         ]
 ```
+
+## Advanced Features
+
+### Asynchronous Rendering
+For heavy documents, enable `async_rendering`. The generation will return a `pdf_id` which can be used to poll for status or receive a notification via WebSockets/Subscriptions when ready.
+
+### Post-Processing
+Apply watermarks or encryption to your PDFs:
+
+```python
+class ConfidentialTemplate(ModelPDFTemplate):
+    # ...
+    watermark = {"text": "CONFIDENTIAL", "opacity": 0.2}
+    encryption = {"owner_password": "secure-password"}
+```
+
+## Programmatic Usage
+
+You can also generate PDFs directly in your Python code:
+
+```python
+from rail_django.extensions.templating import PDFGenerator
+
+generator = PDFGenerator(template="invoice")
+pdf_bytes = generator.render(instance=order)
+```
+
+## See Also
+
+- [Data Exporting](./exporting.md) - For CSV and basic Excel exports.
+- [Background Tasks](./tasks.md) - For handling long-running generation.
+- [Webhooks](./webhooks.md) - For notifying external systems when a document is ready.
