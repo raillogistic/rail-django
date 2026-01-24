@@ -29,15 +29,36 @@ url = os.environ.get("DATABASE_URL", "")
 parsed = urlparse(url)
 host = parsed.hostname
 port = parsed.port
-if not host or not port:
+scheme = (parsed.scheme or "").lower()
+
+if not host:
+    if scheme in {"sqlite", "sqlite3"}:
+        print("skip")
+        sys.exit(0)
     sys.exit(1)
+
+if port is None:
+    defaults = {
+        "postgres": 5432,
+        "postgresql": 5432,
+        "mysql": 3306,
+        "mariadb": 3306,
+        "mssql": 1433,
+    }
+    port = defaults.get(scheme)
+    if port is None:
+        sys.exit(1)
+
 print(f"{host}:{port}")
 PY
     ) || {
-        echo "Error: DATABASE_URL must include host and port."
+        echo "Error: DATABASE_URL must include a host and port (or use a supported scheme default)."
         exit 1
     }
 
+    if [ "$DB_INFO" = "skip" ]; then
+        echo "Skipping database wait (no host/port to check)."
+    else
     DB_HOST=${DB_INFO%:*}
     DB_PORT=${DB_INFO##*:}
     DB_WAIT_TIMEOUT=${DB_WAIT_TIMEOUT:-30}
@@ -54,15 +75,15 @@ PY
     done
 
     echo "Database started"
+    fi
 fi
 
-if is_truthy "${RUN_MIGRATIONS:-true}"; then
+if is_truthy "${RUN_MIGRATIONS:-false}"; then
     echo "Running migrations..."
-    python manage.py makemigrations
     python manage.py migrate
 fi
 
-if is_truthy "${RUN_COLLECTSTATIC:-true}"; then
+if is_truthy "${RUN_COLLECTSTATIC:-false}"; then
     echo "Collecting static files..."
     python manage.py collectstatic --noinput
 fi

@@ -5,7 +5,6 @@ services:
     build:
       context: ../../
       dockerfile: deploy/docker/Dockerfile
-    command: /home/app/web/entrypoint.sh
     restart: unless-stopped
     volumes:
       - static_volume:/home/app/web/staticfiles
