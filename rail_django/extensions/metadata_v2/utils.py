@@ -108,6 +108,8 @@ def _classify_field(field: models.Field) -> dict[str, bool]:
             "DecimalField",
         ),
         "is_boolean": field_type in ("BooleanField", "NullBooleanField"),
+        # NullBooleanField removed in Django 4.0; kept for compatibility
+
         "is_text": field_type
         in ("CharField", "TextField", "SlugField", "URLField", "EmailField"),
         "is_rich_text": field_type == "TextField",

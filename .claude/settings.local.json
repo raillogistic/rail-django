@@ -20,7 +20,9 @@
       "Bash(pytest:*)",
       "Bash(rail_django/bin/rail_admin.py:*)",
       "Bash(export PYTHONPATH=$PYTHONPATH:.:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git grep:*)"
     ]
   }
 }

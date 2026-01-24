@@ -150,6 +150,7 @@ class FieldExtractorMixin:
             "FloatField": "Float",
             "DecimalField": "Float",
             "BooleanField": "Boolean",
+            # NullBooleanField removed in Django 4.0
             "NullBooleanField": "Boolean",
             "DateField": "Date",
             "DateTimeField": "DateTime",

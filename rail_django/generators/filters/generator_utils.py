@@ -56,7 +56,10 @@ FIELD_TYPE_TO_FILTER_INPUT: Dict[Type[models.Field], Type[graphene.InputObjectTy
     models.FloatField: FloatFilterInput,
     models.DecimalField: FloatFilterInput,
     models.BooleanField: BooleanFilterInput,
-    models.NullBooleanField: BooleanFilterInput,
+    # models.NullBooleanField is deprecated in Django 3.1 and removed in 4.0
+    # kept for compatibility with older migrations or custom fields that might still use it
+    # but we treat it as BooleanFilterInput
+    getattr(models, "NullBooleanField", models.BooleanField): BooleanFilterInput,
     # DateTimeField must come before DateField since DateTimeField is a subclass
     models.DateTimeField: DateTimeFilterInput,
     models.DateField: DateFilterInput,
