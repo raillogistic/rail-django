@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Rail Django is a GraphQL framework for Django built on top of Graphene-Django. It provides automatic schema generation from Django models, built-in security (RBAC, query depth limits, input validation), and enterprise features (audit logging, health checks, webhooks, observability).
 
-**Versions:** Python 3.11+, Django 4.2+, Graphene 3.3+
+**Versions:** Python 3.11+, Django 5.0+, Graphene 3.3+
 
 ## Commands
 

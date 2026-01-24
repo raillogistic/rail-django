@@ -2659,7 +2659,7 @@ get_event_bus().add_sink(SlackSink())
 ## Dependencies
 
 ### Required
-- Django 4.2+
+- Django 5.0+
 - Python 3.11+
 
 ### Optional (for full features)
