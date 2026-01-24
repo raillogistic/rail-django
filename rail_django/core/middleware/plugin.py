@@ -100,6 +100,9 @@ class PluginMiddleware(BaseMiddleware):
         context = getattr(info.context, "_rail_plugin_context", None)
         if context is None:
             context = {}
+            # Add standard context variables for convenience
+            context["user"] = getattr(info.context, "user", None)
+            context["request"] = info.context
             setattr(info.context, "_rail_plugin_context", context)
         return context
 
