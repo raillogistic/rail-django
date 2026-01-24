@@ -8,6 +8,7 @@ from .settings import get_multitenancy_settings
 
 _TENANT_ID_ATTR = "_rail_tenant_id"
 _TENANT_RESOLVED_ATTR = "_rail_tenant_resolved"
+_TENANT_CACHE_ATTR = "_rail_tenant_cache"
 
 
 def _normalize_header_key(header_name: str) -> str:
@@ -60,9 +61,15 @@ def _extract_subdomain(request: Any) -> Optional[str]:
     return subdomain or None
 
 
-def _get_existing_tenant_value(request: Any) -> Optional[str]:
+def _get_existing_tenant_value(
+    request: Any, *, schema_name: Optional[str] = None
+) -> Optional[str]:
     if request is None:
         return None
+    if schema_name:
+        request_schema = getattr(request, "schema_name", None)
+        if request_schema and request_schema != schema_name:
+            return None
     existing = getattr(request, "tenant_id", None)
     if existing not in (None, ""):
         return existing
@@ -79,11 +86,20 @@ def resolve_tenant_id(
 ) -> Optional[str]:
     if request is None:
         return None
-    if getattr(request, _TENANT_RESOLVED_ATTR, False):
-        return getattr(request, _TENANT_ID_ATTR, None)
+    cache = getattr(request, _TENANT_CACHE_ATTR, None)
+    if not isinstance(cache, dict):
+        cache = {}
+        try:
+            setattr(request, _TENANT_CACHE_ATTR, cache)
+        except Exception:
+            cache = {}
+
+    cache_key = schema_name or "default"
+    if cache_key in cache:
+        return cache[cache_key]
 
     settings = get_multitenancy_settings(schema_name)
-    tenant_id = _get_existing_tenant_value(request)
+    tenant_id = _get_existing_tenant_value(request, schema_name=schema_name)
 
     if tenant_id is None and settings.tenant_claim:
         payload = getattr(request, "jwt_payload", None)
@@ -96,10 +112,14 @@ def resolve_tenant_id(
     if tenant_id is None and settings.tenant_subdomain:
         tenant_id = _extract_subdomain(request)
 
-    setattr(request, _TENANT_RESOLVED_ATTR, True)
-    setattr(request, _TENANT_ID_ATTR, tenant_id)
+    cache[cache_key] = tenant_id
+    if cache_key == "default":
+        setattr(request, _TENANT_RESOLVED_ATTR, True)
+        setattr(request, _TENANT_ID_ATTR, tenant_id)
     if tenant_id is not None and not hasattr(request, "tenant_id"):
-        setattr(request, "tenant_id", tenant_id)
+        request_schema = getattr(request, "schema_name", None)
+        if request_schema in (None, schema_name, cache_key):
+            setattr(request, "tenant_id", tenant_id)
     return tenant_id
 
 

@@ -194,7 +194,7 @@ class MutationGenerator:
         operation: str = "read",
     ) -> None:
         try:
-            from ..extensions.multitenancy import ensure_tenant_access
+            from ...extensions.multitenancy import ensure_tenant_access
         except Exception:
             return
         ensure_tenant_access(
@@ -210,7 +210,7 @@ class MutationGenerator:
         operation: str = "create",
     ) -> dict[str, Any]:
         try:
-            from ..extensions.multitenancy import apply_tenant_to_input
+            from ...extensions.multitenancy import apply_tenant_to_input
         except Exception:
             return input_data
         return apply_tenant_to_input(

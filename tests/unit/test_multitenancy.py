@@ -32,6 +32,9 @@ class TestMultiTenancy(TestCase):
                 "default_tenant_field": "organization",
                 "require_tenant": True,
             },
+            "mutation_settings": {
+                "generate_bulk": True,
+            },
         }
         user_model = get_user_model()
         self.user = user_model.objects.create_user(
@@ -39,7 +42,11 @@ class TestMultiTenancy(TestCase):
             password="password",
         )
         perms = Permission.objects.filter(
-            codename__in=["view_tenantproject", "change_tenantproject"]
+            codename__in=[
+                "view_tenantproject",
+                "change_tenantproject",
+                "add_tenantproject",
+            ]
         )
         self.user.user_permissions.add(*perms)
         harness = build_schema(
@@ -116,6 +123,40 @@ class TestMultiTenancy(TestCase):
         """
         result = client.execute(mutation)
         data = result["data"]["updateTenantProject"]
+        self.assertFalse(data["ok"])
+        self.assertTrue(data["errors"])
+
+    def test_bulk_create_mismatched_tenant_rejected(self):
+        client = self._client(self.org1.id)
+        mutation = f"""
+        mutation {{
+            bulkCreateTenantProject(inputs: [{{ name: "Bulk Project", organization: {{ connect: "{self.org2.id}" }} }}]) {{
+                ok
+                errors {{
+                    message
+                }}
+            }}
+        }}
+        """
+        result = client.execute(mutation)
+        data = result["data"]["bulkCreateTenantProject"]
+        self.assertFalse(data["ok"])
+        self.assertTrue(data["errors"])
+
+    def test_bulk_update_mismatched_tenant_rejected(self):
+        client = self._client(self.org1.id)
+        mutation = f"""
+        mutation {{
+            bulkUpdateTenantProject(inputs: [{{ id: "{self.p1.id}", data: {{ organization: {{ connect: "{self.org2.id}" }} }} }}]) {{
+                ok
+                errors {{
+                    message
+                }}
+            }}
+        }}
+        """
+        result = client.execute(mutation)
+        data = result["data"]["bulkUpdateTenantProject"]
         self.assertFalse(data["ok"])
         self.assertTrue(data["errors"])
 

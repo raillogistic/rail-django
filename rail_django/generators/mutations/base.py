@@ -86,7 +86,7 @@ class TenantMixin:
             return
 
         try:
-            from ..extensions.multitenancy import ensure_tenant_access
+            from ...extensions.multitenancy import ensure_tenant_access
 
             ensure_tenant_access(
                 instance,
@@ -124,7 +124,7 @@ class TenantMixin:
             return input_data
 
         try:
-            from ..extensions.multitenancy import apply_tenant_to_input
+            from ...extensions.multitenancy import apply_tenant_to_input
 
             return apply_tenant_to_input(
                 input_data,

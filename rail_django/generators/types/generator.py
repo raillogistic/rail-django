@@ -450,7 +450,7 @@ class TypeGenerator:
 
     def _get_tenant_filter_for_model(self, context: Any, model: type[models.Model]) -> tuple[Optional[str], Optional[Any], Optional[Any]]:
         try:
-            from ..extensions.multitenancy import get_multitenancy_settings, get_tenant_field_config, resolve_tenant_id
+            from ...extensions.multitenancy import get_multitenancy_settings, get_tenant_field_config, resolve_tenant_id
             settings_mt = get_multitenancy_settings(self.schema_name)
             if not settings_mt.enabled or settings_mt.isolation_mode != "row":
                 return None, None, settings_mt

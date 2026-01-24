@@ -171,9 +171,14 @@ def generate_bulk_update_mutation(
     model_name = model.__name__
     graphql_meta = get_model_graphql_meta(model)
 
-    class BulkUpdateInput(graphene.InputObjectType):
-        id = graphene.ID(required=True)
-        data = input_type(required=True)
+    BulkUpdateInput = type(
+        f"BulkUpdate{model_name}Input",
+        (graphene.InputObjectType,),
+        {
+            "id": graphene.ID(required=True),
+            "data": input_type(required=True),
+        },
+    )
 
     class BulkUpdateMutation(graphene.Mutation):
         model_class = model

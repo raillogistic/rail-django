@@ -112,16 +112,13 @@ def apply_tenant_queryset(
         return _strip_tenant_marker(queryset)
 
     tenant_field = get_tenant_field_config(model, schema_name=schema_name)
-    print(f"DEBUG: tenant_field={tenant_field}")
     if tenant_field is None:
         return _strip_tenant_marker(queryset)
 
     if _is_cross_tenant_allowed(info, settings):
-        print(f"DEBUG: cross tenant allowed")
         return _strip_tenant_marker(queryset)
 
     tenant_id = resolve_tenant_id(getattr(info, "context", None), schema_name=schema_name)
-    print(f"DEBUG: tenant_id={tenant_id}")
     if tenant_id is None:
         if settings.require_tenant:
             raise GraphQLError("Tenant context required")

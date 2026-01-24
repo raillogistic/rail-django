@@ -344,7 +344,7 @@ class QueryGenerator:
         operation: str = "read",
     ) -> None:
         try:
-            from ..extensions.multitenancy import ensure_tenant_access
+            from ...extensions.multitenancy import ensure_tenant_access
         except Exception:
             return
         ensure_tenant_access(
