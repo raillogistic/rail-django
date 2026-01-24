@@ -114,25 +114,28 @@ def create_middleware_resolver(middleware_stack: List[BaseMiddleware]) -> Callab
             Result from the resolver chain.
         """
 
-        def apply_middleware(index: int) -> Any:
+        def apply_middleware(index: int, current_root: Any, current_info: Any, current_kwargs: dict) -> Any:
             """Recursively apply middleware at the given index.
 
             Args:
                 index: Current middleware index in the stack.
+                current_root: Root value passed through the middleware chain.
+                current_info: GraphQL resolve info passed through the chain.
+                current_kwargs: Resolver kwargs passed through the chain.
 
             Returns:
                 Result from the middleware chain.
             """
             if index >= len(middleware_stack):
-                return next_resolver(root, info, **kwargs)
+                return next_resolver(current_root, current_info, **current_kwargs)
 
             middleware = middleware_stack[index]
 
             def next_middleware_resolver(r, i, **kw):
-                return apply_middleware(index + 1)
+                return apply_middleware(index + 1, r, i, kw)
 
-            return middleware.resolve(next_middleware_resolver, root, info, **kwargs)
+            return middleware.resolve(next_middleware_resolver, current_root, current_info, **current_kwargs)
 
-        return apply_middleware(0)
+        return apply_middleware(0, root, info, kwargs)
 
     return middleware_resolver

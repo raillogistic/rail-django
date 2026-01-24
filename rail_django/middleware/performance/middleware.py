@@ -70,17 +70,18 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         if not self.enabled or not hasattr(request, "_graphql_metrics"):
             return response
 
-        end_time = time.time()
         metrics = request._graphql_metrics
-        metrics.end_time = end_time
-        metrics.execution_time = end_time - metrics.start_time
-        self._finalize_query_metrics(request, metrics)
+        if not getattr(request, "_graphql_metrics_recorded", False):
+            end_time = time.time()
+            metrics.end_time = end_time
+            metrics.execution_time = end_time - metrics.start_time
+            self._finalize_query_metrics(request, metrics)
 
-        metrics.cache_hits = 0
-        metrics.cache_misses = 0
+            metrics.cache_hits = 0
+            metrics.cache_misses = 0
 
-        if self.aggregator:
-            self.aggregator.add_metrics(metrics)
+            if self.aggregator:
+                self.aggregator.add_metrics(metrics)
 
         if getattr(settings, "GRAPHQL_PERFORMANCE_HEADERS", False):
             response["X-GraphQL-Execution-Time"] = f"{metrics.execution_time:.3f}"
@@ -110,6 +111,7 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
 
         if self.aggregator:
             self.aggregator.add_metrics(metrics)
+        request._graphql_metrics_recorded = True
 
         return None
 
