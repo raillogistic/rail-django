@@ -21,7 +21,7 @@ Rail Django wraps [Graphene-Django](https://docs.graphene-python.org/projects/dj
 
 ### Core Concepts
 *   [**Models & Schema**](core/models-and-schema.md): How Django models map to GraphQL types.
-*   [**Queries**](core/queries.md): Fetching data.
+*   [**Queries**](core/queries.md): Fetching data with advanced filtering and pagination.
 *   [**Filtering**](core/filtering.md): Deep dive into the `where` argument.
 *   [**Mutations**](core/mutations.md): Creating, updating, and deleting data.
 *   [**Configuration Reference**](core/configuration.md): Global settings reference.
@@ -32,23 +32,15 @@ Rail Django wraps [Graphene-Django](https://docs.graphene-python.org/projects/dj
 *   [**Permissions (RBAC)**](security/permissions.md): Role-based and field-level access control.
 *   [**Validation**](security/validation.md): Input validation and data integrity.
 
-### Extensions
-*   [**Audit Logging**](extensions/audit-logging.md): Track who did what and when.
-*   [**Webhooks**](extensions/webhooks.md): Event-driven architecture and webhooks.
-*   [**Exporting**](extensions/exporting.md): Data export capabilities (Excel, CSV).
-*   [**Templating**](extensions/templating.md): PDF and Excel generation.
-*   [**Reporting & BI**](extensions/reporting.md): Analytical datasets and visualizations.
-*   [**Background Tasks**](extensions/tasks.md): Async task management.
-*   [**Subscriptions**](extensions/subscriptions.md): Real-time events via WebSockets.
-*   [**Multitenancy**](extensions/multitenancy.md): SaaS-ready data isolation.
-*   [**Health Checks**](extensions/health-checks.md): System health monitoring.
-*   [**Observability**](extensions/observability.md): Tracing and metrics (Sentry/OpenTelemetry).
-*   [**Metadata**](extensions/metadata.md): Schema introspection for frontends.
+### Advanced Features & Extensions
+*   [**Testing**](guides/testing.md): Best practices and utilities for testing your GraphQL API.
+*   [**Plugin System**](guides/plugins.md): Extend the framework with custom hooks and logic.
+*   [**Extensions Overview**](extensions/index.md): Audit Logging, Webhooks, Multitenancy, and more.
+*   [**Migration: Unified Inputs**](guides/migration-unified-inputs.md): Moving to the new Prisma-style relation inputs.
 
-### Operations
+### Operations & Reference
 *   [**Production Deployment**](operations/deployment.md): Best practices for going live.
-
-### Reference
+*   [**Troubleshooting**](guides/troubleshooting.md): Common issues and how to solve them.
 *   [**API Reference**](reference/api.md): Public API documentation.
 *   [**CLI Reference**](reference/cli.md): `rail-admin` command usage.
 *   [**GraphQLMeta**](reference/meta.md): The comprehensive guide to `class GraphQLMeta`.

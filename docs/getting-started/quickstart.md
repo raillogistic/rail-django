@@ -119,5 +119,7 @@ class Product(models.Model):
 
 - Learn about [Advanced Filtering](../core/filtering.md).
 - Set up [Authentication & MFA](../security/authentication.md).
+- Learn how to [Test your API](../guides/testing.md).
 - Configure [Webhooks](../extensions/webhooks.md) for event notifications.
 - Dive into [Performance Optimization](../core/performance.md).
+- Encountering issues? Check the [Troubleshooting Guide](../guides/troubleshooting.md).

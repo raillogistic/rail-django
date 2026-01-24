@@ -12,85 +12,146 @@ The security system allows you to:
 - Use a **Policy Engine** for complex allow/deny rules with priorities.
 - Audit permission decisions.
 
-## Basic Configuration
+## Global Configuration
 
-Enable the security features in your settings:
+### Global Authentication
+By default, Rail Django allows anonymous access if the underlying Django view does not restrict it. You can enforce authentication globally across your entire GraphQL schema:
 
 ```python
+# settings.py
 RAIL_DJANGO_GRAPHQL = {
+    "schema_settings": {
+        "authentication_required": True, # Blocks all anonymous queries/mutations
+    },
     "security_settings": {
-        "enable_authentication": True,
         "enable_authorization": True,
         "enable_field_permissions": True,
         "enable_policy_engine": True,
-        "enable_object_permissions": True,
     },
 }
 ```
 
 ## Role-Based Access Control (RBAC)
 
+RBAC allows you to group permissions into logical roles like `admin`, `editor`, and `viewer`.
+
 ### Defining Roles
-Roles can be defined in Python code or via a `meta.yaml` file in your apps.
+Define your hierarchy in an initialization module (e.g., `apps.py` or a dedicated `security.py`):
 
 ```python
 from rail_django.security import role_manager, RoleDefinition
 
+# 1. Base Viewer: Can only see public data
+role_manager.register_role(
+    RoleDefinition(
+        name="viewer",
+        description="Read-only access to public data",
+        permissions=["cms.view_article", "auth.view_user"]
+    )
+)
+
+# 2. Editor: Inherits from Viewer + can modify content
 role_manager.register_role(
     RoleDefinition(
         name="editor",
-        description="Can edit catalog products",
-        permissions=["store.change_product", "store.view_product"],
-        parent_roles=["viewer"], # Inherits permissions
+        description="Can create and edit articles",
+        permissions=["cms.add_article", "cms.change_article"],
+        parent_roles=["viewer"]
+    )
+)
+
+# 3. Admin: Full control
+role_manager.register_role(
+    RoleDefinition(
+        name="admin",
+        description="System administrator",
+        permissions=["*"], # Wildcard for all permissions
+        parent_roles=["editor"]
     )
 )
 ```
 
-### The @require_role Decorator
-You can protect custom resolvers or functions:
+## Per-Model Security (GraphQLMeta)
+
+The `GraphQLMeta` class on your models is the primary way to enforce security rules.
+
+### Operation Guards & Field Security
+The following example demonstrates a `Profile` model with different rules for **Admins** and **Standard Users**.
 
 ```python
-from rail_django.security import require_role
+from django.db import models
 
-@require_role("manager")
-def resolve_sensitive_report(root, info):
-    return generate_report()
-```
+class Profile(models.Model):
+    user = models.OneToOneField("auth.User", on_delete=models.CASCADE)
+    full_name = models.CharField(max_length=255)
+    salary = models.DecimalField(max_digits=10, decimal_places=2)
+    ssn = models.CharField(max_length=11)
+    is_verified = models.BooleanField(default=False)
 
-## Per-Model Configuration (GraphQLMeta)
-
-Use `GraphQLMeta` on your models to define access rules.
-
-```python
-class Order(models.Model):
     class GraphQLMeta:
-        # 1. Operation Guards
+        # Operation Guards: Who can do what?
         access = {
             "operations": {
-                "list": {"roles": ["sales", "admin"]},
+                "list": {"roles": ["viewer", "editor", "admin"]},
+                "create": {"roles": ["admin"]}, # Only Admins create profiles
                 "update": {
-                    "roles": ["admin"],
-                    "condition": "can_modify_order" # Method on model
-                }
+                    "roles": ["editor", "admin"],
+                    "condition": "is_owner_or_admin" # Custom logic
+                },
+                "delete": {"roles": ["admin"]} # Only Admins delete
             }
         }
 
-        # 2. Field Permissions
+        # Field-Level Security: Sensitive data masking
         field_permissions = {
-            "total_amount": {
-                "roles": ["accounting", "admin"],
-                "visibility": "masked",
-                "mask_value": "****"
+            "salary": {
+                "roles": ["admin"], # Only Admins see exact salary
+                "visibility": "hidden" # Everyone else sees null
             },
-            "internal_notes": {
+            "ssn": {
                 "roles": ["admin"],
-                "visibility": "hidden"
+                "visibility": "masked",
+                "mask_value": "***-**-XXXX" # Editors see masked version
             }
         }
 
-    def can_modify_order(self, user, operation, info):
-        return self.customer.user == user or user.is_staff
+    def is_owner_or_admin(self, user, operation, info):
+        """Row-Level Security (RLS) Logic"""
+        if user.is_superuser or "admin" in user.roles:
+            return True
+        return self.user == user
 ```
+
+### Row-Level Security (RLS)
+While Operation Guards control *if* an action can be taken, RLS controls *which* rows are returned.
+
+#### Using `get_queryset` for Automatic Filtering
+You can restrict the list of objects a user sees by overriding `get_queryset` logic via the policy engine or model managers:
+
+```python
+# Policy-based RLS
+from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
+
+policy_manager.register_policy(
+    AccessPolicy(
+        name="users_only_see_own_profiles",
+        effect=PolicyEffect.ALLOW,
+        roles=["viewer"],
+        # Dynamic filter injected into the database query
+        row_filter=lambda user: {"user": user} if not user.is_staff else {}
+    )
+)
+```
+
+## User vs Admin Narrative
+
+| Feature | Standard User (`viewer`) | Administrator (`admin`) |
+|---------|---------------------------|-------------------------|
+| **List Profiles** | Sees only their own profile (RLS). | Sees all profiles in the system. |
+| **View `salary`** | Field is `null` (Hidden). | Sees actual decimal value. |
+| **View `ssn`** | Sees `***-**-XXXX` (Masked). | Sees actual social security number. |
+| **Delete Profile** | Operation Blocked (403). | Allowed to delete any profile. |
+| **Update Verification**| Operation Blocked. | Allowed to verify users. |
 
 ## Policy Engine
 
