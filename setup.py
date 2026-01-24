@@ -19,7 +19,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        "Django>=4.2.27",
+        "Django>=5.0",
         "psycopg2>=2.9.9",
         "graphene-django>=3.1.5",
         "graphql-relay>=3.2.0",
@@ -52,7 +52,8 @@ setup(
         "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",
         "Framework :: Django",
-        "Framework :: Django :: 4.2",
+        "Framework :: Django :: 5.0",
+        "Framework :: Django :: 5.1",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
