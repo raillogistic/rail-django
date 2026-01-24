@@ -15,8 +15,8 @@ from rail_django.defaults import LIBRARY_DEFAULTS
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This BASE_DIR is a placeholder; the project's settings.py will redefine it
-# relative to itself, but we provide a fallback here.
-BASE_DIR = Path(os.getcwd())
+# relative to itself, but we provide a stable fallback here.
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Default fallback key - projects MUST override this or set env var.
@@ -27,7 +27,15 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+def _split_env_list(raw_value: str) -> list[str]:
+    if not raw_value:
+        return []
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+ALLOWED_HOSTS = _split_env_list(
+    os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+)
 
 # Application definition
 INSTALLED_APPS = [
@@ -171,18 +179,19 @@ if DEBUG:
 CORS_ALLOW_ALL_ORIGINS = (
     os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 )
-CORS_ALLOWED_ORIGINS = (
-    os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
-    if os.environ.get("CORS_ALLOWED_ORIGINS")
-    else []
-)
+CORS_ALLOWED_ORIGINS = _split_env_list(os.environ.get("CORS_ALLOWED_ORIGINS", ""))
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)
 
 # Environment overrides for limits
 if os.environ.get("RAIL_MAX_FILTER_DEPTH"):
-    RAIL_DJANGO_GRAPHQL.setdefault("filtering_settings", {})["max_filter_depth"] = int(os.environ["RAIL_MAX_FILTER_DEPTH"])
+    try:
+        RAIL_DJANGO_GRAPHQL.setdefault("filtering_settings", {})[
+            "max_filter_depth"
+        ] = int(os.environ["RAIL_MAX_FILTER_DEPTH"])
+    except (TypeError, ValueError):
+        pass
 
 if DEBUG:
     RAIL_DJANGO_GRAPHQL.setdefault("security_settings", {})[

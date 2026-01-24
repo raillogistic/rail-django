@@ -33,7 +33,17 @@ class TenantFieldConfig:
 def _coerce_bool(value: Any, default: bool) -> bool:
     if value is None:
         return default
-    return bool(value)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n", "off", ""}:
+            return False
+    return default
 
 
 def _coerce_str(value: Any, default: str) -> str:
