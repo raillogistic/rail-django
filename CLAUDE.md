@@ -54,7 +54,7 @@ cd my_api && python manage.py migrate && python manage.py runserver
 
 ### GraphQLMeta
 
-Per-model configuration used by generators for field inclusion/exclusion, permissions, guards, ordering rules, and custom filters. See `docs/reference/meta.md`.
+Per-model configuration used by generators for field inclusion/exclusion, permissions, guards, ordering rules, and custom filters. See `rail_django/docs/reference/meta.md`.
 
 ### Middleware Layers
 

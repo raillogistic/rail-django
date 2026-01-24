@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import shutil
 from importlib import resources
 from django.core.management import execute_from_command_line
 
@@ -31,8 +32,7 @@ def main():
 
     execute_from_command_line(argv)
 
-    # Post-processing: Rename *-tpl files to remove the suffix
-    # Django does not automatically rename custom extensions like .txt-tpl or .py-tpl (except for specific cases)
+    # Post-processing: Rename *-tpl files and copy docs
     if len(argv) > 1 and argv[1] == "startproject":
         try:
             # Parse arguments to find the project directory
@@ -49,21 +49,27 @@ def main():
             destination = os.path.abspath(destination)
 
             if os.path.exists(destination):
+                # 1. Copy documentation
+                try:
+                    import rail_django
+                    docs_src = resources.files("rail_django").joinpath("docs")
+                    if os.path.exists(os.fspath(docs_src)):
+                        docs_dest = os.path.join(destination, "docs")
+                        if not os.path.exists(docs_dest):
+                            shutil.copytree(os.fspath(docs_src), docs_dest)
+                except Exception as doc_err:
+                    print(f"Warning: Could not copy documentation: {doc_err}")
+
+                # 2. Rename template files
                 for root, dirs, files in os.walk(destination):
                     for filename in files:
                         if filename.endswith('-tpl'):
                             old_path = os.path.join(root, filename)
                             new_path = os.path.join(root, filename[:-4]) # Remove -tpl
                             
-                            # If the target file already exists (e.g. Django somehow renamed it), 
-                            # we skip to avoid overwriting or errors, unless we want to enforce our template.
-                            # But usually, it won't exist if the filename is 'requirements.txt-tpl'.
                             if not os.path.exists(new_path):
                                 os.rename(old_path, new_path)
                             else:
-                                # If both exist, we probably want the rendered one which might be the .tpl one?
-                                # Actually, if Django rendered into requirements.txt-tpl, then requirements.txt shouldn't exist.
-                                # Just in case, we remove the .tpl file if the clean one exists to keep it clean.
                                 os.remove(old_path)
                         elif filename.endswith('.tpl'):
                              # Also handle .tpl if any exist (like .py-tpl which Django usually handles, but just in case)
@@ -75,7 +81,7 @@ def main():
                                 os.remove(old_path)
         except Exception as e:
             # Don't crash the tool if cleanup fails, just warn or ignore
-            print(f"Warning: Could not cleanup template files: {e}")
+            print(f"Warning: Post-processing failed: {e}")
 
 
 if __name__ == "__main__":

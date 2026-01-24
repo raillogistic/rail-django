@@ -1,1 +1,0 @@
-See [Health Checks](../../../../../docs/extensions/health-checks.md)

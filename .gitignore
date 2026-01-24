@@ -82,7 +82,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+rail_django/docs/_build/
 
 # PyBuilder
 target/
@@ -185,8 +185,8 @@ htmlcov/
 coverage.xml
 
 # Documentation builds
-docs/_build/
-docs/build/
+rail_django/docs/_build/
+rail_django/docs/build/
 
 # Node.js (if using for frontend tools)
 node_modules/

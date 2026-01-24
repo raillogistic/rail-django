@@ -17,7 +17,10 @@
       "Bash(ls:*)",
       "Bash(echo.:*)",
       "Bash(pytest rail_django/tests/unit/security/test_context.py:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(rail_django/bin/rail_admin.py:*)",
+      "Bash(export PYTHONPATH=$PYTHONPATH:.:*)",
+      "Bash(git add:*)"
     ]
   }
 }

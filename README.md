@@ -12,14 +12,14 @@ Rail Django is a production-ready GraphQL framework for Django, built on top of 
 
 ## 📚 Documentation
 
-Full documentation is available in the `docs/` directory.
+Full documentation is available in the `rail_django/docs/` directory.
 
-*   [**Getting Started**](docs/getting-started/quickstart.md): Installation and your first API.
-*   [**Core Concepts**](docs/core/queries.md): Queries, Mutations, and Filtering.
-*   [**Security**](docs/security/permissions.md): Authentication, RBAC, and Validation.
-*   [**Advanced Guides**](docs/guides/testing.md): Testing, Plugins, and Troubleshooting.
-*   [**Extensions**](docs/extensions/index.md): Audit Logging, Webhooks, and Multitenancy.
-*   [**Reference**](docs/reference/api.md): API and CLI reference.
+*   [**Getting Started**](rail_django/docs/getting-started/quickstart.md): Installation and your first API.
+*   [**Core Concepts**](rail_django/docs/core/queries.md): Queries, Mutations, and Filtering.
+*   [**Security**](rail_django/docs/security/permissions.md): Authentication, RBAC, and Validation.
+*   [**Advanced Guides**](rail_django/docs/guides/testing.md): Testing, Plugins, and Troubleshooting.
+*   [**Extensions**](rail_django/docs/extensions/index.md): Audit Logging, Webhooks, and Multitenancy.
+*   [**Reference**](rail_django/docs/reference/api.md): API and CLI reference.
 
 ## 📦 Installation
 

@@ -4,6 +4,7 @@ recursive-include rail_django/scaffolding *
 recursive-include rail_django/config *
 recursive-include rail_django/templates *
 recursive-include rail_django/static *
+recursive-include rail_django/docs *
 include rail_django/py.typed
 global-exclude __pycache__
 global-exclude *.py[co]

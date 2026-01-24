@@ -1,1 +1,0 @@
-See [Audit Logging](../../../../../docs/extensions/audit-logging.md)
