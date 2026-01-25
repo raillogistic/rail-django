@@ -164,6 +164,31 @@ Each field type exposes typed operators:
 - **Boolean**: `eq`, `isNull`
 - **JSON**: `eq`, `isNull`, `hasKey`, `hasKeys`, `hasAnyKeys`
 
+### Dynamic Filtering UI
+
+The metadata API provides specific fields to help build dynamic filtering interfaces automatically:
+
+- **`base_type`**: Hints at the type of UI widget to render for the field (e.g., "String", "Number", "Boolean", "Date", "Relationship", "JSON").
+- **`label`** (on filter options): Human-readable, localized label for the operator (e.g., "Equals", "Greater than").
+
+Example query for building a filter panel:
+
+```graphql
+query FilterPanelMetadata($app: String!, $model: String!) {
+  filterSchema(app: $app, model: $model) {
+    fieldName
+    fieldLabel
+    baseType
+    options {
+      lookup
+      label
+      graphqlType
+      isList
+    }
+  }
+}
+```
+
 ### Relation Filters
 
 Nested style includes relation quantifiers for M2M and reverse relations:

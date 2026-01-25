@@ -148,8 +148,53 @@ class FilterExtractorMixin:
                 }
                 field_label = labels.get(field_name, field_name)
 
+            # Base type mapping for UI widgets
+            base_type = "String"
+            if model_field:
+                internal_type = model_field.get_internal_type()
+                if internal_type in ("IntegerField", "SmallIntegerField", "BigIntegerField", "PositiveIntegerField", "FloatField", "DecimalField"):
+                    base_type = "Number"
+                elif internal_type in ("BooleanField", "NullBooleanField"):
+                    base_type = "Boolean"
+                elif internal_type in ("DateField", "DateTimeField", "TimeField"):
+                    base_type = "Date"
+                elif internal_type in ("ForeignKey", "OneToOneField", "ManyToManyField"):
+                    base_type = "Relationship"
+                elif internal_type == "JSONField":
+                    base_type = "JSON"
+
             options = []
             if hasattr(input_type, "_meta") and hasattr(input_type._meta, "fields"):
+                # Operator labels
+                operator_labels = {
+                    "eq": _("Equals"),
+                    "neq": _("Not equals"),
+                    "contains": _("Contains"),
+                    "icontains": _("Contains (case-insensitive)"),
+                    "in": _("In list"),
+                    "notIn": _("Not in list"),
+                    "gt": _("Greater than"),
+                    "gte": _("Greater than or equal"),
+                    "lt": _("Less than"),
+                    "lte": _("Less than or equal"),
+                    "startsWith": _("Starts with"),
+                    "endsWith": _("Ends with"),
+                    "regex": _("Regex match"),
+                    "isNull": _("Is null"),
+                    "hasKey": _("Has key"),
+                    "hasKeys": _("Has keys"),
+                    "hasAnyKeys": _("Has any keys"),
+                    # Date specific
+                    "year": _("Year"),
+                    "month": _("Month"),
+                    "day": _("Day"),
+                    "weekDay": _("Week day"),
+                    "hour": _("Hour"),
+                    "minute": _("Minute"),
+                    "second": _("Second"),
+                    "range": _("Range"),
+                }
+
                 for op_name, op_field in input_type._meta.fields.items():
                     op_type = op_field.type
                     is_list = False
@@ -163,11 +208,22 @@ class FilterExtractorMixin:
                     if model_field and hasattr(model_field, "choices") and model_field.choices:
                         if op_name in ("eq", "in", "neq", "notIn"):
                             field_choices = [{"value": str(c[0]), "label": str(c[1])} for c in model_field.choices]
-                    options.append({"name": op_name, "lookup": op_name, "help_text": op_name, "choices": field_choices, "graphql_type": op_graphql_type, "is_list": is_list})
+
+                    op_label = operator_labels.get(op_name, op_name)
+                    options.append({
+                        "name": op_name,
+                        "lookup": op_name,
+                        "label": str(op_label),
+                        "help_text": op_name,
+                        "choices": field_choices,
+                        "graphql_type": op_graphql_type,
+                        "is_list": is_list
+                    })
 
             return {
                 "field_name": field_name,
                 "field_label": field_label,
+                "base_type": base_type,
                 "is_nested": is_nested,
                 "related_model": related_model_name,
                 "options": options,

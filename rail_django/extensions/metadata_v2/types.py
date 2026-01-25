@@ -176,6 +176,7 @@ class FilterOptionSchemaType(graphene.ObjectType):
 
     name = graphene.String(required=True)
     lookup = graphene.String(required=True)
+    label = graphene.String(required=True, description="Human-readable label (e.g. 'Equals')")
     help_text = graphene.String()
     choices = graphene.List(ChoiceTypeV2)
     graphql_type = graphene.String(description="GraphQL type for this operator")
@@ -214,6 +215,7 @@ class FilterSchemaTypeV2(graphene.ObjectType):
 
     field_name = graphene.String(required=True)
     field_label = graphene.String(required=True)
+    base_type = graphene.String(description="Base type of the field (String, Int, Date, etc.) for UI widget selection")
     is_nested = graphene.Boolean(required=True)
     related_model = graphene.String()
     options = graphene.List(FilterOptionSchemaType, required=True)
