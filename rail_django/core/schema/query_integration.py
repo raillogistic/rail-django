@@ -227,7 +227,6 @@ class QueryIntegrationMixin:
             from ...extensions.metadata_v2 import ModelSchemaQueryV2
 
             schema_query_v2_instance = ModelSchemaQueryV2()
-
             for field_name, field in ModelSchemaQueryV2._meta.fields.items():
                 resolver_method_name = f"resolve_{field_name}"
                 if hasattr(schema_query_v2_instance, resolver_method_name):

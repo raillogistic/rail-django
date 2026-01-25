@@ -235,7 +235,7 @@ RAIL_DJANGO_GRAPHQL = {
         # Disable generation of security-related mutations (login, etc.)
         "disable_security_mutations": False,
         # Show metadata fields in schema
-        "show_metadata": False,
+        "show_metadata": True,
         # List of custom query extension classes to add
         "query_extensions": [],
         "mutation_extensions": [],
