@@ -35,6 +35,7 @@ from .utils import (
     _is_fsm_field,
     invalidate_metadata_v2_cache,
 )
+from .mapping import FieldTypeRegistry, registry
 
 __all__ = [
     # Queries
@@ -67,4 +68,7 @@ __all__ = [
     "_classify_field",
     "_get_fsm_transitions",
     "_is_fsm_field",
+    # Mapping
+    "FieldTypeRegistry",
+    "registry",
 ]

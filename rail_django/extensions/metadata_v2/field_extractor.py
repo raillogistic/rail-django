@@ -8,6 +8,7 @@ from typing import Any, Optional
 from django.db import models
 from ...security.field_permissions import field_permission_manager, FieldVisibility
 from .utils import _classify_field, _get_fsm_transitions
+from .mapping import registry
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,12 @@ logger = logging.getLogger(__name__)
 class FieldExtractorMixin:
     """Mixin for extracting fields and relationships."""
 
-    def _extract_fields(self, model: type[models.Model], user: Any) -> list[dict]:
+    def _extract_fields(
+        self,
+        model: type[models.Model],
+        user: Any,
+        instance: Optional[models.Model] = None,
+    ) -> list[dict]:
         """Extract all field schemas."""
         fields = []
         for field in model._meta.get_fields():
@@ -24,13 +30,17 @@ class FieldExtractorMixin:
             if not hasattr(field, "name"):
                 continue
 
-            field_schema = self._extract_field(model, field, user)
+            field_schema = self._extract_field(model, field, user, instance)
             if field_schema:
                 fields.append(field_schema)
         return fields
 
     def _extract_field(
-        self, model: type[models.Model], field: models.Field, user: Any
+        self,
+        model: type[models.Model],
+        field: models.Field,
+        user: Any,
+        instance: Optional[models.Model] = None,
     ) -> Optional[dict]:
         """Extract schema for a single field."""
         try:
@@ -76,12 +86,41 @@ class FieldExtractorMixin:
             validators = []
             for v in getattr(field, "validators", []):
                 v_type = type(v).__name__
-                validators.append({"type": v_type, "params": None, "message": None})
+                params = {}
+
+                # Extract limits
+                if hasattr(v, "limit_value"):
+                    params["limit_value"] = v.limit_value
+
+                # Extract regex patterns
+                if hasattr(v, "regex"):
+                    if hasattr(v.regex, "pattern"):
+                        params["pattern"] = v.regex.pattern
+                    elif isinstance(v.regex, str):
+                        params["pattern"] = v.regex
+
+                    if hasattr(v, "inverse_match"):
+                        params["inverse_match"] = v.inverse_match
+                    if hasattr(v, "flags"):
+                        params["flags"] = v.flags
+
+                # Extract error messages if available
+                message = getattr(v, "message", None)
+                if hasattr(v, "code"):
+                    params["code"] = v.code
+
+                validators.append({
+                    "type": v_type,
+                    "params": params if params else None,
+                    "message": str(message) if message else None
+                })
 
             # FSM transitions
             fsm_transitions = []
             if classification["is_fsm_field"]:
-                fsm_transitions = _get_fsm_transitions(model, field.name)
+                fsm_transitions = _get_fsm_transitions(
+                    model, field.name, instance=instance
+                )
 
             # GraphQL type mapping
             graphql_type = self._map_to_graphql_type(field_type, field)
@@ -123,7 +162,7 @@ class FieldExtractorMixin:
                         "label": t.get("label"),
                         "description": None,
                         "permission": None,
-                        "allowed": True,
+                        "allowed": t.get("allowed", True),
                     }
                     for t in fsm_transitions
                 ],
@@ -135,49 +174,11 @@ class FieldExtractorMixin:
 
     def _map_to_graphql_type(self, field_type: str, field: models.Field) -> str:
         """Map Django field type to GraphQL type."""
-        mapping = {
-            "CharField": "String",
-            "TextField": "String",
-            "SlugField": "String",
-            "URLField": "String",
-            "EmailField": "String",
-            "UUIDField": "String",
-            "IntegerField": "Int",
-            "SmallIntegerField": "Int",
-            "BigIntegerField": "Int",
-            "PositiveIntegerField": "Int",
-            "PositiveSmallIntegerField": "Int",
-            "FloatField": "Float",
-            "DecimalField": "Float",
-            "BooleanField": "Boolean",
-            # NullBooleanField removed in Django 4.0
-            "NullBooleanField": "Boolean",
-            "DateField": "Date",
-            "DateTimeField": "DateTime",
-            "TimeField": "Time",
-            "JSONField": "JSONString",
-            "FileField": "String",
-            "ImageField": "String",
-            "ForeignKey": "ID",
-            "OneToOneField": "ID",
-        }
-        return mapping.get(field_type, "String")
+        return registry.get_graphql_type(field)
 
     def _get_python_type(self, field: models.Field) -> str:
         """Get Python type for a field."""
-        field_type = type(field).__name__
-        mapping = {
-            "CharField": "str",
-            "TextField": "str",
-            "IntegerField": "int",
-            "FloatField": "float",
-            "DecimalField": "Decimal",
-            "BooleanField": "bool",
-            "DateField": "date",
-            "DateTimeField": "datetime",
-            "JSONField": "dict",
-        }
-        return mapping.get(field_type, "str")
+        return registry.get_python_type(field)
 
     def _extract_relationships(
         self, model: type[models.Model], user: Any

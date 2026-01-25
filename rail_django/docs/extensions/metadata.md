@@ -58,6 +58,7 @@ query ModelMetadata($app: String!, $model: String!) {
       validators {
         type
         params
+        message
       }
     }
     filtering {
@@ -96,6 +97,28 @@ query AvailableModels {
     fieldCount
     hasMutations
     isUserModel
+  }
+}
+```
+
+### Instance-Aware Metadata (FSM)
+
+You can retrieve metadata specific to a model instance (e.g., valid state transitions) by providing an `objectId`.
+
+```graphql
+query InstanceMetadata($app: String!, $model: String!, $id: ID!) {
+  modelSchema(appLabel: $app, modelName: $model, objectId: $id) {
+    fields {
+      name
+      isFsmField
+      fsmTransitions {
+        name
+        source
+        target
+        label
+        allowed  # True if transition is valid for this instance
+      }
+    }
   }
 }
 ```
@@ -207,6 +230,25 @@ Visibility levels include: `VISIBLE`, `MASKED`, `HIDDEN`, `REDACTED`.
 
 ## Customization
 
+### Field Type Registry
+
+You can extend the default type mapping for custom Django fields using the `FieldTypeRegistry`. This is useful if you have custom model fields (like `PhoneNumberField` or `ColorField`) that you want to map to specific GraphQL types.
+
+```python
+from rail_django.extensions.metadata_v2.mapping import registry
+from my_app.fields import PhoneNumberField
+
+# Register GraphQL type mapping
+registry.register_graphql_mapping(PhoneNumberField, "String")
+# Or use a custom scalar if available
+# registry.register_graphql_mapping(PhoneNumberField, "PhoneNumber")
+
+# Register Python type mapping (for code generation tools)
+registry.register_python_mapping(PhoneNumberField, "str")
+```
+
+### GraphQLMeta
+
 Use `GraphQLMeta` to configure how metadata is generated for your models:
 
 ```python
@@ -236,6 +278,34 @@ class Product(models.Model):
             },
         )
 ```
+
+## Caching
+
+Metadata generation can be expensive for complex models. The extension uses Django's cache framework to store schema results.
+
+### Versioning Strategy
+
+Each model has a tracked version key (`metadata_v2_version:{app}:{model}`). When metadata is requested:
+1. The current version is retrieved (or initialized).
+2. A cache key is built including the version, app, model, user hash (for permissions), and object ID (if applicable).
+3. If a cached schema exists, it is returned immediately.
+
+### Invalidation
+
+To invalidate metadata for a specific model (e.g., after a schema migration or permission change), use:
+
+```python
+from rail_django.extensions.metadata_v2.utils import invalidate_metadata_v2_cache
+
+# Invalidate specific model
+invalidate_metadata_v2_cache(app="my_app", model="MyModel")
+```
+
+This bumps the version token, effectively invalidating all cached entries for that model without requiring a full cache flush.
+
+## Internationalization (i18n)
+
+The metadata extension supports internationalization. Field labels, help text, descriptions, and filter operator labels (e.g., "At least one", "All") are returned in the active language of the request. Ensure `django.middleware.locale.LocaleMiddleware` is enabled.
 
 ## See Also
 

@@ -7,31 +7,85 @@ import time
 import uuid
 from typing import Any, Optional
 
+from django.core.cache import cache
+from django.conf import settings
 from django.db import models
 
 # Cache management
-_schema_cache: dict[str, dict[str, Any]] = {}
-_cache_version = str(int(time.time() * 1000))
+
+def get_model_version(app: str, model: str) -> str:
+    """Get the current version token for a model's metadata."""
+    key = f"metadata_v2_version:{app}:{model}"
+    version = cache.get(key)
+    if not version:
+        version = str(int(time.time() * 1000))
+        cache.set(key, version, timeout=None)
+    return str(version)
 
 
-def _generate_version() -> str:
-    """Generate a metadata version token."""
-    return f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
-
-
-def _get_cache_key(app: str, model: str, user_id: Optional[str] = None) -> str:
+def _get_cache_key(
+    app: str, model: str, user_id: Optional[str] = None, object_id: Optional[str] = None
+) -> str:
     """Build cache key for model schema."""
-    key = f"v2:{app}:{model}"
+    version = get_model_version(app, model)
+    key = f"metadata_v2:{version}:{app}:{model}"
+
+    if object_id:
+        key = f"{key}:obj:{object_id}"
+
     if user_id:
-        key = f"{key}:{hashlib.sha1(str(user_id).encode()).hexdigest()[:8]}"
+        # Use a hash of user_id to keep key short/safe
+        user_hash = hashlib.sha1(str(user_id).encode()).hexdigest()[:8]
+        key = f"{key}:user:{user_hash}"
+
     return key
+
+
+def get_cached_schema(
+    app: str, model: str, user_id: Optional[str] = None, object_id: Optional[str] = None
+) -> Optional[dict[str, Any]]:
+    """Retrieve schema from cache."""
+    # In DEBUG mode, we might want to skip cache for faster iteration
+    if getattr(settings, "DEBUG", False):
+        return None
+
+    key = _get_cache_key(app, model, user_id, object_id)
+    return cache.get(key)
+
+
+def set_cached_schema(
+    app: str,
+    model: str,
+    data: dict[str, Any],
+    user_id: Optional[str] = None,
+    object_id: Optional[str] = None
+) -> None:
+    """Store schema in cache."""
+    if getattr(settings, "DEBUG", False):
+        return
+
+    key = _get_cache_key(app, model, user_id, object_id)
+    # Default timeout: 1 hour (3600 seconds)
+    # We could make this configurable via settings
+    cache.set(key, data, timeout=3600)
 
 
 def invalidate_metadata_v2_cache(app: str = None, model: str = None) -> None:
     """Invalidate metadata v2 cache."""
-    global _cache_version
-    _cache_version = _generate_version()
-    _schema_cache.clear()
+    if app and model:
+        # Bump version for specific model
+        key = f"metadata_v2_version:{app}:{model}"
+        new_version = str(int(time.time() * 1000))
+        cache.set(key, new_version, timeout=None)
+    else:
+        # For global invalidation, currently we don't have a global prefix.
+        # But we can clear the whole cache if needed, though that's drastic.
+        # Or we could iterate/broadcast if we had a registry of models.
+        # For now, let's just support app/model specific invalidation as that's the primary use case (signals).
+        pass
+
+# Backward compatibility for imports
+_cache_version = str(int(time.time() * 1000))
 
 
 # =============================================================================
@@ -49,21 +103,41 @@ def _is_fsm_field(field: Any) -> bool:
         return False
 
 
-def _get_fsm_transitions(model: type[models.Model], field_name: str) -> list[dict]:
-    """Get FSM transitions for a field."""
+def _get_fsm_transitions(
+    model: type[models.Model], field_name: str, instance: Optional[models.Model] = None
+) -> list[dict]:
+    """
+    Get FSM transitions for a field.
+    If instance is provided, returns only transitions available for that instance.
+    """
     try:
         from django_fsm import get_available_FIELD_transitions
+
+        # If instance is provided, get available transitions for it
+        available_transitions = set()
+        if instance:
+            # django-fsm adds get_available_FIELD_transitions method to model instance
+            method_name = f"get_available_{field_name}_transitions"
+            if hasattr(instance, method_name):
+                # This returns the method objects that are valid transitions
+                available_methods = getattr(instance, method_name)()
+                available_transitions = {m.__name__ for m in available_methods}
 
         func = getattr(model, f"get_available_{field_name}_transitions", None)
         if not func:
             return []
-        # Return static transition info (without instance)
+
         transitions = []
         for attr_name in dir(model):
             attr = getattr(model, attr_name, None)
             if hasattr(attr, "_django_fsm"):
                 fsm_meta = attr._django_fsm
                 if hasattr(fsm_meta, "field") and fsm_meta.field.name == field_name:
+                    # Check if this transition is allowed for the instance
+                    is_allowed = True
+                    if instance:
+                        is_allowed = attr_name in available_transitions
+
                     for source, target in getattr(fsm_meta, "transitions", {}).items():
                         transitions.append(
                             {
@@ -75,6 +149,7 @@ def _get_fsm_transitions(model: type[models.Model], field_name: str) -> list[dic
                                 "label": getattr(
                                     attr, "label", attr_name.replace("_", " ").title()
                                 ),
+                                "allowed": is_allowed,
                             }
                         )
         return transitions

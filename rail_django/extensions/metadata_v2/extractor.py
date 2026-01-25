@@ -9,7 +9,7 @@ from django.apps import apps
 from graphql import GraphQLError
 
 from ...utils.graphql_meta import get_model_graphql_meta
-from .utils import _cache_version
+from .utils import _cache_version, get_cached_schema, set_cached_schema, get_model_version
 
 from .field_extractor import FieldExtractorMixin
 from .filter_extractor import FilterExtractorMixin
@@ -34,6 +34,12 @@ class ModelSchemaExtractor(FieldExtractorMixin, FilterExtractorMixin, Permission
         object_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """Extract complete schema for a model."""
+        # Try cache first
+        user_id = str(user.pk) if user and hasattr(user, "pk") else None
+        cached = get_cached_schema(app_name, model_name, user_id, object_id)
+        if cached:
+            return cached
+
         try:
             model = apps.get_model(app_name, model_name)
         except LookupError:
@@ -42,7 +48,15 @@ class ModelSchemaExtractor(FieldExtractorMixin, FilterExtractorMixin, Permission
         meta = model._meta
         graphql_meta = get_model_graphql_meta(model)
 
-        return {
+        # Retrieve instance if object_id is provided
+        instance = None
+        if object_id:
+            try:
+                instance = model.objects.get(pk=object_id)
+            except (model.DoesNotExist, ValueError):
+                pass
+
+        result = {
             "app": app_name,
             "model": model_name,
             "verbose_name": str(meta.verbose_name),
@@ -52,7 +66,7 @@ class ModelSchemaExtractor(FieldExtractorMixin, FilterExtractorMixin, Permission
             "unique_together": [list(ut) for ut in meta.unique_together]
             if meta.unique_together
             else [],
-            "fields": self._extract_fields(model, user),
+            "fields": self._extract_fields(model, user, instance=instance),
             "relationships": self._extract_relationships(model, user),
             "filters": self._extract_filters(model),
             "filter_config": self._extract_filter_config(model),
@@ -61,6 +75,11 @@ class ModelSchemaExtractor(FieldExtractorMixin, FilterExtractorMixin, Permission
             "permissions": self._extract_permissions(model, user),
             "field_groups": self._extract_field_groups(model, graphql_meta),
             "templates": self._extract_templates(model, user),
-            "metadata_version": _cache_version,
+            "metadata_version": get_model_version(app_name, model_name),
             "custom_metadata": getattr(graphql_meta, "custom_metadata", None),
         }
+
+        # Cache result
+        set_cached_schema(app_name, model_name, result, user_id, object_id)
+
+        return result

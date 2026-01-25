@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import graphene
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from ...utils.graphql_meta import get_model_graphql_meta
 
 logger = logging.getLogger(__name__)
@@ -122,18 +123,28 @@ class FilterExtractorMixin:
                 camel_field = to_camel_case(model_field.name)
                 if field_name != camel_field:
                     suffix = field_name.replace(camel_field, "")
-                    if suffix == "_some": field_label += " (Au moins un)"
-                    elif suffix == "_every": field_label += " (Tous)"
-                    elif suffix == "_none": field_label += " (Aucun)"
-                    elif suffix == "_count": field_label += " (Compte)"
-                    elif suffix == "_agg": field_label += " (AgrÇ¸gation)"
+                    if suffix == "_some":
+                        field_label += f" ({_('At least one')})"
+                    elif suffix == "_every":
+                        field_label += f" ({_('All')})"
+                    elif suffix == "_none":
+                        field_label += f" ({_('None')})"
+                    elif suffix == "_count":
+                        field_label += f" ({_('Count')})"
+                    elif suffix == "_agg":
+                        field_label += f" ({_('Aggregation')})"
             else:
                 labels = {
-                    "id": "ID", "quick": "Recherche rapide", "search": "Recherche texte intÇ¸gral",
-                    "_window": "Filtre fenÇºtre", "_subquery": "Filtre sous-requÇºte",
-                    "_exists": "Filtre existence", "_compare": "Comparaison champs",
-                    "include": "Inclure IDs", "instanceIn": "Instances d'origine",
-                    "historyTypeIn": "Type d'historique",
+                    "id": "ID",
+                    "quick": _("Quick Search"),
+                    "search": _("Full Text Search"),
+                    "_window": _("Window Filter"),
+                    "_subquery": _("Subquery Filter"),
+                    "_exists": _("Exists Filter"),
+                    "_compare": _("Field Comparison"),
+                    "include": _("Include IDs"),
+                    "instanceIn": _("Origin Instances"),
+                    "historyTypeIn": _("History Type"),
                 }
                 field_label = labels.get(field_name, field_name)
 

@@ -4,6 +4,7 @@ Permission and other extraction logic for ModelSchemaExtractor.
 
 from typing import Any, Optional
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 class PermissionExtractorMixin:
     """Mixin for extracting permissions and other miscellaneous info."""
@@ -12,10 +13,18 @@ class PermissionExtractorMixin:
         """Extract available mutations."""
         mutations = []
         model_name = model.__name__
+        # Translators: Operation names
+        ops = {
+            "CREATE": _("Create"),
+            "UPDATE": _("Update"),
+            "DELETE": _("Delete")
+        }
+
         for op, name in [("CREATE", f"create_{model_name}"), ("UPDATE", f"update_{model_name}"), ("DELETE", f"delete_{model_name}")]:
+            op_label = ops.get(op, op.title())
             mutations.append({
                 "name": name, "operation": op,
-                "description": f"{op.title()} a {model._meta.verbose_name}",
+                "description": f"{op_label} {model._meta.verbose_name}",
                 "method_name": None, "input_fields": [], "allowed": True,
                 "required_permissions": [f"{model._meta.app_label}.{op.lower()}_{model_name.lower()}"],
                 "reason": None,
