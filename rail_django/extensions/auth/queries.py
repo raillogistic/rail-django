@@ -16,7 +16,11 @@ if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
 from ...extensions.permissions import PermissionInfo
-from .utils import _get_effective_permissions, _build_model_permission_snapshot
+from .utils import (
+    _get_effective_permissions,
+    _build_model_permission_snapshot,
+    _get_user_roles_detail,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,22 @@ class DummySettingsType(graphene.ObjectType):
     font_family = graphene.String(description="Famille de police")
 
 
+class AuthPermissionType(graphene.ObjectType):
+    """Permission details for auth payloads."""
+
+    id = graphene.ID()
+    name = graphene.String()
+    codename = graphene.String()
+
+
+class AuthRoleType(graphene.ObjectType):
+    """Role details for auth payloads."""
+
+    id = graphene.ID()
+    name = graphene.String()
+    permissions = graphene.List(AuthPermissionType)
+
+
 def _get_safe_settings_type():
     """
     Return real UserSettingsType or a dummy fallback.
@@ -120,6 +140,10 @@ def get_authenticated_user_type():
         permissions = graphene.List(
             graphene.String, description="Permissions effectives de l'utilisateur"
         )
+        roles = graphene.List(
+            AuthRoleType,
+            description="Roles RBAC et groupes Django de l'utilisateur",
+        )
         model_permissions = graphene.List(
             PermissionInfo,
             description="Permissions CRUD detaillees par modele",
@@ -153,6 +177,10 @@ def get_authenticated_user_type():
         def resolve_permissions(self, info):
             """Resolve the user's effective permissions."""
             return _get_effective_permissions(self)
+
+        def resolve_roles(self, info):
+            """Resolve the user's RBAC roles and Django groups."""
+            return _get_user_roles_detail(self)
 
         def resolve_model_permissions(self, info):
             """Resolve the user's model-level CRUD permissions."""

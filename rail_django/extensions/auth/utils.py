@@ -6,7 +6,7 @@ user authentication from JWT tokens.
 """
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Any
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -40,6 +40,120 @@ def _get_effective_permissions(user: "AbstractUser") -> list[str]:
     """
     if not user:
         return []
+
+
+def _get_user_roles(user: "AbstractUser") -> list[str]:
+    """
+    Return a sorted list of user roles (RBAC + Django groups).
+
+    Args:
+        user: The Django user instance to get roles for.
+
+    Returns:
+        A sorted list of role/group names. Returns an empty list if
+        the user is None or if roles cannot be retrieved.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+    if getattr(user, "pk", None) is None:
+        return []
+
+    roles: set[str] = set()
+
+    try:
+        roles.update(role_manager.get_user_roles(user))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Impossible de recuperer les roles RBAC de %s: %s", user, exc)
+
+    try:
+        roles.update(user.groups.values_list("name", flat=True))
+    except Exception:
+        # ignore group lookup failures
+        pass
+
+    # Ensure staff/superuser roles are always included.
+    if getattr(user, "is_superuser", False):
+        roles.add("superadmin")
+    elif getattr(user, "is_staff", False):
+        roles.add("admin")
+
+    return sorted(roles)
+
+
+def _serialize_permission(permission: Any) -> dict[str, str]:
+    """
+    Normalize a permission object or string into an API-friendly shape.
+    """
+    if hasattr(permission, "codename") and hasattr(permission, "name"):
+        permission_id = getattr(permission, "id", None)
+        return {
+            "id": str(permission_id) if permission_id is not None else "",
+            "name": str(permission.name),
+            "codename": str(permission.codename),
+        }
+
+    perm_str = str(permission)
+    return {
+        "id": f"rbac:{perm_str}",
+        "name": perm_str,
+        "codename": perm_str,
+    }
+
+
+def _get_user_roles_detail(user: "AbstractUser") -> list[dict[str, Any]]:
+    """
+    Return RBAC roles and Django groups with permissions.
+
+    Each role includes its name and a list of permissions in a normalized shape.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+    if getattr(user, "pk", None) is None:
+        return []
+
+    roles: dict[str, dict[str, Any]] = {}
+
+    try:
+        for group in user.groups.all():
+            role = roles.setdefault(
+                group.name,
+                {"id": f"group:{group.id}", "name": group.name, "permissions": []},
+            )
+            if role.get("id", "").startswith("rbac:"):
+                role["id"] = f"group:{group.id}"
+            for perm in group.permissions.all():
+                role["permissions"].append(_serialize_permission(perm))
+    except Exception:
+        pass
+
+    try:
+        role_names = role_manager.get_user_roles(user)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Impossible de recuperer les roles RBAC de %s: %s", user, exc)
+        role_names = []
+
+    for role_name in role_names:
+        role = roles.setdefault(
+            role_name,
+            {"id": f"rbac:{role_name}", "name": role_name, "permissions": []},
+        )
+        role_def = role_manager.get_role_definition(role_name)
+        if role_def:
+            for perm in role_def.permissions:
+                role["permissions"].append(_serialize_permission(perm))
+
+    for role in roles.values():
+        seen: set[str] = set()
+        unique_permissions = []
+        for perm in role.get("permissions", []):
+            perm_id = str(perm.get("id", ""))
+            if perm_id in seen:
+                continue
+            seen.add(perm_id)
+            unique_permissions.append(perm)
+        role["permissions"] = unique_permissions
+
+    return list(roles.values())
 
     try:
         permissions = role_manager.get_effective_permissions(user)
