@@ -82,8 +82,9 @@ class MFAManager:
             device.last_used = django_timezone.now()
             device.save()
 
-            # Générer les codes de récupération
-            self._generate_backup_codes(device)
+            # Générer les codes de récupération si aucun n'existe
+            if not device.backup_codes.exists():
+                self.generate_backup_codes(device)
 
             return True
 
@@ -328,9 +329,9 @@ class MFAManager:
             )
 
         # Générer de nouveaux codes
-        return self._generate_backup_codes(backup_device)
+        return self.generate_backup_codes(backup_device)
 
-    def _generate_backup_codes(self, device: MFADevice) -> list[str]:
+    def generate_backup_codes(self, device: MFADevice) -> list[str]:
         """
         Génère des codes de récupération pour un appareil.
 

@@ -269,6 +269,48 @@ class JWTManager:
         return lifetime_seconds
 
     @classmethod
+    def generate_ephemeral_token(cls, user: "AbstractUser", **extra_claims) -> str:
+        """
+        Generate a short-lived ephemeral token for MFA verification.
+
+        Args:
+            user: The Django user instance.
+            **extra_claims: Additional claims to include in the token.
+
+        Returns:
+            The ephemeral token string.
+        """
+        now = timezone.now()
+        # Ephemeral tokens are short-lived (e.g. 5 minutes)
+        expiration = now + timedelta(seconds=300)
+
+        payload = {
+            "user_id": user.id,
+            "username": user.username,
+            "iat": now,
+            "exp": expiration,
+            "type": "ephemeral_mfa",
+        }
+
+        if extra_claims:
+            payload.update(extra_claims)
+
+        return jwt.encode(payload, cls.get_jwt_secret(), algorithm="HS256")
+
+    @classmethod
+    def verify_ephemeral_token(cls, token: str) -> Optional[dict[str, Any]]:
+        """
+        Verify an ephemeral MFA token.
+
+        Args:
+            token: The token string.
+
+        Returns:
+            The decoded payload if valid, None otherwise.
+        """
+        return cls.verify_token(token, expected_type="ephemeral_mfa")
+
+    @classmethod
     def generate_token(
         cls,
         user: "AbstractUser",
@@ -376,6 +418,36 @@ class JWTManager:
         except jwt.InvalidTokenError as e:
             logger.warning(f"Token JWT invalide: {e}")
             return None
+
+    @classmethod
+    def revoke_token(cls, token: str) -> bool:
+        """
+        Revoke a refresh token (and its family).
+
+        Args:
+            token: The refresh token string.
+
+        Returns:
+            True if revocation was successful (or token was already invalid), False on error.
+        """
+        try:
+            payload = cls.verify_token(token, expected_type="refresh")
+            if not payload:
+                # Token already invalid/expired
+                return True
+
+            family_id = payload.get("family")
+            if not family_id:
+                return False
+
+            store = get_refresh_token_store()
+            # Revoke for a long time (e.g. refresh lifetime)
+            refresh_ttl = cls.get_refresh_expiration()
+            store.revoke_family(family_id, refresh_ttl)
+            return True
+        except Exception as e:
+            logger.error(f"Error revoking token: {e}")
+            return False
 
     @classmethod
     def refresh_token(cls, refresh_token: str) -> Optional[dict[str, Any]]:

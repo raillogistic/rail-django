@@ -243,6 +243,12 @@ class AuthPayload(graphene.ObjectType):
         graphene.String,
         description="Liste des permissions effectives disponibles pour l'utilisateur",
     )
+    mfa_required = graphene.Boolean(
+        description="Indique si l'authentification MFA est requise"
+    )
+    ephemeral_token = graphene.String(
+        description="Token ephemere pour la validation MFA"
+    )
     token = graphene.String(description="Token JWT d'authentification")
     refresh_token = graphene.String(description="Token de rafraichissement")
     expires_at = graphene.DateTime(description="Date d'expiration du token")
