@@ -43,6 +43,9 @@ from .mutations import (
     RefreshTokenMutation,
     LogoutMutation,
     UpdateMySettingsMutation,
+    VerifyMFALoginMutation,
+    RevokeSessionMutation,
+    RevokeAllSessionsMutation,
     AuthMutations,
 )
 
@@ -91,6 +94,9 @@ __all__ = [
     "RefreshTokenMutation",
     "LogoutMutation",
     "UpdateMySettingsMutation",
+    "VerifyMFALoginMutation",
+    "RevokeSessionMutation",
+    "RevokeAllSessionsMutation",
     "AuthMutations",
     # GraphQL Queries and Types
     "MeQuery",

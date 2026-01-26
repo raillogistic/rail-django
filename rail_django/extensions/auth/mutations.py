@@ -168,11 +168,16 @@ class LoginMutation(graphene.Mutation):
 
             # Check MFA requirements
             if mfa_manager.is_mfa_required(user):
+                # Check if setup is required (user has no active devices)
+                has_devices = user.mfa_devices.filter(is_active=True).exists()
+                mfa_setup_required = not has_devices
+
                 # Generate ephemeral token for MFA verification
                 ephemeral_token = JWTManager.generate_ephemeral_token(user)
                 return AuthPayload(
                     ok=True,
                     mfa_required=True,
+                    mfa_setup_required=mfa_setup_required,
                     ephemeral_token=ephemeral_token,
                     errors=[],
                 )

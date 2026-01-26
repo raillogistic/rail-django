@@ -122,20 +122,43 @@ class ExtensionsMixin:
                 RefreshTokenMutation,
                 RegisterMutation,
                 UpdateMySettingsMutation,
+                VerifyMFALoginMutation,
+                RevokeSessionMutation,
+                RevokeAllSessionsMutation,
             )
 
             disable_security = self.settings.disable_security_mutations
-
             if not disable_security:
-                security_mutations.update(
-                    {
-                        "login": LoginMutation.Field(),
-                        "register": RegisterMutation.Field(),
-                        "refresh_token": RefreshTokenMutation.Field(),
-                        "logout": LogoutMutation.Field(),
-                        "update_my_settings": UpdateMySettingsMutation.Field(),
-                    }
-                )
+                mutations_to_add = {
+                    "login": LoginMutation.Field(),
+                    "register": RegisterMutation.Field(),
+                    "refresh_token": RefreshTokenMutation.Field(),
+                    "logout": LogoutMutation.Field(),
+                    "update_my_settings": UpdateMySettingsMutation.Field(),
+                    "verify_mfa_login": VerifyMFALoginMutation.Field(),
+                    "revoke_session": RevokeSessionMutation.Field(),
+                    "revoke_all_sessions": RevokeAllSessionsMutation.Field(),
+                }
+
+                # Integrate MFA mutations
+                try:
+                    from ...extensions.mfa.mutations import MFAMutations
+
+                    # Check if MFA is enabled in settings, defaulting to True for backward compatibility
+                    # or checking app availability. Assuming always available if import succeeds.
+                    # We can use the MFAMutations fields directly.
+                    for field_name, field in MFAMutations._meta.fields.items():
+                        mutations_to_add[field_name] = field
+                    logger.info(
+                        f"MFA mutations integrated into schema '{self.schema_name}'"
+                    )
+                except ImportError as e:
+                    logger.warning(
+                        f"Could not import MFA mutations for schema '{self.schema_name}': {e}"
+                    )
+
+                security_mutations.update(mutations_to_add)
+
                 logger.info(
                     f"Security mutations integrated into schema '{self.schema_name}'"
                 )
@@ -222,7 +245,9 @@ class ExtensionsMixin:
         """Create the Mutation type from mutation fields."""
         mutation_allowlist = self._get_schema_setting("mutation_field_allowlist", None)
         if mutation_allowlist is not None:
-            all_mutations = self._apply_field_allowlist(all_mutations, mutation_allowlist)
+            all_mutations = self._apply_field_allowlist(
+                all_mutations, mutation_allowlist
+            )
 
         if all_mutations:
             all_mutations = self._camelcase_fields(all_mutations)

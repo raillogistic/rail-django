@@ -3,9 +3,10 @@ MFA GraphQL mutations.
 """
 
 import graphene
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from .manager import mfa_manager
 from .models import MFADevice, MFABackupCode
+from ..auth.jwt import JWTManager
 
 
 class SetupMFAMutation(graphene.Mutation):
@@ -14,6 +15,7 @@ class SetupMFAMutation(graphene.Mutation):
     """
     class Arguments:
         method = graphene.String(required=True)
+        ephemeral_token = graphene.String(required=False)
 
     secret = graphene.String()
     qr_code_url = graphene.String()
@@ -21,8 +23,19 @@ class SetupMFAMutation(graphene.Mutation):
     ok = graphene.Boolean()
     errors = graphene.List(graphene.String)
 
-    def mutate(self, info, method):
+    def mutate(self, info, method, ephemeral_token=None):
         user = info.context.user
+        
+        # Try to resolve user from ephemeral token if not authenticated
+        if not user.is_authenticated and ephemeral_token:
+            payload = JWTManager.verify_ephemeral_token(ephemeral_token)
+            if payload:
+                try:
+                    User = get_user_model()
+                    user = User.objects.get(id=payload["user_id"])
+                except User.DoesNotExist:
+                    pass
+
         if not user.is_authenticated:
             return SetupMFAMutation(ok=False, errors=["Authentification requise"])
 
@@ -59,12 +72,24 @@ class VerifyMFASetupMutation(graphene.Mutation):
     class Arguments:
         code = graphene.String(required=True)
         secret = graphene.String(required=True)
+        ephemeral_token = graphene.String(required=False)
 
     ok = graphene.Boolean()
     errors = graphene.List(graphene.String)
 
-    def mutate(self, info, code, secret):
+    def mutate(self, info, code, secret, ephemeral_token=None):
         user = info.context.user
+
+        # Try to resolve user from ephemeral token if not authenticated
+        if not user.is_authenticated and ephemeral_token:
+            payload = JWTManager.verify_ephemeral_token(ephemeral_token)
+            if payload:
+                try:
+                    User = get_user_model()
+                    user = User.objects.get(id=payload["user_id"])
+                except User.DoesNotExist:
+                    pass
+
         if not user.is_authenticated:
             return VerifyMFASetupMutation(ok=False, errors=["Authentification requise"])
 

@@ -246,6 +246,9 @@ class AuthPayload(graphene.ObjectType):
     mfa_required = graphene.Boolean(
         description="Indique si l'authentification MFA est requise"
     )
+    mfa_setup_required = graphene.Boolean(
+        description="Indique si la configuration MFA est requise (pas d'appareil actif)"
+    )
     ephemeral_token = graphene.String(
         description="Token ephemere pour la validation MFA"
     )

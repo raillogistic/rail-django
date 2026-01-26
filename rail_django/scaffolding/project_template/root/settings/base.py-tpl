@@ -581,7 +581,13 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
             # Only expose the current-user query.
             "query_field_allowlist": ["me"],
             # Only expose login + register mutations.
-            "mutation_field_allowlist": ["login", "register"],
+            "mutation_field_allowlist": [
+                "login",
+                "register",
+                "setup_mfa",
+                "verify_mfa_setup",
+                "verify_mfa_login",
+            ],
         },
         "mutation_settings": {
             # Disable generic CRUD mutations to keep this endpoint focused on Auth
