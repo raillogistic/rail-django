@@ -13,6 +13,7 @@ Supports multi-schema functionality.
 
 from django.urls import include, path
 from .http.urls.health import health_urlpatterns
+from .http.urls.csrf import csrf_urlpatterns
 from .http.urls.audit import audit_urlpatterns
 from .graphql.views import MultiSchemaGraphQLView, SchemaListView
 
@@ -30,4 +31,5 @@ urlpatterns = [
     path("api/v1/", include("rail_django.http.api.urls", namespace="schema_api")),
 ]
 urlpatterns += health_urlpatterns
+urlpatterns += csrf_urlpatterns
 urlpatterns += audit_urlpatterns

@@ -389,6 +389,10 @@ The library uses `django-cors-headers` when configured. Do not leave
 `csrf_exempt` sensitive endpoints. Cookie-based JWT auth enforces CSRF by
 default outside DEBUG (`JWT_ENFORCE_CSRF`).
 
+Rail Django also exposes a default CSRF bootstrap endpoint at `/csrf/`. The
+endpoint returns JSON with a `csrfToken` field and sets the CSRF cookie so SPA
+clients can prime cookie-based auth flows before making GraphQL requests.
+
 ## Audit logging
 
 Audit events are emitted by `rail_django.extensions.audit`. Configure:
