@@ -186,7 +186,7 @@ class NestedFilterInputGenerator:
                     fields[field_name] = graphene.InputField(
                         filter_input,
                         name=to_camel_case(field_name),
-                        description=f"Filter by {field_name}",
+                        description=f"Filtrer par {field_name}",
                     )
 
         return fields
@@ -196,13 +196,13 @@ class NestedFilterInputGenerator:
     ) -> Dict[str, graphene.InputField]:
         """Generate standard filter fields available on all models."""
         fields = {
-            "id": graphene.InputField(IDFilterInput, description="Filter by ID"),
+            "id": graphene.InputField(IDFilterInput, description="Filtrer par ID"),
             "quick": graphene.InputField(
-                graphene.String, description="Quick search across multiple text fields"
+                graphene.String, description="Recherche rapide dans plusieurs champs de texte"
             ),
             "include": graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.ID)),
-                description="Include specific IDs regardless of other filters",
+                description="Inclure des IDs spécifiques indépendamment des autres filtres",
             ),
         }
 

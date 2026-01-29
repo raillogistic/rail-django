@@ -35,16 +35,16 @@ class AggregationFilterInput(graphene.InputObjectType):
         }
     """
 
-    field = graphene.String(required=True, description="Field to aggregate")
-    sum = graphene.InputField(FloatFilterInput, description="Filter by SUM")
-    avg = graphene.InputField(FloatFilterInput, description="Filter by AVG")
-    min = graphene.InputField(FloatFilterInput, description="Filter by MIN")
-    max = graphene.InputField(FloatFilterInput, description="Filter by MAX")
-    count = graphene.InputField(IntFilterInput, description="Filter by COUNT")
+    field = graphene.String(required=True, description="Champ à agréger")
+    sum = graphene.InputField(FloatFilterInput, description="Filtrer par SOMME")
+    avg = graphene.InputField(FloatFilterInput, description="Filtrer par MOYENNE")
+    min = graphene.InputField(FloatFilterInput, description="Filtrer par MIN")
+    max = graphene.InputField(FloatFilterInput, description="Filtrer par MAX")
+    count = graphene.InputField(IntFilterInput, description="Filtrer par COMPTE")
     count_distinct = graphene.InputField(
         IntFilterInput,
         name="countDistinct",
-        description="Filter by COUNT of distinct values",
+        description="Filtrer par COMPTE de valeurs distinctes",
     )
 
 
@@ -71,15 +71,15 @@ class ConditionalAggregationFilterInput(graphene.InputObjectType):
         }
     """
 
-    field = graphene.String(required=True, description="Field to aggregate")
+    field = graphene.String(required=True, description="Champ à agréger")
     filter = graphene.Argument(
         lambda: graphene.JSONString,
-        description="Filter condition for records to include in aggregation (JSON)",
+        description="Condition de filtrage pour les enregistrements à inclure dans l'agrégation (JSON)",
     )
-    sum = graphene.InputField(FloatFilterInput, description="Filter by conditional SUM")
-    avg = graphene.InputField(FloatFilterInput, description="Filter by conditional AVG")
+    sum = graphene.InputField(FloatFilterInput, description="Filtrer par SOMME conditionnelle")
+    avg = graphene.InputField(FloatFilterInput, description="Filtrer par MOYENNE conditionnelle")
     count = graphene.InputField(
-        IntFilterInput, description="Filter by conditional COUNT"
+        IntFilterInput, description="Filtrer par COMPTE conditionnel"
     )
 
 
@@ -126,23 +126,23 @@ class WindowFilterInput(graphene.InputObjectType):
     function = graphene.Field(
         WindowFunctionEnum,
         required=True,
-        description="Window function to use: rank, dense_rank, row_number, percent_rank",
+        description="Fonction de fenêtre à utiliser: rank, dense_rank, row_number, percent_rank",
     )
     partition_by = graphene.List(
         graphene.NonNull(graphene.String),
         name="partitionBy",
-        description="Fields to partition by",
+        description="Champs pour le partitionnement",
     )
     order_by = graphene.List(
         graphene.NonNull(graphene.String),
         required=True,
         name="orderBy",
-        description="Fields to order by within partition (prefix with '-' for descending)",
+        description="Champs pour trier au sein de la partition (préfixer avec '-' pour descendant)",
     )
     # Filter conditions
-    rank = graphene.InputField(IntFilterInput, description="Filter by rank value")
+    rank = graphene.InputField(IntFilterInput, description="Filtrer par valeur de rang")
     percentile = graphene.InputField(
-        FloatFilterInput, description="Filter by percentile (0.0-1.0)"
+        FloatFilterInput, description="Filtrer par percentile (0.0-1.0)"
     )
 
 

@@ -17,30 +17,30 @@ class DateFilterInput(graphene.InputObjectType):
     Supports date comparisons, ranges, and convenient temporal filters.
     """
 
-    eq = graphene.Date(description="Equal to")
-    neq = graphene.Date(description="Not equal to")
-    gt = graphene.Date(description="After date")
-    gte = graphene.Date(description="On or after date")
-    lt = graphene.Date(description="Before date")
-    lte = graphene.Date(description="On or before date")
-    between = graphene.List(graphene.Date, description="Between [start, end] inclusive")
-    is_null = graphene.Boolean(name="isNull", description="Is null")
+    eq = graphene.Date(description="Égal à")
+    neq = graphene.Date(description="Différent de")
+    gt = graphene.Date(description="Après la date")
+    gte = graphene.Date(description="Le ou après la date")
+    lt = graphene.Date(description="Avant la date")
+    lte = graphene.Date(description="Le ou avant la date")
+    between = graphene.List(graphene.Date, description="Entre [début, fin] inclus")
+    is_null = graphene.Boolean(name="isNull", description="Est nul")
     # Temporal convenience filters
-    year = graphene.Int(description="Filter by year")
-    month = graphene.Int(description="Filter by month (1-12)")
-    day = graphene.Int(description="Filter by day of month")
+    year = graphene.Int(description="Filtrer par année")
+    month = graphene.Int(description="Filtrer par mois (1-12)")
+    day = graphene.Int(description="Filtrer par jour du mois")
     week_day = graphene.Int(
-        name="weekDay", description="Filter by day of week (1=Sunday, 7=Saturday)"
+        name="weekDay", description="Filtrer par jour de la semaine (1=Dimanche, 7=Samedi)"
     )
     # Relative date filters
-    today = graphene.Boolean(description="Is today")
-    yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(name="thisWeek", description="Is this week")
-    past_week = graphene.Boolean(name="pastWeek", description="Is past week")
-    this_month = graphene.Boolean(name="thisMonth", description="Is this month")
-    past_month = graphene.Boolean(name="pastMonth", description="Is past month")
-    this_year = graphene.Boolean(name="thisYear", description="Is this year")
-    past_year = graphene.Boolean(name="pastYear", description="Is past year")
+    today = graphene.Boolean(description="Est aujourd'hui")
+    yesterday = graphene.Boolean(description="Est hier")
+    this_week = graphene.Boolean(name="thisWeek", description="Est cette semaine")
+    past_week = graphene.Boolean(name="pastWeek", description="Est la semaine dernière")
+    this_month = graphene.Boolean(name="thisMonth", description="Est ce mois-ci")
+    past_month = graphene.Boolean(name="pastMonth", description="Est le mois dernier")
+    this_year = graphene.Boolean(name="thisYear", description="Est cette année")
+    past_year = graphene.Boolean(name="pastYear", description="Est l'année dernière")
 
 
 class DateTimeFilterInput(graphene.InputObjectType):
@@ -50,34 +50,34 @@ class DateTimeFilterInput(graphene.InputObjectType):
     Supports datetime comparisons, ranges, and convenient temporal filters.
     """
 
-    eq = graphene.DateTime(description="Equal to")
-    neq = graphene.DateTime(description="Not equal to")
-    gt = graphene.DateTime(description="After datetime")
-    gte = graphene.DateTime(description="On or after datetime")
-    lt = graphene.DateTime(description="Before datetime")
-    lte = graphene.DateTime(description="On or before datetime")
+    eq = graphene.DateTime(description="Égal à")
+    neq = graphene.DateTime(description="Différent de")
+    gt = graphene.DateTime(description="Après la date et l'heure")
+    gte = graphene.DateTime(description="Le ou après la date et l'heure")
+    lt = graphene.DateTime(description="Avant la date et l'heure")
+    lte = graphene.DateTime(description="Le ou avant la date et l'heure")
     between = graphene.List(
-        graphene.DateTime, description="Between [start, end] inclusive"
+        graphene.DateTime, description="Entre [début, fin] inclus"
     )
-    is_null = graphene.Boolean(name="isNull", description="Is null")
+    is_null = graphene.Boolean(name="isNull", description="Est nul")
     # Date-only filters (ignores time)
-    date = graphene.Date(description="Filter by date part only")
-    year = graphene.Int(description="Filter by year")
-    month = graphene.Int(description="Filter by month (1-12)")
-    day = graphene.Int(description="Filter by day of month")
+    date = graphene.Date(description="Filtrer par date uniquement")
+    year = graphene.Int(description="Filtrer par année")
+    month = graphene.Int(description="Filtrer par mois (1-12)")
+    day = graphene.Int(description="Filtrer par jour du mois")
     week_day = graphene.Int(
-        name="weekDay", description="Filter by day of week (1=Sunday, 7=Saturday)"
+        name="weekDay", description="Filtrer par jour de la semaine (1=Dimanche, 7=Samedi)"
     )
-    hour = graphene.Int(description="Filter by hour (0-23)")
+    hour = graphene.Int(description="Filtrer par heure (0-23)")
     # Relative date filters
-    today = graphene.Boolean(description="Is today")
-    yesterday = graphene.Boolean(description="Is yesterday")
-    this_week = graphene.Boolean(name="thisWeek", description="Is this week")
-    past_week = graphene.Boolean(name="pastWeek", description="Is past week")
-    this_month = graphene.Boolean(name="thisMonth", description="Is this month")
-    past_month = graphene.Boolean(name="pastMonth", description="Is past month")
-    this_year = graphene.Boolean(name="thisYear", description="Is this year")
-    past_year = graphene.Boolean(name="pastYear", description="Is past year")
+    today = graphene.Boolean(description="Est aujourd'hui")
+    yesterday = graphene.Boolean(description="Est hier")
+    this_week = graphene.Boolean(name="thisWeek", description="Est cette semaine")
+    past_week = graphene.Boolean(name="pastWeek", description="Est la semaine dernière")
+    this_month = graphene.Boolean(name="thisMonth", description="Est ce mois-ci")
+    past_month = graphene.Boolean(name="pastMonth", description="Est le mois dernier")
+    this_year = graphene.Boolean(name="thisYear", description="Est cette année")
+    past_year = graphene.Boolean(name="pastYear", description="Est l'année dernière")
 
 
 __all__ = [

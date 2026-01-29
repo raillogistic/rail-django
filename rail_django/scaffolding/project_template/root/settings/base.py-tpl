@@ -584,9 +584,14 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
             "mutation_field_allowlist": [
                 "login",
                 "register",
+                "refresh_token",
+                "logout",
+                "verify_mfa_login",
+                "revoke_session",
+                "revoke_all_sessions",
                 "setup_mfa",
                 "verify_mfa_setup",
-                "verify_mfa_login",
+                "disable_mfa",
             ],
         },
         "mutation_settings": {

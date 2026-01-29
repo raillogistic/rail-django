@@ -232,7 +232,7 @@ def generate_date_trunc_filters(
             fields[trunc_field_name] = graphene.InputField(
                 date_trunc_filter_input,
                 name=to_camel_case(trunc_field_name),
-                description=f"Filter {field_name} by truncated date parts",
+                description=f"Filtrer {field_name} par parties de date tronquées",
             )
 
     return fields
@@ -268,8 +268,8 @@ def generate_date_extract_filters(
                 extract_date_filter_input,
                 name=to_camel_case(extract_field_name),
                 description=(
-                    f"Filter {field_name} by extracted date parts "
-                    "(day_of_week, hour, etc.)"
+                    f"Filtrer {field_name} par parties de date extraites "
+                    "(jour de la semaine, heure, etc.)"
                 ),
             )
 
@@ -293,7 +293,7 @@ def generate_historical_filters(
     # Instance filter - filter by original instance IDs
     filters["instance_in"] = graphene.InputField(
         graphene.List(graphene.NonNull(graphene.ID)),
-        description="Filter by original instance IDs",
+        description="Filtrer par IDs d'instance d'origine",
     )
 
     # History type filter
@@ -303,7 +303,7 @@ def generate_historical_filters(
         if choices:
             filters["history_type_in"] = graphene.InputField(
                 graphene.List(graphene.NonNull(graphene.String)),
-                description="Filter by history type (create, update, delete)",
+                description="Filtrer par type d'historique (création, mise à jour, suppression)",
             )
     except FieldDoesNotExist:
         pass

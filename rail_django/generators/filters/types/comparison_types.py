@@ -37,28 +37,28 @@ class SubqueryFilterInput(graphene.InputObjectType):
         }
     """
 
-    relation = graphene.String(required=True, description="Related field name")
+    relation = graphene.String(required=True, description="Nom du champ lié")
     order_by = graphene.List(
         graphene.NonNull(graphene.String),
         name="orderBy",
-        description="Order by fields to determine which related record to use (prefix with '-' for desc)",
+        description="Champs de tri pour déterminer quel enregistrement lié utiliser (préfixer avec '-' pour descendant)",
     )
     filter = graphene.Argument(
         lambda: graphene.JSONString,
-        description="Additional filter on related records (JSON)",
+        description="Filtre supplémentaire sur les enregistrements liés (JSON)",
     )
     field = graphene.String(
-        required=True, description="Field from related record to compare"
+        required=True, description="Champ de l'enregistrement lié à comparer"
     )
     # Comparison conditions - apply to the subquery result
     # Using JSONString for flexibility since we don't know the field type
-    eq = graphene.JSONString(description="Subquery result equals (value as JSON)")
-    neq = graphene.JSONString(description="Subquery result not equals (value as JSON)")
-    gt = graphene.Float(description="Subquery result greater than")
-    gte = graphene.Float(description="Subquery result greater than or equal")
-    lt = graphene.Float(description="Subquery result less than")
-    lte = graphene.Float(description="Subquery result less than or equal")
-    is_null = graphene.Boolean(name="isNull", description="Subquery result is null")
+    eq = graphene.JSONString(description="Résultat de la sous-requête égal à (valeur en JSON)")
+    neq = graphene.JSONString(description="Résultat de la sous-requête différent de (valeur en JSON)")
+    gt = graphene.Float(description="Résultat de la sous-requête supérieur à")
+    gte = graphene.Float(description="Résultat de la sous-requête supérieur ou égal à")
+    lt = graphene.Float(description="Résultat de la sous-requête inférieur à")
+    lte = graphene.Float(description="Résultat de la sous-requête inférieur ou égal à")
+    is_null = graphene.Boolean(name="isNull", description="Le résultat de la sous-requête est nul")
 
 
 class ExistsFilterInput(graphene.InputObjectType):
@@ -83,14 +83,14 @@ class ExistsFilterInput(graphene.InputObjectType):
         }
     """
 
-    relation = graphene.String(required=True, description="Related field name")
+    relation = graphene.String(required=True, description="Nom du champ lié")
     filter = graphene.Argument(
         lambda: graphene.JSONString,
-        description="Filter condition for related records (JSON)",
+        description="Condition de filtrage pour les enregistrements liés (JSON)",
     )
     exists = graphene.Boolean(
         default_value=True,
-        description="True to check existence, False to check non-existence",
+        description="Vrai pour vérifier l'existence, Faux pour vérifier la non-existence",
     )
 
 
@@ -137,24 +137,24 @@ class FieldCompareFilterInput(graphene.InputObjectType):
 
     left = graphene.String(
         required=True,
-        description="Left-hand field name to compare",
+        description="Nom du champ de gauche à comparer",
     )
     operator = graphene.Field(
         CompareOperatorEnum,
         required=True,
-        description="Comparison operator: eq, neq, gt, gte, lt, lte",
+        description="Opérateur de comparaison : eq, neq, gt, gte, lt, lte",
     )
     right = graphene.String(
         required=True,
-        description="Right-hand field name to compare against",
+        description="Nom du champ de droite à comparer",
     )
     right_multiplier = graphene.Float(
         name="rightMultiplier",
-        description="Optional multiplier for the right-hand field (e.g., 1.5 for right * 1.5)",
+        description="Multiplicateur optionnel pour le champ de droite (ex: 1.5 pour droite * 1.5)",
     )
     right_offset = graphene.Float(
         name="rightOffset",
-        description="Optional offset to add to the right-hand field (e.g., 10 for right + 10)",
+        description="Décalage optionnel à ajouter au champ de droite (ex: 10 pour droite + 10)",
     )
 
 
@@ -201,24 +201,24 @@ class DateTruncFilterInput(graphene.InputObjectType):
     precision = graphene.Field(
         DateTruncPrecisionEnum,
         required=True,
-        description="Truncation precision: year, quarter, month, week, day, hour, minute",
+        description="Précision de troncature : année, trimestre, mois, semaine, jour, heure, minute",
     )
     # Filter by specific value
     value = graphene.String(
-        description="Date value to match (ISO format: 2024-01-01 or 2024-03 for month)",
+        description="Valeur de date à faire correspondre (format ISO : 2024-01-01 ou 2024-03 pour le mois)",
     )
-    year = graphene.Int(description="Filter by year")
-    quarter = graphene.Int(description="Filter by quarter (1-4)")
-    month = graphene.Int(description="Filter by month (1-12)")
-    week = graphene.Int(description="Filter by week number (1-53)")
+    year = graphene.Int(description="Filtrer par année")
+    quarter = graphene.Int(description="Filtrer par trimestre (1-4)")
+    month = graphene.Int(description="Filtrer par mois (1-12)")
+    week = graphene.Int(description="Filtrer par numéro de semaine (1-53)")
     # Relative period filters
     this_period = graphene.Boolean(
         name="thisPeriod",
-        description="Filter by current period (this year/quarter/month/week/day)",
+        description="Filtrer par la période actuelle (cette année/trimestre/mois/semaine/jour)",
     )
     last_period = graphene.Boolean(
         name="lastPeriod",
-        description="Filter by previous period (last year/quarter/month/week/day)",
+        description="Filtrer par la période précédente (année/trimestre/mois/semaine/jour dernier)",
     )
 
 
@@ -246,55 +246,55 @@ class ExtractDateFilterInput(graphene.InputObjectType):
 
     year = graphene.InputField(
         IntFilterInput,
-        description="Filter by year (e.g., 2024)",
+        description="Filtrer par année (ex: 2024)",
     )
     month = graphene.InputField(
         IntFilterInput,
-        description="Filter by month (1-12)",
+        description="Filtrer par mois (1-12)",
     )
     day = graphene.InputField(
         IntFilterInput,
-        description="Filter by day of month (1-31)",
+        description="Filtrer par jour du mois (1-31)",
     )
     quarter = graphene.InputField(
         IntFilterInput,
-        description="Filter by quarter (1-4)",
+        description="Filtrer par trimestre (1-4)",
     )
     week = graphene.InputField(
         IntFilterInput,
-        description="Filter by ISO week number (1-53)",
+        description="Filtrer par numéro de semaine ISO (1-53)",
     )
     day_of_week = graphene.InputField(
         IntFilterInput,
         name="dayOfWeek",
-        description="Filter by day of week (1=Sunday, 7=Saturday)",
+        description="Filtrer par jour de la semaine (1=Dimanche, 7=Samedi)",
     )
     day_of_year = graphene.InputField(
         IntFilterInput,
         name="dayOfYear",
-        description="Filter by day of year (1-366)",
+        description="Filtrer par jour de l'année (1-366)",
     )
     iso_week_day = graphene.InputField(
         IntFilterInput,
         name="isoWeekDay",
-        description="Filter by ISO week day (1=Monday, 7=Sunday)",
+        description="Filtrer par jour de semaine ISO (1=Lundi, 7=Dimanche)",
     )
     iso_year = graphene.InputField(
         IntFilterInput,
         name="isoYear",
-        description="Filter by ISO week-numbering year",
+        description="Filtrer par année de numérotation de semaine ISO",
     )
     hour = graphene.InputField(
         IntFilterInput,
-        description="Filter by hour (0-23)",
+        description="Filtrer par heure (0-23)",
     )
     minute = graphene.InputField(
         IntFilterInput,
-        description="Filter by minute (0-59)",
+        description="Filtrer par minute (0-59)",
     )
     second = graphene.InputField(
         IntFilterInput,
-        description="Filter by second (0-59)",
+        description="Filtrer par seconde (0-59)",
     )
 
 
@@ -337,20 +337,20 @@ class FullTextSearchInput(graphene.InputObjectType):
         }
     """
 
-    query = graphene.String(required=True, description="Search query")
+    query = graphene.String(required=True, description="Requête de recherche")
     fields = graphene.List(
         graphene.NonNull(graphene.String),
-        description="Fields to search (supports relations: 'author__name')",
+        description="Champs à rechercher (supporte les relations : 'auteur__nom')",
     )
-    config = graphene.String(description="Text search configuration (Postgres only)")
+    config = graphene.String(description="Configuration de la recherche textuelle (Postgres uniquement)")
     rank_threshold = graphene.Float(
         name="rankThreshold",
-        description="Minimum search rank (0.0-1.0)",
+        description="Rang de recherche minimum (0.0-1.0)",
     )
     search_type = graphene.Field(
         lambda: FullTextSearchTypeEnum,
         name="searchType",
-        description="Search type: plain, phrase, websearch, raw",
+        description="Type de recherche : plain, phrase, websearch, raw",
         default_value=FullTextSearchTypeEnum.WEBSEARCH,
     )
 

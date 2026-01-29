@@ -17,16 +17,16 @@ class JSONFilterInput(graphene.InputObjectType):
     Filter input for JSON fields.
     """
 
-    eq = graphene.JSONString(description="Exact JSON match")
-    is_null = graphene.Boolean(name="isNull", description="Is null")
-    has_key = graphene.String(name="hasKey", description="Has key")
+    eq = graphene.JSONString(description="Correspondance JSON exacte")
+    is_null = graphene.Boolean(name="isNull", description="Est nul")
+    has_key = graphene.String(name="hasKey", description="A la clé")
     has_keys = graphene.List(
-        graphene.NonNull(graphene.String), name="hasKeys", description="Has all keys"
+        graphene.NonNull(graphene.String), name="hasKeys", description="A toutes les clés"
     )
     has_any_keys = graphene.List(
         graphene.NonNull(graphene.String),
         name="hasAnyKeys",
-        description="Has any of keys",
+        description="A n'importe quelle clé",
     )
 
 
@@ -39,19 +39,19 @@ class ArrayFilterInput(graphene.InputObjectType):
 
     contains = graphene.List(
         graphene.NonNull(graphene.String),
-        description="Array contains all these values",
+        description="Le tableau contient toutes ces valeurs",
     )
     contained_by = graphene.List(
         graphene.NonNull(graphene.String),
-        description="Array is contained by these values",
+        description="Le tableau est contenu par ces valeurs",
     )
     overlaps = graphene.List(
         graphene.NonNull(graphene.String),
         name="overlaps",
-        description="Array overlaps with any of these values",
+        description="Le tableau chevauche n'importe laquelle de ces valeurs",
     )
-    length = graphene.InputField(IntFilterInput, description="Filter by array length")
-    is_null = graphene.Boolean(name="isNull", description="Array is null")
+    length = graphene.InputField(IntFilterInput, description="Filtrer par longueur du tableau")
+    is_null = graphene.Boolean(name="isNull", description="Le tableau est nul")
 
 
 class CountFilterInput(graphene.InputObjectType):
@@ -61,12 +61,12 @@ class CountFilterInput(graphene.InputObjectType):
     Used for filtering by the count of related objects.
     """
 
-    eq = graphene.Int(description="Count equals")
-    neq = graphene.Int(description="Count not equals")
-    gt = graphene.Int(description="Count greater than")
-    gte = graphene.Int(description="Count greater than or equal to")
-    lt = graphene.Int(description="Count less than")
-    lte = graphene.Int(description="Count less than or equal to")
+    eq = graphene.Int(description="Compte égal à")
+    neq = graphene.Int(description="Compte différent de")
+    gt = graphene.Int(description="Compte supérieur à")
+    gte = graphene.Int(description="Compte supérieur ou égal à")
+    lt = graphene.Int(description="Compte inférieur à")
+    lte = graphene.Int(description="Compte inférieur ou égal à")
 
 
 __all__ = [
