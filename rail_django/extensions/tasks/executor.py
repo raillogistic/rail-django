@@ -15,6 +15,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from graphene.types.generic import GenericScalar
 
+from ...generators.subscriptions.utils import RailSubscription
 from .models import TaskExecution, TaskStatus
 from .config import get_task_settings
 from .utils import (
@@ -52,14 +53,10 @@ def _get_task_subscription_class() -> Optional[type]:
     global _TASK_SUBSCRIPTION_CLASS
     if _TASK_SUBSCRIPTION_CLASS is not None:
         return _TASK_SUBSCRIPTION_CLASS
-    try:
-        import channels_graphql_ws  # type: ignore
-    except Exception:
-        return None
 
     from .queries import TaskExecutionPayloadType
 
-    class TaskUpdatedSubscription(channels_graphql_ws.Subscription):
+    class TaskUpdatedSubscription(RailSubscription):
         task_id = graphene.ID(required=True)
         status = graphene.String(required=True)
         progress = graphene.Int()
@@ -81,10 +78,10 @@ def _get_task_subscription_class() -> Optional[type]:
         def publish(payload, info, task_id: str):
             task = TaskExecution.objects.filter(pk=task_id).first()
             if not task or _task_is_expired(task):
-                return channels_graphql_ws.Subscription.SKIP
+                return RailSubscription.SKIP
             schema_name = _resolve_schema_name(info)
             if not _task_access_allowed(info.context, task, schema_name):
-                return channels_graphql_ws.Subscription.SKIP
+                return RailSubscription.SKIP
             return {
                 "task_id": str(task.id),
                 "status": task.status,

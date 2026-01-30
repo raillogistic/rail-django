@@ -52,7 +52,7 @@ requires-python = ">=3.11"
 [project.optional-dependencies]
 subscriptions = [
     "channels>=4.0.0",
-    "channels-graphql-ws>=0.9.0",
+    "daphne>=4.0.0",
 ]
 
 [project.scripts]

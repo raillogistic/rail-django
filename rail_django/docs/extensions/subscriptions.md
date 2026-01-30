@@ -65,7 +65,7 @@ import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from rail_django.subscriptions import GraphQLWebsocketConsumer
+from rail_django.extensions.subscriptions import get_subscription_consumer
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'my_project.settings')
 
@@ -73,7 +73,7 @@ application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket": AuthMiddlewareStack(
         URLRouter([
-            path("graphql/", GraphQLWebsocketConsumer.as_asgi()),
+            path("graphql/", get_subscription_consumer()),
         ])
     ),
 })
@@ -146,7 +146,7 @@ register_subscription(MySubscription)
 
 To broadcast to this subscription:
 ```python
-from rail_django.subscriptions import broadcast
+from rail_django.extensions.subscriptions import broadcast
 broadcast("custom_notifications", {"custom_event": "Hello World!"})
 ```
 

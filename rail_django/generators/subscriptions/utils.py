@@ -5,8 +5,9 @@ Internal utility functions for subscription generation.
 import copy
 import hashlib
 import re
+import logging
 from datetime import date, datetime
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 import graphene
 from django.contrib.auth.models import AnonymousUser
@@ -15,18 +16,48 @@ from django.utils import timezone
 
 from ...security.field_permissions import mask_sensitive_fields
 
+logger = logging.getLogger(__name__)
+
 _GROUP_NAME_SAFE_RE = re.compile(r"[^0-9A-Za-z_.-]")
 
 
+class RailSubscription(graphene.ObjectType):
+    """
+    Base class for Rail Django subscriptions.
+    Replaces channels_graphql_ws.Subscription to remove dependency.
+    """
+    
+    # Marker object to indicate a broadcast should be skipped for a specific client
+    SKIP = object()
+
+    @classmethod
+    def broadcast(cls, group: str, payload: Any) -> None:
+        """
+        Broadcast a payload to a named group.
+        Consumers listening to this group will trigger the 'publish' method.
+        """
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    group,
+                    {
+                        "type": "graphql.subscription.broadcast",
+                        "payload": payload,
+                        "group": group
+                    }
+                )
+        except ImportError:
+            logger.warning("Channels not installed, cannot broadcast subscription")
+        except Exception as e:
+            logger.error(f"Failed to broadcast subscription event: {e}")
+
+
 def _get_subscription_base() -> type:
-    try:
-        import channels_graphql_ws  # type: ignore
-    except Exception as exc:
-        raise ImportError(
-            "channels-graphql-ws is required for subscriptions. "
-            "Install it with: pip install channels-graphql-ws"
-        ) from exc
-    return channels_graphql_ws.Subscription
+    return RailSubscription
 
 
 def _sanitize_group_name(value: str, max_length: int = 90) -> str:

@@ -50,7 +50,7 @@ New schema registry endpoints:
 
 ## Optional Dependencies
 
-- `channels-graphql-ws` for subscriptions.
+- `Django Channels` for subscriptions.
 - `sentry-sdk` and `opentelemetry-api` for observability plugins.
 
 ## Notes

@@ -105,7 +105,7 @@ class SubscriptionGenerator:
         model_type: type[graphene.ObjectType],
         event: str,
         filter_input: Optional[type[graphene.InputObjectType]],
-    ) -> type:
+    ) -> tuple[type, dict[str, graphene.Argument]]:
         base_class = _get_subscription_base()
         group_name = _build_group_name(self.schema_name, model._meta.label_lower, event)
         graphql_meta = get_model_graphql_meta(model)
@@ -118,7 +118,6 @@ class SubscriptionGenerator:
                 filter_input, required=False, description="Filter events using model field lookups.",
             )
 
-        arguments_type = type("Arguments", (), arguments)
         skip_marker = getattr(base_class, "SKIP", None)
 
         def _skip(): return skip_marker
@@ -130,6 +129,11 @@ class SubscriptionGenerator:
             return [group_name]
 
         def publish(payload, info, filters: Optional[dict[str, Any]] = None, **kwargs):
+            # Check if we are in publication phase
+            # If not (e.g. initial subscribe call), return None
+            if not getattr(info.context, "is_publication", False):
+                return None
+
             instance = _build_instance_from_payload(model, payload)
             if instance is None: return _skip()
             try: self._ensure_authentication(info)
@@ -143,12 +147,15 @@ class SubscriptionGenerator:
                 return _skip()
 
             instance = _apply_field_masks(instance, info, model)
-            return {"event": event, "node": instance, "id": getattr(instance, "pk", None)}
+            return {
+                "event": event,
+                "node": instance,
+                "id": str(getattr(instance, "pk", None) or ""),
+            }
 
         class_name = f"{model.__name__}{event.title()}Subscription"
         attrs = {
             "__doc__": f"{model.__name__} {event} subscription.",
-            "Arguments": arguments_type,
             "event": graphene.String(required=True),
             "node": graphene.Field(model_type),
             "id": graphene.ID(required=True),
@@ -156,10 +163,17 @@ class SubscriptionGenerator:
             "model_class": model,
             "event_type": event,
             "group_name": group_name,
-            "subscribe": staticmethod(subscribe),
-            "publish": staticmethod(publish),
+            "resolve_event": lambda root, info, **kwargs: root.get("event"),
+            "resolve_node": lambda root, info, **kwargs: root.get("node"),
+            "resolve_id": lambda root, info, **kwargs: root.get("id"),
         }
-        return type(class_name, (base_class,), attrs)
+        
+        # We store 'subscribe' and 'publish' as attributes for the consumer to find
+        subscription_class = type(class_name, (base_class,), attrs)
+        subscription_class.subscribe = staticmethod(subscribe)
+        subscription_class.publish = staticmethod(publish)
+        
+        return subscription_class, arguments
 
     def generate_model_subscriptions(self, model: type[models.Model]) -> dict[str, graphene.Field]:
         if not self.settings.enable_subscriptions or not self._model_is_allowed(model): return {}
@@ -196,9 +210,27 @@ class SubscriptionGenerator:
         subscriptions: dict[str, graphene.Field] = {}
         for event, enabled in event_config.items():
             if not enabled: continue
-            subscription_class = self._build_subscription_class(model, model_type, event, filter_input)
+            subscription_class, arguments = self._build_subscription_class(model, model_type, event, filter_input)
             field_name = f"{model.__name__.lower()}_{event}"
-            subscriptions[field_name] = subscription_class.Field()
+            
+            # The field resolver logic:
+            # 1. If is_subscription=True context, call 'subscribe' to get groups.
+            # 2. If is_publication=True context, call 'publish' to get data.
+            def create_field_resolver(s_class):
+                def resolver(root, info, **kwargs):
+                    context = info.context
+                    if getattr(context, "is_subscription", False):
+                        return s_class.subscribe(root, info, **kwargs)
+                    if getattr(context, "is_publication", False):
+                        return s_class.publish(root, info, **kwargs)
+                    return None
+                return resolver
+
+            subscriptions[field_name] = graphene.Field(
+                subscription_class,
+                args=arguments,
+                resolver=create_field_resolver(subscription_class)
+            )
             register_subscription(self.schema_name, model._meta.label_lower, event, subscription_class)
         return subscriptions
 

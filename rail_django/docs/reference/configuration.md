@@ -242,7 +242,7 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
 ## Subscription settings
 
 Auto-generated subscriptions are enabled by default and require
-`channels-graphql-ws` for WebSocket support.
+`Django Channels` for WebSocket support.
 Disable by setting `subscription_settings.enable_subscriptions` to `False`.
 Full reference: `../guides/subscriptions.md`.
 
