@@ -50,20 +50,11 @@ from .exporting import (
     export_model_to_excel,
 )
 
-# Model metadata schema for rich frontend interfaces
+# Model schema for rich frontend interfaces
 from .metadata import (
-    FieldMetadataType,
-    ModelMetadataExtractor,
-    ModelMetadataQuery,
-    ModelMetadataType,
-    RelationshipMetadataType,
-)
-
-# Model schema V2 for rich frontend interfaces
-from .metadata_v2 import (
     FieldSchemaType,
     ModelSchemaExtractor,
-    ModelSchemaQueryV2,
+    ModelSchemaQuery,
     ModelSchemaType,
     RelationshipSchemaType,
 )
@@ -143,14 +134,8 @@ __all__ = [
     "ModelExporter",
     "export_model_to_csv",
     "export_model_to_excel",
-    # Model metadata schema
-    "ModelMetadataQuery",
-    "ModelMetadataType",
-    "FieldMetadataType",
-    "RelationshipMetadataType",
-    "ModelMetadataExtractor",
-    # Model schema V2
-    "ModelSchemaQueryV2",
+    # Model schema
+    "ModelSchemaQuery",
     "ModelSchemaType",
     "FieldSchemaType",
     "RelationshipSchemaType",

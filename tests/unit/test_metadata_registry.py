@@ -1,7 +1,7 @@
 
 from django.db import models
 from django.test import TestCase
-from rail_django.extensions.metadata_v2.mapping import registry, FieldTypeRegistry
+from rail_django.extensions.metadata.mapping import registry, FieldTypeRegistry
 
 class CustomField(models.Field):
     pass

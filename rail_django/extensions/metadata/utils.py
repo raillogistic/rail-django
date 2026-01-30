@@ -15,7 +15,7 @@ from django.db import models
 
 def get_model_version(app: str, model: str) -> str:
     """Get the current version token for a model's metadata."""
-    key = f"metadata_v2_version:{app}:{model}"
+    key = f"metadata_version:{app}:{model}"
     version = cache.get(key)
     if not version:
         version = str(int(time.time() * 1000))
@@ -28,7 +28,7 @@ def _get_cache_key(
 ) -> str:
     """Build cache key for model schema."""
     version = get_model_version(app, model)
-    key = f"metadata_v2:{version}:{app}:{model}"
+    key = f"metadata:{version}:{app}:{model}"
 
     if object_id:
         key = f"{key}:obj:{object_id}"
@@ -70,11 +70,11 @@ def set_cached_schema(
     cache.set(key, data, timeout=3600)
 
 
-def invalidate_metadata_v2_cache(app: str = None, model: str = None) -> None:
+def invalidate_metadata_cache(app: str = None, model: str = None) -> None:
     """Invalidate metadata v2 cache."""
     if app and model:
         # Bump version for specific model
-        key = f"metadata_v2_version:{app}:{model}"
+        key = f"metadata_version:{app}:{model}"
         new_version = str(int(time.time() * 1000))
         cache.set(key, new_version, timeout=None)
     else:

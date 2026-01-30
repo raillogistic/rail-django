@@ -6,7 +6,7 @@ This module contains Graphene ObjectType classes for model schema introspection.
 
 import graphene
 
-class ChoiceTypeV2(graphene.ObjectType):
+class ChoiceType(graphene.ObjectType):
     """Choice option for select fields."""
 
     value = graphene.String(required=True)
@@ -64,7 +64,7 @@ class FieldSchemaType(graphene.ObjectType):
     max_digits = graphene.Int()
 
     # Choices
-    choices = graphene.List(ChoiceTypeV2)
+    choices = graphene.List(ChoiceType)
 
     # Default
     default_value = graphene.JSONString()
@@ -154,7 +154,7 @@ class InputFieldSchemaType(graphene.ObjectType):
     required = graphene.Boolean(required=True)
     default_value = graphene.JSONString()
     description = graphene.String()
-    choices = graphene.List(ChoiceTypeV2)
+    choices = graphene.List(ChoiceType)
     related_model = graphene.String()
 
 
@@ -178,12 +178,12 @@ class FilterOptionSchemaType(graphene.ObjectType):
     lookup = graphene.String(required=True)
     label = graphene.String(required=True, description="Human-readable label (e.g. 'Equals')")
     help_text = graphene.String()
-    choices = graphene.List(ChoiceTypeV2)
+    choices = graphene.List(ChoiceType)
     graphql_type = graphene.String(description="GraphQL type for this operator")
     is_list = graphene.Boolean(description="Whether this operator accepts a list")
 
 
-class FilterStyleEnumV2(graphene.Enum):
+class FilterStyleEnum(graphene.Enum):
     """Filter input style."""
 
     FLAT = "flat"
@@ -210,7 +210,7 @@ class FilterPresetType(graphene.ObjectType):
     filter_json = graphene.JSONString(required=True)
 
 
-class FilterSchemaTypeV2(graphene.ObjectType):
+class FilterSchemaType(graphene.ObjectType):
     """Filter field schema with support for both flat and nested styles."""
 
     field_name = graphene.String(required=True)
@@ -237,10 +237,10 @@ class ComputedFilterSchemaType(graphene.ObjectType):
     description = graphene.String()
 
 
-class FilterConfigTypeV2(graphene.ObjectType):
+class FilterConfigType(graphene.ObjectType):
     """Overall filter configuration for a model."""
 
-    style = graphene.Field(FilterStyleEnumV2, required=True)
+    style = graphene.Field(FilterStyleEnum, required=True)
     argument_name = graphene.String(
         required=True, description="'where' for nested filtering"
     )
@@ -325,9 +325,9 @@ class ModelSchemaType(graphene.ObjectType):
     relationships = graphene.List(RelationshipSchemaType, required=True)
 
     # Filters
-    filters = graphene.List(FilterSchemaTypeV2, required=True)
+    filters = graphene.List(FilterSchemaType, required=True)
     filter_config = graphene.Field(
-        FilterConfigTypeV2, description="Filter style configuration"
+        FilterConfigType, description="Filter style configuration"
     )
     relation_filters = graphene.List(
         RelationFilterSchemaType,

@@ -2,7 +2,7 @@
 from django.db import models
 from django.test import TestCase
 from django.utils.translation import activate, deactivate
-from rail_django.extensions.metadata_v2.filter_extractor import FilterExtractorMixin
+from rail_django.extensions.metadata.filter_extractor import FilterExtractorMixin
 from unittest.mock import MagicMock, patch
 import graphene
 

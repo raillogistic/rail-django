@@ -1,208 +1,74 @@
-"""Metadata extension package.
+"""
+Metadata: Rich Model Introspection for Frontend UI Generation.
 
-This package provides metadata types and utilities for exposing
-Django model information via GraphQL. It supports comprehensive
-metadata extraction for models, forms, and tables with caching,
-signal-based invalidation, and cache warmup utilities.
-
-Package Structure:
-    - types/: Dataclasses and GraphQL types for metadata
-    - extractors/: Model, form, and table metadata extractors
-    - cache: Caching utilities and decorators
-    - queries: GraphQL query definitions
-    - signals: Cache invalidation signal handlers
-    - warmup: Cache warmup utilities
-
-Example Usage:
-    from rail_django.extensions.metadata import (
-        # Extractors
-        ModelMetadataExtractor,
-        ModelFormMetadataExtractor,
-        ModelTableExtractor,
-        # GraphQL types
-        ModelMetadataType,
-        FieldMetadataType,
-        # Caching
-        cache_metadata,
-        invalidate_metadata_cache,
-        # Query
-        ModelMetadataQuery,
-    )
+This package provides comprehensive metadata exposure for Django models,
+enabling frontends to build forms, tables, and detail views automatically.
 """
 
-# Types (dataclasses and GraphQL types)
+from .queries import ModelSchemaQuery
+from .extractor import ModelSchemaExtractor
 from .types import (
-    # Dataclasses
-    FieldMetadata,
-    FieldPermissionMetadata,
-    FormFieldMetadata,
-    FormRelationshipMetadata,
-    InputFieldMetadata,
-    ModelFormMetadata,
-    ModelMetadata,
-    ModelPermissionMatrix,
-    ModelTableMetadata,
-    MutationMetadata,
-    RelationshipMetadata,
-    TableFieldMetadata,
-    TemplateActionMetadata,
-    # GraphQL types - filter and input types
     ChoiceType,
-    FieldPermissionMetadataType,
+    ComputedFilterSchemaType,
+    FieldGroupType,
+    FieldSchemaType,
     FilterConfigType,
-    FilterFieldType,
-    FilterOptionType,
+    FilterOptionSchemaType,
     FilterPresetType,
     FilterSchemaType,
     FilterStyleEnum,
-    InputFieldMetadataType,
-    ModelPermissionMatrixType,
-    MutationMetadataType,
-    RelationFilterType,
-    # GraphQL types - model, form, and table types
-    FieldMetadataType,
-    FormFieldMetadataType,
-    FormRelationshipMetadataType,
-    ModelFormMetadataType,
-    ModelMetadataType,
-    ModelTableType,
-    RelationshipMetadataType,
-    TableFieldMetadataType,
-    TemplateActionMetadataType,
+    FSMTransitionType,
+    InputFieldSchemaType,
+    ModelInfoType,
+    ModelPermissionsType,
+    ModelSchemaType,
+    MutationSchemaType,
+    RelationFilterSchemaType,
+    RelationshipSchemaType,
+    TemplateInfoType,
+    ValidatorInfoType,
 )
-
-# Extractors
-from .extractors import (
-    # Main extractors
-    ModelMetadataExtractor,
-    ModelFormMetadataExtractor,
-    ModelTableExtractor,
-    # Base classes
-    BaseMetadataExtractor,
-    JsonSerializerMixin,
-    TranslationMixin,
-    # Extraction mixins
-    ModelFieldExtractionMixin,
-    MutationExtractionMixin,
-    InputFieldExtractionMixin,
-    FormFieldExtractionMixin,
-    TableFieldExtractionMixin,
-    TableFilterExtractionMixin,
-    # Helper functions
-    _build_field_permission_snapshot,
-    _build_model_permission_matrix,
-    _is_fsm_field_instance,
-    _relationship_cardinality,
-)
-
-# Cache utilities
-from .cache import (
-    cache_metadata,
+from .utils import (
+    _classify_field,
+    _get_cache_key,
+    _get_fsm_transitions,
+    _is_fsm_field,
     invalidate_metadata_cache,
-    invalidate_cache_on_startup,
 )
-
-# GraphQL queries
-from .queries import (
-    AvailableModelType,
-    ModelMetadataQuery,
-    resolve_filter_schema,
-)
-
-# Signal handlers
-from .signals import (
-    invalidate_model_metadata_cache_on_save,
-    invalidate_model_metadata_cache_on_delete,
-    invalidate_m2m_metadata_cache,
-    reset_migration_context_cache,
-)
-
-# Cache warmup utilities
-from .warmup import (
-    warm_metadata_cache,
-    warm_table_metadata_cache,
-    get_cache_stats,
-    get_metadata_cache_stats,
-    get_combined_cache_stats,
-    clear_all_caches,
-)
-
+from .mapping import FieldTypeRegistry, registry
 
 __all__ = [
-    # Dataclasses
-    "FieldMetadata",
-    "FieldPermissionMetadata",
-    "FormFieldMetadata",
-    "FormRelationshipMetadata",
-    "InputFieldMetadata",
-    "ModelFormMetadata",
-    "ModelMetadata",
-    "ModelPermissionMatrix",
-    "ModelTableMetadata",
-    "MutationMetadata",
-    "RelationshipMetadata",
-    "TableFieldMetadata",
-    "TemplateActionMetadata",
-    # GraphQL types - filter and input
+    # Queries
+    "ModelSchemaQuery",
+    # Extractor
+    "ModelSchemaExtractor",
+    # Types
     "ChoiceType",
-    "FieldPermissionMetadataType",
+    "ComputedFilterSchemaType",
+    "FieldGroupType",
+    "FieldSchemaType",
     "FilterConfigType",
-    "FilterFieldType",
-    "FilterOptionType",
+    "FilterOptionSchemaType",
     "FilterPresetType",
     "FilterSchemaType",
     "FilterStyleEnum",
-    "InputFieldMetadataType",
-    "ModelPermissionMatrixType",
-    "MutationMetadataType",
-    "RelationFilterType",
-    # GraphQL types - model, form, table
-    "FieldMetadataType",
-    "FormFieldMetadataType",
-    "FormRelationshipMetadataType",
-    "ModelFormMetadataType",
-    "ModelMetadataType",
-    "ModelTableType",
-    "RelationshipMetadataType",
-    "TableFieldMetadataType",
-    "TemplateActionMetadataType",
-    # Extractors
-    "ModelMetadataExtractor",
-    "ModelFormMetadataExtractor",
-    "ModelTableExtractor",
-    "BaseMetadataExtractor",
-    "JsonSerializerMixin",
-    "TranslationMixin",
-    # Extraction mixins
-    "ModelFieldExtractionMixin",
-    "MutationExtractionMixin",
-    "InputFieldExtractionMixin",
-    "FormFieldExtractionMixin",
-    "TableFieldExtractionMixin",
-    "TableFilterExtractionMixin",
-    # Cache utilities
-    "cache_metadata",
+    "FSMTransitionType",
+    "InputFieldSchemaType",
+    "ModelInfoType",
+    "ModelPermissionsType",
+    "ModelSchemaType",
+    "MutationSchemaType",
+    "RelationFilterSchemaType",
+    "RelationshipSchemaType",
+    "TemplateInfoType",
+    "ValidatorInfoType",
+    # Utils
     "invalidate_metadata_cache",
-    "invalidate_cache_on_startup",
-    # GraphQL queries
-    "AvailableModelType",
-    "ModelMetadataQuery",
-    "resolve_filter_schema",
-    # Signal handlers
-    "invalidate_model_metadata_cache_on_save",
-    "invalidate_model_metadata_cache_on_delete",
-    "invalidate_m2m_metadata_cache",
-    "reset_migration_context_cache",
-    # Cache warmup
-    "warm_metadata_cache",
-    "warm_table_metadata_cache",
-    "get_cache_stats",
-    "get_metadata_cache_stats",
-    "get_combined_cache_stats",
-    "clear_all_caches",
-    # Internal helpers (exported for backward compatibility)
-    "_build_field_permission_snapshot",
-    "_build_model_permission_matrix",
-    "_is_fsm_field_instance",
-    "_relationship_cardinality",
+    "_get_cache_key",
+    "_classify_field",
+    "_get_fsm_transitions",
+    "_is_fsm_field",
+    # Mapping
+    "FieldTypeRegistry",
+    "registry",
 ]

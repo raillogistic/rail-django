@@ -384,7 +384,6 @@ class ExtensionsMixin:
                 self._integrate_health_queries(query_attrs)
                 self._integrate_task_queries(query_attrs)
                 self._integrate_metadata_queries(query_attrs)
-                self._integrate_metadata_v2_queries(query_attrs)
 
                 # Create Query type
                 query_type = self._create_query_type(query_attrs)

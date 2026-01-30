@@ -46,7 +46,7 @@ class AppConfig(BaseAppConfig):
         self._prebuild_schemas_on_startup()
 
         # Invalidate metadata cache on startup
-        self._invalidate_cache_on_startup()
+        # self._invalidate_cache_on_startup()
 
         logger.info("Rail Django GraphQL library initialized successfully")
 
@@ -161,16 +161,16 @@ class AppConfig(BaseAppConfig):
             from .core.registry import schema_registry
 
             schema_registry.discover_schemas()
-            schema_names = schema_registry.get_schema_names(enabled_only=True) or ["gql"]
+            schema_names = schema_registry.get_schema_names(enabled_only=True) or [
+                "gql"
+            ]
             for schema_name in schema_names:
                 schema_settings = SchemaSettings.from_schema(schema_name)
                 if schema_settings.prebuild_on_startup:
                     builder = get_schema_builder(schema_name)
                     # Build the schema once at startup
                     builder.get_schema()
-                    logger.info(
-                        "Prebuilt GraphQL schema '%s' on startup", schema_name
-                    )
+                    logger.info("Prebuilt GraphQL schema '%s' on startup", schema_name)
         except ImportError as e:
             logger.debug(f"Could not prebuild schema on startup: {e}")
         except Exception as e:
@@ -198,15 +198,8 @@ class AppConfig(BaseAppConfig):
 
     def _invalidate_cache_on_startup(self):
         """Invalidate metadata cache on application startup."""
-        try:
-            from .extensions.metadata import invalidate_cache_on_startup
-
-            invalidate_cache_on_startup()
-            logger.info("Metadata cache invalidated on startup")
-        except ImportError:
-            logger.warning("Could not import cache invalidation function")
-        except Exception as e:
-            logger.error(f"Error invalidating cache on startup: {e}")
+        # Metadata V2 cache handles versioning automatically and doesn't require global invalidation
+        logger.info("Metadata cache invalidation handled by V2 versioning")
 
 
 # Backward compatibility alias

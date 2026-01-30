@@ -2,7 +2,7 @@
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.db import models
 from django.test import TestCase
-from rail_django.extensions.metadata_v2.field_extractor import FieldExtractorMixin
+from rail_django.extensions.metadata.field_extractor import FieldExtractorMixin
 
 class ValidatorTestModel(models.Model):
     age = models.IntegerField(validators=[MinValueValidator(18), MaxValueValidator(100)])
@@ -24,7 +24,7 @@ class TestValidatorExtraction(TestCase):
         # _classify_field is imported in field_extractor.py
 
         from unittest.mock import patch
-        with patch('rail_django.extensions.metadata_v2.field_extractor._classify_field') as mock_classify:
+        with patch('rail_django.extensions.metadata.field_extractor._classify_field') as mock_classify:
             mock_classify.return_value = {
                 "is_primary_key": False,
                 "is_indexed": False,
@@ -62,7 +62,7 @@ class TestValidatorExtraction(TestCase):
         code_field = ValidatorTestModel._meta.get_field('code')
 
         from unittest.mock import patch
-        with patch('rail_django.extensions.metadata_v2.field_extractor._classify_field') as mock_classify:
+        with patch('rail_django.extensions.metadata.field_extractor._classify_field') as mock_classify:
             mock_classify.return_value = {
                 "is_primary_key": False,
                 "is_indexed": False,

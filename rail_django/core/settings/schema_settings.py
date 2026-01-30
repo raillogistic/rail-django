@@ -4,12 +4,18 @@ SchemaSettings implementation.
 
 from dataclasses import dataclass, field
 from typing import List, Optional
-from .base import _get_library_defaults, _get_global_settings, _get_schema_registry_settings, _merge_settings_dicts
+from .base import (
+    _get_library_defaults,
+    _get_global_settings,
+    _get_schema_registry_settings,
+    _merge_settings_dicts,
+)
 
 
 @dataclass
 class SchemaSettings:
     """Settings for controlling overall schema behavior."""
+
     excluded_apps: List[str] = field(default_factory=list)
     excluded_models: List[str] = field(default_factory=list)
     enable_introspection: bool = True
@@ -24,7 +30,7 @@ class SchemaSettings:
     auto_camelcase: bool = True
     disable_security_mutations: bool = False
     enable_extension_mutations: bool = True
-    show_metadata: bool = False
+    show_metadata: bool = True
     query_extensions: List[str] = field(default_factory=list)
     mutation_extensions: List[str] = field(default_factory=list)
     query_field_allowlist: Optional[List[str]] = None
@@ -37,7 +43,13 @@ class SchemaSettings:
         global_settings = _get_global_settings(schema_name).get("schema_settings", {})
         schema_registry_settings = _get_schema_registry_settings(schema_name)
         schema_settings = schema_registry_settings.get("schema_settings", {})
-        direct_settings = {k: v for k, v in schema_registry_settings.items() if k in cls.__dataclass_fields__}
-        merged = _merge_settings_dicts(defaults, global_settings, schema_settings, direct_settings)
+        direct_settings = {
+            k: v
+            for k, v in schema_registry_settings.items()
+            if k in cls.__dataclass_fields__
+        }
+        merged = _merge_settings_dicts(
+            defaults, global_settings, schema_settings, direct_settings
+        )
         valid_fields = set(cls.__dataclass_fields__.keys())
         return cls(**{k: v for k, v in merged.items() if k in valid_fields})

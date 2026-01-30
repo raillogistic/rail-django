@@ -39,6 +39,8 @@ from .pagination import (  # noqa: F401
     generate_paginated_query as _generate_paginated_query,
 )
 from ..types import TypeGenerator
+
+
 class QueryGenerator:
     """
     Generates GraphQL queries for Django models.
@@ -90,17 +92,8 @@ class QueryGenerator:
 
     def generate_introspection_queries(self) -> Dict[str, graphene.Field]:
         """Generate introspection queries like __filterSchema."""
-        from ...extensions.metadata import FilterSchemaType, resolve_filter_schema
-        
-        return {
-            "filterSchema": graphene.Field(
-                FilterSchemaType,
-                model=graphene.String(required=True),
-                depth=graphene.Int(default_value=1),
-                resolver=resolve_filter_schema,
-                description="Introspect available filters for a model"
-            )
-        }
+        # Metadata V2 handles filter introspection via ModelSchemaQueryV2
+        return {}
 
     @property
     def filter_generator(self):
@@ -193,7 +186,7 @@ class QueryGenerator:
             if not isinstance(instance, models.Model):
                 return instance
             field_defs = list(instance._meta.concrete_fields)
-            
+
             snapshot = {}
             for field in field_defs:
                 # Optimization: For relation fields (ForeignKeys/OneToOne), use attname (the ID)
@@ -244,12 +237,12 @@ class QueryGenerator:
             # This is a Postgres requirement: SELECT DISTINCT ON (a) ... ORDER BY a, b
             # If explicit ordering is provided, it must start with the distinct fields.
             # If not, we might need to prepend them or rely on the caller to ensure it.
-            
+
             # Here we assume order_by contains the full ordering specs.
             # If order_by is empty or doesn't match, Django/Postgres will raise an error.
             # However, to be safe, we can try to prepend distinct fields to order_by if not present?
             # But the caller (generate_list_query) passes db_specs as order_by.
-            
+
             # Simple implementation: let Django handle the SQL generation.
             # Users must ensure order_by starts with distinct_on fields.
             return queryset.order_by(*order_by).distinct(*distinct_on)
@@ -262,13 +255,13 @@ class QueryGenerator:
             # Convert string order specs to expressions if needed, or just use them
             # _parse_order_by isn't available here directly, let's use F() for simple fields
             # or rely on the fact that order_by list strings work in order_by().
-            
+
             # For Window functions in annotate, order_by needs to be F() expressions or similar
             # not just strings like "-created_at".
-            
+
             # Simplified fallback for now: group by distinct fields and take first?
             # Window functions are the most robust way but require recent Django/DB support.
-            
+
             try:
                 window_ordering = []
                 for o in order_by:
@@ -320,7 +313,7 @@ class QueryGenerator:
             from ...extensions.multitenancy import apply_tenant_queryset
         except Exception:
             return queryset
-        
+
         try:
             return apply_tenant_queryset(
                 queryset,
@@ -441,9 +434,7 @@ class QueryGenerator:
         def filtered_resolver(root: Any, info: graphene.ResolveInfo, **kwargs):
             result = original_resolver(root, info, **kwargs)
             if isinstance(result, models.QuerySet):
-                result = self._apply_tenant_scope(
-                    result, info, model, operation="list"
-                )
+                result = self._apply_tenant_scope(result, info, model, operation="list")
                 filterset = filter_class(kwargs, result)
                 return filterset.qs
             return result

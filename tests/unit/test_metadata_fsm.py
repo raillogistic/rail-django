@@ -3,7 +3,7 @@ import sys
 from unittest.mock import MagicMock, patch
 from django.db import models
 from django.test import TestCase
-from rail_django.extensions.metadata_v2 import utils
+from rail_django.extensions.metadata import utils
 
 # Mock django_fsm if not present
 module_name = 'django_fsm'
@@ -118,11 +118,11 @@ class TestFSMMetadata(TestCase):
             self.assertFalse(publish_trans['allowed'])
             self.assertTrue(archive_trans['allowed'])
 
-    @patch('rail_django.extensions.metadata_v2.field_extractor._get_fsm_transitions')
-    @patch('rail_django.extensions.metadata_v2.field_extractor._classify_field')
+    @patch('rail_django.extensions.metadata.field_extractor._get_fsm_transitions')
+    @patch('rail_django.extensions.metadata.field_extractor._classify_field')
     def test_extract_field_passes_instance(self, mock_classify, mock_get_fsm):
         """Test that _extract_field passes the instance to _get_fsm_transitions."""
-        from rail_django.extensions.metadata_v2.field_extractor import FieldExtractorMixin
+        from rail_django.extensions.metadata.field_extractor import FieldExtractorMixin
 
         extractor = FieldExtractorMixin()
         extractor._map_to_graphql_type = MagicMock(return_value="String")

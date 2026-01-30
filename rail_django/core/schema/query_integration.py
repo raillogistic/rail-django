@@ -179,55 +179,15 @@ class QueryIntegrationMixin:
             )
 
     def _integrate_metadata_queries(self, query_attrs: dict[str, Any]) -> None:
-        """Integrate model metadata queries into query attributes."""
+        """Integrate Model Schema V2 queries (Metadata) into query attributes."""
         if not self.settings.show_metadata:
             return
 
         try:
-            from ...extensions.metadata import ModelMetadataQuery
+            from ...extensions.metadata import ModelSchemaQuery
 
-            metadata_query_instance = ModelMetadataQuery()
-
-            for field_name, field in ModelMetadataQuery._meta.fields.items():
-                resolver_method_name = f"resolve_{field_name}"
-                if hasattr(metadata_query_instance, resolver_method_name):
-                    resolver_method = getattr(
-                        metadata_query_instance, resolver_method_name
-                    )
-
-                    def create_resolver_wrapper(method):
-                        def wrapper(root, info, **kwargs):
-                            return method(info, **kwargs)
-
-                        return wrapper
-
-                    query_attrs[field_name] = graphene.Field(
-                        field.type,
-                        description=field.description,
-                        resolver=create_resolver_wrapper(resolver_method),
-                        args=getattr(field, "args", None),
-                    )
-                else:
-                    query_attrs[field_name] = field
-
-            logger.info(
-                f"Model metadata queries integrated into schema '{self.schema_name}'"
-            )
-        except ImportError as e:
-            logger.warning(
-                f"Could not import metadata queries for schema '{self.schema_name}': {e}"
-            )
-
-    def _integrate_metadata_v2_queries(self, query_attrs: dict[str, Any]) -> None:
-        """Integrate Model Schema V2 queries (Metadata V2) into query attributes."""
-        if not self.settings.show_metadata:
-            return
-
-        try:
-            from ...extensions.metadata_v2 import ModelSchemaQueryV2
-
-            schema_query_v2_instance = ModelSchemaQueryV2()
-            for field_name, field in ModelSchemaQueryV2._meta.fields.items():
+            schema_query_v2_instance = ModelSchemaQuery()
+            for field_name, field in ModelSchemaQuery._meta.fields.items():
                 resolver_method_name = f"resolve_{field_name}"
                 if hasattr(schema_query_v2_instance, resolver_method_name):
                     resolver_method = getattr(
@@ -250,10 +210,10 @@ class QueryIntegrationMixin:
                     query_attrs[field_name] = field
 
             logger.info(
-                f"Model schema V2 queries integrated into schema '{self.schema_name}'"
+                f"Model schema queries integrated into schema '{self.schema_name}'"
             )
         except ImportError as e:
             logger.warning(
-                f"Could not import metadata v2 queries for "
+                f"Could not import metadata queries for "
                 f"schema '{self.schema_name}': {e}"
             )

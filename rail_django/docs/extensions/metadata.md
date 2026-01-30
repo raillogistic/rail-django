@@ -13,12 +13,12 @@ The metadata extension allows frontends to:
 
 ## Activation
 
-Enable the metadata extension in your settings:
+The metadata extension is enabled by default. You can disable it in your settings:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
-        "show_metadata": True,
+        "show_metadata": False,
     },
 }
 ```
@@ -88,7 +88,7 @@ Lists all available models with summary information.
 
 ```graphql
 query AvailableModels {
-  availableModelsV2 {
+  availableModels {
     appLabel
     modelName
     verboseName
@@ -260,7 +260,7 @@ Visibility levels include: `VISIBLE`, `MASKED`, `HIDDEN`, `REDACTED`.
 You can extend the default type mapping for custom Django fields using the `FieldTypeRegistry`. This is useful if you have custom model fields (like `PhoneNumberField` or `ColorField`) that you want to map to specific GraphQL types.
 
 ```python
-from rail_django.extensions.metadata_v2.mapping import registry
+from rail_django.extensions.metadata.mapping import registry
 from my_app.fields import PhoneNumberField
 
 # Register GraphQL type mapping
@@ -310,7 +310,7 @@ Metadata generation can be expensive for complex models. The extension uses Djan
 
 ### Versioning Strategy
 
-Each model has a tracked version key (`metadata_v2_version:{app}:{model}`). When metadata is requested:
+Each model has a tracked version key (`metadata_version:{app}:{model}`). When metadata is requested:
 1. The current version is retrieved (or initialized).
 2. A cache key is built including the version, app, model, user hash (for permissions), and object ID (if applicable).
 3. If a cached schema exists, it is returned immediately.
@@ -320,10 +320,10 @@ Each model has a tracked version key (`metadata_v2_version:{app}:{model}`). When
 To invalidate metadata for a specific model (e.g., after a schema migration or permission change), use:
 
 ```python
-from rail_django.extensions.metadata_v2.utils import invalidate_metadata_v2_cache
+from rail_django.extensions.metadata.utils import invalidate_metadata_cache
 
 # Invalidate specific model
-invalidate_metadata_v2_cache(app="my_app", model="MyModel")
+invalidate_metadata_cache(app="my_app", model="MyModel")
 ```
 
 This bumps the version token, effectively invalidating all cached entries for that model without requiring a full cache flush.

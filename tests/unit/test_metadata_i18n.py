@@ -3,8 +3,8 @@ from django.db import models
 from django.test import TestCase, override_settings
 from django.utils.translation import activate, deactivate
 from django.utils.translation import gettext_lazy as _
-from rail_django.extensions.metadata_v2.filter_extractor import FilterExtractorMixin
-from rail_django.extensions.metadata_v2.permissions_extractor import PermissionExtractorMixin
+from rail_django.extensions.metadata.filter_extractor import FilterExtractorMixin
+from rail_django.extensions.metadata.permissions_extractor import PermissionExtractorMixin
 from unittest.mock import MagicMock, patch
 
 class I18nTestModel(models.Model):
@@ -26,7 +26,7 @@ class TestI18nSupport(TestCase):
     def test_permission_extractor_lazy_translation(self):
         """Verify that PermissionExtractor uses translation."""
         # Use a mock translation to verify it's being called/used
-        with patch('rail_django.extensions.metadata_v2.permissions_extractor._') as mock_gettext:
+        with patch('rail_django.extensions.metadata.permissions_extractor._') as mock_gettext:
             mock_gettext.side_effect = lambda x: f"Translated[{x}]"
 
             mutations_mock = self.perm_extractor._extract_mutations(I18nTestModel, user=None)
@@ -57,7 +57,7 @@ class TestI18nSupport(TestCase):
             input_field.type = input_type
 
             # Patch gettext_lazy in filter_extractor to verify calls
-            with patch('rail_django.extensions.metadata_v2.filter_extractor._') as mock_gettext:
+            with patch('rail_django.extensions.metadata.filter_extractor._') as mock_gettext:
                 mock_gettext.side_effect = lambda x: f"TR[{x}]"
 
                 result = self.filter_extractor._analyze_filter_field(model, field_name, input_field)
