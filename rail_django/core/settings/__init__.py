@@ -7,6 +7,7 @@ from .filtering_settings import FilteringSettings
 from .mutation_settings import MutationGeneratorSettings
 from .query_settings import QueryGeneratorSettings
 from .schema_settings import SchemaSettings
+from .subscription_settings import SubscriptionGeneratorSettings
 from .type_settings import TypeGeneratorSettings
 
 __all__ = [
@@ -18,6 +19,3 @@ __all__ = [
     "SchemaSettings",
     "GraphQLAutoConfig",
 ]
-
-# SubscriptionGeneratorSettings was missing from imports above but listed in __all__
-from .subscription_settings import SubscriptionGeneratorSettings

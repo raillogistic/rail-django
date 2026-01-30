@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class GraphQLAuthenticationMiddleware(MiddlewareMixin):
     """
-    Middleware pour l'authentification GraphQL avec support JWT.
+    Middleware for GraphQL authentication with JWT support.
     """
 
     def __init__(self, get_response=None):

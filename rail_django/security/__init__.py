@@ -1,12 +1,12 @@
 """
-Module de sécurité pour Django GraphQL.
+Security module for Django GraphQL.
 
-Ce module fournit des fonctionnalités de sécurité avancées :
-- Validation et assainissement des entrées
-- Contrôle d'accès basé sur les rôles (RBAC)
-- Permissions au niveau des champs
-- Sécurité spécifique à GraphQL
-- Journalisation d'audit unifiée (Security Events)
+This module provides advanced security features:
+- Input validation and sanitization
+- Role-Based Access Control (RBAC)
+- Field-level permissions
+- GraphQL-specific security
+- Unified audit logging (Security Events)
 """
 
 from .api import security, SecurityAPI

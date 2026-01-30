@@ -11,6 +11,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def normalize_legacy_sections(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy settings keys to current names."""
+    if not isinstance(config, dict):
+        return config
+    normalized = dict(config)
+    if "TYPE_SETTINGS" in config and "type_generation_settings" not in config:
+        normalized["type_generation_settings"] = config["TYPE_SETTINGS"]
+    if "PERFORMANCE" in config and "performance_settings" not in config:
+        normalized["performance_settings"] = config["PERFORMANCE"]
+    if "SECURITY" in config and "security_settings" not in config:
+        normalized["security_settings"] = config["SECURITY"]
+    return normalized
+
+
 def load_mutation_settings_from_config(config: dict[str, Any]) -> Optional["MutationGeneratorSettings"]:
     try:
         from ..settings import MutationGeneratorSettings

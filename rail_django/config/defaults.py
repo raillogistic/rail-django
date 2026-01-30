@@ -44,7 +44,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
     },
     "type_generation_settings": {
         "exclude_fields": {},
-        "excluded_fields": {},
+        "excluded_fields": {},  # Deprecated: use exclude_fields
         "include_fields": None,
         "custom_field_mappings": {},
         "generate_filters": True,

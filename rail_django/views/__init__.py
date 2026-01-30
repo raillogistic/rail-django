@@ -1,12 +1,12 @@
 """
-Package d'initialisation pour les vues de rail_django.
+Initialization package for rail_django views.
 
-Ce module permet d'importer les vues pour différents composants du système.
+This module makes views available for different system components.
 """
 
 from rail_django.graphql.views import MultiSchemaGraphQLView, SchemaListView
 
-# Rendre les imports disponibles au niveau du package
+# Make imports available at package level
 from rail_django.http.views.health import (
     HealthAPIView,
     HealthDashboardView,

@@ -44,7 +44,7 @@ from .settings import (
 )
 
 __all__ = [
-    # Configuration et schéma
+    # Configuration and schema
     "ConfigLoader",
     "SchemaBuilder",
     "TypeGeneratorSettings",
@@ -52,7 +52,7 @@ __all__ = [
     "MutationGeneratorSettings",
     "SchemaSettings",
     "GraphQLAutoConfig",
-    # Gestion d'erreurs
+    # Error handling
     "GraphQLAutoError",
     "ValidationError",
     "AuthenticationError",
@@ -67,7 +67,7 @@ __all__ = [
     "ErrorHandler",
     "error_handler",
     "handle_graphql_error",
-    # Debug et profilage
+    # Debug and profiling
     "RequestMetrics",
     "PerformanceAlert",
     "PerformanceAggregator",

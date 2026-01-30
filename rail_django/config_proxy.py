@@ -11,6 +11,7 @@ from django.conf import settings
 
 # Import comprehensive library defaults from defaults.py
 from .config.defaults import LIBRARY_DEFAULTS
+from .core.config.helpers import normalize_legacy_sections
 
 
 # Runtime storage for schema settings overrides (avoids modifying Django settings)
@@ -162,21 +163,7 @@ class SettingsProxy:
 
     def _normalize_legacy_sections(self, data: dict[str, Any]) -> dict[str, Any]:
         """Normalize legacy settings keys to current names."""
-        if not isinstance(data, dict):
-            return data
-
-        normalized = dict(data)
-
-        if "TYPE_SETTINGS" in data and "type_generation_settings" not in data:
-            normalized["type_generation_settings"] = data["TYPE_SETTINGS"]
-
-        if "PERFORMANCE" in data and "performance_settings" not in data:
-            normalized["performance_settings"] = data["PERFORMANCE"]
-
-        if "SECURITY" in data and "security_settings" not in data:
-            normalized["security_settings"] = data["SECURITY"]
-
-        return normalized
+        return normalize_legacy_sections(data)
 
     def set(self, key: str, value: Any) -> None:
         """
