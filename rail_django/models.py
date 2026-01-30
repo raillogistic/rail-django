@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 from django.core.exceptions import ValidationError
 from django.db import models as django_models
 
-from rail_django.defaults import LIBRARY_DEFAULTS
+from rail_django.config.defaults import LIBRARY_DEFAULTS
 from rail_django.extensions.audit import AuditEventModel
 from rail_django.extensions.reporting import (
     ReportingDataset,
@@ -23,7 +23,7 @@ from rail_django.extensions.reporting import (
     ReportingVisualization,
 )
 from rail_django.extensions.tasks import TaskExecution
-from rail_django.saved_filter import SavedFilter
+from rail_django.extensions.filters.models import SavedFilter
 from rail_django.validation.schema_validator import SchemaValidator
 
 

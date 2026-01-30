@@ -11,7 +11,7 @@ from pathlib import Path
 
 from django.db.backends.signals import connection_created
 
-from rail_django.defaults import LIBRARY_DEFAULTS
+from rail_django.config.defaults import LIBRARY_DEFAULTS
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # This BASE_DIR is a placeholder; the project's settings.py will redefine it

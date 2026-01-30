@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from rail_django.core.meta import get_model_graphql_meta
-from rail_django.core.meta_json import clear_meta_configs, load_app_meta_configs
+from rail_django.core.meta.json_loader import clear_meta_configs, load_app_meta_configs
 from rail_django.security.rbac import role_manager
 from test_app.models import Category
 

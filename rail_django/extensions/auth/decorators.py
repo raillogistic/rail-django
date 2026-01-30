@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .auth import JWTManager
+from .jwt import JWTManager
 
 logger = logging.getLogger(__name__)
 

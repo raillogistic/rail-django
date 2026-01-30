@@ -28,7 +28,7 @@ def get_export_urls():
     """
     if not JWT_REQUIRED_AVAILABLE:
         raise ImproperlyConfigured(
-            "Export endpoints require JWT auth; auth_decorators is missing."
+            "Export endpoints require JWT auth; rail_django.extensions.auth.decorators is missing."
         )
 
     return [

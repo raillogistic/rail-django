@@ -30,7 +30,7 @@ def get_subscription_consumer(schema_name: str = "default") -> Any:
             "Install it with: pip install channels-graphql-ws"
         ) from exc
 
-    from ..core.schema import get_schema
+    from rail_django.core.schema import get_schema
 
     class RailGraphqlWsConsumer(channels_graphql_ws.GraphqlWsConsumer):
         schema = get_schema(schema_name)

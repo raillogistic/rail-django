@@ -12,7 +12,7 @@ from typing import Any, Optional
 from django.db import models
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
-from rail_django.decorators import action_form
+from rail_django.core.decorators import action_form
 
 from ..types import FilterSpec
 from ..utils import _coerce_int, _to_filter_list

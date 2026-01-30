@@ -26,7 +26,7 @@ from test_app.models import Post as OrderForMutation
 from test_app.models import Product as ProductForMutation
 from test_app.models import Profile, Tag
 
-from rail_django.decorators import business_logic
+from rail_django.core.decorators import business_logic
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationError, MutationGenerator
 from rail_django.generators.types import TypeGenerator

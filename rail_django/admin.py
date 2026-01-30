@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from django.urls import path
 
 from rail_django.core.registry import schema_registry
-from rail_django.defaults import LIBRARY_DEFAULTS
+from rail_django.config.defaults import LIBRARY_DEFAULTS
 from rail_django.models import SchemaRegistryModel
 
 logger = logging.getLogger(__name__)

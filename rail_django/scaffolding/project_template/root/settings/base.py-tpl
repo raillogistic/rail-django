@@ -211,7 +211,7 @@ LOGGING = {
 
 
 # Rail Django Configuration
-# Overriding defaults from rail_django.defaults
+# Overriding defaults from rail_django.config.defaults
 # This dictionary controls the behavior of the auto-generated GraphQL schema.
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {

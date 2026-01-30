@@ -81,7 +81,7 @@ def set_query_cache_factory(factory: Optional[QueryCacheFactory]) -> None:
 def get_rate_limiter(schema_name: Optional[str] = None) -> RateLimiterProtocol:
     if _rate_limiter_factory is not None:
         return _rate_limiter_factory(schema_name)
-    from ..rate_limiting import get_rate_limiter as default_get_rate_limiter
+    from .rate_limiting import get_rate_limiter as default_get_rate_limiter
 
     return default_get_rate_limiter(schema_name)
 

@@ -58,7 +58,7 @@ def get_enabled_scalars(schema_name: Optional[str] = None) -> dict:
     Returns:
         Dictionary of enabled scalars
     """
-    from rail_django.defaults import LIBRARY_DEFAULTS
+    from rail_django.config.defaults import LIBRARY_DEFAULTS
 
     # Get custom scalars configuration
     custom_scalars_config = LIBRARY_DEFAULTS.get("custom_scalars", {})

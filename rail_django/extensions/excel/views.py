@@ -38,7 +38,7 @@ from .job_views import ExcelTemplateJobDownloadView, ExcelTemplateJobStatusView
 
 # Optional imports
 try:
-    from ..auth_decorators import jwt_required
+    from ..auth.decorators import jwt_required
 except ImportError:
     jwt_required = None
 

@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Product
-from rail_django.saved_filter import SavedFilter
+from rail_django.extensions.filters.models import SavedFilter
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 

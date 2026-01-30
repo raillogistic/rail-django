@@ -28,7 +28,7 @@ from rail_django.testing import RailGraphQLTestClient
 from graphene_django.views import GraphQLView
 from rail_django.core.schema import SchemaBuilder
 from rail_django.middleware import GraphQLPerformanceMiddleware
-from rail_django.rate_limiting import clear_rate_limiter_cache
+from rail_django.core.rate_limiting import clear_rate_limiter_cache
 
 # Configuration de test pour les endpoints
 TEST_GRAPHQL_SETTINGS = {

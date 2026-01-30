@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from rail_django.security_config import SecurityConfig, get_security_status
+from rail_django.security.config import SecurityConfig, get_security_status
 
 
 class Command(BaseCommand):

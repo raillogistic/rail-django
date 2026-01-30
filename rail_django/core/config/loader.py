@@ -6,7 +6,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.conf import settings
-from ...defaults import get_merged_settings
+from rail_django.config.defaults import get_merged_settings, validate_settings
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,6 @@ class ConfigLoader:
         try:
             if config is None:
                 config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_rail_django_settings()
-            from ...defaults import validate_settings
             validate_settings(config); return True
         except Exception as e:
             logger.error(f"Configuration validation failed: {e}"); return False

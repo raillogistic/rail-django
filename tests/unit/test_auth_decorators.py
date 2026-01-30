@@ -12,7 +12,7 @@ from django.http import JsonResponse
 from django.test import RequestFactory
 
 from rail_django.extensions.auth import JWTManager
-from rail_django.extensions.auth_decorators import jwt_optional, jwt_required, require_permissions
+from rail_django.extensions.auth.decorators import jwt_optional, jwt_required, require_permissions
 from test_app.models import Category
 
 pytestmark = pytest.mark.unit

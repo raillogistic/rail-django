@@ -60,7 +60,7 @@ class MiddlewareSettings:
         Returns:
             MiddlewareSettings instance with merged configuration.
         """
-        from ...defaults import LIBRARY_DEFAULTS
+        from rail_django.config.defaults import LIBRARY_DEFAULTS
         from django.conf import settings as django_settings
 
         defaults = LIBRARY_DEFAULTS.get("middleware_settings", {})

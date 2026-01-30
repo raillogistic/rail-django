@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, Mock, patch
 from django.apps import apps
 from django.test import TestCase
 
-from rail_django.decorators import (
+from rail_django.core.decorators import (
     business_logic,
     custom_mutation_name,
     mutation,
@@ -132,7 +132,7 @@ class TestRegisterSchemaDecorator(TestCase):
             "Registration failed"
         )
 
-        with patch("rail_django.decorators.logger") as mock_logger:
+        with patch("rail_django.core.decorators.logger") as mock_logger:
 
             @register_schema(name="error_schema")
             class ErrorSchema:
@@ -330,7 +330,7 @@ class TestDecoratorLogging(TestCase):
         """Nettoyage après les tests de logging."""
         self.registry_patcher.stop()
 
-    @patch("rail_django.decorators.logger")
+    @patch("rail_django.core.decorators.logger")
     def test_successful_registration_logging(self, mock_logger):
         """Test du logging lors d'un enregistrement réussi."""
 
@@ -344,7 +344,7 @@ class TestDecoratorLogging(TestCase):
         self.assertIn("Successfully registered schema", info_call)
         self.assertIn("logging_test_schema", info_call)
 
-    @patch("rail_django.decorators.logger")
+    @patch("rail_django.core.decorators.logger")
     def test_failed_registration_logging(self, mock_logger):
         """Test du logging lors d'un échec d'enregistrement."""
 

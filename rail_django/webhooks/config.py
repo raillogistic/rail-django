@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from django.conf import settings as django_settings
 
 from ..config_proxy import get_settings_proxy
-from ..defaults import LIBRARY_DEFAULTS, merge_settings
+from ..config.defaults import LIBRARY_DEFAULTS, merge_settings
 
 logger = logging.getLogger(__name__)
 

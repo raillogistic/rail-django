@@ -30,7 +30,7 @@ from tests.models import (
 )
 
 from rail_django.core.schema import AutoSchemaGenerator, SchemaBuilder
-from rail_django.decorators import business_logic
+from rail_django.core.decorators import business_logic
 from rail_django.generators.filters import AdvancedFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationGenerator

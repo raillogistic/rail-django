@@ -29,12 +29,9 @@ logger = logging.getLogger(__name__)
 
 # Optional JWT protection (mirrors export endpoints)
 try:
-    from .auth_decorators import jwt_required
+    from ..auth.decorators import jwt_required
 except ImportError:
-    try:
-        from ..auth_decorators import jwt_required
-    except ImportError:
-        jwt_required = None
+    jwt_required = None
 
 
 @method_decorator(csrf_exempt, name="dispatch")

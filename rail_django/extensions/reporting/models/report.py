@@ -12,7 +12,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from django.db import models
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
-from rail_django.decorators import action_form
+from rail_django.core.decorators import action_form
 
 from ..security import _reporting_roles, _reporting_operations
 

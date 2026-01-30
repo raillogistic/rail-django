@@ -8,13 +8,14 @@ from django.contrib.postgres.search import SearchVector, SearchQuery
 from django.db.models import StdDev, Variance, Count
 from django.db import models
 
-from .reporting import (
-    DatasetExecutionEngine,
+from ..types import (
     MetricSpec,
     ReportingError,
     FilterSpec,
     AGGREGATION_MAP as BASE_AGGREGATION_MAP
 )
+
+from .core import DatasetExecutionEngine
 
 # Extended aggregation map for Postgres
 PSQL_AGGREGATION_MAP = BASE_AGGREGATION_MAP.copy()

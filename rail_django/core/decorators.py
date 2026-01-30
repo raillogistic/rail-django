@@ -369,7 +369,7 @@ def _register_schema_with_registry(
     """
     try:
         # Import registry here to avoid circular imports
-        from .core.registry import schema_registry
+        from .registry import schema_registry
 
         # Register the schema
         schema_registry.register_schema(

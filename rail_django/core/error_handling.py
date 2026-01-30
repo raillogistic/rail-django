@@ -49,7 +49,7 @@ class ErrorHandlingSettings:
     @classmethod
     def from_schema(cls, schema_name: Optional[str] = None) -> "ErrorHandlingSettings":
         """Create ErrorHandlingSettings from schema configuration."""
-        from ..defaults import LIBRARY_DEFAULTS
+        from ..config.defaults import LIBRARY_DEFAULTS
 
         defaults = LIBRARY_DEFAULTS.get("error_handling", {})
 

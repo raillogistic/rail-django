@@ -33,7 +33,7 @@ from .auth import (  # ChangePasswordMutation,
 )
 
 # Authentication decorators for Django views
-from .auth_decorators import (
+from .auth.decorators import (
     get_user_from_jwt,
     jwt_optional,
     jwt_required,

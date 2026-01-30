@@ -47,7 +47,7 @@ def _get_global_settings(schema_name: str) -> dict[str, Any]:
 def _get_library_defaults() -> dict[str, Any]:
     """Get library default settings."""
     try:
-        from ...defaults import LIBRARY_DEFAULTS, get_environment_defaults, merge_settings
+        from rail_django.config.defaults import LIBRARY_DEFAULTS, get_environment_defaults, merge_settings
         env = getattr(django_settings, "ENVIRONMENT", None)
         if not env: env = "production" if not getattr(django_settings, "DEBUG", False) else "development"
         return merge_settings(LIBRARY_DEFAULTS, get_environment_defaults(env))

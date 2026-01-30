@@ -11,7 +11,7 @@ from django.db import models
 from django.utils import timezone
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
-from rail_django.decorators import confirm_action
+from rail_django.core.decorators import confirm_action
 
 from ..types import ReportingError
 from ..security import _reporting_roles, _reporting_operations

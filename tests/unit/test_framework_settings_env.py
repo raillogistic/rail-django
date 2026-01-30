@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-from rail_django.defaults import LIBRARY_DEFAULTS
+from rail_django.config.defaults import LIBRARY_DEFAULTS
 import rail_django.config.framework_settings as framework_settings
 
 pytestmark = pytest.mark.unit

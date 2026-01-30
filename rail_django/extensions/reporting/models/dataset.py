@@ -15,7 +15,7 @@ from django.db import models
 from django.utils import timezone
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
-from rail_django.decorators import action_form, confirm_action
+from rail_django.core.decorators import action_form, confirm_action
 
 from ..types import FilterSpec
 from ..utils import _coerce_int, _to_filter_list, _to_ordering
@@ -143,7 +143,7 @@ class ReportingDataset(models.Model):
 
         if connection.vendor == "postgresql":
             try:
-                from ..reporting_psql import PostgresDatasetExecutionEngine
+                from ..engine import PostgresDatasetExecutionEngine
 
                 return PostgresDatasetExecutionEngine(self)
             except ImportError:

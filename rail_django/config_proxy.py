@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from django.conf import settings
 
 # Import comprehensive library defaults from defaults.py
-from .defaults import LIBRARY_DEFAULTS
+from .config.defaults import LIBRARY_DEFAULTS
 
 
 # Runtime storage for schema settings overrides (avoids modifying Django settings)

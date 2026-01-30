@@ -17,7 +17,7 @@ from .config import get_export_settings, is_model_allowed
 
 # Import auth decorators
 try:
-    from ..auth_decorators import jwt_required
+    from ..auth.decorators import jwt_required
 except ImportError:
     jwt_required = None
 
@@ -54,7 +54,7 @@ if jwt_required is None:
 
     def _missing_jwt_required(view_func):
         raise ImproperlyConfigured(
-            "Export endpoints require JWT auth; install auth_decorators to enable."
+            "Export endpoints require JWT auth; install rail_django.extensions.auth to enable."
         )
 
     jwt_required_decorator = _missing_jwt_required
