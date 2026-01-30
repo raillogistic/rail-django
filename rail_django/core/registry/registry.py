@@ -123,7 +123,7 @@ class SchemaRegistry:
             schema_settings = modified_kwargs.get("settings", settings) or {}
             if schema_settings:
                 from ...config_proxy import configure_schema_settings
-                configure_schema_settings(name, **schema_settings)
+                configure_schema_settings(name, clear_existing=True, **schema_settings)
 
             logger.info(f"Registered schema: {name}")
             self._run_post_registration_hooks(schema_info)
@@ -138,6 +138,11 @@ class SchemaRegistry:
                     del self._schema_builders[name]
                 if name in self._schema_instance_cache:
                     del self._schema_instance_cache[name]
+
+                # Clear runtime settings for this schema
+                from ...config_proxy import clear_runtime_settings
+                clear_runtime_settings(name)
+
                 logger.info(f"Unregistered schema: {name}")
                 return True
             return False
@@ -186,6 +191,11 @@ class SchemaRegistry:
             self._schema_builders.clear()
             self._schema_instance_cache.clear()
             self._initialized = False
+
+            # Clear all runtime settings
+            from ...config_proxy import clear_runtime_settings
+            clear_runtime_settings()
+
             logger.info("Cleared all schemas from registry")
 
     def get_models_for_schema(self, name: str) -> list[type[models.Model]]:

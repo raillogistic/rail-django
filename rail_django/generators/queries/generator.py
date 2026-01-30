@@ -212,9 +212,9 @@ class QueryGenerator:
                 name = field.name
                 attname = getattr(field, "attname", name)
                 if name in masked:
-                    instance.__dict__[attname] = masked[name]
+                    setattr(instance, attname, masked[name])
                 else:
-                    instance.__dict__[attname] = None
+                    setattr(instance, attname, None)
             return instance
 
         if isinstance(data, list):

@@ -193,15 +193,62 @@ class RailGraphQLTestClient:
 
 
 @contextmanager
+def override_rail_schema_settings(schema_name: str, **kwargs):
+    """
+    Override rail settings for a specific schema at runtime.
+    This modifies the _RUNTIME_SCHEMA_SETTINGS in config_proxy.
+    """
+    from rail_django.config_proxy import _RUNTIME_SCHEMA_SETTINGS, settings_proxy
+
+    # Save original state
+    original_exists = schema_name in _RUNTIME_SCHEMA_SETTINGS
+    original_value = _RUNTIME_SCHEMA_SETTINGS.get(schema_name, {}).copy()
+
+    # Apply overrides
+    if schema_name not in _RUNTIME_SCHEMA_SETTINGS:
+        _RUNTIME_SCHEMA_SETTINGS[schema_name] = {}
+    _RUNTIME_SCHEMA_SETTINGS[schema_name].update(kwargs)
+
+    # Clear cache
+    settings_proxy.clear_cache()
+
+    try:
+        yield
+    finally:
+        # Restore original state
+        if original_exists:
+            _RUNTIME_SCHEMA_SETTINGS[schema_name] = original_value
+        else:
+            _RUNTIME_SCHEMA_SETTINGS.pop(schema_name, None)
+        settings_proxy.clear_cache()
+
+
+@contextmanager
 def override_rail_settings(
     *,
     global_settings: Optional[dict[str, Any]] = None,
     schema_settings: Optional[dict[str, Any]] = None,
 ):
+    from rail_django.config_proxy import _RUNTIME_SCHEMA_SETTINGS, settings_proxy
+
+    # Save original runtime settings
+    original_runtime = _RUNTIME_SCHEMA_SETTINGS.copy()
+
+    # Clear runtime settings so they don't interfere with the overrides
+    _RUNTIME_SCHEMA_SETTINGS.clear()
+
     overrides: dict[str, Any] = {}
     if global_settings is not None:
         overrides["RAIL_DJANGO_GRAPHQL"] = global_settings
     if schema_settings is not None:
         overrides["RAIL_DJANGO_GRAPHQL_SCHEMAS"] = schema_settings
+
     with override_settings(**overrides):
-        yield
+        settings_proxy.clear_cache()
+        try:
+            yield
+        finally:
+            # Restore runtime settings
+            _RUNTIME_SCHEMA_SETTINGS.clear()
+            _RUNTIME_SCHEMA_SETTINGS.update(original_runtime)
+            settings_proxy.clear_cache()

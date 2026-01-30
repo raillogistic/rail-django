@@ -124,31 +124,31 @@ class FilterExtractorMixin:
                 if field_name != camel_field:
                     suffix = field_name.replace(camel_field, "")
                     if suffix == "_some":
-                        field_label += f" ({_('Au moins un')})"
+                        field_label += f" ({_('At least one')})"
                     elif suffix == "_every":
-                        field_label += f" ({_('Tous')})"
+                        field_label += f" ({_('All')})"
                     elif suffix == "_none":
-                        field_label += f" ({_('Aucun')})"
+                        field_label += f" ({_('None')})"
                     elif suffix == "_count":
-                        field_label += f" ({_('Nombre')})"
+                        field_label += f" ({_('Count')})"
                     elif suffix == "_agg":
-                        field_label += f" ({_('Agrégation')})"
+                        field_label += f" ({_('Aggregation')})"
                     elif suffix == "_trunc":
-                        field_label += f" ({_('Date tronquée')})"
+                        field_label += f" ({_('Truncated date')})"
                     elif suffix == "_extract":
-                        field_label += f" ({_('Extraction de date')})"
+                        field_label += f" ({_('Date extraction')})"
             else:
                 labels = {
                     "id": "ID",
-                    "quick": _("Recherche rapide"),
-                    "search": _("Recherche plein texte"),
-                    "_window": _("Filtre de fenêtre"),
-                    "_subquery": _("Filtre de sous-requête"),
-                    "_exists": _("Filtre d'existence"),
-                    "_compare": _("Comparaison de champs"),
-                    "include": _("Inclure les IDs"),
-                    "instanceIn": _("Instances d'origine"),
-                    "historyTypeIn": _("Type d'historique"),
+                    "quick": _("Quick search"),
+                    "search": _("Full text search"),
+                    "_window": _("Window filter"),
+                    "_subquery": _("Subquery filter"),
+                    "_exists": _("Existence filter"),
+                    "_compare": _("Field comparison"),
+                    "include": _("Include IDs"),
+                    "instanceIn": _("Source instances"),
+                    "historyTypeIn": _("History type"),
                 }
                 field_label = labels.get(field_name, field_name)
 
@@ -171,32 +171,32 @@ class FilterExtractorMixin:
             if hasattr(input_type, "_meta") and hasattr(input_type._meta, "fields"):
                 # Operator labels
                 operator_labels = {
-                    "eq": _("Égal à"),
-                    "neq": _("Différent de"),
-                    "contains": _("Contient"),
-                    "icontains": _("Contient (insensible à la casse)"),
-                    "in": _("Dans la liste"),
-                    "notIn": _("Pas dans la liste"),
-                    "gt": _("Supérieur à"),
-                    "gte": _("Supérieur ou égal à"),
-                    "lt": _("Inférieur à"),
-                    "lte": _("Inférieur ou égal à"),
-                    "startsWith": _("Commence par"),
-                    "endsWith": _("Se termine par"),
-                    "regex": _("Correspondance Regex"),
-                    "isNull": _("Est nul"),
-                    "hasKey": _("A la clé"),
-                    "hasKeys": _("A les clés"),
-                    "hasAnyKeys": _("A n'importe quelle clé"),
+                    "eq": _("Equals"),
+                    "neq": _("Different from"),
+                    "contains": _("Contains"),
+                    "icontains": _("Contains (case-insensitive)"),
+                    "in": _("In list"),
+                    "notIn": _("Not in list"),
+                    "gt": _("Greater than"),
+                    "gte": _("Greater than or equal to"),
+                    "lt": _("Less than"),
+                    "lte": _("Less than or equal to"),
+                    "startsWith": _("Starts with"),
+                    "endsWith": _("Ends with"),
+                    "regex": _("Regex match"),
+                    "isNull": _("Is null"),
+                    "hasKey": _("Has key"),
+                    "hasKeys": _("Has keys"),
+                    "hasAnyKeys": _("Has any keys"),
                     # Date specific
-                    "year": _("Année"),
-                    "month": _("Mois"),
-                    "day": _("Jour"),
-                    "weekDay": _("Jour de la semaine"),
-                    "hour": _("Heure"),
+                    "year": _("Year"),
+                    "month": _("Month"),
+                    "day": _("Day"),
+                    "weekDay": _("Day of week"),
+                    "hour": _("Hour"),
                     "minute": _("Minute"),
-                    "second": _("Seconde"),
-                    "range": _("Plage"),
+                    "second": _("Second"),
+                    "range": _("Range"),
                 }
 
                 for op_name, op_field in input_type._meta.fields.items():

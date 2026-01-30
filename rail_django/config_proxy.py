@@ -13,14 +13,19 @@ from django.conf import settings
 from .defaults import LIBRARY_DEFAULTS
 
 
+# Runtime storage for schema settings overrides (avoids modifying Django settings)
+_RUNTIME_SCHEMA_SETTINGS: dict[str, Any] = {}
+
+
 class SettingsProxy:
     """
     Proxy for accessing Rail Django GraphQL settings with hierarchical resolution.
 
     Settings are resolved in the following order:
-    1. Schema-specific settings (RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name])
-    2. Global Django settings (RAIL_DJANGO_GRAPHQL)
-    3. Library defaults (LIBRARY_DEFAULTS)
+    1. Runtime schema-specific settings (via configure_schema_settings)
+    2. Schema-specific settings (RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name])
+    3. Global Django settings (RAIL_DJANGO_GRAPHQL)
+    4. Library defaults (LIBRARY_DEFAULTS)
     """
 
     def __init__(self, schema_name: Optional[str] = None):
@@ -85,6 +90,14 @@ class SettingsProxy:
         """
         if not self.schema_name:
             return None
+
+        # Check runtime settings first
+        runtime_settings = _RUNTIME_SCHEMA_SETTINGS.get(self.schema_name)
+        if runtime_settings:
+            runtime_config = self._normalize_legacy_sections(runtime_settings)
+            val = self._get_nested_value(runtime_config, key)
+            if val is not None:
+                return val
 
         schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
         # print(f"DEBUG: _get_schema_setting key={key} schema={self.schema_name} available={list(schema_settings.keys())}")
@@ -223,9 +236,12 @@ class SettingsProxy:
         # Validate schema-specific settings if schema_name is provided
         if self.schema_name:
             schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
-            if self.schema_name not in schema_settings:
+            runtime_exists = self.schema_name in _RUNTIME_SCHEMA_SETTINGS
+            django_exists = self.schema_name in schema_settings
+
+            if not runtime_exists and not django_exists:
                 validation_results["warnings"].append(
-                    f"Schema '{self.schema_name}' not found in RAIL_DJANGO_GRAPHQL_SCHEMAS"
+                    f"Schema '{self.schema_name}' not found in RAIL_DJANGO_GRAPHQL_SCHEMAS or runtime settings"
                 )
 
         # Validate critical settings
@@ -280,36 +296,39 @@ def get_setting(
     return proxy.get(key, default)
 
 
-def configure_schema_settings(schema_name: str, **overrides: Any) -> None:
+def configure_schema_settings(
+    schema_name: str, clear_existing: bool = False, **overrides: Any
+) -> None:
     """
     Configure schema-specific settings overrides.
 
     Args:
         schema_name: Name of the schema to configure
+        clear_existing: Whether to clear existing runtime settings for this schema
         **overrides: Setting key-value pairs to override for this schema
     """
-    from django.conf import settings
+    # Use runtime settings instead of modifying Django settings directly
+    if clear_existing or schema_name not in _RUNTIME_SCHEMA_SETTINGS:
+        _RUNTIME_SCHEMA_SETTINGS[schema_name] = {}
 
-    # Ensure RAIL_DJANGO_GRAPHQL_SCHEMAS exists
-    if not hasattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS"):
-        # This assignment might fail if settings are immutable?
-        # In Django tests, settings are usually a UserSettingsHolder or similar.
-        # It's better to modify the dict if it exists, or rely on initialization elsewhere.
-        # But if it doesn't exist, we must create it.
-        try:
-            settings.RAIL_DJANGO_GRAPHQL_SCHEMAS = {}
-        except Exception as e:
-            # print(f"DEBUG: Failed to set RAIL_DJANGO_GRAPHQL_SCHEMAS: {e}")
-            pass
+    _RUNTIME_SCHEMA_SETTINGS[schema_name].update(overrides)
 
-    # Initialize schema settings if not exists
-    current_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
-    if schema_name not in current_schemas:
-        current_schemas[schema_name] = {}
 
-    # Apply overrides
-    current_schemas[schema_name].update(overrides)
-    # print(f"DEBUG: Configured schema {schema_name} with {overrides.keys()}")
+def clear_runtime_settings(schema_name: Optional[str] = None) -> None:
+    """
+    Clear runtime settings overrides.
+
+    Args:
+        schema_name: If provided, only clear settings for this schema.
+                    If None, clear all runtime settings.
+    """
+    if schema_name:
+        _RUNTIME_SCHEMA_SETTINGS.pop(schema_name, None)
+    else:
+        _RUNTIME_SCHEMA_SETTINGS.clear()
+
+    # Also clear the settings proxy cache
+    settings_proxy.clear_cache()
 
 
 def get_settings_for_schema(schema_name: str) -> SettingsProxy:

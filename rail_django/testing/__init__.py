@@ -9,6 +9,7 @@ from .harness import (
     build_request,
     build_schema,
     override_rail_settings,
+    override_rail_schema_settings,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "build_request",
     "build_schema",
     "override_rail_settings",
+    "override_rail_schema_settings",
 ]

@@ -26,35 +26,29 @@ class AppConfig(BaseAppConfig):
     def ready(self):
         """Initialize the application after Django has loaded."""
         logger.info("AppConfig.ready() method called - starting initialization")
-        try:
-            # Setup performance monitoring if enabled
-            self._setup_performance_monitoring()
 
-            # Setup Django signals
-            self._setup_signals()
+        # Setup performance monitoring if enabled
+        self._setup_performance_monitoring()
 
-            # Load GraphQLMeta JSON configs from installed apps
-            self._load_meta_files()
+        # Setup Django signals
+        self._setup_signals()
 
-            # Validate library configuration
-            self._validate_configuration()
+        # Load GraphQLMeta JSON configs from installed apps
+        self._load_meta_files()
 
-            # Initialize schema registry
-            self._initialize_schema_registry()
+        # Validate library configuration
+        self._validate_configuration()
 
-            # Optionally prebuild schemas on startup
-            self._prebuild_schemas_on_startup()
+        # Initialize schema registry
+        self._initialize_schema_registry()
 
-            # Invalidate metadata cache on startup
-            self._invalidate_cache_on_startup()
+        # Optionally prebuild schemas on startup
+        self._prebuild_schemas_on_startup()
 
-            logger.info("Rail Django GraphQL library initialized successfully")
+        # Invalidate metadata cache on startup
+        self._invalidate_cache_on_startup()
 
-        except Exception as e:
-            logger.error(f"Error initializing Rail Django GraphQL library: {e}")
-            # Don't raise in production to avoid breaking the app
-            if self._is_debug_mode():
-                raise
+        logger.info("Rail Django GraphQL library initialized successfully")
 
     def _setup_performance_monitoring(self):
         """Setup performance monitoring if enabled."""
@@ -70,9 +64,14 @@ class AppConfig(BaseAppConfig):
                 setup_performance_monitoring()
                 logger.debug("Performance monitoring setup completed")
         except ImportError as e:
+            # Optional dependency might be missing
             logger.warning(f"Could not setup performance monitoring: {e}")
         except Exception as e:
+            # Critical failure in monitoring setup should probably be logged but maybe not crash app?
+            # But the user asked to fix error silencing.
             logger.error(f"Error setting up performance monitoring: {e}")
+            if self._is_debug_mode():
+                raise
 
     def _setup_signals(self):
         """Configure Django signals for automatic schema generation."""
@@ -100,10 +99,13 @@ class AppConfig(BaseAppConfig):
                     ensure_webhook_signals()
             except Exception as e:
                 logger.warning(f"Could not setup webhook signals: {e}")
+                if self._is_debug_mode():
+                    raise
         except ImportError as e:
             logger.debug(f"Signals module not found, skipping: {e}")
         except Exception as e:
-            logger.warning(f"Could not setup signals: {e}")
+            logger.error(f"Could not setup signals: {e}")
+            raise  # Signal setup failure is critical
 
     def _validate_configuration(self):
         """Validate library configuration."""
@@ -113,9 +115,9 @@ class AppConfig(BaseAppConfig):
             ConfigLoader.validate_configuration()
             logger.debug("Configuration validation completed")
         except Exception as e:
-            logger.warning(f"Configuration validation failed: {e}")
-            if self._is_debug_mode():
-                raise
+            logger.error(f"Configuration validation failed: {e}")
+            # Always raise configuration errors, not just in debug
+            raise
 
     def _load_meta_files(self):
         """Load meta.yaml/meta.json GraphQLMeta definitions from installed apps."""
@@ -129,7 +131,8 @@ class AppConfig(BaseAppConfig):
                     registered_count,
                 )
         except Exception as exc:
-            logger.warning("Could not load GraphQLMeta definitions: %s", exc)
+            logger.error("Could not load GraphQLMeta definitions: %s", exc)
+            raise
 
     def _initialize_schema_registry(self):
         """Initialize the schema registry."""
@@ -147,7 +150,8 @@ class AppConfig(BaseAppConfig):
         except ImportError as e:
             logger.debug(f"Schema registry not available: {e}")
         except Exception as e:
-            logger.warning(f"Could not initialize schema registry: {e}")
+            logger.error(f"Could not initialize schema registry: {e}")
+            raise
 
     def _prebuild_schemas_on_startup(self):
         """Prebuild GraphQL schemas on server startup if enabled in settings."""
@@ -170,7 +174,9 @@ class AppConfig(BaseAppConfig):
         except ImportError as e:
             logger.debug(f"Could not prebuild schema on startup: {e}")
         except Exception as e:
-            logger.warning(f"Error during schema prebuild on startup: {e}")
+            logger.error(f"Error during schema prebuild on startup: {e}")
+            if self._is_debug_mode():
+                raise
 
     def _is_debug_mode(self):
         """Check if we're in debug mode."""

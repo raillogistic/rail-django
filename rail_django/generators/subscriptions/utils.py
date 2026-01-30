@@ -94,9 +94,9 @@ def _apply_field_masks(
         name = field.name
         attname = getattr(field, "attname", name)
         if name in masked:
-            masked_instance.__dict__[attname] = masked[name]
+            setattr(masked_instance, attname, masked[name])
         else:
-            masked_instance.__dict__[attname] = None
+            setattr(masked_instance, attname, None)
     return masked_instance
 
 
