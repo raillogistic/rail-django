@@ -6,6 +6,7 @@ This module contains Graphene ObjectType classes for model schema introspection.
 
 import graphene
 
+
 class ChoiceType(graphene.ObjectType):
     """Choice option for select fields."""
 
@@ -170,13 +171,22 @@ class MutationSchemaType(graphene.ObjectType):
     required_permissions = graphene.List(graphene.String)
     reason = graphene.String()
 
+    # Extra fields for compatibility/frontend
+    mutation_type = graphene.String()
+    model_name = graphene.String()
+    form_config = graphene.JSONString()
+    success_message = graphene.String()
+    requires_authentication = graphene.Boolean()
+
 
 class FilterOptionSchemaType(graphene.ObjectType):
     """Filter option/operator schema."""
 
     name = graphene.String(required=True)
     lookup = graphene.String(required=True)
-    label = graphene.String(required=True, description="Human-readable label (e.g. 'Equals')")
+    label = graphene.String(
+        required=True, description="Human-readable label (e.g. 'Equals')"
+    )
     help_text = graphene.String()
     choices = graphene.List(ChoiceType)
     graphql_type = graphene.String(description="GraphQL type for this operator")
@@ -215,7 +225,9 @@ class FilterSchemaType(graphene.ObjectType):
 
     field_name = graphene.String(required=True)
     field_label = graphene.String(required=True)
-    base_type = graphene.String(description="Base type of the field (String, Int, Date, etc.) for UI widget selection")
+    base_type = graphene.String(
+        description="Base type of the field (String, Int, Date, etc.) for UI widget selection"
+    )
     is_nested = graphene.Boolean(required=True)
     related_model = graphene.String()
     options = graphene.List(FilterOptionSchemaType, required=True)
@@ -286,6 +298,7 @@ class FieldGroupType(graphene.ObjectType):
     label = graphene.String(required=True)
     description = graphene.String()
     fields = graphene.List(graphene.String, required=True)
+    collapsed = graphene.Boolean()
 
 
 class TemplateInfoType(graphene.ObjectType):
@@ -295,6 +308,16 @@ class TemplateInfoType(graphene.ObjectType):
     title = graphene.String(required=True)
     description = graphene.String()
     endpoint = graphene.String(required=True)
+    url_path = graphene.String()
+    guard = graphene.String()
+    require_authentication = graphene.Boolean()
+    roles = graphene.List(graphene.String)
+    permissions = graphene.List(graphene.String)
+    allowed = graphene.Boolean()
+    denial_reason = graphene.String()
+    allow_client_data = graphene.Boolean()
+    client_data_fields = graphene.List(graphene.String)
+    client_data_schema = graphene.JSONString()
 
 
 class ModelInfoType(graphene.ObjectType):
