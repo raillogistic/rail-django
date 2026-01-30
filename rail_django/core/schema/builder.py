@@ -27,23 +27,6 @@ class SchemaBuilderCore:
     settings management, and model discovery.
     """
 
-    _instances: dict[str, "SchemaBuilderCore"] = {}
-    _lock = threading.Lock()
-
-    def __new__(
-        cls,
-        settings: Optional[Any] = None,
-        schema_name: str = "default",
-        *args,
-        **kwargs,
-    ):
-        """Create or return existing SchemaBuilder instance for the given schema name."""
-        with cls._lock:
-            if schema_name not in cls._instances:
-                instance = super().__new__(cls)
-                cls._instances[schema_name] = instance
-            return cls._instances[schema_name]
-
     def __init__(
         self,
         settings: Optional[Any] = None,
@@ -60,9 +43,6 @@ class SchemaBuilderCore:
             raw_settings: Raw settings dictionary containing schema_settings
             registry: Schema registry instance for model discovery
         """
-        # Avoid re-initialization
-        if hasattr(self, "_initialized") and self._initialized:
-            return
         self.schema_name = schema_name
         self.registry = registry
 
@@ -112,6 +92,9 @@ class SchemaBuilderCore:
         self._subscription_fields: dict[str, graphene.Field] = {}
         self._registered_models: set[type[models.Model]] = set()
         self._schema_version = 0
+        
+        # Instance-level lock for thread-safe operations
+        self._lock = threading.Lock()
 
         self._initialized = True
         self._connect_signals()

@@ -14,7 +14,8 @@ from test_app.models import Category
 from rail_django.core.settings import SubscriptionGeneratorSettings
 from rail_django.generators.subscriptions import SubscriptionGenerator
 from rail_django.generators.types import TypeGenerator
-from rail_django.subscriptions.registry import (
+from rail_django.extensions.subscriptions.registry import (
+    _SUBSCRIPTION_REGISTRY,
     clear_subscription_registry,
     iter_subscriptions_for_model,
 )

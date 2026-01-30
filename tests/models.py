@@ -157,3 +157,17 @@ class TenantProject(models.Model):
     class Meta:
         app_label = "tests"
         verbose_name_plural = "tenant projects"
+
+
+class TestGeneratedModel(models.Model):
+    __test__ = False
+    side = models.IntegerField()
+    area = models.GeneratedField(
+        expression=models.F("side") * models.F("side"),
+        output_field=models.BigIntegerField(),
+        db_persist=True,
+    )
+
+    class Meta:
+        app_label = "tests"
+

@@ -74,7 +74,8 @@ def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
     from ..registry import schema_registry
 
     schema_registry.discover_schemas()
-    return SchemaBuilder(schema_name=schema_name, registry=schema_registry)
+    # The registry manages caching of builders now
+    return schema_registry.get_schema_builder(schema_name)
 
 
 def get_schema(schema_name: str = "default") -> graphene.Schema:
@@ -104,14 +105,9 @@ def register_mutation(mutation_class: Type[graphene.Mutation], name: Optional[st
 
 def clear_all_schemas() -> None:
     """Clear all schema builder instances."""
-    with SchemaBuilder._lock:
-        builders = list(SchemaBuilder._instances.values())
-        SchemaBuilder._instances.clear()
-    for builder in builders:
-        try:
-            builder.clear_schema()
-        except Exception:
-            logger.debug("Failed to clear schema builder", exc_info=True)
+    from ..registry import schema_registry
+    
+    schema_registry.clear_builders()
     logger.info("All schemas cleared")
 
 
@@ -122,7 +118,8 @@ def get_all_schema_names() -> List[str]:
     Returns:
         List[str]: List of schema names
     """
-    return list(SchemaBuilder._instances.keys())
+    from ..registry import schema_registry
+    return schema_registry.get_schema_names()
 
 
 # Public API

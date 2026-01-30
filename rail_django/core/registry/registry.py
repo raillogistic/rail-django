@@ -184,6 +184,13 @@ class SchemaRegistry:
         """Check if a schema exists in the registry."""
         return name in self._schemas
 
+    def clear_builders(self) -> None:
+        """Clear all schema builders."""
+        with self._lock:
+            self._schema_builders.clear()
+            self._schema_instance_cache.clear()
+            logger.info("Cleared all schema builders from registry")
+
     def clear(self) -> None:
         """Clear all schemas from the registry."""
         with self._lock:

@@ -148,24 +148,33 @@ for name, mutation in mutations.items():
     print(f"Mutation: {name}")
 ```
 
-## Multiton Pattern
+## Instance Management
 
-SchemaBuilder uses the Multiton pattern - one instance per schema name:
+The `SchemaBuilder` class itself produces a new instance on every instantiation. For consistent schema state and caching, the framework uses the `SchemaRegistry` to manage builder instances.
+
+**Recommended:** Use the helper function or registry:
+
+```python
+from rail_django import get_schema_builder
+
+# Returns the cached instance for "default"
+builder1 = get_schema_builder("default")
+builder2 = get_schema_builder("default")
+assert builder1 is builder2  # True
+```
+
+**Direct Instantiation:**
 
 ```python
 from rail_django import SchemaBuilder
 
-# These return the SAME instance
+# Creates NEW instances every time
 builder1 = SchemaBuilder(schema_name="default")
 builder2 = SchemaBuilder(schema_name="default")
-assert builder1 is builder2  # True
-
-# This returns a DIFFERENT instance
-admin_builder = SchemaBuilder(schema_name="admin")
-assert builder1 is not admin_builder  # True
+assert builder1 is not builder2  # True
 ```
 
-This ensures consistent schema state across your application.
+Use `get_schema_builder` ensures you are working with the shared, cached instance used by the runtime.
 
 ## Model Discovery
 

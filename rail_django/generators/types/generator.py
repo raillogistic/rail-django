@@ -10,7 +10,18 @@ from django.db import models
 from django.db.models.fields import Field
 from graphene_django import DjangoObjectType
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
+from graphene_django.converter import convert_django_field
 from graphql import GraphQLError
+
+# Django 5.0+ GeneratedField support
+try:
+    from django.db.models import GeneratedField
+
+    @convert_django_field.register(GeneratedField)
+    def convert_generated_field(field, registry=None):
+        return convert_django_field(field.output_field, registry)
+except ImportError:
+    pass
 
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter, FilterSet

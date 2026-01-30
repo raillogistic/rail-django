@@ -272,15 +272,11 @@ class QueryBuilderMixin:
         """
         self._subscription_fields = {}
         try:
-            from ...subscriptions.registry import clear_subscription_registry
-
+            from ...extensions.subscriptions.registry import clear_subscription_registry
             clear_subscription_registry(self.schema_name)
-        except Exception:
-            logger.debug(
-                "Failed to clear subscription registry for schema '%s'",
-                self.schema_name,
-                exc_info=True,
-            )
+        except ImportError:
+            logger.warning(f"Subscriptions disabled for schema '{self.schema_name}': No module named 'rail_django.extensions.subscriptions'")
+            return
         try:
             subscriptions = self.subscription_generator.generate_all_subscriptions(
                 models_list

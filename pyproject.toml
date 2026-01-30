@@ -1,22 +1,64 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "rail_django.config.test_settings"
-django_find_project = false
-pythonpath = ["."]
-markers = [
-    "unit: unit tests",
-    "integration: integration tests",
+[project]
+name = "rail-django"
+version = "1.1.4"
+description = "A Django wrapper framework with pre-configured settings and tools."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "Milia Khaled", email = "miliakhaled@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "Django>=5.0",
+    "psycopg2>=2.9.9",
+    "graphene-django>=3.1.5",
+    "graphql-relay>=3.2.0",
+    "django-filter>=23.2",
+    "django-cors-headers>=4.3.0",
+    "PyJWT>=2.8.0",
+    "bleach>=6.1.0",
+    "openpyxl>=3.1.2",
+    "psutil>=5.9.0",
+    "pyotp>=2.9.0",
+    "qrcode>=7.4.2",
+    "PyYAML>=6.0.1",
+    "requests>=2.32.4",
+    "sentry-sdk>=2.8.0",
+    "pillow>=10.3.0",
 ]
 
-[tool.black]
-line-length = 88
-target-version = ["py311"]
+[project.optional-dependencies]
+subscriptions = [
+    "channels>=4.0.0",
+    "channels-graphql-ws>=0.9.0",
+    "daphne>=4.0.0",
+]
 
-[tool.ruff]
-line-length = 88
-target-version = "py311"
-select = ["F"]
-ignore = ["F401"]
+[project.urls]
+Homepage = "https://github.com/raillogistic/rail-django"
+
+[project.scripts]
+rail-admin = "rail_django.bin.rail_admin:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["rail_django*"]
