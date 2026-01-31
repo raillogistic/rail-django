@@ -196,6 +196,15 @@ class FilterOptionSchemaType(graphene.ObjectType):
     is_list = graphene.Boolean(description="Whether this operator accepts a list")
 
 
+class DatePresetType(graphene.ObjectType):
+    """Date preset metadata for filter helpers."""
+
+    key = graphene.String(required=True)
+    label = graphene.String(required=True)
+    days = graphene.Int()
+    start_of_period = graphene.String()
+
+
 class FilterStyleEnum(graphene.Enum):
     """Filter input style."""
 
@@ -245,6 +254,11 @@ class FilterSchemaType(graphene.ObjectType):
     available_operators = graphene.List(
         graphene.String, description="Available operators for nested style"
     )
+    default_operator = graphene.String()
+    preferred_operators = graphene.List(graphene.String)
+    date_presets = graphene.List(DatePresetType)
+    show_in_quick_filter = graphene.Boolean()
+    priority = graphene.Int()
 
 
 class ComputedFilterSchemaType(graphene.ObjectType):

@@ -13,6 +13,49 @@ from ...utils.graphql_meta import get_model_graphql_meta
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_OPERATORS = {
+    "CharField": "icontains",
+    "TextField": "icontains",
+    "EmailField": "icontains",
+    "IntegerField": "eq",
+    "SmallIntegerField": "eq",
+    "BigIntegerField": "eq",
+    "PositiveIntegerField": "eq",
+    "FloatField": "eq",
+    "DecimalField": "eq",
+    "BooleanField": "eq",
+    "NullBooleanField": "eq",
+    "DateField": "eq",
+    "DateTimeField": "gte",
+    "TimeField": "eq",
+    "ForeignKey": "eq",
+    "OneToOneField": "eq",
+    "ManyToManyField": "_some",
+}
+
+PREFERRED_OPERATORS = {
+    "String": ["icontains", "eq", "startsWith", "endsWith", "in"],
+    "Number": ["eq", "gte", "lte", "between", "in"],
+    "Date": ["eq", "gte", "lte", "between", "year", "month"],
+    "DateTime": ["gte", "lte", "between", "eq", "year", "month"],
+    "Boolean": ["eq"],
+    "Relationship": ["eq", "in", "isNull"],
+    "JSON": ["hasKey", "contains", "eq"],
+}
+
+DATE_PRESETS = [
+    {"key": "today", "label": "Today", "days": 0, "start_of_period": "day"},
+    {"key": "yesterday", "label": "Yesterday", "days": -1, "start_of_period": None},
+    {"key": "thisWeek", "label": "This Week", "days": 0, "start_of_period": "week"},
+    {"key": "lastWeek", "label": "Last Week", "days": -7, "start_of_period": "week"},
+    {"key": "thisMonth", "label": "This Month", "days": 0, "start_of_period": "month"},
+    {"key": "lastMonth", "label": "Last Month", "days": -30, "start_of_period": "month"},
+    {"key": "thisQuarter", "label": "This Quarter", "days": 0, "start_of_period": "quarter"},
+    {"key": "thisYear", "label": "This Year", "days": 0, "start_of_period": "year"},
+    {"key": "last30Days", "label": "Last 30 Days", "days": -30, "start_of_period": None},
+    {"key": "last90Days", "label": "Last 90 Days", "days": -90, "start_of_period": None},
+]
+
 
 class FilterExtractorMixin:
     """Mixin for extracting filters."""
@@ -156,11 +199,22 @@ class FilterExtractorMixin:
             base_type = "String"
             if model_field:
                 internal_type = model_field.get_internal_type()
-                if internal_type in ("IntegerField", "SmallIntegerField", "BigIntegerField", "PositiveIntegerField", "FloatField", "DecimalField"):
+                if internal_type in (
+                    "IntegerField",
+                    "SmallIntegerField",
+                    "BigIntegerField",
+                    "PositiveIntegerField",
+                    "FloatField",
+                    "DecimalField",
+                ):
                     base_type = "Number"
                 elif internal_type in ("BooleanField", "NullBooleanField"):
                     base_type = "Boolean"
-                elif internal_type in ("DateField", "DateTimeField", "TimeField"):
+                elif internal_type == "DateField":
+                    base_type = "Date"
+                elif internal_type == "DateTimeField":
+                    base_type = "DateTime"
+                elif internal_type == "TimeField":
                     base_type = "Date"
                 elif internal_type in ("ForeignKey", "OneToOneField", "ManyToManyField"):
                     base_type = "Relationship"
@@ -234,6 +288,15 @@ class FilterExtractorMixin:
                 "options": options,
                 "filter_input_type": type_name,
                 "available_operators": available_operators,
+                "default_operator": self._get_default_operator(
+                    model_field, base_type, available_operators
+                ),
+                "preferred_operators": self._get_preferred_operators(
+                    base_type, available_operators
+                ),
+                "date_presets": self._get_date_presets(base_type),
+                "show_in_quick_filter": self._get_show_in_quick_filter(model_field),
+                "priority": self._get_field_priority(model, model_field),
             }
         except Exception as e:
             logger.warning(f"Error analyzing filter field {field_name} for {model.__name__}: {e}")
@@ -315,3 +378,66 @@ class FilterExtractorMixin:
                     "nested_filter_type": f"{related_model.__name__}WhereInput",
                 })
         return relation_filters
+
+    def _get_default_operator(
+        self,
+        model_field: Optional[models.Field],
+        base_type: str,
+        available_operators: list[str],
+    ) -> str:
+        if model_field:
+            default = DEFAULT_OPERATORS.get(model_field.get_internal_type())
+            if default and default in available_operators:
+                return default
+        preferred = PREFERRED_OPERATORS.get(base_type, [])
+        for operator in preferred:
+            if operator in available_operators:
+                return operator
+        return available_operators[0] if available_operators else "eq"
+
+    def _get_preferred_operators(
+        self, base_type: str, available_operators: list[str]
+    ) -> list[str]:
+        preferred = PREFERRED_OPERATORS.get(base_type, [])
+        ordered = [op for op in preferred if op in available_operators]
+        ordered += [op for op in available_operators if op not in ordered]
+        return ordered
+
+    def _get_date_presets(self, base_type: str) -> Optional[list[dict]]:
+        if base_type not in ("Date", "DateTime"):
+            return None
+        return DATE_PRESETS
+
+    def _get_show_in_quick_filter(
+        self, model_field: Optional[models.Field]
+    ) -> bool:
+        if not model_field:
+            return False
+        if getattr(model_field, "primary_key", False):
+            return True
+        field_name = model_field.name.lower()
+        return field_name in {
+            "name",
+            "title",
+            "status",
+            "state",
+            "created_at",
+            "created",
+            "updated_at",
+            "updated",
+            "date",
+            "type",
+        }
+
+    def _get_field_priority(
+        self, model: type[models.Model], model_field: Optional[models.Field]
+    ) -> int:
+        if not model_field:
+            return 999
+        try:
+            for index, field in enumerate(model._meta.fields):
+                if field is model_field:
+                    return index
+        except Exception:
+            pass
+        return 999
