@@ -225,6 +225,7 @@ class FilterExtractorMixin:
                     })
 
             return {
+                "name": to_camel_case(field_name),
                 "field_name": field_name,
                 "field_label": field_label,
                 "base_type": base_type,
@@ -252,11 +253,23 @@ class FilterExtractorMixin:
             graphql_meta = get_model_graphql_meta(model)
             if graphql_meta:
                 if graphql_meta.filter_presets:
+                    from graphene.utils.str_converters import to_camel_case
                     for name, definition in graphql_meta.filter_presets.items():
-                        presets.append({"name": name, "description": f"Preset: {name}", "filter_json": json.dumps(definition)})
+                        presets.append({
+                            "name": to_camel_case(name),
+                            "preset_name": name,
+                            "description": f"Preset: {name}",
+                            "filter_json": json.dumps(definition)
+                        })
                 if hasattr(graphql_meta, "computed_filters") and graphql_meta.computed_filters:
+                    from graphene.utils.str_converters import to_camel_case
                     for name, definition in graphql_meta.computed_filters.items():
-                        computed_filters.append({"name": name, "filter_type": definition.get("filter_type", "string"), "description": definition.get("description", "")})
+                        computed_filters.append({
+                            "name": to_camel_case(name),
+                            "field_name": name,
+                            "filter_type": definition.get("filter_type", "string"),
+                            "description": definition.get("description", "")
+                        })
             try:
                 from ...core.settings import FilteringSettings
                 filtering_settings = FilteringSettings.from_schema(self.schema_name)
@@ -291,8 +304,12 @@ class FilterExtractorMixin:
                 related_model = getattr(field, "related_model", None)
                 if not related_model: continue
                 relation_type = "MANY_TO_MANY" if (is_m2m or is_reverse_m2m) else "REVERSE_FK"
+
+                from graphene.utils.str_converters import to_camel_case
+
                 relation_filters.append({
-                    "relation_name": field.name,
+                    "name": to_camel_case(field.name),
+                    "field_name": field.name,
                     "relation_type": relation_type,
                     "supports_some": True, "supports_every": True, "supports_none": True, "supports_count": True,
                     "nested_filter_type": f"{related_model.__name__}WhereInput",

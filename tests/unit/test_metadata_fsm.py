@@ -8,7 +8,11 @@ from rail_django.extensions.metadata import utils
 # Mock django_fsm if not present
 module_name = 'django_fsm'
 if module_name not in sys.modules:
-    sys.modules[module_name] = MagicMock()
+    mock_fsm = MagicMock()
+    class MockFSMFieldClass:
+        pass
+    mock_fsm.FSMField = MockFSMFieldClass
+    sys.modules[module_name] = mock_fsm
 
 class MockFSMField:
     pass

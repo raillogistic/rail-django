@@ -125,8 +125,12 @@ class FieldExtractorMixin:
             # GraphQL type mapping
             graphql_type = self._map_to_graphql_type(field_type, field)
 
+            from graphene.utils.str_converters import to_camel_case
+            camel_name = to_camel_case(field.name)
+
             return {
-                "name": field.name,
+                "name": camel_name,
+                "field_name": field.name,
                 "verbose_name": str(getattr(field, "verbose_name", field.name)),
                 "help_text": str(getattr(field, "help_text", "") or ""),
                 "field_type": field_type,
@@ -199,6 +203,7 @@ class FieldExtractorMixin:
     ) -> Optional[dict]:
         """Extract schema for a relationship."""
         try:
+            from graphene.utils.str_converters import to_camel_case
             is_reverse = not hasattr(field, "remote_field") or field.auto_created
 
             if is_reverse:
@@ -229,7 +234,8 @@ class FieldExtractorMixin:
                     pass
 
             return {
-                "name": field.name
+                "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
+                "field_name": field.name
                 if hasattr(field, "name")
                 else field.get_accessor_name(),
                 "verbose_name": str(

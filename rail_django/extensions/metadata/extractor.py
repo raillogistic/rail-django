@@ -66,14 +66,16 @@ class ModelSchemaExtractor(
             except (model.DoesNotExist, ValueError):
                 pass
 
+        from graphene.utils.str_converters import to_camel_case
+
         result = {
             "app": app_name,
             "model": model_name,
             "verbose_name": str(meta.verbose_name),
             "verbose_name_plural": str(meta.verbose_name_plural),
-            "primary_key": meta.pk.name if meta.pk else "id",
-            "ordering": list(meta.ordering) if meta.ordering else [],
-            "unique_together": [list(ut) for ut in meta.unique_together]
+            "primary_key": to_camel_case(meta.pk.name) if meta.pk else "id",
+            "ordering": [("-" + to_camel_case(o[1:])) if o.startswith("-") else to_camel_case(o) for o in meta.ordering] if meta.ordering else [],
+            "unique_together": [[to_camel_case(f) for f in ut] for ut in meta.unique_together]
             if meta.unique_together
             else [],
             "fields": self._extract_fields(model, user, instance=instance),
@@ -99,6 +101,8 @@ class ModelSchemaExtractor(
         if not graphql_meta or not hasattr(graphql_meta, "field_groups"):
             return []
 
+        from graphene.utils.str_converters import to_camel_case
+
         groups = []
         for group in graphql_meta.field_groups:
             groups.append(
@@ -106,7 +110,7 @@ class ModelSchemaExtractor(
                     "key": group.get("key"),
                     "label": group.get("label"),
                     "description": group.get("description"),
-                    "fields": group.get("fields", []),
+                    "fields": [to_camel_case(f) for f in group.get("fields", [])],
                     "collapsed": group.get("collapsed", False),
                 }
             )
@@ -114,6 +118,7 @@ class ModelSchemaExtractor(
 
     def _extract_templates(self, model: Any, user: Any) -> list[dict]:
         """Extract available PDF templates for the model."""
+        from graphene.utils.str_converters import to_camel_case
         templates = []
         # Filter templates for this model
         for url_path, definition in template_registry.all().items():
@@ -133,7 +138,7 @@ class ModelSchemaExtractor(
                         "allowed": True,
                         "denial_reason": None,
                         "allow_client_data": definition.allow_client_data,
-                        "client_data_fields": list(definition.client_data_fields),
+                        "client_data_fields": [to_camel_case(f) for f in definition.client_data_fields],
                         "client_data_schema": None,  # complex to serialize fully
                     }
                 )
@@ -194,11 +199,12 @@ class ModelSchemaExtractor(
 
         # Method mutations
         introspector = ModelIntrospector.for_model(model)
+        from graphene.utils.str_converters import to_camel_case
         for name, info in introspector.get_model_methods().items():
             if info.is_mutation:
                 results.append(
                     {
-                        "name": name,
+                        "name": to_camel_case(name),
                         "operation": "custom",
                         "description": str(info.method.__doc__ or "").strip(),
                         "method_name": name,

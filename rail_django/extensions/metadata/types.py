@@ -41,6 +41,7 @@ class FieldSchemaType(graphene.ObjectType):
 
     # Identity
     name = graphene.String(required=True)
+    field_name = graphene.String(required=True)
     verbose_name = graphene.String(required=True)
     help_text = graphene.String()
 
@@ -109,6 +110,7 @@ class RelationshipSchemaType(graphene.ObjectType):
     """Relationship field schema."""
 
     name = graphene.String(required=True)
+    field_name = graphene.String(required=True)
     verbose_name = graphene.String(required=True)
     help_text = graphene.String()
 
@@ -150,6 +152,7 @@ class InputFieldSchemaType(graphene.ObjectType):
     """Mutation input field schema."""
 
     name = graphene.String(required=True)
+    field_name = graphene.String(required=True)
     field_type = graphene.String(required=True)
     graphql_type = graphene.String(required=True)
     required = graphene.Boolean(required=True)
@@ -203,7 +206,8 @@ class FilterStyleEnum(graphene.Enum):
 class RelationFilterSchemaType(graphene.ObjectType):
     """Relation filter schema for M2M and reverse relations."""
 
-    relation_name = graphene.String(required=True)
+    name = graphene.String(required=True)
+    field_name = graphene.String(required=True)
     relation_type = graphene.String(required=True)
     supports_some = graphene.Boolean(required=True)
     supports_every = graphene.Boolean(required=True)
@@ -216,6 +220,7 @@ class FilterPresetType(graphene.ObjectType):
     """Filter preset metadata."""
 
     name = graphene.String(required=True)
+    preset_name = graphene.String(required=True)
     description = graphene.String()
     filter_json = graphene.JSONString(required=True)
 
@@ -223,6 +228,7 @@ class FilterPresetType(graphene.ObjectType):
 class FilterSchemaType(graphene.ObjectType):
     """Filter field schema with support for both flat and nested styles."""
 
+    name = graphene.String(required=True)
     field_name = graphene.String(required=True)
     field_label = graphene.String(required=True)
     base_type = graphene.String(
@@ -245,6 +251,7 @@ class ComputedFilterSchemaType(graphene.ObjectType):
     """Computed filter schema."""
 
     name = graphene.String(required=True)
+    field_name = graphene.String(required=True)
     filter_type = graphene.String(required=True)
     description = graphene.String()
 
