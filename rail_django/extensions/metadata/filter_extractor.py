@@ -137,7 +137,10 @@ class FilterExtractorMixin:
 
             available_operators = []
             if hasattr(input_type, "_meta") and hasattr(input_type._meta, "fields"):
-                available_operators = list(input_type._meta.fields.keys())
+                available_operators = [
+                    getattr(op_field, "name", None) or op_name
+                    for op_name, op_field in input_type._meta.fields.items()
+                ]
 
             model_field = None
             field_label = field_name
@@ -254,6 +257,7 @@ class FilterExtractorMixin:
                 }
 
                 for op_name, op_field in input_type._meta.fields.items():
+                    graphql_name = getattr(op_field, "name", None) or op_name
                     op_type = op_field.type
                     is_list = False
                     temp_type = op_type
@@ -264,15 +268,15 @@ class FilterExtractorMixin:
                     op_graphql_type = (getattr(temp_type, "_meta", None) and getattr(temp_type._meta, "name", None)) or str(temp_type)
                     field_choices = None
                     if model_field and hasattr(model_field, "choices") and model_field.choices:
-                        if op_name in ("eq", "in", "neq", "notIn"):
+                        if graphql_name in ("eq", "in", "neq", "notIn"):
                             field_choices = [{"value": str(c[0]), "label": str(c[1])} for c in model_field.choices]
 
-                    op_label = operator_labels.get(op_name, op_name)
+                    op_label = operator_labels.get(graphql_name, graphql_name)
                     options.append({
-                        "name": op_name,
-                        "lookup": op_name,
+                        "name": graphql_name,
+                        "lookup": graphql_name,
                         "label": str(op_label),
-                        "help_text": op_name,
+                        "help_text": graphql_name,
                         "choices": field_choices,
                         "graphql_type": op_graphql_type,
                         "is_list": is_list
