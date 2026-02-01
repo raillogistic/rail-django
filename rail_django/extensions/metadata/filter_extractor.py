@@ -354,30 +354,159 @@ class FilterExtractorMixin:
             "computed_filters": computed_filters,
         }
 
-    def _extract_relation_filters(self, model: type[models.Model]) -> list[dict]:
-        """Extract relation filter metadata."""
+    def _extract_relation_filters(
+        self, model: type[models.Model], include_nested_schema: bool = False, depth: int = 0, max_depth: int = 2
+    ) -> list[dict]:
+        """Extract relation filter metadata with optional nested schema support.
+
+        Args:
+            model: The Django model to extract relations from.
+            include_nested_schema: Whether to include nested field/operator info.
+            depth: Current recursion depth.
+            max_depth: Maximum recursion depth for nested schemas.
+        """
         relation_filters = []
         for field in model._meta.get_fields():
             if not hasattr(field, "name"): continue
+            is_fk = isinstance(field, models.ForeignKey)
+            is_o2o = isinstance(field, models.OneToOneField)
             is_m2m = isinstance(field, models.ManyToManyField)
             is_reverse = hasattr(field, "related_model") and not hasattr(field, "remote_field")
             is_reverse_m2m = hasattr(field, "many_to_many") and field.many_to_many
             is_reverse_fk = hasattr(field, "one_to_many") and field.one_to_many
-            if is_m2m or is_reverse_m2m or is_reverse_fk:
-                related_model = getattr(field, "related_model", None)
-                if not related_model: continue
-                relation_type = "MANY_TO_MANY" if (is_m2m or is_reverse_m2m) else "REVERSE_FK"
 
-                from graphene.utils.str_converters import to_camel_case
+            if not (is_fk or is_o2o or is_m2m or is_reverse_m2m or is_reverse_fk):
+                continue
 
-                relation_filters.append({
-                    "name": to_camel_case(field.name),
-                    "field_name": field.name,
-                    "relation_type": relation_type,
-                    "supports_some": True, "supports_every": True, "supports_none": True, "supports_count": True,
-                    "nested_filter_type": f"{related_model.__name__}WhereInput",
-                })
+            related_model = getattr(field, "related_model", None)
+            if not related_model:
+                continue
+
+            # Determine relation type
+            if is_fk:
+                relation_type = "FOREIGN_KEY"
+            elif is_o2o:
+                relation_type = "ONE_TO_ONE"
+            elif is_m2m or is_reverse_m2m:
+                relation_type = "MANY_TO_MANY"
+            else:
+                relation_type = "REVERSE_FK"
+
+            from graphene.utils.str_converters import to_camel_case
+
+            relation_data = {
+                "name": to_camel_case(field.name),
+                "field_name": field.name,
+                "field_label": str(getattr(field, "verbose_name", field.name)),
+                "relation_type": relation_type,
+                "related_app": related_model._meta.app_label,
+                "related_model": related_model.__name__,
+                "supports_direct_filter": relation_type in ("FOREIGN_KEY", "ONE_TO_ONE"),
+                "supports_some": relation_type in ("MANY_TO_MANY", "REVERSE_FK"),
+                "supports_every": relation_type in ("MANY_TO_MANY", "REVERSE_FK"),
+                "supports_none": relation_type in ("MANY_TO_MANY", "REVERSE_FK"),
+                "supports_count": relation_type in ("MANY_TO_MANY", "REVERSE_FK"),
+                "supports_is_null": relation_type == "FOREIGN_KEY",
+                "nested_filter_type": f"{related_model.__name__}WhereInput",
+            }
+
+            # Include nested schema if requested and within depth limit
+            if include_nested_schema and depth < max_depth:
+                try:
+                    nested_fields = self._extract_nested_filter_fields(
+                        related_model, depth + 1, max_depth
+                    )
+                    relation_data["nested_fields"] = nested_fields
+                except Exception as e:
+                    logger.debug(f"Could not extract nested schema for {field.name}: {e}")
+
+            relation_filters.append(relation_data)
         return relation_filters
+
+    def _extract_nested_filter_fields(
+        self, model: type[models.Model], depth: int = 0, max_depth: int = 2
+    ) -> list[dict]:
+        """Extract a lightweight version of filter fields for nested relations.
+
+        This provides just enough information for the frontend to render
+        field selectors without requiring a full schema fetch.
+        """
+        from graphene.utils.str_converters import to_camel_case
+
+        fields = []
+        for field in model._meta.get_fields():
+            if not hasattr(field, "name"):
+                continue
+            if field.name.startswith("_") or "polymorphic" in field.name.lower():
+                continue
+
+            # Skip reverse relations at this level (too complex for lightweight extraction)
+            if hasattr(field, "related_model") and not hasattr(field, "remote_field"):
+                continue
+
+            field_name = field.name
+            verbose_name = str(getattr(field, "verbose_name", field_name))
+
+            # Determine base type
+            base_type = "String"
+            is_relation = False
+            if hasattr(field, "get_internal_type"):
+                internal_type = field.get_internal_type()
+                if internal_type in (
+                    "IntegerField", "SmallIntegerField", "BigIntegerField",
+                    "PositiveIntegerField", "FloatField", "DecimalField",
+                ):
+                    base_type = "Number"
+                elif internal_type in ("BooleanField", "NullBooleanField"):
+                    base_type = "Boolean"
+                elif internal_type == "DateField":
+                    base_type = "Date"
+                elif internal_type == "DateTimeField":
+                    base_type = "DateTime"
+                elif internal_type in ("ForeignKey", "OneToOneField", "ManyToManyField"):
+                    base_type = "Relationship"
+                    is_relation = True
+                elif internal_type == "JSONField":
+                    base_type = "JSON"
+
+            field_data = {
+                "name": to_camel_case(field_name),
+                "field_name": field_name,
+                "field_label": verbose_name,
+                "base_type": base_type,
+                "is_relation": is_relation,
+            }
+
+            # Add relation info if it's a relation field
+            if is_relation and hasattr(field, "related_model") and field.related_model:
+                related = field.related_model
+                field_data["related_app"] = related._meta.app_label
+                field_data["related_model"] = related.__name__
+
+            # Get default operator
+            default_op = self._get_default_operator(
+                field if hasattr(field, "get_internal_type") else None,
+                base_type,
+                PREFERRED_OPERATORS.get(base_type, ["eq"])
+            )
+            field_data["default_operator"] = default_op
+            field_data["preferred_operators"] = PREFERRED_OPERATORS.get(base_type, ["eq"])
+
+            fields.append(field_data)
+
+        return fields
+
+    def extract_relation_filters_with_depth(
+        self, model: type[models.Model], max_depth: int = 2
+    ) -> list[dict]:
+        """Extract relation filters with nested schema information up to max_depth.
+
+        This is used by the GraphQL schema to provide nested field information
+        for lazy loading in the frontend.
+        """
+        return self._extract_relation_filters(
+            model, include_nested_schema=True, depth=0, max_depth=max_depth
+        )
 
     def _get_default_operator(
         self,
