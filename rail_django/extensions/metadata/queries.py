@@ -64,6 +64,11 @@ class ModelSchemaQuery(graphene.ObjectType):
         description="Get filter metadata for a specific field",
     )
 
+    metadataDeployVersion = graphene.String(
+        key=graphene.String(description="Deployment version key"),
+        description="Deployment-level metadata version for cache invalidation.",
+    )
+
     def resolve_modelSchema(
         self,
         info,
@@ -114,6 +119,11 @@ class ModelSchemaQuery(graphene.ObjectType):
             return extractor.extract_filter_field(model_cls, field)
         except LookupError:
             return None
+
+    def resolve_metadataDeployVersion(self, info, key: Optional[str] = None) -> str:
+        from .deploy_version import get_deploy_version
+
+        return get_deploy_version(key)
 
     def resolve_availableModels(self, info, app: Optional[str] = None) -> list[dict]:
         """

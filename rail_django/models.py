@@ -250,6 +250,22 @@ class SchemaSnapshotModel(django_models.Model):
         return f"{self.schema_name} ({self.version})"
 
 
+class MetadataDeployVersionModel(django_models.Model):
+    """Deployment-level metadata version for cache invalidation."""
+
+    key = django_models.SlugField(max_length=50, unique=True, default="default")
+    version = django_models.CharField(max_length=64, default="init")
+    updated_at = django_models.DateTimeField(auto_now=True)
+    created_at = django_models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "rail_django_metadata_deploy_version"
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return f"{self.key} ({self.version})"
+
+
 __all__ = [
     "AuditEventModel",
     "ReportingDataset",
@@ -260,5 +276,6 @@ __all__ = [
     "TaskExecution",
     "SchemaRegistryModel",
     "SchemaSnapshotModel",
+    "MetadataDeployVersionModel",
     "SavedFilter",
 ]

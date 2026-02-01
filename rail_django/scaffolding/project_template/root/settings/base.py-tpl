@@ -218,6 +218,13 @@ LOGGING = {
 # Rail Django Configuration
 # Overriding defaults from rail_django.config.defaults
 # This dictionary controls the behavior of the auto-generated GraphQL schema.
+RAIL_METADATA_DEPLOY_VERSION = {
+    # How to bump metadata deploy version: "migration", "startup", "command", or "none"
+    "mode": env("RAIL_METADATA_DEPLOY_VERSION_MODE", default="command"),
+    # Key for multi-tenant/segment deployments (default single key)
+    "key": env("RAIL_METADATA_DEPLOY_VERSION_KEY", default="default"),
+}
+
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
         # Apps to exclude from schema generation (e.g. ['django.contrib.auth'])

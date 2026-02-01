@@ -184,6 +184,12 @@ CORS_ALLOWED_ORIGINS = _split_env_list(os.environ.get("CORS_ALLOWED_ORIGINS", ""
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)
 
+# Metadata deploy version configuration
+RAIL_METADATA_DEPLOY_VERSION = {
+    "mode": os.environ.get("RAIL_METADATA_DEPLOY_VERSION_MODE", "command"),
+    "key": os.environ.get("RAIL_METADATA_DEPLOY_VERSION_KEY", "default"),
+}
+
 # Environment overrides for limits
 if os.environ.get("RAIL_MAX_FILTER_DEPTH"):
     try:

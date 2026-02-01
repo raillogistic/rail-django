@@ -83,6 +83,11 @@ if is_truthy "${RUN_MIGRATIONS:-false}"; then
     python manage.py migrate
 fi
 
+if [ "${RAIL_METADATA_DEPLOY_VERSION_MODE:-}" = "command" ]; then
+    echo "Bumping metadata deploy version..."
+    python manage.py bump_metadata_deploy_version
+fi
+
 if is_truthy "${RUN_COLLECTSTATIC:-false}"; then
     echo "Collecting static files..."
     python manage.py collectstatic --noinput
