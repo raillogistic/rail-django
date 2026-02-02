@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 
 from ...core.exceptions import GraphQLAutoError
 from django.db import IntegrityError, models
+from django.db.models.deletion import ProtectedError
 
 
 class MutationError(graphene.ObjectType):
@@ -210,11 +211,40 @@ def _extract_not_null_field(error_msg: str) -> Optional[str]:
     return None
 
 
+def _safe_exception_message(model: type[models.Model], exc: Exception) -> str:
+    if isinstance(exc, ProtectedError) or hasattr(exc, "protected_objects"):
+        protected_objects = getattr(exc, "protected_objects", None)
+        if isinstance(protected_objects, (list, tuple, set)):
+            count = len(protected_objects)
+            related_models = {
+                getattr(obj.__class__._meta, "verbose_name", obj.__class__.__name__)
+                for obj in protected_objects
+            }
+            models_label = ", ".join(sorted(str(m) for m in related_models))
+            if models_label:
+                return (
+                    f"Cannot delete {model.__name__}: {count} related object(s) "
+                    f"({models_label}) protect this record."
+                )
+            return (
+                f"Cannot delete {model.__name__}: {count} related object(s) "
+                "protect this record."
+            )
+        return (
+            f"Cannot delete {model.__name__}: related objects protect this record."
+        )
+
+    try:
+        return str(exc)
+    except Exception:
+        return ""
+
+
 def build_integrity_errors(
     model: type[models.Model], exc: IntegrityError
 ) -> list[MutationError]:
     """Create friendly errors for database integrity failures."""
-    error_msg = str(exc)
+    error_msg = _safe_exception_message(model, exc)
     field = _extract_not_null_field(error_msg)
     if field:
         field_name = _map_column_to_field(model, field) or field
@@ -247,4 +277,6 @@ def build_integrity_errors(
     if "check constraint" in lower_msg:
         return [build_mutation_error("Value violates a database constraint.", None)]
 
+    if error_msg:
+        return [build_mutation_error(error_msg, None)]
     return [build_mutation_error("Database integrity error.", None)]

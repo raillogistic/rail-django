@@ -284,6 +284,9 @@ class FilterConfigType(graphene.ObjectType):
     dual_mode_enabled = graphene.Boolean(
         required=True, description="Both filter styles available"
     )
+    supports_quick = graphene.Boolean(
+        required=True, description="Quick search supported"
+    )
     # Advanced filtering capabilities
     supports_fts = graphene.Boolean(
         required=True, description="Full-text search supported"

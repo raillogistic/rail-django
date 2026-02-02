@@ -63,6 +63,7 @@ class FilterExtractorMixin:
     def extract_model_filters(self, model: type[models.Model]) -> list[dict]:
         """Extract all available filters for a model."""
         filters = []
+        supports_quick = self._supports_quick_filter(model)
         try:
             from ...generators.filters import get_nested_filter_generator
             generator = get_nested_filter_generator(self.schema_name)
@@ -70,6 +71,8 @@ class FilterExtractorMixin:
 
             for field_name, input_field in where_input_type._meta.fields.items():
                 if field_name in ["AND", "OR", "NOT"]:
+                    continue
+                if field_name == "quick" and not supports_quick:
                     continue
                 filter_meta = self._analyze_filter_field(model, field_name, input_field)
                 if filter_meta:
@@ -82,6 +85,8 @@ class FilterExtractorMixin:
         self, model: type[models.Model], field_name: str
     ) -> Optional[dict]:
         """Extract metadata for a specific filter field."""
+        if field_name.lower() == "quick" and not self._supports_quick_filter(model):
+            return None
         try:
             from ...generators.filters import get_nested_filter_generator
             from graphene.utils.str_converters import to_camel_case
@@ -316,6 +321,7 @@ class FilterExtractorMixin:
         presets = []
         computed_filters = []
         supports_fts = False
+        supports_quick = self._supports_quick_filter(model)
         try:
             graphql_meta = get_model_graphql_meta(model)
             if graphql_meta:
@@ -352,11 +358,22 @@ class FilterExtractorMixin:
             "supports_or": True,
             "supports_not": True,
             "dual_mode_enabled": False,
+            "supports_quick": supports_quick,
             "supports_fts": supports_fts,
             "supports_aggregation": True,
             "presets": presets,
             "computed_filters": computed_filters,
         }
+
+    def _supports_quick_filter(self, model: type[models.Model]) -> bool:
+        try:
+            from ...generators.filters import AdvancedFilterGenerator
+
+            filter_generator = AdvancedFilterGenerator(schema_name=self.schema_name)
+            filter_class = filter_generator.generate_filter_set(model)
+            return bool(getattr(filter_class, "base_filters", {}).get("quick"))
+        except Exception:
+            return False
 
     def _extract_relation_filters(
         self, model: type[models.Model], include_nested_schema: bool = False, depth: int = 0, max_depth: int = 2
