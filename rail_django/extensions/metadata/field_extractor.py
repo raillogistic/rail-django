@@ -312,6 +312,17 @@ class FieldExtractorMixin:
                 else None
             )
 
+            related_query_name = None
+            if hasattr(field, "related_query_name"):
+                candidate = field.related_query_name
+                if callable(candidate):
+                    try:
+                        related_query_name = candidate()
+                    except Exception:
+                        related_query_name = None
+                elif isinstance(candidate, str):
+                    related_query_name = candidate
+
             return {
                 "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
                 "field_name": field.name
@@ -333,9 +344,7 @@ class FieldExtractorMixin:
                 "is_to_one": is_to_one,
                 "is_to_many": is_to_many,
                 "on_delete": on_delete_name,
-                "related_name": getattr(field, "related_query_name", lambda: None)()
-                if hasattr(field, "related_query_name")
-                else None,
+                "related_name": related_query_name,
                 "through_model": field.remote_field.through._meta.label
                 if hasattr(field, "remote_field")
                 and hasattr(field.remote_field, "through")

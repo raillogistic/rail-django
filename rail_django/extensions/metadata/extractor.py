@@ -108,7 +108,8 @@ class ModelSchemaExtractor(
         from graphene.utils.str_converters import to_camel_case
 
         groups = []
-        for group in graphql_meta.field_groups:
+        field_groups = getattr(graphql_meta, "field_groups", None) or []
+        for group in field_groups:
             groups.append(
                 {
                     "key": group.get("key"),
