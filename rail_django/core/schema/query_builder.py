@@ -30,10 +30,7 @@ class QueryBuilderMixin:
     def _pluralize_name(self, name: str) -> str:
         """
         Pluralize a name for list queries.
-        Handles common English pluralization rules including:
-        - Words ending in y
-        - Words ending in s, x, z, ch, sh
-        - Common irregulars
+        Uses a simple suffix-only rule (always append "s").
 
         Args:
             name: The singular name to pluralize
@@ -44,41 +41,6 @@ class QueryBuilderMixin:
         value = str(name or "").strip()
         if not value:
             return value
-
-        # Handle common irregular plurals
-        irregulars = {
-            "person": "people",
-            "child": "children",
-            "foot": "feet",
-            "tooth": "teeth",
-            "mouse": "mice",
-            "goose": "geese",
-            "man": "men",
-            "woman": "women",
-        }
-
-        # Check for case-insensitive match
-        lower_val = value.lower()
-        if lower_val in irregulars:
-            plural = irregulars[lower_val]
-            if value.isupper():
-                return plural.upper()
-            if value[0].isupper():
-                # Handle Title Case (e.g. Person -> People)
-                # Note: istitle() might be false for "PersonProfile" but we are checking exact match so "Person" is title.
-                return plural.capitalize()
-            return plural
-
-        # Words ending in 'y'
-        if lower_val.endswith("y"):
-            # If the letter before 'y' is a consonant, change to 'ies'
-            if len(value) > 1 and lower_val[-2] not in "aeiou":
-                return f"{value[:-1]}ies"
-
-        # Words ending in s, x, z, ch, sh
-        if lower_val.endswith(("s", "x", "z", "ch", "sh")):
-            return f"{value}es"
-
         return f"{value}s"
 
     def _get_list_alias(self, model: type[models.Model]) -> Optional[str]:
@@ -91,17 +53,15 @@ class QueryBuilderMixin:
         Returns:
             Optional[str]: The camelCase alias or None
         """
+        original_attrs = getattr(model._meta, "original_attrs", {}) or {}
+        if "verbose_name_plural" not in original_attrs:
+            return None
         plural = getattr(model._meta, "verbose_name_plural", None)
         if not plural:
             return None
         alias = str(plural).strip()
         if not alias:
             return None
-        original_attrs = getattr(model._meta, "original_attrs", {}) or {}
-        if "verbose_name_plural" not in original_attrs:
-            singular = str(getattr(model._meta, "verbose_name", "")).strip()
-            if singular and alias == f"{singular}s":
-                alias = self._pluralize_name(singular)
         alias = unicodedata.normalize("NFKD", alias)
         alias = alias.encode("ascii", "ignore").decode("ascii")
         alias = alias.replace(" ", "_").replace("-", "_")
@@ -128,8 +88,8 @@ class QueryBuilderMixin:
             # Ensure model_name starts with lowercase (camelCase)
             model_name = to_camel_case(to_snake_case(model.__name__))
             
-            # Use the singular model name for list queries (no pluralization).
-            plural_name = model_name
+            # Use simple pluralization for list queries (ignore verbose_name_plural).
+            plural_name = self._pluralize_name(model_name)
 
             # Get model managers using introspector
             from ...generators.introspector import ModelIntrospector
@@ -169,7 +129,7 @@ class QueryBuilderMixin:
                         )
                         self._query_fields[model_name] = single_query
 
-                        # List query: use singular model name.
+                        # List query: uses simple pluralization.
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
@@ -207,7 +167,7 @@ class QueryBuilderMixin:
                             to_camel_case(f"{model_name}_{manager_name}")
                         ] = single_query
 
-                        # List query: use singular model name for custom managers.
+                        # List query: uses simple pluralization for custom managers.
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
