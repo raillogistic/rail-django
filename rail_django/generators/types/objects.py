@@ -2,6 +2,7 @@
 Object type generation helpers.
 """
 
+import logging
 from typing import Any, Dict, List, Optional, Type
 
 import graphene
@@ -11,6 +12,17 @@ from graphene_django import DjangoObjectType
 from ...utils.history import serialize_history_changes
 from .inheritance import inheritance_handler
 from ..introspector import ModelIntrospector
+
+logger = logging.getLogger(__name__)
+
+
+class RowMutationPermissionsType(graphene.ObjectType):
+    """Row-level mutation permissions for update/delete actions."""
+
+    can_update = graphene.Boolean(required=True)
+    can_delete = graphene.Boolean(required=True)
+    update_reason = graphene.String()
+    delete_reason = graphene.String()
 
 try:
     import graphql
@@ -92,6 +104,67 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
     # add desc field for desc
     type_attrs["desc"] = graphene.String(description="Description of the object")
     type_attrs["resolve_desc"] = desc_resolver()
+
+    type_attrs["row_permissions"] = graphene.Field(
+        RowMutationPermissionsType,
+        description="Row-level mutation permissions for update/delete.",
+    )
+
+    def resolve_row_permissions(self, info):
+        user = getattr(info.context, "user", None)
+        schema_name = getattr(info.context, "schema_name", "default")
+        try:
+            from ...extensions.metadata.extractor import ModelSchemaExtractor
+        except Exception as exc:
+            logger.debug(
+                "Row permissions resolver unavailable for %s.%s: %s",
+                model._meta.app_label,
+                model.__name__,
+                exc,
+            )
+            return {
+                "can_update": True,
+                "can_delete": True,
+                "update_reason": None,
+                "delete_reason": None,
+            }
+        try:
+            extractor = ModelSchemaExtractor(schema_name=schema_name)
+            mutations = extractor._extract_mutations(model, user, instance=self)
+        except Exception as exc:
+            logger.warning(
+                "Failed to compute row permissions for %s.%s: %s",
+                model._meta.app_label,
+                model.__name__,
+                exc,
+            )
+            return {
+                "can_update": True,
+                "can_delete": True,
+                "update_reason": None,
+                "delete_reason": None,
+            }
+
+        def find_op(op: str):
+            for mutation in mutations:
+                op_name = str(
+                    mutation.get("operation") or mutation.get("mutation_type") or ""
+                ).lower()
+                if op_name == op:
+                    return mutation
+            return None
+
+        update = find_op("update")
+        delete = find_op("delete")
+
+        return {
+            "can_update": bool(update.get("allowed")) if update else False,
+            "can_delete": bool(delete.get("allowed")) if delete else False,
+            "update_reason": update.get("reason") if update else None,
+            "delete_reason": delete.get("reason") if delete else None,
+        }
+
+    type_attrs["resolve_row_permissions"] = resolve_row_permissions
     # Add custom field resolvers
     is_historical_model = self._is_historical_model(model)
 
