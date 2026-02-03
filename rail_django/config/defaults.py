@@ -234,6 +234,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "enable_cors_middleware": True,
         "log_queries": True,
         "log_mutations": True,
+        "log_field_level": False,
         "log_introspection": False,
         "log_errors": True,
         "log_performance": True,

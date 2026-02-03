@@ -500,6 +500,8 @@ RAIL_DJANGO_GRAPHQL = {
         "log_queries": True,
         # Log all GraphQL mutations
         "log_mutations": True,
+        # Log non-root field resolutions (very verbose)
+        "log_field_level": False,
         # Log GraphQL introspection fields (e.g. __schema, __type, __typename)
         "log_introspection": False,
         # Log all GraphQL errors

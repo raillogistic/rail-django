@@ -2,8 +2,12 @@
 Field and relationship extraction logic for ModelSchemaExtractor.
 """
 
+import json
 import logging
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any, Optional
+from uuid import UUID
 
 from django.db import models
 from ...security.field_permissions import field_permission_manager, FieldVisibility
@@ -15,6 +19,38 @@ logger = logging.getLogger(__name__)
 
 class FieldExtractorMixin:
     """Mixin for extracting fields and relationships."""
+
+    def _to_json_value(self, value: Any) -> Any:
+        """Coerce values into JSON-serializable structures."""
+        if value is None:
+            return None
+        if hasattr(value, "__json__"):
+            try:
+                return self._to_json_value(value.__json__())
+            except Exception:
+                return str(value)
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, (datetime, date, time)):
+            return value.isoformat()
+        if isinstance(value, UUID):
+            return str(value)
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except Exception:
+                return value.hex()
+        if isinstance(value, set):
+            return [self._to_json_value(v) for v in sorted(value, key=str)]
+        if isinstance(value, (list, tuple)):
+            return [self._to_json_value(v) for v in value]
+        if isinstance(value, dict):
+            return {str(k): self._to_json_value(v) for k, v in value.items()}
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return str(value)
 
     def _extract_fields(
         self,
@@ -76,9 +112,7 @@ class FieldExtractorMixin:
             has_default = field.has_default()
             if has_default and not callable(field.default):
                 try:
-                    default_value = field.default
-                    if hasattr(default_value, "__json__"):
-                        default_value = default_value.__json__()
+                    default_value = self._to_json_value(field.default)
                 except Exception:
                     default_value = str(field.default)
 
@@ -90,7 +124,7 @@ class FieldExtractorMixin:
 
                 # Extract limits
                 if hasattr(v, "limit_value"):
-                    params["limit_value"] = v.limit_value
+                    params["limit_value"] = self._to_json_value(v.limit_value)
 
                 # Extract regex patterns
                 if hasattr(v, "regex"):

@@ -27,6 +27,7 @@ class MiddlewareSettings:
         enable_cors_middleware: Enable CORS handling middleware.
         log_queries: Log query operations.
         log_mutations: Log mutation operations.
+        log_field_level: Log non-root field resolutions (very verbose).
         log_introspection: Log introspection queries.
         log_errors: Log errors that occur during resolution.
         log_performance: Log performance warnings for slow operations.
@@ -44,6 +45,7 @@ class MiddlewareSettings:
     enable_cors_middleware: bool = True
     log_queries: bool = True
     log_mutations: bool = True
+    log_field_level: bool = False
     log_introspection: bool = False
     log_errors: bool = True
     log_performance: bool = True

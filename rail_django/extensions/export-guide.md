@@ -153,7 +153,7 @@ filters = {
 ### Endpoint
 
 ```
-POST /api/export/
+POST /api/v1/export/
 ```
 
 ### Request Format
@@ -213,7 +213,7 @@ Async exports return a JSON payload with `job_id`, `status_url`, and `download_u
 ### API Documentation Endpoint
 
 ```
-GET /api/export/
+GET /api/v1/export/
 ```
 
 Returns API documentation and examples.
@@ -577,13 +577,11 @@ class SecureExportView(ExportView):
 ### Common Issues
 
 1. **GraphQL Filters Not Working**
-
    - Ensure `AdvancedFilterGenerator` is properly configured
    - Check that your model has `GraphQLMeta` configuration
    - Verify filter field names match your model fields
 
 2. **Nested Field Access Fails**
-
    - Check that all relationships exist and are properly defined
    - Ensure foreign key fields are not null
    - Use `select_related` optimization for better performance

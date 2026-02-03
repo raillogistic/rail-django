@@ -94,6 +94,11 @@ Enables/disables specific middleware layers.
 | :--- | :--- | :--- | :--- |
 | `enable_performance_middleware` | `bool` | `True` | Track and log execution time. |
 | `enable_logging_middleware` | `bool` | `True` | Log GraphQL operations and errors. |
+| `log_queries` | `bool` | `True` | Log query operations. |
+| `log_mutations` | `bool` | `True` | Log mutation operations. |
+| `log_field_level` | `bool` | `False` | Log non-root field resolutions (very verbose). |
+| `log_introspection` | `bool` | `False` | Log introspection fields (`__schema`, `__type`, `__typename`). |
+| `log_errors` | `bool` | `True` | Log errors during field resolution. |
 | `performance_threshold_ms` | `int` | `1000` | Threshold for logging "slow" queries. |
 
 ## Environment Variables

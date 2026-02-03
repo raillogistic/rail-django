@@ -334,12 +334,15 @@ class LoggingMiddleware(BaseMiddleware):
 
         operation_type = info.operation.operation.value if info.operation else "unknown"
         field_name = info.field_name
+        is_root_field = self._is_root_field(info)
 
         # Log query/mutation start
         should_log = (
             (operation_type == "query" and self.settings.log_queries) or
             (operation_type == "mutation" and self.settings.log_mutations)
         )
+        if should_log and not (is_root_field or self.settings.log_field_level):
+            should_log = False
         if should_log and not self.settings.log_introspection and self._is_introspection_field(info):
             should_log = False
 
@@ -387,3 +390,11 @@ class LoggingMiddleware(BaseMiddleware):
         parent_type = getattr(info, "parent_type", None)
         parent_name = getattr(parent_type, "name", "") or ""
         return parent_name.startswith("__")
+
+    @staticmethod
+    def _is_root_field(info: Any) -> bool:
+        """Check if this is a root field resolution."""
+        path = getattr(info, "path", None)
+        if path is None:
+            return True
+        return getattr(path, "prev", None) is None
