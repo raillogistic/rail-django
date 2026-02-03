@@ -187,6 +187,7 @@ def generate_paginated_query(
             page = int(kwargs.get("page", 1))
         except (ValueError, TypeError):
             page = 1
+        page = max(1, page)
         try:
             per_page = int(
                 kwargs.get("per_page", self.settings.default_page_size)
@@ -194,6 +195,7 @@ def generate_paginated_query(
         except (ValueError, TypeError):
             per_page = self.settings.default_page_size
         per_page = max(1, min(per_page, self.settings.max_page_size))
+        skip_count = bool(kwargs.get("skip_count"))
 
         # Apply query optimization
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -229,7 +231,32 @@ def generate_paginated_query(
             kwargs.get("distinct_on"),
         )
 
-        # Calculate pagination values
+        if skip_count:
+            # Apply pagination without total count
+            start = (page - 1) * per_page
+            end = start + per_page
+            if items is not None:
+                has_next_page = len(items) > end
+                items = items[start:end]
+            else:
+                items = list(queryset[start : end + 1])
+                has_next_page = len(items) > per_page
+                if has_next_page:
+                    items = items[:per_page]
+
+            page_info = PaginationInfo(
+                total_count=None,
+                page_count=None,
+                current_page=max(1, page),
+                per_page=per_page,
+                has_next_page=has_next_page,
+                has_previous_page=page > 1,
+            )
+
+            items = self._apply_field_masks(items, info, model)
+            return PaginatedResult(items=items, page_info=page_info)
+
+        # Calculate pagination values (with total count)
         if uncapped_total is not None:
             total_count = uncapped_total
         elif items is not None:
@@ -249,7 +276,7 @@ def generate_paginated_query(
         else:
             page = max(1, min(page, page_count))
 
-        # Apply pagination
+        # Apply pagination (with total count)
         start = (page - 1) * per_page
         end = start + per_page
 
@@ -279,6 +306,10 @@ def generate_paginated_query(
         filter_class=filter_class,
         include_pagination=True,
         use_page_based=True,
+    )
+    arguments["skip_count"] = graphene.Argument(
+        graphene.Boolean,
+        description="Skip total count calculation for faster pagination.",
     )
 
     # Add quick filter if available

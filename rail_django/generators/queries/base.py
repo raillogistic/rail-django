@@ -33,6 +33,7 @@ RESERVED_QUERY_ARGS: FrozenSet[str] = frozenset([
     "limit",
     "page",
     "per_page",
+    "skip_count",
     "include",
     "presets",
     "savedFilter",
