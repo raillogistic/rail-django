@@ -161,7 +161,7 @@ class GraphQLSecurityAnalyzer:
                 result.field_count += 1
 
                 # Vérifier l'introspection
-                if selection.name.value in ['__schema', '__type', '__typename']:
+                if selection.name.value in ['__schema', '__type']:
                     result.has_introspection = True
                 elif depth == 1:
                     result.introspection_only = False

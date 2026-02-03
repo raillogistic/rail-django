@@ -267,6 +267,16 @@ class FieldExtractorMixin:
                 except Exception:
                     pass
 
+            if related_model is None:
+                # Skip relationships without a concrete related model (e.g. generic relations).
+                return None
+
+            on_delete_name = None
+            if getattr(field, "remote_field", None) and getattr(
+                field.remote_field, "on_delete", None
+            ):
+                on_delete_name = field.remote_field.on_delete.__name__
+
             return {
                 "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
                 "field_name": field.name
@@ -287,12 +297,7 @@ class FieldExtractorMixin:
                 "is_reverse": is_reverse,
                 "is_to_one": is_to_one,
                 "is_to_many": is_to_many,
-                "on_delete": str(
-                    getattr(field, "remote_field", None)
-                    and getattr(field.remote_field, "on_delete", None).__name__
-                )
-                if hasattr(field, "remote_field")
-                else None,
+                "on_delete": on_delete_name,
                 "related_name": getattr(field, "related_query_name", lambda: None)()
                 if hasattr(field, "related_query_name")
                 else None,
