@@ -128,10 +128,8 @@ class QueryBuilderMixin:
             # Ensure model_name starts with lowercase (camelCase)
             model_name = to_camel_case(to_snake_case(model.__name__))
             
-            # Try to get alias from verbose_name_plural
-            plural_name = self._get_list_alias(model)
-            if not plural_name:
-                plural_name = self._pluralize_name(model_name)
+            # Use the singular model name for list queries (no pluralization).
+            plural_name = model_name
 
             # Get model managers using introspector
             from ...generators.introspector import ModelIntrospector
@@ -171,7 +169,7 @@ class QueryBuilderMixin:
                         )
                         self._query_fields[model_name] = single_query
 
-                        # List query: e.g. 'orders'
+                        # List query: use singular model name.
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
@@ -209,7 +207,7 @@ class QueryBuilderMixin:
                             to_camel_case(f"{model_name}_{manager_name}")
                         ] = single_query
 
-                        # List query: pluralModelnameCustommanager
+                        # List query: use singular model name for custom managers.
                         list_query = self.query_generator.generate_list_query(
                             model, manager_name
                         )
