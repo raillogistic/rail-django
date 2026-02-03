@@ -57,8 +57,10 @@ class FieldExtractorMixin:
         model: type[models.Model],
         user: Any,
         instance: Optional[models.Model] = None,
+        graphql_meta: Optional[Any] = None,
     ) -> list[dict]:
         """Extract all field schemas."""
+        field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
         fields = []
         for field in model._meta.get_fields():
             if field.is_relation:
@@ -66,7 +68,13 @@ class FieldExtractorMixin:
             if not hasattr(field, "name"):
                 continue
 
-            field_schema = self._extract_field(model, field, user, instance)
+            field_schema = self._extract_field(
+                model,
+                field,
+                user,
+                instance,
+                field_metadata=field_metadata.get(field.name),
+            )
             if field_schema:
                 fields.append(field_schema)
         return fields
@@ -77,6 +85,7 @@ class FieldExtractorMixin:
         field: models.Field,
         user: Any,
         instance: Optional[models.Model] = None,
+        field_metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[dict]:
         """Extract schema for a single field."""
         try:
@@ -161,6 +170,11 @@ class FieldExtractorMixin:
 
             from graphene.utils.str_converters import to_camel_case
             camel_name = to_camel_case(field.name)
+            custom_metadata = (
+                self._to_json_value(field_metadata)
+                if field_metadata is not None
+                else None
+            )
 
             return {
                 "name": camel_name,
@@ -204,7 +218,7 @@ class FieldExtractorMixin:
                     }
                     for t in fsm_transitions
                 ],
-                "custom_metadata": None,
+                "custom_metadata": custom_metadata,
             }
         except Exception as e:
             logger.warning(f"Error extracting field {field.name}: {e}")
@@ -219,21 +233,36 @@ class FieldExtractorMixin:
         return registry.get_python_type(field)
 
     def _extract_relationships(
-        self, model: type[models.Model], user: Any
+        self, model: type[models.Model], user: Any, graphql_meta: Optional[Any] = None
     ) -> list[dict]:
         """Extract relationship schemas."""
+        field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
         relationships = []
         for field in model._meta.get_fields():
             if not field.is_relation:
                 continue
 
-            rel_schema = self._extract_relationship(model, field, user)
+            field_key = (
+                field.name
+                if hasattr(field, "name")
+                else field.get_accessor_name()
+            )
+            rel_schema = self._extract_relationship(
+                model,
+                field,
+                user,
+                field_metadata=field_metadata.get(field_key),
+            )
             if rel_schema:
                 relationships.append(rel_schema)
         return relationships
 
     def _extract_relationship(
-        self, model: type[models.Model], field: Any, user: Any
+        self,
+        model: type[models.Model],
+        field: Any,
+        user: Any,
+        field_metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[dict]:
         """Extract schema for a relationship."""
         try:
@@ -277,6 +306,12 @@ class FieldExtractorMixin:
             ):
                 on_delete_name = field.remote_field.on_delete.__name__
 
+            custom_metadata = (
+                self._to_json_value(field_metadata)
+                if field_metadata is not None
+                else None
+            )
+
             return {
                 "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
                 "field_name": field.name
@@ -313,7 +348,7 @@ class FieldExtractorMixin:
                 "readable": readable,
                 "writable": writable,
                 "can_create_inline": not is_reverse,
-                "custom_metadata": None,
+                "custom_metadata": custom_metadata,
             }
         except Exception as e:
             logger.warning(f"Error extracting relationship: {e}")

@@ -10,7 +10,7 @@ can describe their API surface declaratively from a single place.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -130,8 +130,14 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
             self._meta_config
         )
         self.pipeline_config: PipelineConfig = build_pipeline_config(self._meta_config)
-        
-        self.relations_config: dict[str, FieldRelationConfig] = getattr(self._meta_config, "relations", {})
+
+        self.relations_config: dict[str, FieldRelationConfig] = getattr(
+            self._meta_config, "relations", {}
+        )
+        # Optional custom metadata/hooks used by frontend schema consumers.
+        self.custom_metadata = getattr(self._meta_config, "custom_metadata", None)
+        self.field_metadata = getattr(self._meta_config, "field_metadata", None) or {}
+        self.field_groups = getattr(self._meta_config, "field_groups", None)
 
         # Backwards-compatible attribute aliases
         self.custom_filters = self.filtering.custom

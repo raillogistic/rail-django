@@ -78,8 +78,12 @@ class ModelSchemaExtractor(
             "unique_together": [[to_camel_case(f) for f in ut] for ut in meta.unique_together]
             if meta.unique_together
             else [],
-            "fields": self._extract_fields(model, user, instance=instance),
-            "relationships": self._extract_relationships(model, user),
+            "fields": self._extract_fields(
+                model, user, instance=instance, graphql_meta=graphql_meta
+            ),
+            "relationships": self._extract_relationships(
+                model, user, graphql_meta=graphql_meta
+            ),
             "filters": self._extract_filters(model),
             "filter_config": self._extract_filter_config(model),
             "relation_filters": self._extract_relation_filters(model),
