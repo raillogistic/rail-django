@@ -20,6 +20,9 @@ class MutationError(graphene.ObjectType):
     Attributes:
         field: The field name where the error occurred (optional)
         message: The error message describing what went wrong
+        code: Optional machine-readable error code
+        severity: "error" | "warning" | "info"
+        details: Optional structured metadata for rich UI rendering
     """
 
     field = graphene.String(description="Le nom du champ oÇû l'erreur s'est produite")
@@ -27,6 +30,9 @@ class MutationError(graphene.ObjectType):
         required=False,
         description="Le message dÇ¸crivant ce qui s'est mal passÇ¸",
     )
+    code = graphene.String(description="Code d'erreur optionnel")
+    severity = graphene.String(description="Niveau de s????v????rit???? de l'erreur")
+    details = graphene.JSONString(description="D????tails structur????s pour l'UI")
 
 
 def _normalize_field_path(field: Any, prefix: Optional[str] = None) -> Optional[str]:
@@ -44,6 +50,26 @@ def _normalize_field_path(field: Any, prefix: Optional[str] = None) -> Optional[
     if prefix:
         return f"{prefix}.{segment}".strip(".")
     return segment or None
+
+
+
+def _append_error(
+    accumulator: list[MutationError],
+    path: Optional[str],
+    message: Any,
+    code: Optional[str] = None,
+    details: Optional[dict[str, Any]] = None,
+    severity: str = "error",
+) -> None:
+    accumulator.append(
+        MutationError(
+            field=path,
+            message=str(message),
+            code=code,
+            severity=severity,
+            details=details,
+        )
+    )
 
 
 def _flatten_validation_error(
@@ -64,13 +90,38 @@ def _flatten_validation_error(
                 next_path = _normalize_field_path(field_name, path)
                 _flatten_validation_error(messages, next_path, accumulator)
             return
+        if hasattr(detail, "error_list") and isinstance(detail.error_list, list):
+            for item in detail.error_list:
+                if isinstance(item, ValidationError):
+                    item_messages = (
+                        item.messages
+                        if hasattr(item, "messages") and isinstance(item.messages, list)
+                        else [str(item)]
+                    )
+                    for message in item_messages:
+                        _append_error(
+                            accumulator,
+                            path,
+                            message,
+                            code=getattr(item, "code", None),
+                            details={"params": getattr(item, "params", None)},
+                        )
+                else:
+                    _append_error(accumulator, path, item)
+            return
         messages = (
             detail.messages
             if hasattr(detail, "messages") and isinstance(detail.messages, list)
             else [str(detail)]
         )
         for message in messages:
-            accumulator.append(MutationError(field=path, message=str(message)))
+            _append_error(
+                accumulator,
+                path,
+                message,
+                code=getattr(detail, "code", None),
+                details={"params": getattr(detail, "params", None)},
+            )
         return
 
     if isinstance(detail, dict):
@@ -87,7 +138,7 @@ def _flatten_validation_error(
             _flatten_validation_error(item, next_path, accumulator)
         return
 
-    accumulator.append(MutationError(field=path, message=str(detail)))
+    _append_error(accumulator, path, detail)
 
 
 def build_validation_errors(
@@ -99,9 +150,22 @@ def build_validation_errors(
     return collected
 
 
-def build_mutation_error(message: str, field: Optional[str] = None) -> MutationError:
+def build_mutation_error(
+    message: str,
+    field: Optional[str] = None,
+    code: Optional[str] = None,
+    severity: str = "error",
+    details: Optional[dict[str, Any]] = None,
+) -> MutationError:
     """Helper to build a single MutationError with a normalized field path."""
-    return MutationError(field=_normalize_field_path(field), message=str(message))
+    return MutationError(
+        field=_normalize_field_path(field),
+        message=str(message),
+        code=code,
+        severity=severity,
+        details=details,
+    )
+
 
 
 def _extract_field_from_message(message: str) -> Optional[str]:
@@ -129,6 +193,11 @@ def build_error_list(messages: list[str]) -> list[MutationError]:
 def build_graphql_auto_errors(error: GraphQLAutoError) -> list[MutationError]:
     details = getattr(error, "details", {}) or {}
     validation_errors = details.get("validation_errors")
+    code_value = (
+        getattr(error, "code", None).value
+        if getattr(error, "code", None)
+        else None
+    )
     if isinstance(validation_errors, dict):
         errors: list[MutationError] = []
         for field_name, messages in validation_errors.items():
@@ -137,14 +206,20 @@ def build_graphql_auto_errors(error: GraphQLAutoError) -> list[MutationError]:
             for message in messages:
                 errors.append(
                     build_mutation_error(
-                        message=str(message), field=str(field_name)
+                        message=str(message),
+                        field=str(field_name),
+                        code=code_value,
+                        details=details,
                     )
                 )
         if errors:
             return errors
     return [
         build_mutation_error(
-            message=str(error), field=getattr(error, "field", None)
+            message=str(error),
+            field=getattr(error, "field", None),
+            code=code_value,
+            details=details,
         )
     ]
 
@@ -249,34 +324,50 @@ def build_integrity_errors(
     if field:
         field_name = _map_column_to_field(model, field) or field
         label = _get_field_label(model, field_name)
-        return [build_mutation_error(f"{label} cannot be null.", field_name)]
+        return [
+            build_mutation_error(
+                f"{label} cannot be null.",
+                field_name,
+                code="NOT_NULL",
+                details={"column": field_name},
+            )
+        ]
 
     unique_fields = _extract_unique_constraint_fields(model, error_msg)
     if unique_fields:
         errors: list[MutationError] = []
         for field_name in unique_fields:
             label = _get_field_label(model, field_name)
-            errors.append(build_mutation_error(f"{label} must be unique.", field_name))
+            errors.append(
+                build_mutation_error(
+                    f"{label} must be unique.",
+                    field_name,
+                    code="UNIQUE",
+                    details={"constraint": "unique"},
+                )
+            )
         return errors
 
     lower_msg = error_msg.lower()
     if "duplicate key value violates unique constraint" in lower_msg:
         return [
-            build_mutation_error("Duplicate value violates unique constraint.", None)
+            build_mutation_error("Duplicate value violates unique constraint.", None, code="UNIQUE")
         ]
     if "unique constraint" in lower_msg or "duplicate entry" in lower_msg:
         return [
-            build_mutation_error("Duplicate value violates unique constraint.", None)
+            build_mutation_error("Duplicate value violates unique constraint.", None, code="UNIQUE")
         ]
     if "foreign key constraint" in lower_msg:
         return [
             build_mutation_error(
-                "Invalid reference: related object does not exist.", None
+                "Invalid reference: related object does not exist.",
+                None,
+                code="FOREIGN_KEY",
             )
         ]
     if "check constraint" in lower_msg:
-        return [build_mutation_error("Value violates a database constraint.", None)]
+        return [build_mutation_error("Value violates a database constraint.", None, code="CHECK_CONSTRAINT")]
 
     if error_msg:
-        return [build_mutation_error(error_msg, None)]
-    return [build_mutation_error("Database integrity error.", None)]
+        return [build_mutation_error(error_msg, None, code="INTEGRITY_ERROR")]
+    return [build_mutation_error("Database integrity error.", None, code="INTEGRITY_ERROR")]

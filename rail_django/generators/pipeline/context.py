@@ -68,17 +68,35 @@ class MutationContext:
     # Extra storage for step-specific data
     extra: dict[str, Any] = field(default_factory=dict)
 
-    def add_error(self, message: str, field_name: Optional[str] = None) -> None:
+    def add_error(
+        self,
+        message: str,
+        field_name: Optional[str] = None,
+        code: Optional[str] = None,
+        details: Optional[dict[str, Any]] = None,
+        severity: str = "error",
+    ) -> None:
         """
         Add an error and set abort flag.
 
         Args:
             message: Error message
             field_name: Optional field name the error relates to
+            code: Optional machine-readable error code
+            details: Optional structured metadata
+            severity: Severity level for the error
         """
         from ..mutations.errors import MutationError
 
-        self.errors.append(MutationError(field=field_name, message=message))
+        self.errors.append(
+            MutationError(
+                field=field_name,
+                message=message,
+                code=code,
+                severity=severity,
+                details=details,
+            )
+        )
         self.should_abort = True
 
     def add_errors(self, errors: list["MutationError"]) -> None:
@@ -92,17 +110,33 @@ class MutationContext:
         if errors:
             self.should_abort = True
 
-    def add_warning(self, message: str, field_name: Optional[str] = None) -> None:
+    def add_warning(
+        self,
+        message: str,
+        field_name: Optional[str] = None,
+        code: Optional[str] = None,
+        details: Optional[dict[str, Any]] = None,
+    ) -> None:
         """
         Add a warning (non-fatal error that doesn't abort).
 
         Args:
             message: Warning message
             field_name: Optional field name the warning relates to
+            code: Optional machine-readable warning code
+            details: Optional structured metadata
         """
         from ..mutations.errors import MutationError
 
-        self.errors.append(MutationError(field=field_name, message=message))
+        self.errors.append(
+            MutationError(
+                field=field_name,
+                message=message,
+                code=code,
+                severity="warning",
+                details=details,
+            )
+        )
         # Note: Does NOT set should_abort
 
     @property
