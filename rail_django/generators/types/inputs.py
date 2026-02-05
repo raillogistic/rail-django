@@ -108,32 +108,40 @@ def generate_input_type(
         elif rel_info.relationship_type == "ManyToManyField":
             relation_type = "m2m"
             
+        relation_config = self._resolve_relation_config(model, field_name)
+
         relation_input = self.relation_input_generator.generate_relation_input_type(
             related_model=rel_info.related_model,
             relation_type=relation_type,
             parent_model=model,
-            depth=depth
+            depth=depth,
+            config=relation_config,
         )
         
         # Determine if required
         is_required = False
         if mutation_type == "create":
-             # Should check underlying field requirement
-             try:
-                 django_field = model._meta.get_field(field_name)
-                 if not django_field.null and django_field.default == models.NOT_PROVIDED:
-                     is_required = not partial
-             except Exception:
-                 pass
+            # Should check underlying field requirement
+            try:
+                django_field = model._meta.get_field(field_name)
+                if (
+                    not django_field.null
+                    and django_field.default == models.NOT_PROVIDED
+                ):
+                    is_required = not partial
+            except Exception:
+                pass
         
         # M2M is never required in Django (defaults to empty list)
         if rel_info.relationship_type == "ManyToManyField":
             is_required = False
 
         if is_required:
-             input_fields[field_name] = graphene.InputField(graphene.NonNull(relation_input))
+            input_fields[field_name] = graphene.InputField(
+                graphene.NonNull(relation_input)
+            )
         else:
-             input_fields[field_name] = graphene.InputField(relation_input)
+            input_fields[field_name] = graphene.InputField(relation_input)
 
 
     # Add reverse relationship fields
@@ -159,16 +167,19 @@ def generate_input_type(
             # Extract remote field name to exclude it in the nested input
             remote_field_name = None
             if isinstance(rel_info, dict) and "relation" in rel_info:
-                 relation = rel_info["relation"]
-                 if hasattr(relation, "field"):
-                      remote_field_name = relation.field.name
+                relation = rel_info["relation"]
+                if hasattr(relation, "field"):
+                    remote_field_name = relation.field.name
+
+            relation_config = self._resolve_relation_config(model, field_name)
 
             relation_input = self.relation_input_generator.generate_relation_input_type(
                 related_model=related_model,
                 relation_type="reverse",
                 parent_model=model,
                 depth=depth,
-                remote_field_name=remote_field_name
+                remote_field_name=remote_field_name,
+                config=relation_config,
             )
             
             input_fields[field_name] = graphene.InputField(relation_input)
@@ -191,7 +202,7 @@ def generate_input_type(
         
     class_name = f"{prefix}{model.__name__}{suffix}Input"
     if not prefix and not suffix:
-         class_name = f"{model.__name__}Input"
+        class_name = f"{model.__name__}Input"
         
     input_type = type(
         class_name,

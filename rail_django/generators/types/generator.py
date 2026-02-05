@@ -40,6 +40,8 @@ from .inputs import (
     generate_input_type as _generate_input_type,
 )
 from .relations import RelationInputTypeGenerator
+from .relation_config import FieldRelationConfig as GeneratorFieldRelationConfig
+from .relation_config import RelationOperationConfig as GeneratorRelationOperationConfig
 from .objects import (
     generate_object_type as _generate_object_type,
 )
@@ -489,3 +491,44 @@ class TypeGenerator:
         if model_name in self.mutation_settings.nested_relations_config:
             return self.mutation_settings.nested_relations_config[model_name]
         return getattr(self.mutation_settings, "enable_nested_relations", False)
+
+    def _resolve_relation_config(
+        self, model: type[models.Model], field_name: str
+    ) -> Optional[GeneratorFieldRelationConfig]:
+        """Resolve per-field relation config, applying nested relation settings."""
+        meta = self._get_model_meta(model)
+        base_cfg = None
+        if meta:
+            try:
+                base_cfg = meta.get_relation_config(field_name)
+            except Exception:
+                base_cfg = None
+
+        def clone_op(op_cfg: Any) -> GeneratorRelationOperationConfig:
+            enabled = True
+            require_permission = None
+            if op_cfg is not None:
+                enabled = bool(getattr(op_cfg, "enabled", True))
+                require_permission = getattr(op_cfg, "require_permission", None)
+            return GeneratorRelationOperationConfig(
+                enabled=enabled, require_permission=require_permission
+            )
+
+        cfg = None
+        if base_cfg is not None:
+            cfg = GeneratorFieldRelationConfig(
+                style=getattr(base_cfg, "style", "unified"),
+                connect=clone_op(getattr(base_cfg, "connect", None)),
+                create=clone_op(getattr(base_cfg, "create", None)),
+                update=clone_op(getattr(base_cfg, "update", None)),
+                disconnect=clone_op(getattr(base_cfg, "disconnect", None)),
+                set=clone_op(getattr(base_cfg, "set", None)),
+            )
+
+        if not self._should_include_nested_field(model, field_name):
+            if cfg is None:
+                cfg = GeneratorFieldRelationConfig()
+            cfg.create.enabled = False
+            cfg.update.enabled = False
+
+        return cfg

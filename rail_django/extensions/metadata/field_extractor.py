@@ -11,6 +11,7 @@ from uuid import UUID
 
 from django.db import models
 from ...security.field_permissions import field_permission_manager, FieldVisibility
+from ...core.settings import MutationGeneratorSettings
 from .utils import _classify_field, _get_fsm_transitions
 from .mapping import registry
 
@@ -252,6 +253,7 @@ class FieldExtractorMixin:
                 field,
                 user,
                 field_metadata=field_metadata.get(field_key),
+                graphql_meta=graphql_meta,
             )
             if rel_schema:
                 relationships.append(rel_schema)
@@ -263,11 +265,13 @@ class FieldExtractorMixin:
         field: Any,
         user: Any,
         field_metadata: Optional[dict[str, Any]] = None,
+        graphql_meta: Optional[Any] = None,
     ) -> Optional[dict]:
         """Extract schema for a relationship."""
         try:
             from graphene.utils.str_converters import to_camel_case
             is_reverse = not hasattr(field, "remote_field") or field.auto_created
+            field_key = field.name if hasattr(field, "name") else field.get_accessor_name()
 
             if is_reverse:
                 related_model = field.related_model
@@ -323,6 +327,10 @@ class FieldExtractorMixin:
                 elif isinstance(candidate, str):
                     related_query_name = candidate
 
+            relation_operations = self._extract_relation_operations(
+                model, field_key, graphql_meta=graphql_meta
+            )
+
             return {
                 "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
                 "field_name": field.name
@@ -357,8 +365,75 @@ class FieldExtractorMixin:
                 "readable": readable,
                 "writable": writable,
                 "can_create_inline": not is_reverse,
+                "relation_operations": relation_operations,
                 "custom_metadata": custom_metadata,
             }
         except Exception as e:
             logger.warning(f"Error extracting relationship: {e}")
             return None
+
+    def _extract_relation_operations(
+        self,
+        model: type[models.Model],
+        field_name: str,
+        graphql_meta: Optional[Any] = None,
+    ) -> Optional[dict]:
+        """Build relation operation metadata from GraphQLMeta and settings."""
+        try:
+            schema_name = getattr(self, "schema_name", "default")
+            settings = MutationGeneratorSettings.from_schema(schema_name)
+        except Exception:
+            settings = None
+
+        cfg = None
+        if graphql_meta is not None:
+            try:
+                cfg = graphql_meta.get_relation_config(field_name)
+            except Exception:
+                cfg = None
+
+        def op_dict(op_cfg: Any, default_enabled: bool = True) -> dict:
+            enabled = default_enabled
+            require_permission = None
+            if op_cfg is not None:
+                enabled = bool(getattr(op_cfg, "enabled", default_enabled))
+                require_permission = getattr(op_cfg, "require_permission", None)
+            return {"enabled": enabled, "require_permission": require_permission}
+
+        # Defaults
+        connect_enabled = True
+        create_enabled = True
+        update_enabled = True
+        disconnect_enabled = True
+        set_enabled = True
+
+        if cfg is not None:
+            connect_enabled = bool(getattr(getattr(cfg, "connect", None), "enabled", True))
+            create_enabled = bool(getattr(getattr(cfg, "create", None), "enabled", True))
+            update_enabled = bool(getattr(getattr(cfg, "update", None), "enabled", True))
+            disconnect_enabled = bool(getattr(getattr(cfg, "disconnect", None), "enabled", True))
+            set_enabled = bool(getattr(getattr(cfg, "set", None), "enabled", True))
+
+        # Apply global nested relation settings (disable nested create/update)
+        if settings is not None:
+            model_name = model.__name__
+            nested_enabled = bool(getattr(settings, "enable_nested_relations", True))
+            if model_name in getattr(settings, "nested_relations_config", {}):
+                nested_enabled = bool(settings.nested_relations_config[model_name])
+            if not nested_enabled:
+                create_enabled = False
+                update_enabled = False
+
+        style = getattr(cfg, "style", "unified") if cfg is not None else "unified"
+        if str(style).lower() == "id_only":
+            create_enabled = False
+            update_enabled = False
+
+        return {
+            "style": style,
+            "connect": op_dict(getattr(cfg, "connect", None), connect_enabled),
+            "create": op_dict(getattr(cfg, "create", None), create_enabled),
+            "update": op_dict(getattr(cfg, "update", None), update_enabled),
+            "disconnect": op_dict(getattr(cfg, "disconnect", None), disconnect_enabled),
+            "set": op_dict(getattr(cfg, "set", None), set_enabled),
+        }

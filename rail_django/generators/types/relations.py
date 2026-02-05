@@ -67,8 +67,12 @@ class RelationInputTypeGenerator:
         if is_list and set_enabled:
             fields["set"] = graphene.InputField(graphene.List(graphene.ID))
 
+        style = getattr(config, "style", "unified") if config else "unified"
+
         # 4. Create (Input)
         create_enabled = config.create.enabled if config else True
+        if str(style).lower() == "id_only":
+            create_enabled = False
         max_depth = getattr(self.type_generator.mutation_settings, "relation_max_nesting_depth", 3)
 
         if depth < max_depth and create_enabled:
@@ -94,6 +98,8 @@ class RelationInputTypeGenerator:
 
         # 5. Update (Input)
         update_enabled = config.update.enabled if config else True
+        if str(style).lower() == "id_only":
+            update_enabled = False
         if depth < max_depth and update_enabled:
             # For update, we usually need the ID to identify WHICH object to update
             # inside the nested payload.

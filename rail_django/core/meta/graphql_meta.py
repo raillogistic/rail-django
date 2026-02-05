@@ -181,6 +181,9 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         config = self.get_relation_config(field_name)
         if not config:
             return True
+        style = getattr(config, "style", "unified")
+        if str(style).lower() == "id_only" and operation in {"create", "update"}:
+            return False
         
         op_config = getattr(config, operation, None)
         if op_config and hasattr(op_config, "enabled"):

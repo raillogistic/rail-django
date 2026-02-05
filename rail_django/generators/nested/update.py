@@ -70,11 +70,15 @@ class NestedUpdateMixin:
 
             for field_name, (rel, value) in reverse_fields.items():
                 if value:
-                     processor.process_relation(instance, field_name, value, info, is_reverse=True)
+                    processor.process_relation(
+                        instance, field_name, value, info, is_reverse=True
+                    )
 
             for field_name, (field, value) in m2m_fields.items():
-                 if value:
-                     processor.process_relation(instance, field_name, value, info, is_m2m=True)
+                if value:
+                    processor.process_relation(
+                        instance, field_name, value, info, is_m2m=True
+                    )
 
             return instance
 
@@ -125,10 +129,12 @@ class NestedUpdateMixin:
             if value is None:
                 setattr(instance, field_name, None)
                 continue
-            
-            if not isinstance(value, dict): continue
+
+            if not isinstance(value, dict):
+                continue
 
             if "connect" in value:
+                self._assert_relation_operation_allowed(model, field_name, "connect")
                 pk_val = self._coerce_pk(value["connect"])
                 try:
                     related_qs = self._get_tenant_queryset(
@@ -144,32 +150,33 @@ class NestedUpdateMixin:
                         field_name: f"{field.related_model.__name__} with id '{pk_val}' does not exist."
                     })
             elif "create" in value:
+                self._assert_relation_operation_allowed(model, field_name, "create")
                 new_inst = self.handle_nested_create(
                     field.related_model, value["create"], info=info
                 )
                 setattr(instance, field_name, new_inst)
             elif "update" in value:
-                 # Update existing linked object (if ID provided) OR update currently linked?
-                 # Unified semantics usually imply 'update' has 'where' or 'data'.
-                 # If we just provide 'update: {...}', does it update the CURRENTLY linked object?
-                 # Prisma: update(data: ...). Updates the relation.
-                 # If value["update"] has ID, we update that ID and link it (if not linked).
-                 # If no ID, we might default to updating the currently linked object?
-                 update_data = value["update"]
-                 if "id" in update_data:
-                      pk = self._coerce_pk(update_data["id"])
-                      related = self._get_tenant_queryset(field.related_model, info).get(pk=pk)
-                      updated = self.handle_nested_update(field.related_model, update_data, related, info=info)
-                      setattr(instance, field_name, updated)
-                 else:
-                      # Try to update currently linked object
-                      current = getattr(instance, field_name)
-                      if current:
-                           updated = self.handle_nested_update(field.related_model, update_data, current, info=info)
-                           # no need to setattr if it's the same instance, but safe to do so
-                      else:
-                           pass # Nothing to update
+                self._assert_relation_operation_allowed(model, field_name, "update")
+                # Update existing linked object (if ID provided) OR update currently linked?
+                update_data = value["update"]
+                if "id" in update_data:
+                    pk = self._coerce_pk(update_data["id"])
+                    related = self._get_tenant_queryset(
+                        field.related_model, info, operation="retrieve"
+                    ).get(pk=pk)
+                    updated = self.handle_nested_update(
+                        field.related_model, update_data, related, info=info
+                    )
+                    setattr(instance, field_name, updated)
+                else:
+                    current = getattr(instance, field_name)
+                    if current:
+                        self.handle_nested_update(
+                            field.related_model, update_data, current, info=info
+                        )
             elif "disconnect" in value:
-                 # Boolean true? or ID?
-                 # If boolean true, disconnect current.
-                 setattr(instance, field_name, None)
+                self._assert_relation_operation_allowed(
+                    model, field_name, "disconnect"
+                )
+                # Boolean true? or ID? If boolean true, disconnect current.
+                setattr(instance, field_name, None)

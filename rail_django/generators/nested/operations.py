@@ -58,6 +58,14 @@ class RelationOperationProcessor:
         # Dispatch to specific handler methods based on operation
         # The handler (NestedUpdateMixin/CreateMixin) should expose these methods.
         # We will assume they are available on self.handler
+        try:
+            if hasattr(self.handler, "_assert_relation_operation_allowed"):
+                self.handler._assert_relation_operation_allowed(
+                    type(instance), field_name, operation
+                )
+        except Exception:
+            # Let handler raise the appropriate error when operation is disallowed
+            raise
         
         if operation == "connect":
             self.handler.handle_connect(instance, field_name, data, info, is_m2m, is_reverse)

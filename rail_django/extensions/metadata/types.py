@@ -144,6 +144,11 @@ class RelationshipSchemaType(graphene.ObjectType):
     writable = graphene.Boolean(required=True)
     can_create_inline = graphene.Boolean(required=True)
 
+    # Nested relation operations/config
+    relation_operations = graphene.JSONString(
+        description="Allowed nested operations for this relation (connect/create/update/etc)."
+    )
+
     # Custom
     custom_metadata = graphene.JSONString()
 

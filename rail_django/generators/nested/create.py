@@ -107,12 +107,16 @@ class NestedCreateMixin:
             # Handle reverse relationships
             for field_name, (rel, value) in reverse_fields.items():
                 if value:
-                     processor.process_relation(instance, field_name, value, info, is_reverse=True)
+                    processor.process_relation(
+                        instance, field_name, value, info, is_reverse=True
+                    )
 
             # Handle many-to-many relationships
             for field_name, (field, value) in m2m_fields.items():
                 if value:
-                     processor.process_relation(instance, field_name, value, info, is_m2m=True)
+                    processor.process_relation(
+                        instance, field_name, value, info, is_m2m=True
+                    )
 
             return instance
 
@@ -138,9 +142,10 @@ class NestedCreateMixin:
                 continue
                 
             if not isinstance(value, dict):
-                 continue
+                continue
                  
             if "connect" in value:
+                self._assert_relation_operation_allowed(model, field_name, "connect")
                 pk_value = self._coerce_pk(value["connect"])
                 try:
                     related_queryset = self._get_tenant_queryset(
@@ -161,16 +166,18 @@ class NestedCreateMixin:
                         }
                     )
             elif "create" in value:
+                self._assert_relation_operation_allowed(model, field_name, "create")
                 create_data = value["create"]
                 related_instance = self.handle_nested_create(
                     field.related_model, create_data, info=info
                 )
                 regular_fields[field_name] = related_instance
             elif "update" in value:
+                self._assert_relation_operation_allowed(model, field_name, "update")
                 # Update existing and link
                 update_payload = value["update"]
                 if "id" not in update_payload:
-                     continue # Cannot identify object to update
+                    continue  # Cannot identify object to update
                 pk_value = self._coerce_pk(update_payload["id"])
                 try:
                     related_queryset = self._get_tenant_queryset(
@@ -182,4 +189,6 @@ class NestedCreateMixin:
                     )
                     regular_fields[field_name] = updated_instance
                 except field.related_model.DoesNotExist:
-                     raise ValidationError({field_name: f"Object not found for update."})
+                    raise ValidationError(
+                        {field_name: "Object not found for update."}
+                    )

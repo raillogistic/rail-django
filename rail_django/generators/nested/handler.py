@@ -19,6 +19,7 @@ from ...core.meta import get_model_graphql_meta
 from ...core.services import get_query_optimizer
 from ...core.security import get_authz_manager, get_input_validator
 from ...core.settings import MutationGeneratorSettings
+from ..mutations.exceptions import NestedOperationDisabledError
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,23 @@ class NestedOperationHandlerBase:
         if hasattr(self.mutation_settings, "enable_nested_relations"):
             return self.mutation_settings.enable_nested_relations
         return True
+
+    def _is_relation_operation_allowed(self, model, field_name: str, operation: str) -> bool:
+        """Check if a relation operation is allowed based on settings/GraphQLMeta."""
+        op = str(operation or "").strip().lower()
+        if op in {"create", "update"} and not self._should_use_nested_operations(model, field_name):
+            return False
+        graphql_meta = get_model_graphql_meta(model)
+        if graphql_meta is not None:
+            try:
+                return graphql_meta.is_operation_allowed(field_name, op)
+            except Exception:
+                return True
+        return True
+
+    def _assert_relation_operation_allowed(self, model, field_name: str, operation: str) -> None:
+        if not self._is_relation_operation_allowed(model, field_name, operation):
+            raise NestedOperationDisabledError(model.__name__, field_name)
 
     def _ensure_operation_access(
         self, model: type[models.Model], operation: str,
