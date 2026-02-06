@@ -137,7 +137,7 @@ def _register_roles(payload: object, meta_path: Path) -> None:
     if not roles:
         return
     try:
-        from ..security.rbac import RoleDefinition, RoleType, role_manager
+        from ...security.rbac import RoleDefinition, RoleType, role_manager
     except Exception as exc:
         logger.warning("Could not import RBAC components for %s: %s", meta_path, exc)
         return

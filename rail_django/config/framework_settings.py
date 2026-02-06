@@ -55,7 +55,10 @@ INSTALLED_APPS = [
 
 
 def _should_include_rail_test_apps() -> bool:
-    if not any(arg in {"test", "pytest"} for arg in sys.argv):
+    argv_tokens = [str(arg).lower() for arg in sys.argv]
+    argv0_name = Path(sys.argv[0]).name.lower() if sys.argv else ""
+    is_test_run = any(arg in {"test", "pytest", "py.test"} for arg in argv_tokens)
+    if not is_test_run and "pytest" not in argv0_name:
         return False
     repo_root = Path(__file__).resolve().parents[2]
     return (repo_root / "examples" / "test_app").is_dir() and (
@@ -64,7 +67,10 @@ def _should_include_rail_test_apps() -> bool:
 
 
 if _should_include_rail_test_apps():
-    examples_path = Path(__file__).resolve().parents[2] / "examples"
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    examples_path = repo_root / "examples"
     if examples_path.is_dir() and str(examples_path) not in sys.path:
         sys.path.insert(0, str(examples_path))
     for app_name in ("test_app", "tests"):
@@ -164,6 +170,7 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = "static/"
+ROOT_URLCONF = "rail_django.urls"
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -174,6 +181,9 @@ GRAPHENE = {
 }
 if DEBUG:
     GRAPHENE["MIDDLEWARE"].append("graphene_django.debug.DjangoDebugMiddleware")
+
+# Schema management API defaults (can be overridden per project)
+GRAPHQL_SCHEMA_API_AUTH_REQUIRED = False
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = (

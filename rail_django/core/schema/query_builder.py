@@ -87,9 +87,9 @@ class QueryBuilderMixin:
         for model in models_list:
             # Ensure model_name starts with lowercase (camelCase)
             model_name = to_camel_case(to_snake_case(model.__name__))
-            
-            # Use simple pluralization for list queries (ignore verbose_name_plural).
-            plural_name = self._pluralize_name(model_name)
+
+            # Prefer model verbose_name_plural alias when explicitly configured.
+            plural_name = self._get_list_alias(model) or self._pluralize_name(model_name)
 
             # Get model managers using introspector
             from ...generators.introspector import ModelIntrospector

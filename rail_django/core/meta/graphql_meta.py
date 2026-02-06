@@ -198,7 +198,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         if meta_decl is not None:
             return meta_decl
         try:
-            from ..meta_json import get_model_meta_config
+            from .json_loader import get_model_meta_config
 
             return get_model_meta_config(model_class)
         except Exception as exc:  # pragma: no cover - defensive logging
