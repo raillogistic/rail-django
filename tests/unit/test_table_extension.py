@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from decimal import Decimal
 
 from rail_django.extensions.table.services.bootstrap import build_table_bootstrap_payload
 from rail_django.extensions.table.services.data_resolver import resolve_table_rows
@@ -93,3 +94,18 @@ def test_table_action_delete_removes_rows(monkeypatch):
     )
     assert result["ok"] is True
     assert result["affectedIds"] == ["1"]
+
+
+def test_table_rows_serializes_decimal_values(monkeypatch):
+    class DecimalModel:
+        _meta = SimpleNamespace(
+            fields=[FakeField("id", "AutoField"), FakeField("price", "DecimalField")]
+        )
+        objects = FakeQuerySet([{"id": 1, "price": Decimal("10.50")}])
+
+    monkeypatch.setattr(
+        "rail_django.extensions.table.services.data_resolver.apps.get_model",
+        lambda app, model: DecimalModel,
+    )
+    response = resolve_table_rows({"app": "tests", "model": "Product", "pageSize": 10})
+    assert response["items"][0]["price"] == "10.50"

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+
+from django.core.serializers.json import DjangoJSONEncoder
 from django.apps import apps
 from django.db.models import Q
 
@@ -13,6 +16,14 @@ from ..performance.profiling import profile_block
 from ..performance.monitoring import record_metric
 from ..security.field_masking import apply_field_masking
 from ..security.input_validator import sanitize_text
+
+
+def _to_json_safe(value):
+    """
+    Normalize nested payload values to JSON-safe primitives.
+    This avoids Graphene JSONString serialization errors (e.g. Decimal).
+    """
+    return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
 
 
 def resolve_table_rows(input_data: dict) -> dict:
@@ -71,6 +82,7 @@ def resolve_table_rows(input_data: dict) -> dict:
         rows = list(qs[offset : offset + page_size].values())
 
     masked_rows = [apply_field_masking(row, set()) for row in rows]
+    safe_rows = _to_json_safe(masked_rows)
     page_count = (total_count + page_size - 1) // page_size if total_count else 1
 
     payload = {
@@ -82,7 +94,7 @@ def resolve_table_rows(input_data: dict) -> dict:
             "hasPreviousPage": page > 1,
             "prefetchNextPage": page < page_count,
         },
-        "items": masked_rows,
+        "items": safe_rows,
         "etag": f"{app}:{model}:{total_count}:{page}:{page_size}",
         "cacheControl": stale_while_revalidate(),
         "aggregate": build_query_hints(page_size),
