@@ -193,6 +193,7 @@ CORS_ALLOWED_ORIGINS = _split_env_list(os.environ.get("CORS_ALLOWED_ORIGINS", ""
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)
+RAIL_DJANGO_GRAPHQL.setdefault("schema_settings", {})["enable_introspection"] = True
 
 # Metadata deploy version configuration
 RAIL_METADATA_DEPLOY_VERSION = {

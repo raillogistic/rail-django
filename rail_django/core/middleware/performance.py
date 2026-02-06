@@ -124,6 +124,7 @@ class QueryComplexityMiddleware(BaseMiddleware):
             query_string,
             schema=getattr(info, "schema", None),
             document=document,
+            user=getattr(getattr(info, "context", None), "user", None),
         )
 
         if validation_errors:

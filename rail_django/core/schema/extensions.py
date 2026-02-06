@@ -197,6 +197,35 @@ class ExtensionsMixin:
 
         return extension_mutations
 
+    def _build_table_mutations(self) -> dict[str, Any]:
+        """Build Table v3 mutations."""
+        table_mutations: dict[str, Any] = {}
+        try:
+            from ...extensions.table import TableMutations
+
+            for field_name, field in TableMutations._meta.fields.items():
+                table_mutations[field_name] = field
+        except ImportError as e:
+            logger.warning(
+                "Could not import table mutations for schema '%s': %s",
+                self.schema_name,
+                e,
+            )
+        return table_mutations
+
+    def _integrate_table_subscriptions(self) -> None:
+        """Integrate Table v3 subscriptions."""
+        try:
+            from ...extensions.table import TableSubscriptions
+
+            self._subscription_fields.update(TableSubscriptions._meta.fields)
+        except ImportError as e:
+            logger.warning(
+                "Could not import table subscriptions for schema '%s': %s",
+                self.schema_name,
+                e,
+            )
+
     def _load_mutation_extensions(self) -> dict[str, Any]:
         """Load custom mutation extensions from settings."""
         extension_mutations: dict[str, Any] = {}
@@ -384,6 +413,7 @@ class ExtensionsMixin:
                 self._integrate_health_queries(query_attrs)
                 self._integrate_task_queries(query_attrs)
                 self._integrate_form_queries(query_attrs)
+                self._integrate_table_queries(query_attrs)
 
                 # Create Query type
                 query_type = self._create_query_type(query_attrs)
@@ -397,15 +427,18 @@ class ExtensionsMixin:
                 security_mutations = self._build_security_mutations()
                 extension_mutations = self._build_extension_mutations()
                 custom_mutations = self._load_mutation_extensions()
+                table_mutations = self._build_table_mutations()
 
                 all_mutations = {
                     **self._mutation_fields,
                     **security_mutations,
                     **extension_mutations,
+                    **table_mutations,
                     **custom_mutations,
                 }
 
                 # Create Mutation and Subscription types
+                self._integrate_table_subscriptions()
                 mutation_type = self._create_mutation_type(all_mutations)
                 subscription_type = self._create_subscription_type()
 

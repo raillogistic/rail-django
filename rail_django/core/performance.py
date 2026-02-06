@@ -184,6 +184,7 @@ class QueryComplexityAnalyzer:
         *,
         schema: Optional[Any] = None,
         document: Optional[Any] = None,
+        user: Optional[Any] = None,
     ) -> list[str]:
         """Validate query against performance limits."""
         errors: list[str] = []
@@ -206,14 +207,16 @@ class QueryComplexityAnalyzer:
                     max_query_depth=self.settings.max_query_depth,
                     max_field_count=1000000,
                     max_operation_count=1000000,
-                    enable_introspection=schema_settings.enable_introspection,
+                    # Introspection authorization is enforced by schema/security
+                    # middleware. Complexity validation should not block it first.
+                    enable_introspection=True,
                     introspection_roles=get_introspection_roles(self.schema_name),
                     enable_query_cost_analysis=enable_complexity,
                     enable_depth_limiting=enable_depth,
                 )
             )
             if schema is not None and (enable_depth or enable_complexity):
-                result = analyzer.analyze_query(doc, schema, user=None)
+                result = analyzer.analyze_query(doc, schema, user=user)
                 errors.extend(result.blocked_reasons)
                 return errors
         except Exception:

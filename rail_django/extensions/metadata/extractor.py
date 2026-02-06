@@ -9,6 +9,7 @@ from django.apps import apps
 from graphql import GraphQLError
 
 from ...utils.graphql_meta import get_model_graphql_meta
+from ...core.security import get_authz_manager
 from .utils import (
     _cache_version,
     get_cached_schema,
@@ -153,7 +154,6 @@ class ModelSchemaExtractor(
         self, model: Any, user: Any, instance: Any = None
     ) -> list[dict]:
         """Extract available mutations for the model."""
-        from ...core.security import get_authz_manager
 
         settings = MutationGeneratorSettings.from_schema(self.schema_name)
         results: list[dict] = []

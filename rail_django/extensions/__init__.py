@@ -106,18 +106,34 @@ from .multitenancy import (
     TenantMixin,
     TenantQuerySet,
 )
-from .tasks import (
-    TaskExecution,
-    TaskExecutionHandle,
-    TaskQuery,
-    TaskStatus,
-    TaskStatusView,
-    get_task_settings,
-    get_task_subscription_field,
-    get_task_urls,
-    task_mutation,
-    tasks_enabled,
-)
+try:
+    from .tasks import (
+        TaskExecution,
+        TaskExecutionHandle,
+        TaskQuery,
+        TaskStatus,
+        TaskStatusView,
+        get_task_settings,
+        get_task_subscription_field,
+        get_task_urls,
+        task_mutation,
+        tasks_enabled,
+    )
+
+    _TASK_EXPORTS = [
+        "TaskExecution",
+        "TaskExecutionHandle",
+        "TaskQuery",
+        "TaskStatus",
+        "TaskStatusView",
+        "get_task_settings",
+        "get_task_subscription_field",
+        "get_task_urls",
+        "task_mutation",
+        "tasks_enabled",
+    ]
+except ImportError:
+    _TASK_EXPORTS = []
 
 __all__ = [
     # Authentication
@@ -184,15 +200,6 @@ __all__ = [
     "TenantManager",
     "TenantMixin",
     "TenantQuerySet",
-    # Tasks
-    "TaskExecution",
-    "TaskExecutionHandle",
-    "TaskQuery",
-    "TaskStatus",
-    "TaskStatusView",
-    "get_task_settings",
-    "get_task_subscription_field",
-    "get_task_urls",
-    "task_mutation",
-    "tasks_enabled",
 ]
+
+__all__.extend(_TASK_EXPORTS)

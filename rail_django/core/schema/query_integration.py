@@ -255,3 +255,40 @@ class QueryIntegrationMixin:
                 f"Could not import form queries for "
                 f"schema '{self.schema_name}': {e}"
             )
+
+    def _integrate_table_queries(self, query_attrs: dict[str, Any]) -> None:
+        """Integrate Table v3 queries into query attributes."""
+        try:
+            from ...extensions.table import TableQuery
+
+            table_query_instance = TableQuery()
+            for field_name, field in TableQuery._meta.fields.items():
+                resolver_method_name = f"resolve_{field_name}"
+                if hasattr(table_query_instance, resolver_method_name):
+                    resolver_method = getattr(table_query_instance, resolver_method_name)
+
+                    def create_resolver_wrapper(method):
+                        def wrapper(root, info, **kwargs):
+                            return method(info, **kwargs)
+
+                        return wrapper
+
+                    query_attrs[field_name] = graphene.Field(
+                        field.type,
+                        description=field.description,
+                        resolver=create_resolver_wrapper(resolver_method),
+                        args=getattr(field, "args", None),
+                    )
+                else:
+                    query_attrs[field_name] = field
+
+            logger.info(
+                "Table queries integrated into schema '%s'",
+                self.schema_name,
+            )
+        except ImportError as e:
+            logger.warning(
+                "Could not import table queries for schema '%s': %s",
+                self.schema_name,
+                e,
+            )

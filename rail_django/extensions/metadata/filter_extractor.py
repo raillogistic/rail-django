@@ -221,7 +221,9 @@ class FilterExtractorMixin:
                 elif internal_type == "DateField":
                     base_type = "Date"
                 elif internal_type == "DateTimeField":
-                    base_type = "DateTime"
+                    # Keep metadata UX backward-compatible: datetime filters
+                    # are exposed using date-oriented operators/presets.
+                    base_type = "Date"
                 elif internal_type == "TimeField":
                     base_type = "Date"
                 elif internal_type in ("ForeignKey", "OneToOneField", "ManyToManyField"):
@@ -262,7 +264,9 @@ class FilterExtractorMixin:
                 }
 
                 for op_name, op_field in input_type._meta.fields.items():
-                    graphql_name = getattr(op_field, "name", None) or op_name
+                    graphql_name = getattr(op_field, "name", None)
+                    if not isinstance(graphql_name, str) or not graphql_name:
+                        graphql_name = op_name
                     op_type = op_field.type
                     is_list = False
                     temp_type = op_type
