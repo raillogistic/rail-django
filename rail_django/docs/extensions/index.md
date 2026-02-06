@@ -13,6 +13,7 @@ Rail Django comes with a suite of extensions to power-up your API.
 *   [**Multitenancy**](multitenancy.md): SaaS-ready data isolation.
 *   [**Health Checks**](health-checks.md): Liveness and readiness probes.
 *   [**Observability**](observability.md): Integration with Sentry and OpenTelemetry.
+*   [**Form API**](form.md): Form configuration and data loading for dynamic forms.
 
 ## Enabling Extensions
 

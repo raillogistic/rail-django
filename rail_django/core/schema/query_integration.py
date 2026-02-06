@@ -217,3 +217,41 @@ class QueryIntegrationMixin:
                 f"Could not import metadata queries for "
                 f"schema '{self.schema_name}': {e}"
             )
+
+    def _integrate_form_queries(self, query_attrs: dict[str, Any]) -> None:
+        """Integrate Form API queries into query attributes."""
+        if not getattr(self.settings, "show_form", True):
+            return
+
+        try:
+            from ...extensions.form import FormQuery
+
+            form_query_instance = FormQuery()
+            for field_name, field in FormQuery._meta.fields.items():
+                resolver_method_name = f"resolve_{field_name}"
+                if hasattr(form_query_instance, resolver_method_name):
+                    resolver_method = getattr(form_query_instance, resolver_method_name)
+
+                    def create_resolver_wrapper(method):
+                        def wrapper(root, info, **kwargs):
+                            return method(info, **kwargs)
+
+                        return wrapper
+
+                    query_attrs[field_name] = graphene.Field(
+                        field.type,
+                        description=field.description,
+                        resolver=create_resolver_wrapper(resolver_method),
+                        args=getattr(field, "args", None),
+                    )
+                else:
+                    query_attrs[field_name] = field
+
+            logger.info(
+                f"Form API queries integrated into schema '{self.schema_name}'"
+            )
+        except ImportError as e:
+            logger.warning(
+                f"Could not import form queries for "
+                f"schema '{self.schema_name}': {e}"
+            )

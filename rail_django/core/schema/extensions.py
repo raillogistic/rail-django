@@ -379,11 +379,11 @@ class ExtensionsMixin:
                         f"{[cls.__name__ for cls in custom_query_classes]}"
                     )
 
-                # Integrate security, health, task, and metadata queries
+                # Integrate security, health, task, and form queries
                 self._integrate_security_queries(query_attrs)
                 self._integrate_health_queries(query_attrs)
                 self._integrate_task_queries(query_attrs)
-                self._integrate_metadata_queries(query_attrs)
+                self._integrate_form_queries(query_attrs)
 
                 # Create Query type
                 query_type = self._create_query_type(query_attrs)

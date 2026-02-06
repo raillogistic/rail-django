@@ -59,6 +59,15 @@ from .metadata import (
     RelationshipSchemaType,
 )
 
+# Form API extension
+from .form import (
+    FormConfigExtractor,
+    FormConfigType,
+    FormDataType,
+    FormQuery,
+    FieldConfigType as FormFieldConfigType,
+)
+
 # PDF templating helpers
 from .templating import (
     PdfTemplateView,
@@ -140,6 +149,12 @@ __all__ = [
     "FieldSchemaType",
     "RelationshipSchemaType",
     "ModelSchemaExtractor",
+    # Form API
+    "FormQuery",
+    "FormConfigExtractor",
+    "FormConfigType",
+    "FormDataType",
+    "FormFieldConfigType",
     # PDF templating
     "PdfTemplateView",
     "model_pdf_template",

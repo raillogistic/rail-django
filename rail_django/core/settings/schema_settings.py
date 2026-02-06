@@ -31,6 +31,7 @@ class SchemaSettings:
     disable_security_mutations: bool = False
     enable_extension_mutations: bool = True
     show_metadata: bool = True
+    show_form: bool = True
     query_extensions: List[str] = field(default_factory=list)
     mutation_extensions: List[str] = field(default_factory=list)
     query_field_allowlist: Optional[List[str]] = None

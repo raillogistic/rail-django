@@ -1,5 +1,11 @@
 # API Reference
 
+## Form API
+
+GraphQL reference for the Form API extension.
+
+See `reference/form-api.md`.
+
 ## Schema Registry
 
 Functions for manually registering schemas and mutations.

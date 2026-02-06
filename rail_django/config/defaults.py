@@ -36,6 +36,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "disable_security_mutations": False,
         "enable_extension_mutations": True,
         "show_metadata": True,
+        "show_form": True,
         "query_extensions": [],
         "mutation_extensions": [],
         "query_field_allowlist": None,
