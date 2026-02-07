@@ -2,15 +2,25 @@
 Internal utility functions for settings loading.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 from django.conf import settings as django_settings
 
 
 def _merge_settings_dicts(*dicts: dict[str, Any]) -> dict[str, Any]:
-    """Merge multiple settings dictionaries with later ones taking precedence."""
-    result = {}
-    for d in dicts:
-        if d: result.update(d)
+    """Deep-merge settings dictionaries with later values taking precedence."""
+    result: dict[str, Any] = {}
+    for data in dicts:
+        if not data:
+            continue
+        for key, value in data.items():
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
+                result[key] = _merge_settings_dicts(result[key], value)
+            else:
+                result[key] = value
     return result
 
 

@@ -23,6 +23,7 @@ from .permissions_extractor import PermissionExtractorMixin
 from ...generators.introspector import ModelIntrospector
 from ...core.settings import MutationGeneratorSettings
 from ..templating.registry import template_registry
+from ..templating.access import evaluate_template_access
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class ModelSchemaExtractor(
             "mutations": self._extract_mutations(model, user, instance=instance),
             "permissions": self._extract_permissions(model, user),
             "field_groups": self._extract_field_groups(model, graphql_meta),
-            "templates": self._extract_templates(model, user),
+            "templates": self._extract_templates(model, user, instance=instance),
             "metadata_version": get_model_version(app_name, model_name),
             "custom_metadata": getattr(graphql_meta, "custom_metadata", None),
         }
@@ -122,14 +123,23 @@ class ModelSchemaExtractor(
             )
         return groups
 
-    def _extract_templates(self, model: Any, user: Any) -> list[dict]:
+    def _extract_templates(
+        self,
+        model: Any,
+        user: Any,
+        instance: Any = None,
+    ) -> list[dict]:
         """Extract available PDF templates for the model."""
         from graphene.utils.str_converters import to_camel_case
         templates = []
         # Filter templates for this model
         for url_path, definition in template_registry.all().items():
             if definition.model == model:
-                # Basic permission check mock - in real app, check 'roles'/'permissions' against user
+                access = evaluate_template_access(
+                    definition,
+                    user=user,
+                    instance=instance,
+                )
                 templates.append(
                     {
                         "key": url_path,
@@ -141,8 +151,8 @@ class ModelSchemaExtractor(
                         "require_authentication": definition.require_authentication,
                         "roles": list(definition.roles),
                         "permissions": list(definition.permissions),
-                        "allowed": True,
-                        "denial_reason": None,
+                        "allowed": access.allowed,
+                        "denial_reason": access.reason,
                         "allow_client_data": definition.allow_client_data,
                         "client_data_fields": [to_camel_case(f) for f in definition.client_data_fields],
                         "client_data_schema": None,  # complex to serialize fully

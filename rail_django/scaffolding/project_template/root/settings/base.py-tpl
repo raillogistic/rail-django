@@ -18,12 +18,15 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 from root.webhooks import RAIL_DJANGO_WEBHOOKS
 
+AUTH_USER_MODEL = "users.User"
+
 # Add the 'apps' directory to the Python path if not in startapp mode
 if os.environ.get('RAIL_STARTAPP') != 'true':
     sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
 # Application definition
 INSTALLED_APPS = [
+    "users",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -250,7 +253,9 @@ RAIL_DJANGO_GRAPHQL = {
         "show_metadata": True,
         # List of custom query extension classes to add
         "query_extensions": [],
-        "mutation_extensions": [],
+        "mutation_extensions": [
+            "users.mutations.UsersMutations",
+        ],
         # Allowlist root query fields (None = no filtering)
         "query_field_allowlist": None,
         # Allowlist root mutation fields (None = no filtering)

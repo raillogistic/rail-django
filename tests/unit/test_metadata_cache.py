@@ -23,14 +23,19 @@ class TestMetadataCaching(TestCase):
     @patch('rail_django.extensions.metadata.utils.cache')
     def test_get_cached_schema_debug_false(self, mock_cache):
         """Test retrieving from cache when DEBUG is False."""
-        # Setup mock returns: first for version, second for schema
-        mock_cache.get.side_effect = ["12345", {"cached": "data"}]
+        # Setup mock returns: version, static payload, dynamic overlay
+        mock_cache.get.side_effect = [
+            "12345",
+            {"app": "app", "model": "model", "fields": []},
+            {"permissions": {"can_list": True}, "mutations": [], "templates": []},
+        ]
 
         result = utils.get_cached_schema("app", "model", user_id="123")
 
-        self.assertEqual(result, {"cached": "data"})
-        # Should be called twice: once for version, once for schema
-        self.assertEqual(mock_cache.get.call_count, 2)
+        self.assertEqual(result["app"], "app")
+        self.assertIn("permissions", result)
+        # Should be called 3 times: version + static + overlay
+        self.assertEqual(mock_cache.get.call_count, 3)
 
     @override_settings(DEBUG=True)
     @patch('rail_django.extensions.metadata.utils.cache')
@@ -54,19 +59,13 @@ class TestMetadataCaching(TestCase):
         # Verify set was called for the schema
         # Note: might be called for version if not found, but we mocked get to return it
 
-        # We look for the call that sets the data
+        # We look for the calls that set static + overlay payloads
         set_calls = mock_cache.set.call_args_list
-        schema_set_call = None
-        for call in set_calls:
-            if call[0][1] == data:
-                schema_set_call = call
-                break
+        static_call = next((call for call in set_calls if "metadata_static:12345:app:model" in call[0][0]), None)
+        overlay_call = next((call for call in set_calls if "metadata_overlay:12345:app:model" in call[0][0]), None)
 
-        self.assertIsNotNone(schema_set_call)
-        key = schema_set_call[0][0]
-        # Check new key structure: metadata_v2:{version}:{app}:{model}...
-        self.assertIn("metadata:12345:app:model", key)
-        self.assertIn("user:", key)
+        self.assertIsNotNone(static_call)
+        self.assertIsNotNone(overlay_call)
 
     @override_settings(DEBUG=False)
     @patch('rail_django.extensions.metadata.utils.cache')
@@ -74,14 +73,19 @@ class TestMetadataCaching(TestCase):
     @patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta')
     def test_extractor_uses_cache(self, mock_get_meta, mock_get_model, mock_cache):
         """Test that extractor uses the cache."""
-        mock_cache.get.return_value = {"cached": "schema"}
+        mock_cache.get.side_effect = [
+            "12345",
+            {"app": "app", "model": "model", "fields": [], "metadata_version": "12345"},
+            {"permissions": {}, "mutations": [], "templates": []},
+        ]
 
         extractor = ModelSchemaExtractor()
 
         # Should return cached value and NOT call get_model
         result = extractor.extract("app", "model", user=self.user)
 
-        self.assertEqual(result, {"cached": "schema"})
+        self.assertEqual(result["app"], "app")
+        self.assertEqual(result["model"], "model")
         mock_get_model.assert_not_called()
 
     @override_settings(DEBUG=False)

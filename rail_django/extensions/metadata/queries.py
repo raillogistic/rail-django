@@ -10,6 +10,7 @@ from django.apps import apps
 from graphql import GraphQLError
 
 from .extractor import ModelSchemaExtractor
+from ...utils.graphql_meta import get_model_graphql_meta
 from .types import (
     FilterConfigType,
     FilterSchemaType,
@@ -18,6 +19,55 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _describe_discovery_state(model, user) -> list[dict]:
+    try:
+        graphql_meta = get_model_graphql_meta(model)
+    except Exception:
+        return []
+
+    describe = getattr(graphql_meta, "describe_operation_guard", None)
+    if not callable(describe):
+        return []
+
+    states: list[dict] = []
+    for operation in ("list", "retrieve"):
+        try:
+            state = describe(operation, user=user, instance=None)
+        except Exception:
+            continue
+        if isinstance(state, dict):
+            states.append(state)
+    return states
+
+
+def _user_can_discover_model(model, user) -> bool:
+    if user and getattr(user, "is_superuser", False):
+        return True
+
+    states = _describe_discovery_state(model, user)
+    guarded_states = [state for state in states if state.get("guarded")]
+    guarded_allows = any(state.get("allowed", False) for state in guarded_states)
+
+    has_view_perm = False
+    has_perm = getattr(user, "has_perm", None)
+    if callable(has_perm):
+        perm_name = f"{model._meta.app_label}.view_{model._meta.model_name}"
+        try:
+            has_view_perm = bool(has_perm(perm_name))
+        except Exception:
+            has_view_perm = False
+
+    is_authenticated = bool(user and getattr(user, "is_authenticated", False))
+    if not is_authenticated:
+        # Anonymous users can only discover models explicitly allowed by guards.
+        return guarded_allows
+
+    if guarded_states and not guarded_allows:
+        return False
+
+    return has_view_perm or guarded_allows
 
 
 class ModelSchemaQuery(graphene.ObjectType):
@@ -141,6 +191,8 @@ class ModelSchemaQuery(graphene.ObjectType):
             if app and model._meta.app_label != app:
                 continue
             if model._meta.app_label in ("admin", "auth", "contenttypes", "sessions"):
+                continue
+            if not _user_can_discover_model(model, getattr(info.context, "user", None)):
                 continue
             results.append(
                 {

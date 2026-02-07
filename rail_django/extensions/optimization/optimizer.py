@@ -42,15 +42,73 @@ class QueryOptimizer:
 
         # Apply prefetch_related optimization
         if self.config.enable_prefetch_related and analysis.prefetch_related_fields:
-            prefetch_objects = self._build_prefetch_objects(
+            prefetch_fields, skipped_fields = self._filter_valid_prefetch_fields(
                 model, analysis.prefetch_related_fields
+            )
+            if skipped_fields:
+                logger.debug(
+                    f"Skipped invalid prefetch_related paths: {skipped_fields}"
+                )
+            if not prefetch_fields:
+                return queryset
+
+            prefetch_objects = self._build_prefetch_objects(
+                model, prefetch_fields
             )
             queryset = queryset.prefetch_related(*prefetch_objects)
             logger.debug(
-                f"Applied prefetch_related: {analysis.prefetch_related_fields}"
+                f"Applied prefetch_related: {prefetch_fields}"
             )
 
         return queryset
+
+    def _filter_valid_prefetch_fields(
+        self, model: type[models.Model], fields: list[str]
+    ) -> tuple[list[str], list[str]]:
+        valid_fields: list[str] = []
+        invalid_fields: list[str] = []
+        seen: set[str] = set()
+
+        for field_path in fields:
+            if not field_path or field_path in seen:
+                continue
+            seen.add(field_path)
+            if self._is_valid_prefetch_path(model, field_path):
+                valid_fields.append(field_path)
+            else:
+                invalid_fields.append(field_path)
+
+        return valid_fields, invalid_fields
+
+    def _is_valid_prefetch_path(
+        self, model: type[models.Model], field_path: str
+    ) -> bool:
+        current_model = model
+        for segment in field_path.split("__"):
+            related_model = self._resolve_related_model(current_model, segment)
+            if related_model is None:
+                return False
+            current_model = related_model
+        return True
+
+    @staticmethod
+    def _resolve_related_model(
+        current_model: type[models.Model], segment: str
+    ) -> Optional[type[models.Model]]:
+        try:
+            field = current_model._meta.get_field(segment)
+            if getattr(field, "is_relation", False):
+                return getattr(field, "related_model", None)
+            return None
+        except FieldDoesNotExist:
+            pass
+
+        if hasattr(current_model._meta, "related_objects"):
+            for rel in current_model._meta.related_objects:
+                if rel.get_accessor_name() == segment:
+                    return rel.related_model
+
+        return None
 
     def _build_prefetch_objects(
         self, model: type[models.Model], fields: list[str]
@@ -59,6 +117,9 @@ class QueryOptimizer:
         prefetch_objects = []
 
         for field_name in fields:
+            if "__" in field_name:
+                prefetch_objects.append(field_name)
+                continue
             try:
                 field = model._meta.get_field(field_name)
                 if isinstance(field, ManyToManyField):

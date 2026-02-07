@@ -20,7 +20,7 @@ def get_schema_builder(registry: SchemaRegistry, name: str):
             raise ValueError(f"Schema '{name}' is disabled")
 
         try:
-            from ...config_proxy import configure_schema_settings, get_schema_settings
+            from ...config_proxy import configure_schema_settings, get_core_schema_settings
             from ..schema import SchemaBuilder
             from ..settings import SchemaSettings
 
@@ -55,8 +55,7 @@ def get_schema_builder(registry: SchemaRegistry, name: str):
                 if overrides:
                     configure_schema_settings(name, **overrides)
 
-            settings_proxy = get_schema_settings(name)
-            schema_settings_dict = settings_proxy.get("schema_settings", {}) or {}
+            schema_settings_dict = get_core_schema_settings(name) or {}
             valid_fields = SchemaSettings.__dataclass_fields__.keys()
             schema_settings = SchemaSettings(
                 **{key: value for key, value in schema_settings_dict.items() if key in valid_fields}

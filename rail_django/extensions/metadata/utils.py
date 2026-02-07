@@ -13,6 +13,10 @@ from django.db import models
 
 # Cache management
 
+DYNAMIC_SCHEMA_KEYS = ("permissions", "mutations", "templates")
+OVERLAY_CACHE_TIMEOUT_SECONDS = 3600
+
+
 def get_model_version(app: str, model: str) -> str:
     """Get the current version token for a model's metadata."""
     key = f"metadata_version:{app}:{model}"
@@ -23,22 +27,84 @@ def get_model_version(app: str, model: str) -> str:
     return str(version)
 
 
-def _get_cache_key(
-    app: str, model: str, user_id: Optional[str] = None, object_id: Optional[str] = None
+def _get_static_cache_key(
+    app: str,
+    model: str,
+    version: Optional[str] = None,
 ) -> str:
-    """Build cache key for model schema."""
-    version = get_model_version(app, model)
-    key = f"metadata:{version}:{app}:{model}"
+    resolved_version = version or get_model_version(app, model)
+    return f"metadata_static:{resolved_version}:{app}:{model}"
+
+
+def _get_overlay_cache_key(
+    app: str,
+    model: str,
+    user_id: Optional[str] = None,
+    object_id: Optional[str] = None,
+    version: Optional[str] = None,
+) -> str:
+    """Build cache key for auth-sensitive metadata overlay."""
+    resolved_version = version or get_model_version(app, model)
+    audience = "public"
+    if user_id:
+        audience = hashlib.sha1(str(user_id).encode()).hexdigest()[:8]
+
+    key = f"metadata_overlay:{resolved_version}:{app}:{model}:aud:{audience}"
 
     if object_id:
         key = f"{key}:obj:{object_id}"
 
-    if user_id:
-        # Use a hash of user_id to keep key short/safe
-        user_hash = hashlib.sha1(str(user_id).encode()).hexdigest()[:8]
-        key = f"{key}:user:{user_hash}"
-
     return key
+
+
+def _get_cache_key(
+    app: str, model: str, user_id: Optional[str] = None, object_id: Optional[str] = None
+) -> str:
+    """
+    Backward-compatible cache key helper.
+
+    Returns the overlay key because permission-sensitive sections are now split out
+    from the static model schema cache.
+    """
+    return _get_overlay_cache_key(app, model, user_id=user_id, object_id=object_id)
+
+
+def _split_schema_payload(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    static_payload = dict(data)
+    overlay_payload: dict[str, Any] = {}
+    for key in DYNAMIC_SCHEMA_KEYS:
+        if key in static_payload:
+            overlay_payload[key] = static_payload.pop(key)
+    return static_payload, overlay_payload
+
+
+def _build_denied_permissions() -> dict[str, Any]:
+    return {
+        "can_list": False,
+        "can_retrieve": False,
+        "can_create": False,
+        "can_update": False,
+        "can_delete": False,
+        "can_bulk_create": False,
+        "can_bulk_update": False,
+        "can_bulk_delete": False,
+        "can_export": False,
+        "denial_reasons": {"cache": "Dynamic metadata overlay unavailable"},
+    }
+
+
+def _merge_schema_payload(
+    static_payload: dict[str, Any],
+    overlay_payload: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    merged = dict(static_payload)
+    if overlay_payload:
+        merged.update(overlay_payload)
+    else:
+        merged.setdefault("permissions", _build_denied_permissions())
+        merged.setdefault("mutations", [])
+        merged.setdefault("templates", [])
+    return merged
 
 
 def get_cached_schema(
@@ -49,8 +115,21 @@ def get_cached_schema(
     if getattr(settings, "DEBUG", False):
         return None
 
-    key = _get_cache_key(app, model, user_id, object_id)
-    return cache.get(key)
+    version = get_model_version(app, model)
+    static_key = _get_static_cache_key(app, model, version=version)
+    static_payload = cache.get(static_key)
+    if not static_payload:
+        return None
+
+    overlay_key = _get_overlay_cache_key(
+        app,
+        model,
+        user_id=user_id,
+        object_id=object_id,
+        version=version,
+    )
+    overlay_payload = cache.get(overlay_key)
+    return _merge_schema_payload(static_payload, overlay_payload)
 
 
 def set_cached_schema(
@@ -64,10 +143,20 @@ def set_cached_schema(
     if getattr(settings, "DEBUG", False):
         return
 
-    key = _get_cache_key(app, model, user_id, object_id)
-    # Default timeout: 1 hour (3600 seconds)
-    # We could make this configurable via settings
-    cache.set(key, data, timeout=3600)
+    version = get_model_version(app, model)
+    static_payload, overlay_payload = _split_schema_payload(data)
+
+    static_key = _get_static_cache_key(app, model, version=version)
+    cache.set(static_key, static_payload, timeout=OVERLAY_CACHE_TIMEOUT_SECONDS)
+
+    overlay_key = _get_overlay_cache_key(
+        app,
+        model,
+        user_id=user_id,
+        object_id=object_id,
+        version=version,
+    )
+    cache.set(overlay_key, overlay_payload, timeout=OVERLAY_CACHE_TIMEOUT_SECONDS)
 
 
 def invalidate_metadata_cache(app: str = None, model: str = None) -> None:

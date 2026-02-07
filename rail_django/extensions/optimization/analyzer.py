@@ -101,6 +101,76 @@ class QueryAnalyzer:
             logger.warning(f"Failed to extract requested fields: {e}")
             return set()
 
+    @staticmethod
+    def _dedupe_paths(paths: list[str]) -> list[str]:
+        seen: set[str] = set()
+        unique: list[str] = []
+        for path in paths:
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            unique.append(path)
+        return unique
+
+    def _normalize_model_field_paths(self, requested_fields: set[str]) -> set[str]:
+        """
+        Normalize extracted GraphQL paths into model-relative field paths.
+
+        Pagination queries expose model fields under an `items` wrapper:
+        e.g. `items__orderItems__id`. For relationship analysis we need
+        `orderItems__id`.
+        """
+        normalized: set[str] = set()
+        root_fields = {
+            field_path.split("__", 1)[0] for field_path in requested_fields if field_path
+        }
+        is_paginated_result = "items" in root_fields and "pageInfo" in root_fields
+
+        for field_path in requested_fields:
+            if not field_path:
+                continue
+
+            candidate = field_path
+
+            if is_paginated_result:
+                if candidate == "items" or candidate.startswith("pageInfo"):
+                    continue
+                if candidate.startswith("items__"):
+                    candidate = candidate[len("items__") :]
+
+            # Relay-style wrappers
+            if candidate in {"edges", "node"}:
+                continue
+            if candidate.startswith("edges__node__"):
+                candidate = candidate[len("edges__node__") :]
+            elif candidate.startswith("node__"):
+                candidate = candidate[len("node__") :]
+
+            if candidate:
+                normalized.add(candidate)
+
+        return normalized
+
+    @staticmethod
+    def _resolve_relation_segment(
+        current_model: type[models.Model],
+        segment: str,
+    ) -> tuple[Optional[Any], Optional[type[models.Model]]]:
+        try:
+            field = current_model._meta.get_field(segment)
+            if getattr(field, "is_relation", False):
+                return field, getattr(field, "related_model", None)
+            return None, None
+        except FieldDoesNotExist:
+            pass
+
+        if hasattr(current_model._meta, "related_objects"):
+            for rel in current_model._meta.related_objects:
+                if rel.get_accessor_name() == segment:
+                    return rel, rel.related_model
+
+        return None, None
+
     def _walk_selection_set(
         self,
         selection_set,
@@ -131,78 +201,73 @@ class QueryAnalyzer:
         self, model: type[models.Model], requested_fields: set[str]
     ) -> list[str]:
         """Determine which fields should use select_related, including nested ones."""
-        select_related = []
+        select_related: list[str] = []
+        normalized_paths = self._normalize_model_field_paths(requested_fields)
 
-        for field_path in requested_fields:
+        for field_path in normalized_paths:
             # We only care about potential relationship paths
             current_model = model
             parts = field_path.split("__")
             valid_path = []
-            
+
             # Check if this path corresponds to a chain of ForeignKeys/OneToOneFields
             is_valid_chain = True
             for part in parts:
-                try:
-                    field = current_model._meta.get_field(part)
-                    if isinstance(field, (ForeignKey, OneToOneField)):
-                        valid_path.append(part)
-                        current_model = field.related_model
-                    else:
-                        is_valid_chain = False
-                        break
-                except FieldDoesNotExist:
+                relation, related_model = self._resolve_relation_segment(
+                    current_model, part
+                )
+                if relation is None or related_model is None:
                     is_valid_chain = False
                     break
-            
+
+                # select_related supports forward FK/O2O and reverse O2O relations
+                is_single_relation = isinstance(
+                    relation, (ForeignKey, OneToOneField)
+                ) or bool(getattr(relation, "one_to_one", False))
+                if not is_single_relation:
+                    is_valid_chain = False
+                    break
+
+                valid_path.append(part)
+                current_model = related_model
+
             if is_valid_chain and valid_path:
                 select_related.append("__".join(valid_path))
 
-        return select_related
+        return self._dedupe_paths(select_related)
 
     def _get_prefetch_related_fields(
         self, model: type[models.Model], requested_fields: set[str]
     ) -> list[str]:
         """Determine which fields should use prefetch_related."""
-        prefetch_related = []
+        prefetch_related: list[str] = []
+        normalized_paths = self._normalize_model_field_paths(requested_fields)
 
-        for field_path in requested_fields:
+        for field_path in normalized_paths:
             parts = field_path.split("__")
             current_model = model
             current_path = []
-            
+
             # Traverse the path to find where we hit a ManyToMany or Reverse Relation
-            for i, part in enumerate(parts):
-                try:
-                    field = None
-                    is_prefetch_needed = False
-                    
-                    # Check forward fields
-                    try:
-                        field = current_model._meta.get_field(part)
-                        if isinstance(field, ManyToManyField):
-                            is_prefetch_needed = True
-                        elif isinstance(field, (ForeignKey, OneToOneField)):
-                            current_model = field.related_model
-                    except FieldDoesNotExist:
-                        # Check reverse relationships
-                        if hasattr(current_model._meta, "related_objects"):
-                            for rel in current_model._meta.related_objects:
-                                if rel.get_accessor_name() == part:
-                                    is_prefetch_needed = True
-                                    field = rel
-                                    current_model = rel.related_model
-                                    break
-                    
-                    current_path.append(part)
-                    
-                    if is_prefetch_needed:
-                        prefetch_related.append("__".join(current_path))
-                        break
-                        
-                except Exception:
+            for part in parts:
+                relation, related_model = self._resolve_relation_segment(
+                    current_model, part
+                )
+                if relation is None or related_model is None:
                     break
 
-        return prefetch_related
+                current_path.append(part)
+                is_prefetch_needed = isinstance(relation, ManyToManyField) or bool(
+                    getattr(relation, "many_to_many", False)
+                    or getattr(relation, "one_to_many", False)
+                )
+                if is_prefetch_needed:
+                    prefetch_related.append("__".join(current_path))
+                    break
+
+                current_model = related_model
+
+        return self._dedupe_paths(prefetch_related)
 
     def _calculate_complexity(self, info: GraphQLResolveInfo) -> int:
         """Calculate query complexity score."""
@@ -249,28 +314,11 @@ class QueryAnalyzer:
         """Estimate number of database queries without optimization."""
         query_count = 1  # Base query
 
-        for field_name in requested_fields:
+        normalized_paths = self._normalize_model_field_paths(requested_fields)
+        for field_name in normalized_paths:
             root_field = field_name.split("__", 1)[0]
-            try:
-                field = model._meta.get_field(root_field)
-                if isinstance(field, (ForeignKey, OneToOneField, ManyToManyField)):
-                    query_count += 1
-            except FieldDoesNotExist:
-                if hasattr(model._meta, "related_objects"):
-                    for rel in model._meta.related_objects:
-                        if rel.get_accessor_name() == field_name:
-                            query_count += 1
-                            break
-                elif hasattr(model._meta, "get_fields"):
-                    try:
-                        for field in model._meta.get_fields():
-                            if hasattr(field, "related_model") and hasattr(
-                                field, "get_accessor_name"
-                            ):
-                                if field.get_accessor_name() == field_name:
-                                    query_count += 1
-                                    break
-                    except AttributeError:
-                        pass
+            relation, _ = self._resolve_relation_segment(model, root_field)
+            if relation is not None:
+                query_count += 1
 
         return query_count
