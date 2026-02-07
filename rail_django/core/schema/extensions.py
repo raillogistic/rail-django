@@ -412,6 +412,7 @@ class ExtensionsMixin:
                 self._integrate_security_queries(query_attrs)
                 self._integrate_health_queries(query_attrs)
                 self._integrate_task_queries(query_attrs)
+                self._integrate_metadata_queries(query_attrs)
                 self._integrate_form_queries(query_attrs)
                 self._integrate_table_queries(query_attrs)
 

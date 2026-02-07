@@ -185,9 +185,26 @@ class QueryIntegrationMixin:
 
         try:
             from ...extensions.metadata import ModelSchemaQuery
+            from graphene.utils.str_converters import to_camel_case
 
             schema_query_v2_instance = ModelSchemaQuery()
+            existing_field_names = set(query_attrs.keys())
+            if self.settings.auto_camelcase:
+                existing_field_names.update(to_camel_case(name) for name in query_attrs)
+
             for field_name, field in ModelSchemaQuery._meta.fields.items():
+                normalized_name = (
+                    to_camel_case(field_name) if self.settings.auto_camelcase else field_name
+                )
+                if field_name in existing_field_names or normalized_name in existing_field_names:
+                    logger.debug(
+                        "Skipping metadata query field '%s' for schema '%s' because a field "
+                        "with the same public name already exists",
+                        field_name,
+                        self.schema_name,
+                    )
+                    continue
+
                 resolver_method_name = f"resolve_{field_name}"
                 if hasattr(schema_query_v2_instance, resolver_method_name):
                     resolver_method = getattr(
@@ -208,6 +225,10 @@ class QueryIntegrationMixin:
                     )
                 else:
                     query_attrs[field_name] = field
+
+                existing_field_names.add(field_name)
+                if self.settings.auto_camelcase:
+                    existing_field_names.add(to_camel_case(field_name))
 
             logger.info(
                 f"Model schema queries integrated into schema '{self.schema_name}'"

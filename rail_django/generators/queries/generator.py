@@ -91,96 +91,12 @@ class QueryGenerator:
         self.performance_monitor = get_performance_monitor(schema_name)
 
     def generate_introspection_queries(self) -> Dict[str, graphene.Field]:
-        """Generate backward-compatible filter introspection queries."""
+        """
+        Introspection root queries are now provided by metadata extensions.
 
-        class _LegacyFilterOption(graphene.ObjectType):
-            name = graphene.String(required=True)
-            lookup_expr = graphene.String(required=True, name="lookupExpr")
-            filter_type = graphene.String(required=True, name="filterType")
-
-        class _LegacyFilterField(graphene.ObjectType):
-            field_name = graphene.String(required=True, name="fieldName")
-            field_label = graphene.String(required=True, name="fieldLabel")
-            options = graphene.List(_LegacyFilterOption, required=True)
-
-        class _LegacyFilterPreset(graphene.ObjectType):
-            name = graphene.String(required=True)
-            filter_json = graphene.JSONString(required=True, name="filterJson")
-
-        class _LegacyFilterSchema(graphene.ObjectType):
-            model = graphene.String(required=True)
-            supports_fts = graphene.Boolean(required=True, name="supportsFts")
-            supports_aggregation = graphene.Boolean(
-                required=True, name="supportsAggregation"
-            )
-            fields = graphene.List(_LegacyFilterField, required=True)
-            presets = graphene.List(_LegacyFilterPreset, required=True)
-
-        def _resolve_filter_schema(root, info, model):
-            try:
-                from django.apps import apps
-                from ...extensions.metadata.extractor import ModelSchemaExtractor
-
-                model_cls = None
-                target = str(model or "").strip().lower()
-                for candidate in apps.get_models():
-                    if candidate.__name__.lower() == target:
-                        model_cls = candidate
-                        break
-
-                if model_cls is None:
-                    return None
-
-                extractor = ModelSchemaExtractor(schema_name=self.schema_name)
-                raw_fields = extractor.extract_model_filters(model_cls)
-                config = extractor._extract_filter_config(model_cls)
-
-                fields = []
-                for field in raw_fields:
-                    options = []
-                    for option in field.get("options", []):
-                        options.append(
-                            {
-                                "name": option.get("name", ""),
-                                "lookup_expr": option.get("lookup", option.get("name", "")),
-                                "filter_type": option.get("graphql_type", ""),
-                            }
-                        )
-                    fields.append(
-                        {
-                            "field_name": field.get("field_name", ""),
-                            "field_label": field.get("field_label", field.get("field_name", "")),
-                            "options": options,
-                        }
-                    )
-
-                presets = []
-                for preset in config.get("presets", []):
-                    presets.append(
-                        {
-                            "name": preset.get("preset_name", preset.get("name", "")),
-                            "filter_json": preset.get("filter_json", "{}"),
-                        }
-                    )
-
-                return {
-                    "model": model_cls.__name__,
-                    "supports_fts": bool(config.get("supports_fts")),
-                    "supports_aggregation": bool(config.get("supports_aggregation")),
-                    "fields": fields,
-                    "presets": presets,
-                }
-            except Exception:
-                return None
-
-        return {
-            "filter_schema": graphene.Field(
-                _LegacyFilterSchema,
-                model=graphene.String(required=True),
-                resolver=_resolve_filter_schema,
-                description="Backward-compatible filter schema metadata for a model.",
-            )
-        }
+        Keep this hook empty to avoid shadowing metadata `filterSchema(app, model)`.
+        """
+        return {}
 
     @property
     def filter_generator(self):

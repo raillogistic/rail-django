@@ -29,25 +29,16 @@ class TestFilterIntrospection:
     """Test filter introspection API."""
 
     def test_filter_schema_query(self, gql_client):
-        """Test filterSchema query returns correct metadata."""
+        """Test metadata extension filterSchema query returns correct metadata."""
         query = """
         query {
-            filterSchema(model: "Product") {
-                model
-                supportsFts
-                supportsAggregation
-                fields {
-                    fieldName
-                    fieldLabel
-                    options {
-                        name
-                        lookupExpr
-                        filterType
-                    }
-                }
-                presets {
+            filterSchema(app: "test_app", model: "Product") {
+                name
+                fieldName
+                fieldLabel
+                options {
                     name
-                    filterJson
+                    lookup
                 }
             }
         }
@@ -55,35 +46,30 @@ class TestFilterIntrospection:
         result = gql_client.execute(query)
         assert result.get("errors") is None
         schema = result["data"]["filterSchema"]
-        
-        assert schema["model"] == "Product"
+
+        assert isinstance(schema, list)
+        assert len(schema) > 0
+
         # Check for expected fields
-        field_names = [f["fieldName"] for f in schema["fields"]]
+        field_names = [f["fieldName"] for f in schema]
         assert "name" in field_names
         assert "price" in field_names
-        # assert "cost_price" in field_names # Added in previous phase
-        
-        # Check options for a field (e.g. name string field)
-        name_field = next(f for f in schema["fields"] if f["fieldName"] == "name")
+
+        name_field = next(f for f in schema if f["fieldName"] == "name")
         ops = [o["name"] for o in name_field["options"]]
         assert "eq" in ops
         assert "icontains" in ops
-        
-        # Check presets (defined in previous phase)
-        preset_names = [p["name"] for p in schema["presets"]]
-        assert "expensive" in preset_names
-        assert "out_of_stock" in preset_names
 
     def test_filter_schema_unknown_model(self, gql_client):
-        """Test query with unknown model returns null."""
+        """Test query with unknown model returns an empty list."""
         query = """
         query {
-            filterSchema(model: "UnknownModel") {
-                model
+            filterSchema(app: "test_app", model: "UnknownModel") {
+                name
             }
         }
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        assert result["data"]["filterSchema"] is None
+        assert result["data"]["filterSchema"] == []
 

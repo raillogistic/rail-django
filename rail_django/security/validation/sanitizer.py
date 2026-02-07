@@ -177,7 +177,9 @@ class InputSanitizer:
         )
         issues: list[ValidationIssue] = []
 
-        if self.settings.enable_sql_injection_protection:
+        if self.settings.enable_sql_injection_protection and not self._is_safe_enum_token(
+            scan_value, field
+        ):
             for pattern in self._sql_patterns:
                 if pattern.search(scan_value):
                     issues.append(
@@ -204,6 +206,32 @@ class InputSanitizer:
                     break
 
         return issues
+
+    @staticmethod
+    def _is_safe_enum_token(value: str, field: Optional[str]) -> bool:
+        """Allow known enum tokens on enum-like fields without SQL keyword false positives."""
+        if not field:
+            return False
+
+        normalized_field = field.lower()
+        is_enum_field = normalized_field.endswith("mode") or normalized_field.endswith(
+            "operation"
+        )
+        if not is_enum_field:
+            return False
+
+        token = value.strip().upper()
+        if not re.fullmatch(r"[A-Z_]{2,32}", token):
+            return False
+
+        return token in {
+            "CREATE",
+            "UPDATE",
+            "DELETE",
+            "VIEW",
+            "READ",
+            "WRITE",
+        }
 
 
 class GraphQLInputSanitizer:
