@@ -79,6 +79,10 @@ class GraphQLMetaAPIMixin:
         if guard.allow_anonymous:
             return
 
+        # Superusers bypass operation-level RBAC guards.
+        if user and getattr(user, "is_superuser", False):
+            return
+
         if guard.require_authentication and not (user and user.is_authenticated):
             raise GraphQLError(
                 guard.deny_message
@@ -167,6 +171,10 @@ class GraphQLMetaAPIMixin:
         role_mgr = security["role_manager"]
 
         if guard.allow_anonymous:
+            return {"guarded": True, "allowed": True, "reason": None}
+
+        # Superusers bypass operation-level RBAC guards.
+        if user and getattr(user, "is_superuser", False):
             return {"guarded": True, "allowed": True, "reason": None}
 
         if guard.require_authentication and not (user and user.is_authenticated):

@@ -40,15 +40,39 @@ USER_MANAGER_ROLES: List[str] = ["user_manager", "user_admin"]
 USER_ADMIN_ROLES: List[str] = ["user_admin"]
 
 
+def _decode_global_id(value: object) -> str:
+    raw = "" if value is None else str(value)
+    try:
+        from graphql_relay import from_global_id
+
+        _, decoded = from_global_id(raw)
+        return str(decoded or raw)
+    except Exception:
+        return raw
+
+
 def can_update_own_user(**kwargs) -> bool:
     """Allow authenticated users to update only their own User record."""
     user = kwargs.get("user")
     instance = kwargs.get("instance")
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if instance is None:
+    user_pk = str(getattr(user, "pk", "") or "")
+    if not user_pk:
         return False
-    return getattr(instance, "pk", None) == getattr(user, "pk", None)
+
+    if instance is not None and str(getattr(instance, "pk", "") or "") == user_pk:
+        return True
+
+    info = kwargs.get("info")
+    if info is not None:
+        variables = getattr(info, "variable_values", None) or {}
+        if isinstance(variables, dict):
+            raw_id = variables.get("id")
+            if raw_id is not None and _decode_global_id(raw_id) == user_pk:
+                return True
+
+    return False
 
 
 def user_operations():
