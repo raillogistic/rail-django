@@ -1,19 +1,27 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import UniqueConstraint
+from typing import Optional
 from django.utils import timezone
+import datetime
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
 
 from .access_control import (
     USER_ROLES,
     profile_operations,
-    settings_operations,
     user_operations,
+    settings_operations,
 )
+
+# Local import of Magazin from stock app
 
 
 class User(AbstractUser):
-    """Custom project user model."""
+    """
+    Custom user model extending Django's AbstractUser.
+    """
 
     def __str__(self) -> str:
         return self.username
@@ -30,15 +38,17 @@ class User(AbstractUser):
 
 
 class UserProfile(models.Model):
-    """Optional profile data attached to a user."""
+    """
+    User profile model with OneToOne relationship to User.
+
+    Stores optional user details like bio, birth date, and phone number.
+    """
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     bio = models.TextField(blank=True, help_text="User biography")
     birth_date = models.DateField(null=True, blank=True, help_text="User birth date")
     phone_number = models.CharField(
-        max_length=20,
-        blank=True,
-        help_text="User phone number",
+        max_length=20, blank=True, help_text="User phone number"
     )
 
     class Meta:
@@ -56,36 +66,49 @@ class UserProfile(models.Model):
 
 
 class UserSettings(models.Model):
-    """Simple frontend preferences attached to a user."""
+    """
+    User settings model with OneToOne relationship to User.
+
+    Stores user preferences for the frontend UI.
+    """
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="settings")
     theme = models.CharField(max_length=50, default="default", help_text="UI Theme")
-    mode = models.CharField(max_length=20, default="light", help_text="UI Mode (light/dark)")
+    mode = models.CharField(
+        max_length=20, default="light", help_text="UI Mode (light/dark)"
+    )
     layout = models.CharField(max_length=20, default="vertical", help_text="UI Layout")
     sidebar_collapse_mode = models.CharField(
-        max_length=20,
-        default="offcanvas",
-        help_text="Sidebar collapse mode",
+        max_length=20, default="offcanvas", help_text="Sidebar collapse mode"
     )
     font_size = models.CharField(max_length=10, default="md", help_text="Font size")
-    font_family = models.CharField(max_length=50, default="inter", help_text="Font family")
+    font_family = models.CharField(
+        max_length=50, default="inter", help_text="Font family"
+    )
+    table_configs = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Table configurations keyed by table identifier (app-model-path)",
+    )
 
     class Meta:
         verbose_name = "User Settings"
         verbose_name_plural = "User Settings"
 
-    class GraphQLMeta(GraphQLMetaBase):
-        access = GraphQLMetaBase.AccessControl(
-            roles=USER_ROLES,
-            operations=settings_operations(),
-        )
+    # class GraphQLMeta(GraphQLMetaBase):
+    #     access = GraphQLMetaBase.AccessControl(
+    #         roles=USER_ROLES,
+    #         operations=settings_operations(),
+    #     )
 
     def __str__(self) -> str:
         return f"Settings for {self.user.username}"
 
 
 class PasswordResetOTP(models.Model):
-    """One-time code for password reset flows."""
+    """
+    Model to store one-time passwords for password reset.
+    """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reset_codes")
     code = models.CharField(max_length=6)

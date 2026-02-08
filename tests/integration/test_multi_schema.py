@@ -7,9 +7,10 @@ de routage multi-schémas, incluant les vues, les URLs, et l'intégration compl�
 
 import json
 from typing import Any, Dict
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
 from django.contrib.auth.models import User
+from django.core.exceptions import RequestDataTooBig
 from django.http import JsonResponse
 from django.test import Client, TestCase, override_settings
 from django.urls import include, path, reverse
@@ -458,6 +459,30 @@ class TestMultiSchemaErrorHandling(TestCase):
 
         # Vérifier que l'erreur de registre est gérée
         self.assertEqual(response.status_code, 503)
+
+    @patch("rail_django.core.registry.schema_registry")
+    def test_request_body_too_large_returns_413(self, mock_registry):
+        """Test qu'une charge utile trop volumineuse retourne HTTP 413."""
+        mock_registry.discover_schemas.return_value = None
+        schema_info = Mock()
+        schema_info.enabled = True
+        mock_registry.get_schema.return_value = schema_info
+
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.method = "POST"
+        request.content_type = "application/json"
+        request.META = {"CONTENT_TYPE": "application/json"}
+
+        type(request).body = PropertyMock(
+            side_effect=RequestDataTooBig("Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.")
+        )
+
+        response = view.dispatch(request, schema_name="gql")
+        payload = json.loads(response.content.decode("utf-8"))
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(payload["errors"][0]["extensions"]["code"], "payload_too_large")
 
 
 if __name__ == "__main__":
