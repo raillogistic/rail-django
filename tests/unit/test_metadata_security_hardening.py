@@ -6,6 +6,8 @@ from django.test import TestCase
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
 from rail_django.extensions.metadata.queries import ModelSchemaQuery
 from rail_django.extensions.templating.registry import TemplateAccessDecision
+from rail_django.security.field_permissions import FieldVisibility
+from test_app.models import Product
 
 
 def _build_model(app_label: str, model_name: str):
@@ -110,3 +112,41 @@ class TestMetadataSecurityHardening(TestCase):
         self.assertFalse(templates[0]["allowed"])
         self.assertEqual(templates[0]["denial_reason"], "Permission manquante")
 
+    @patch("rail_django.extensions.metadata.filter_extractor.field_permission_manager")
+    @patch("rail_django.extensions.metadata.field_extractor.field_permission_manager")
+    def test_hidden_fields_are_excluded_from_metadata_and_filters(
+        self,
+        mock_field_perm_manager,
+        mock_filter_perm_manager,
+    ):
+        user = MagicMock()
+        user.is_authenticated = True
+
+        visible_perm = SimpleNamespace(
+            visibility=FieldVisibility.VISIBLE,
+            can_write=True,
+        )
+        hidden_perm = SimpleNamespace(
+            visibility=FieldVisibility.HIDDEN,
+            can_write=False,
+        )
+
+        def _field_perm(_user, _model, field_name, instance=None):
+            if field_name in {"price", "cost_price"}:
+                return hidden_perm
+            return visible_perm
+
+        mock_field_perm_manager.check_field_permission.side_effect = _field_perm
+        mock_filter_perm_manager.check_field_permission.side_effect = _field_perm
+
+        extractor = ModelSchemaExtractor()
+        fields = extractor._extract_fields(Product, user)
+        filters = extractor._extract_filters(Product, user=user)
+
+        field_names = {field["field_name"] for field in fields}
+        filter_names = {flt["field_name"] for flt in filters}
+
+        self.assertNotIn("price", field_names)
+        self.assertNotIn("cost_price", field_names)
+        self.assertNotIn("price", filter_names)
+        self.assertNotIn("costPrice", filter_names)

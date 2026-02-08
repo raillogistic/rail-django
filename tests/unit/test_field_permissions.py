@@ -3,6 +3,7 @@ Unit tests for field-level permissions and masking helpers.
 """
 
 from types import SimpleNamespace
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -19,7 +20,7 @@ from rail_django.security.field_permissions import (
     field_permission_manager,
     mask_sensitive_fields,
 )
-from test_app.models import Category
+from test_app.models import Category, Product
 
 pytestmark = pytest.mark.unit
 
@@ -130,4 +131,18 @@ def test_financial_fields_mask_for_non_privileged_users():
 
     assert visibility == FieldVisibility.MASKED
     assert mask_value == "***CONFIDENTIAL***"
+
+
+@pytest.mark.django_db
+def test_mask_sensitive_fields_uses_null_for_decimal_fields():
+    user = User.objects.create_user(username="finance_mask_user", password="pass12345")
+    data = {
+        "price": Decimal("10.50"),
+        "name": "Maskable Product",
+    }
+
+    masked = mask_sensitive_fields(data, user, Product)
+
+    assert masked["price"] == Decimal("0")
+    assert masked["name"] == "Maskable Product"
 

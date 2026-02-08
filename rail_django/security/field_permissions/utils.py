@@ -14,6 +14,10 @@ from typing import (
     Type,
 )
 
+from datetime import date, datetime, time
+from decimal import Decimal
+
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
 from .types import (
@@ -23,6 +27,87 @@ from .types import (
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
+
+
+_NON_STRING_MASK_FIELD_TYPES = (
+    models.DecimalField,
+    models.FloatField,
+    models.IntegerField,
+    models.BigIntegerField,
+    models.SmallIntegerField,
+    models.PositiveIntegerField,
+    models.PositiveSmallIntegerField,
+    models.BooleanField,
+    models.DateField,
+    models.DateTimeField,
+    models.TimeField,
+    models.DurationField,
+)
+
+
+def _resolve_model_field(
+    model_class: Type[models.Model], field_name: str
+) -> Optional[models.Field]:
+    try:
+        return model_class._meta.get_field(field_name)
+    except (LookupError, FieldDoesNotExist, AttributeError):
+        return None
+
+
+def _coerce_masked_value(
+    *,
+    model_class: Type[models.Model],
+    field_name: str,
+    original_value: Any,
+    mask_value: Any,
+) -> Any:
+    """Coerce mask values so they remain compatible with output field scalars."""
+    if mask_value is None:
+        return None
+
+    model_field = _resolve_model_field(model_class, field_name)
+    if model_field is not None:
+        def non_null_placeholder() -> Any:
+            if isinstance(model_field, models.DecimalField):
+                return Decimal("0")
+            if isinstance(model_field, models.FloatField):
+                return 0.0
+            if isinstance(
+                model_field,
+                (
+                    models.IntegerField,
+                    models.BigIntegerField,
+                    models.SmallIntegerField,
+                    models.PositiveIntegerField,
+                    models.PositiveSmallIntegerField,
+                ),
+            ):
+                return 0
+            if isinstance(model_field, models.BooleanField):
+                return False
+            if isinstance(model_field, models.DateField) and not isinstance(
+                model_field, models.DateTimeField
+            ):
+                return date(1970, 1, 1)
+            if isinstance(model_field, models.DateTimeField):
+                return datetime(1970, 1, 1, 0, 0, 0)
+            if isinstance(model_field, models.TimeField):
+                return time(0, 0, 0)
+            if isinstance(model_field, models.DurationField):
+                return 0
+            return None
+
+        if model_field.is_relation:
+            return None if model_field.null else original_value
+        if isinstance(model_field, _NON_STRING_MASK_FIELD_TYPES):
+            if model_field.null:
+                return None
+            return non_null_placeholder()
+        return mask_value
+
+    if isinstance(original_value, (Decimal, int, float, bool, date, datetime, time)):
+        return None
+    return mask_value
 
 
 def mask_sensitive_fields(
@@ -75,7 +160,12 @@ def mask_sensitive_fields(
         if visibility == FieldVisibility.HIDDEN:
             result.pop(field_name, None)
         elif visibility == FieldVisibility.MASKED:
-            result[field_name] = mask_value
+            result[field_name] = _coerce_masked_value(
+                model_class=model_class,
+                field_name=field_name,
+                original_value=value,
+                mask_value=mask_value,
+            )
         elif visibility == FieldVisibility.REDACTED and value:
             result[field_name] = redact_value(value)
 

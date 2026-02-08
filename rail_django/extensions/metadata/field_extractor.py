@@ -76,7 +76,7 @@ class FieldExtractorMixin:
                 instance,
                 field_metadata=field_metadata.get(field.name),
             )
-            if field_schema:
+            if field_schema and field_schema.get("readable", True):
                 fields.append(field_schema)
         return fields
 
@@ -255,7 +255,7 @@ class FieldExtractorMixin:
                 field_metadata=field_metadata.get(field_key),
                 graphql_meta=graphql_meta,
             )
-            if rel_schema:
+            if rel_schema and rel_schema.get("readable", True):
                 relationships.append(rel_schema)
         return relationships
 

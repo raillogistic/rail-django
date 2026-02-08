@@ -10,6 +10,7 @@ import graphene
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from ...utils.graphql_meta import get_model_graphql_meta
+from ...security.field_permissions import field_permission_manager, FieldVisibility
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ DATE_PRESETS = [
 class FilterExtractorMixin:
     """Mixin for extracting filters."""
 
-    def extract_model_filters(self, model: type[models.Model]) -> list[dict]:
+    def extract_model_filters(self, model: type[models.Model], user: Any = None) -> list[dict]:
         """Extract all available filters for a model."""
         filters = []
         supports_quick = self._supports_quick_filter(model)
@@ -74,7 +75,9 @@ class FilterExtractorMixin:
                     continue
                 if field_name == "quick" and not supports_quick:
                     continue
-                filter_meta = self._analyze_filter_field(model, field_name, input_field)
+                filter_meta = self._analyze_filter_field(
+                    model, field_name, input_field, user=user
+                )
                 if filter_meta:
                     filters.append(filter_meta)
         except Exception as e:
@@ -82,7 +85,7 @@ class FilterExtractorMixin:
         return filters
 
     def extract_filter_field(
-        self, model: type[models.Model], field_name: str
+        self, model: type[models.Model], field_name: str, user: Any = None
     ) -> Optional[dict]:
         """Extract metadata for a specific filter field."""
         if field_name.lower() == "quick" and not self._supports_quick_filter(model):
@@ -119,13 +122,19 @@ class FilterExtractorMixin:
 
             if not target_input_field:
                 return None
-            return self._analyze_filter_field(current_model, parts[-1], target_input_field)
+            return self._analyze_filter_field(
+                current_model, parts[-1], target_input_field, user=user
+            )
         except Exception as e:
             logger.error(f"Error extracting filter field {field_name} for {model.__name__}: {e}")
             return None
 
     def _analyze_filter_field(
-        self, model: type[models.Model], field_name: str, input_field: Any
+        self,
+        model: type[models.Model],
+        field_name: str,
+        input_field: Any,
+        user: Any = None,
     ) -> Optional[dict]:
         """Analyze a single filter input field and generate its metadata."""
         try:
@@ -165,6 +174,16 @@ class FilterExtractorMixin:
             candidates.sort(key=lambda x: x[1], reverse=True)
             if candidates:
                 model_field = candidates[0][0]
+
+            if user and model_field is not None:
+                try:
+                    perm = field_permission_manager.check_field_permission(
+                        user, model, model_field.name, instance=None
+                    )
+                    if perm.visibility == FieldVisibility.HIDDEN:
+                        return None
+                except Exception:
+                    pass
 
             if model_field:
                 field_label = str(getattr(model_field, "verbose_name", model_field.name))
@@ -315,9 +334,9 @@ class FilterExtractorMixin:
             logger.warning(f"Error analyzing filter field {field_name} for {model.__name__}: {e}")
             return None
 
-    def _extract_filters(self, model: type[models.Model]) -> list[dict]:
+    def _extract_filters(self, model: type[models.Model], user: Any = None) -> list[dict]:
         """Extract available filters."""
-        return self.extract_model_filters(model)
+        return self.extract_model_filters(model, user=user)
 
     def _extract_filter_config(self, model: type[models.Model]) -> dict:
         """Extract filter configuration for the model."""
@@ -380,7 +399,12 @@ class FilterExtractorMixin:
             return False
 
     def _extract_relation_filters(
-        self, model: type[models.Model], include_nested_schema: bool = False, depth: int = 0, max_depth: int = 2
+        self,
+        model: type[models.Model],
+        include_nested_schema: bool = False,
+        depth: int = 0,
+        max_depth: int = 2,
+        user: Any = None,
     ) -> list[dict]:
         """Extract relation filter metadata with optional nested schema support.
 
@@ -402,6 +426,16 @@ class FilterExtractorMixin:
 
             if not (is_fk or is_o2o or is_m2m or is_reverse_m2m or is_reverse_fk):
                 continue
+
+            if user and hasattr(field, "name"):
+                try:
+                    perm = field_permission_manager.check_field_permission(
+                        user, model, field.name, instance=None
+                    )
+                    if perm.visibility == FieldVisibility.HIDDEN:
+                        continue
+                except Exception:
+                    pass
 
             related_model = getattr(field, "related_model", None)
             if not related_model:
@@ -439,7 +473,7 @@ class FilterExtractorMixin:
             if include_nested_schema and depth < max_depth:
                 try:
                     nested_fields = self._extract_nested_filter_fields(
-                        related_model, depth + 1, max_depth
+                        related_model, depth + 1, max_depth, user=user
                     )
                     relation_data["nested_fields"] = nested_fields
                 except Exception as e:
@@ -449,7 +483,11 @@ class FilterExtractorMixin:
         return relation_filters
 
     def _extract_nested_filter_fields(
-        self, model: type[models.Model], depth: int = 0, max_depth: int = 2
+        self,
+        model: type[models.Model],
+        depth: int = 0,
+        max_depth: int = 2,
+        user: Any = None,
     ) -> list[dict]:
         """Extract a lightweight version of filter fields for nested relations.
 
@@ -471,6 +509,16 @@ class FilterExtractorMixin:
 
             field_name = field.name
             verbose_name = str(getattr(field, "verbose_name", field_name))
+
+            if user:
+                try:
+                    perm = field_permission_manager.check_field_permission(
+                        user, model, field_name, instance=None
+                    )
+                    if perm.visibility == FieldVisibility.HIDDEN:
+                        continue
+                except Exception:
+                    pass
 
             # Determine base type
             base_type = "String"
@@ -522,7 +570,7 @@ class FilterExtractorMixin:
         return fields
 
     def extract_relation_filters_with_depth(
-        self, model: type[models.Model], max_depth: int = 2
+        self, model: type[models.Model], max_depth: int = 2, user: Any = None
     ) -> list[dict]:
         """Extract relation filters with nested schema information up to max_depth.
 
@@ -530,7 +578,11 @@ class FilterExtractorMixin:
         for lazy loading in the frontend.
         """
         return self._extract_relation_filters(
-            model, include_nested_schema=True, depth=0, max_depth=max_depth
+            model,
+            include_nested_schema=True,
+            depth=0,
+            max_depth=max_depth,
+            user=user,
         )
 
     def _get_default_operator(

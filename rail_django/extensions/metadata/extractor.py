@@ -86,9 +86,9 @@ class ModelSchemaExtractor(
             "relationships": self._extract_relationships(
                 model, user, graphql_meta=graphql_meta
             ),
-            "filters": self._extract_filters(model),
+            "filters": self._extract_filters(model, user=user),
             "filter_config": self._extract_filter_config(model),
-            "relation_filters": self._extract_relation_filters(model),
+            "relation_filters": self._extract_relation_filters(model, user=user),
             "mutations": self._extract_mutations(model, user, instance=instance),
             "permissions": self._extract_permissions(model, user),
             "field_groups": self._extract_field_groups(model, graphql_meta),

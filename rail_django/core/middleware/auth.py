@@ -7,7 +7,10 @@ permission enforcement for GraphQL operations.
 
 import logging
 from typing import Any, Callable, Optional
+from datetime import date, datetime, time
+from decimal import Decimal
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from graphql import GraphQLError
 
@@ -167,6 +170,82 @@ class FieldPermissionMiddleware(BaseMiddleware):
         while hasattr(graphql_type, "of_type"):
             graphql_type = graphql_type.of_type
         return graphql_type
+
+    @staticmethod
+    def _coerce_masked_output_value(
+        model_class: type[models.Model],
+        field_name: str,
+        result: Any,
+        mask_value: Any,
+    ) -> Any:
+        """Return a mask value compatible with the GraphQL field scalar."""
+        if mask_value is None:
+            return None
+
+        model_field = None
+        try:
+            model_field = model_class._meta.get_field(field_name)
+        except (LookupError, FieldDoesNotExist, AttributeError):
+            model_field = None
+
+        if model_field is not None:
+            def non_null_placeholder() -> Any:
+                if isinstance(model_field, models.DecimalField):
+                    return Decimal("0")
+                if isinstance(model_field, models.FloatField):
+                    return 0.0
+                if isinstance(
+                    model_field,
+                    (
+                        models.IntegerField,
+                        models.BigIntegerField,
+                        models.SmallIntegerField,
+                        models.PositiveIntegerField,
+                        models.PositiveSmallIntegerField,
+                    ),
+                ):
+                    return 0
+                if isinstance(model_field, models.BooleanField):
+                    return False
+                if isinstance(model_field, models.DateField) and not isinstance(
+                    model_field, models.DateTimeField
+                ):
+                    return date(1970, 1, 1)
+                if isinstance(model_field, models.DateTimeField):
+                    return datetime(1970, 1, 1, 0, 0, 0)
+                if isinstance(model_field, models.TimeField):
+                    return time(0, 0, 0)
+                if isinstance(model_field, models.DurationField):
+                    return 0
+                return None
+
+            if model_field.is_relation:
+                return None if model_field.null else result
+            if isinstance(
+                model_field,
+                (
+                    models.DecimalField,
+                    models.FloatField,
+                    models.IntegerField,
+                    models.BigIntegerField,
+                    models.SmallIntegerField,
+                    models.PositiveIntegerField,
+                    models.PositiveSmallIntegerField,
+                    models.BooleanField,
+                    models.DateField,
+                    models.DateTimeField,
+                    models.TimeField,
+                    models.DurationField,
+                ),
+            ):
+                if model_field.null:
+                    return None
+                return non_null_placeholder()
+            return mask_value
+
+        if isinstance(result, (Decimal, int, float, bool, date, datetime, time)):
+            return None
+        return mask_value
 
     def _resolve_parent_model_class(
         self, info: Any, root: Any, result: Any
@@ -496,7 +575,12 @@ class FieldPermissionMiddleware(BaseMiddleware):
         if visibility == FieldVisibility.HIDDEN:
             return None
         if visibility == FieldVisibility.MASKED:
-            return mask_value
+            return self._coerce_masked_output_value(
+                model_class,
+                field_name,
+                result,
+                mask_value,
+            )
         if visibility == FieldVisibility.REDACTED:
             return self._redact_value(result)
 

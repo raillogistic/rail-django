@@ -8,8 +8,10 @@ functionality including role management, permission evaluation, and caching.
 import logging
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
+from django.apps import apps as django_apps
 from django.core.cache import cache
 from django.db import models
+from django.db.utils import OperationalError, ProgrammingError
 
 from rail_django.config_proxy import get_setting
 
@@ -125,18 +127,44 @@ class RoleManager(PermissionEvaluationMixin):
 
     # --- Role Registration ---
 
+    def _ensure_group_for_role(self, role_name: str) -> None:
+        """Ensure a Django Group exists for a role name."""
+        if not role_name:
+            return
+        if not django_apps.ready:
+            return
+        try:
+            group_model = _get_group_model()
+            group_model.objects.get_or_create(name=role_name)
+        except (OperationalError, ProgrammingError):
+            # Auth tables may not be migrated yet during early startup.
+            logger.debug("Skipping group sync for role '%s' (DB not ready)", role_name)
+        except Exception as exc:
+            logger.warning(
+                "Failed to ensure Django group for role '%s': %s", role_name, exc
+            )
+
+    def sync_roles_to_groups(self) -> None:
+        """Synchronize all known RBAC role names to Django groups."""
+        role_names = set(self.system_roles.keys()) | set(self._roles_cache.keys())
+        for role_name in role_names:
+            self._ensure_group_for_role(role_name)
+
     def register_role(self, role_definition: RoleDefinition) -> None:
         """Register a new role definition. Skips if role already exists."""
-        if (
-            role_definition.name in self.system_roles
-            or role_definition.name in self._roles_cache
-        ):
+        if role_definition.name in self._roles_cache:
             logger.debug("Le role '%s' est deja enregistre", role_definition.name)
+            self._ensure_group_for_role(role_definition.name)
+            return
+        if role_definition.name in self.system_roles:
+            logger.debug("Le role '%s' est deja enregistre", role_definition.name)
+            self._ensure_group_for_role(role_definition.name)
             return
         self._roles_cache[role_definition.name] = role_definition
         if role_definition.parent_roles:
             self._role_hierarchy[role_definition.name] = role_definition.parent_roles
         logger.info(f"Role '{role_definition.name}' enregistre")
+        self._ensure_group_for_role(role_definition.name)
 
     def register_default_model_roles(self, model_class: type[models.Model]) -> None:
         """Create default CRUD roles (viewer, editor, manager) for a Django model."""

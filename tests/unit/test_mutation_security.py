@@ -5,6 +5,7 @@ Tests for mutation security and validation behaviors.
 import copy
 
 from types import SimpleNamespace
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, Permission, User
@@ -25,7 +26,7 @@ from rail_django.security.field_permissions import (
     FieldPermissionRule,
     field_permission_manager,
 )
-from test_app.models import Category, Post
+from test_app.models import Category, Post, Product
 
 pytestmark = pytest.mark.unit
 
@@ -274,4 +275,48 @@ def test_input_validator_errors_surface_in_mutations():
     assert result.ok is False
     assert result.errors
     assert result.errors[0].field == "name"
+
+
+@pytest.mark.django_db
+def test_field_permission_middleware_masks_decimal_output_as_null():
+    user = User.objects.create_user(username="masked_decimal_user", password="pass12345")
+    category = Category.objects.create(name="masked-cat", description="")
+    product = Product.objects.create(name="masked-product", price=10.50, category=category)
+
+    snapshot = {
+        "field_rules": copy.deepcopy(field_permission_manager._field_rules),
+        "pattern_rules": copy.deepcopy(field_permission_manager._pattern_rules),
+        "global_rules": list(field_permission_manager._global_rules),
+        "rule_signatures": set(field_permission_manager._rule_signatures),
+    }
+    try:
+        field_permission_manager.register_field_rule(
+            FieldPermissionRule(
+                field_name="price",
+                model_name="test_app.product",
+                access_level=FieldAccessLevel.READ,
+                visibility=FieldVisibility.MASKED,
+                mask_value="***CONFIDENTIAL***",
+            )
+        )
+
+        middleware = FieldPermissionMiddleware()
+        info = SimpleNamespace(
+            context=SimpleNamespace(user=user),
+            field_name="price",
+            operation=SimpleNamespace(operation=SimpleNamespace(value="query")),
+            parent_type=None,
+        )
+        masked = middleware._apply_output_permissions(
+            user,
+            info,
+            product,
+            product.price,
+        )
+        assert masked == Decimal("0")
+    finally:
+        field_permission_manager._field_rules = snapshot["field_rules"]
+        field_permission_manager._pattern_rules = snapshot["pattern_rules"]
+        field_permission_manager._global_rules = snapshot["global_rules"]
+        field_permission_manager._rule_signatures = snapshot["rule_signatures"]
 
