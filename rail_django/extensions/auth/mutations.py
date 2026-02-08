@@ -8,7 +8,6 @@ including login, registration, token refresh, and logout.
 import logging
 
 import graphene
-from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -19,8 +18,6 @@ from .cookies import set_auth_cookies, delete_auth_cookies
 from .jwt import JWTManager, get_refresh_token_store
 from .queries import (
     AuthPayload,
-    _get_user_settings_type,
-    _get_safe_settings_type,
 )
 from .utils import _get_effective_permissions
 from ...security import security, EventType, Outcome
@@ -28,90 +25,6 @@ from ..mfa.manager import mfa_manager
 from ..mfa.models import MFADevice
 
 logger = logging.getLogger(__name__)
-
-
-class UpdateMySettingsMutation(graphene.Mutation):
-    """
-    Mutation to update the current user's settings.
-
-    This mutation allows authenticated users to update their
-    interface preferences such as theme, layout, and font settings.
-
-    Example:
-        mutation {
-            updateMySettings(theme: "dark", fontSize: "large") {
-                ok
-                errors
-                settings {
-                    theme
-                    fontSize
-                }
-            }
-        }
-    """
-
-    class Arguments:
-        theme = graphene.String()
-        mode = graphene.String()
-        layout = graphene.String()
-        sidebar_collapse_mode = graphene.String()
-        font_size = graphene.String()
-        font_family = graphene.String()
-
-    ok = graphene.Boolean(required=True)
-    errors = graphene.List(graphene.String, required=True)
-
-    # Use lambda with fallback for lazy resolution
-    settings = graphene.Field(lambda: _get_safe_settings_type())
-
-    def mutate(self, info, **kwargs):
-        """
-        Update the current user's settings.
-
-        Args:
-            info: GraphQL resolve info.
-            **kwargs: Setting fields to update.
-
-        Returns:
-            UpdateMySettingsMutation with success status and updated settings.
-        """
-        user = info.context.user
-        if not user or not user.is_authenticated:
-            return UpdateMySettingsMutation(
-                ok=False,
-                errors=["Vous devez etre connecte pour modifier vos parametres."],
-            )
-
-        # Check if settings system is active
-        if not _get_user_settings_type():
-            return UpdateMySettingsMutation(
-                ok=False,
-                errors=["Le systeme de preferences utilisateur n'est pas active."],
-            )
-
-        try:
-            UserSettingsModel = apps.get_model("users", "UserSettings")
-
-            # Get or create settings
-            settings_obj, created = UserSettingsModel.objects.get_or_create(user=user)
-
-            # Update fields
-            for field, value in kwargs.items():
-                if value is not None and hasattr(settings_obj, field):
-                    setattr(settings_obj, field, value)
-
-            settings_obj.save()
-
-            return UpdateMySettingsMutation(ok=True, errors=[], settings=settings_obj)
-
-        except Exception as e:
-            logger.error(
-                f"Erreur lors de la mise a jour des parametres utilisateur: {e}"
-            )
-            return UpdateMySettingsMutation(
-                ok=False,
-                errors=["Erreur interne lors de la mise a jour des parametres."],
-            )
 
 
 class LoginMutation(graphene.Mutation):
@@ -738,8 +651,5 @@ class AuthMutations(graphene.ObjectType):
     revoke_session = RevokeSessionMutation.Field(description="Revocation d'une session")
     revoke_all_sessions = RevokeAllSessionsMutation.Field(
         description="Revocation de toutes les sessions"
-    )
-    update_my_settings = UpdateMySettingsMutation.Field(
-        description="Mise a jour des parametres utilisateur"
     )
     logout = LogoutMutation.Field(description="Deconnexion utilisateur")
