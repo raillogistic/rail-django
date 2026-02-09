@@ -1,4 +1,4 @@
-"""Shared helpers for declaring GraphQL access control across apps."""
+"""Shared helpers for building GraphQL access control declarations."""
 
 from typing import Dict, Iterable, Optional
 
@@ -12,7 +12,7 @@ HISTORY_ROLE_NAME = "history_auditor"
 def _build_history_role() -> GraphQLMeta.Role:
     return GraphQLMeta.Role(
         name=HISTORY_ROLE_NAME,
-        description="Read-only access to business history.",
+        description="Consulte tous les historiques métiers (lecture seule).",
         role_type="functional",
         permissions=["history.read"],
     )
@@ -21,8 +21,10 @@ def _build_history_role() -> GraphQLMeta.Role:
 HISTORY_AUDITOR_ROLES = [HISTORY_ROLE_NAME]
 
 
-def include_history_role(roles: Dict[str, GraphQLMeta.Role]) -> Dict[str, GraphQLMeta.Role]:
-    """Ensure the shared history role is present alongside local roles."""
+def include_history_role(
+    roles: Dict[str, GraphQLMeta.Role],
+) -> Dict[str, GraphQLMeta.Role]:
+    """Ensure the shared history auditor role is registered alongside local roles."""
 
     combined = {**roles}
     if HISTORY_ROLE_NAME not in combined:
@@ -39,7 +41,15 @@ def build_operation_guards(
     history_roles: Optional[Iterable[str]] = None,
     extra: Optional[OperationMap] = None,
 ) -> OperationMap:
-    """Create a default GraphQLMeta operation map for CRUD APIs."""
+    """Create a default operation guard mapping for GraphQLMeta.
+
+    Args:
+        read_roles: Roles allowed to list/retrieve records (and base guard).
+        create_roles: Optional roles allowed to create records.
+        update_roles: Optional roles allowed to update records.
+        delete_roles: Optional roles allowed to delete records.
+        extra: Additional operation guards to merge in (approve, validate, etc.).
+    """
 
     read_roles_list = list(read_roles)
     operations: OperationMap = {

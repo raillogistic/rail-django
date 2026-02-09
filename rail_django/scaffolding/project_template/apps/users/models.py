@@ -88,7 +88,7 @@ class UserSettings(models.Model):
     table_configs = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Table configurations keyed by table identifier (app-model-path)",
+        help_text="Table configurations keyed by table identifier (app-model-path)"
     )
 
     class Meta:

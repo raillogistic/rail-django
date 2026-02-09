@@ -252,14 +252,16 @@ def auto_populate_created_by(
     Returns:
         Dict with created_by populated if applicable
     """
-    if "created_by" in input_data:
+    if "created_by" in input_data or "created_by_id" in input_data:
         return input_data
 
     try:
         field = model._meta.get_field("created_by")
         if user and getattr(user, "is_authenticated", False) and field:
             result = input_data.copy()
-            result["created_by"] = user.id
+            # Assign FK id directly to avoid requiring nested relation
+            # permission checks on the related User retrieve operation.
+            result["created_by_id"] = user.id
             return result
     except Exception:
         pass

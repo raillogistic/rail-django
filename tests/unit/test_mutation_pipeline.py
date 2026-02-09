@@ -411,7 +411,7 @@ class TestPipelineUtils:
         input_data = {"name": "test"}
         result = auto_populate_created_by(input_data, mock_model, mock_user)
 
-        assert result["created_by"] == 123
+        assert result["created_by_id"] == 123
 
     def test_auto_populate_created_by_skips_if_exists(self):
         """Test that created_by is not overwritten if already present."""
@@ -420,10 +420,10 @@ class TestPipelineUtils:
         mock_user.is_authenticated = True
         mock_user.id = 123
 
-        input_data = {"name": "test", "created_by": 456}
+        input_data = {"name": "test", "created_by_id": 456}
         result = auto_populate_created_by(input_data, mock_model, mock_user)
 
-        assert result["created_by"] == 456
+        assert result["created_by_id"] == 456
 
     def test_decode_global_id(self):
         """Test decoding of GraphQL global IDs."""
