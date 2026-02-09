@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Type
 
 import graphene
 from django.db import models
+from django.db.models import Avg, Count, Max, Min, Sum
 from graphene_django import DjangoObjectType
 
 from ...utils.history import serialize_history_changes
@@ -53,6 +54,19 @@ def _resolve_promise(value):
         except Exception:
             return value
     return value
+
+
+def _is_numeric_model_field(field: models.Field) -> bool:
+    """Return True for concrete, non-relational numeric fields useful for stats."""
+    if not getattr(field, "concrete", False):
+        return False
+    if getattr(field, "is_relation", False):
+        return False
+    if getattr(field, "primary_key", False):
+        return False
+    if isinstance(field, (models.AutoField, models.BigAutoField, models.SmallAutoField)):
+        return False
+    return isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField))
 
 
 def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
@@ -493,6 +507,128 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
             count_field_name = f"{accessor_name}_count"
             type_attrs[f"resolve_{count_field_name}"] = make_count_resolver(
                 accessor_name, is_one_to_one_reverse, related_model
+            )
+
+            numeric_fields = [
+                field
+                for field in related_model._meta.get_fields()
+                if _is_numeric_model_field(field)
+            ]
+            stats_field_name = f"{accessor_name}_stats"
+            stats_type_name = (
+                f"{model.__name__}{related_model.__name__}"
+                f"{''.join(part.capitalize() for part in accessor_name.split('_'))}"
+                "StatsType"
+            )
+
+            def get_numeric_graphql_type(django_field: models.Field):
+                for django_field_type, graphql_type in self.FIELD_TYPE_MAP.items():
+                    try:
+                        if isinstance(django_field, django_field_type):
+                            return graphql_type
+                    except Exception:
+                        continue
+                return graphene.Float
+
+            stats_type_attrs = {
+                "__doc__": f"Aggregate statistics for {accessor_name} on {model.__name__}.",
+                "total_count": graphene.Int(
+                    description=f"Total number of related {related_model.__name__} rows"
+                ),
+            }
+            numeric_field_names: list[str] = []
+            for numeric_field in numeric_fields:
+                field_name = numeric_field.name
+                numeric_field_names.append(field_name)
+                numeric_graphql_type = get_numeric_graphql_type(numeric_field)
+                stats_type_attrs[f"{field_name}_sum"] = graphene.Field(
+                    numeric_graphql_type,
+                    description=f"Sum of {field_name} on related {related_model.__name__}",
+                )
+                stats_type_attrs[f"{field_name}_avg"] = graphene.Float(
+                    description=f"Average of {field_name} on related {related_model.__name__}",
+                )
+                stats_type_attrs[f"{field_name}_min"] = graphene.Field(
+                    numeric_graphql_type,
+                    description=f"Minimum {field_name} on related {related_model.__name__}",
+                )
+                stats_type_attrs[f"{field_name}_max"] = graphene.Field(
+                    numeric_graphql_type,
+                    description=f"Maximum {field_name} on related {related_model.__name__}",
+                )
+                stats_type_attrs[f"{field_name}_count"] = graphene.Int(
+                    description=f"Non-null count of {field_name} on related {related_model.__name__}",
+                )
+                stats_type_attrs[f"{field_name}_distinct_count"] = graphene.Int(
+                    description=f"Distinct non-null count of {field_name} on related {related_model.__name__}",
+                )
+
+            stats_type = type(stats_type_name, (graphene.ObjectType,), stats_type_attrs)
+
+            type_attrs[stats_field_name] = graphene.Field(
+                stats_type,
+                filters=graphene.Argument(graphene.JSONString),
+                description=f"Aggregate stats for related {related_model.__name__} objects",
+            )
+
+            def make_stats_resolver(
+                accessor_name,
+                related_model,
+                numeric_field_names,
+                apply_tenant_scope,
+            ):
+                def stats_resolver(self, info, filters=None):
+                    related_obj = getattr(self, accessor_name)
+                    queryset = related_obj.all()
+                    queryset = apply_tenant_scope(
+                        queryset, info, related_model, operation="read"
+                    )
+
+                    if filters:
+                        from .filters import AdvancedFilterGenerator
+
+                        filter_generator = AdvancedFilterGenerator()
+                        filter_set_class = filter_generator.generate_filter_set(
+                            related_model
+                        )
+                        filter_set = filter_set_class(filters, queryset=queryset)
+                        queryset = filter_set.qs
+
+                    annotations = {"total_count": Count("pk")}
+                    for numeric_field_name in numeric_field_names:
+                        annotations[f"{numeric_field_name}_sum"] = Sum(numeric_field_name)
+                        annotations[f"{numeric_field_name}_avg"] = Avg(numeric_field_name)
+                        annotations[f"{numeric_field_name}_min"] = Min(numeric_field_name)
+                        annotations[f"{numeric_field_name}_max"] = Max(numeric_field_name)
+                        annotations[f"{numeric_field_name}_count"] = Count(
+                            numeric_field_name
+                        )
+                        annotations[f"{numeric_field_name}_distinct_count"] = Count(
+                            numeric_field_name, distinct=True
+                        )
+
+                    aggregate_values = queryset.aggregate(**annotations)
+                    aggregate_values["total_count"] = aggregate_values.get("total_count") or 0
+
+                    for numeric_field_name in numeric_field_names:
+                        sum_key = f"{numeric_field_name}_sum"
+                        count_key = f"{numeric_field_name}_count"
+                        distinct_count_key = f"{numeric_field_name}_distinct_count"
+                        aggregate_values[sum_key] = aggregate_values.get(sum_key) or 0
+                        aggregate_values[count_key] = aggregate_values.get(count_key) or 0
+                        aggregate_values[distinct_count_key] = (
+                            aggregate_values.get(distinct_count_key) or 0
+                        )
+
+                    return aggregate_values
+
+                return stats_resolver
+
+            type_attrs[f"resolve_{stats_field_name}"] = make_stats_resolver(
+                accessor_name,
+                related_model,
+                numeric_field_names,
+                apply_tenant_scope,
             )
 
     # Add @property methods as GraphQL fields

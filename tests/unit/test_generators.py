@@ -9,6 +9,7 @@ Ce module teste:
 - L'optimisation des performances de génération
 """
 
+from decimal import Decimal
 from typing import Dict, List, Optional, Type
 from unittest.mock import MagicMock, Mock, patch
 
@@ -371,4 +372,90 @@ class TestReverseRelationCountFields(TestCase):
         # Post has comments reverse relation
         self.assertIn("comments_count", fields)
         self.assertIn("comments", fields)
+
+    def test_reverse_relation_stats_field_generated(self):
+        """Test that stats fields are generated for reverse relations with numeric fields."""
+        product_type = self.type_generator.generate_object_type(Product)
+        fields = product_type._meta.fields
+
+        self.assertIn("order_items_stats", fields)
+
+    def test_reverse_relation_stats_subfields_generated(self):
+        """Test that stats subfields are generated for numeric related fields."""
+        product_type = self.type_generator.generate_object_type(Product)
+        stats_field = product_type._meta.fields.get("order_items_stats")
+
+        self.assertIsNotNone(stats_field)
+        stats_type = stats_field.type
+        if hasattr(stats_type, "of_type"):
+            stats_type = stats_type.of_type
+        stats_fields = stats_type._meta.fields
+
+        self.assertIn("total_count", stats_fields)
+        self.assertIn("quantity_sum", stats_fields)
+        self.assertIn("quantity_avg", stats_fields)
+        self.assertIn("quantity_min", stats_fields)
+        self.assertIn("quantity_max", stats_fields)
+        self.assertIn("quantity_count", stats_fields)
+        self.assertIn("quantity_distinct_count", stats_fields)
+        self.assertIn("unit_price_sum", stats_fields)
+        self.assertIn("unit_price_avg", stats_fields)
+        self.assertIn("unit_price_min", stats_fields)
+        self.assertIn("unit_price_max", stats_fields)
+        self.assertIn("unit_price_count", stats_fields)
+        self.assertIn("unit_price_distinct_count", stats_fields)
+
+    def test_reverse_relation_stats_field_generated_without_numeric_fields(self):
+        """Reverse stats should exist even when related model has no numeric business fields."""
+        category_type = self.type_generator.generate_object_type(Category)
+        fields = category_type._meta.fields
+
+        self.assertIn("posts_stats", fields)
+        stats_field = fields.get("posts_stats")
+        stats_type = stats_field.type
+        if hasattr(stats_type, "of_type"):
+            stats_type = stats_type.of_type
+        stats_fields = stats_type._meta.fields
+        self.assertIn("total_count", stats_fields)
+        self.assertNotIn("id_sum", stats_fields)
+
+    def test_reverse_relation_stats_resolver_returns_aggregates(self):
+        """Test stats resolver returns aggregate values for related numeric fields."""
+        product = Product.objects.create(
+            name="Stats Product",
+            price=Decimal("99.99"),
+            cost_price=Decimal("10.00"),
+            inventory_count=10,
+        )
+        OrderItem.objects.create(
+            product=product,
+            quantity=2,
+            unit_price=Decimal("5.50"),
+        )
+        OrderItem.objects.create(
+            product=product,
+            quantity=4,
+            unit_price=Decimal("9.50"),
+        )
+
+        product_type = self.type_generator.generate_object_type(Product)
+        resolver = getattr(product_type, "resolve_order_items_stats")
+        info = Mock()
+        info.context = Mock()
+
+        stats = resolver(product, info)
+
+        self.assertEqual(stats["total_count"], 2)
+        self.assertEqual(stats["quantity_sum"], 6)
+        self.assertAlmostEqual(float(stats["quantity_avg"]), 3.0)
+        self.assertEqual(stats["quantity_min"], 2)
+        self.assertEqual(stats["quantity_max"], 4)
+        self.assertEqual(stats["quantity_count"], 2)
+        self.assertEqual(stats["quantity_distinct_count"], 2)
+        self.assertEqual(stats["unit_price_sum"], Decimal("15.00"))
+        self.assertAlmostEqual(float(stats["unit_price_avg"]), 7.5)
+        self.assertEqual(stats["unit_price_min"], Decimal("5.50"))
+        self.assertEqual(stats["unit_price_max"], Decimal("9.50"))
+        self.assertEqual(stats["unit_price_count"], 2)
+        self.assertEqual(stats["unit_price_distinct_count"], 2)
 
