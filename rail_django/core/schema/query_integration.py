@@ -313,3 +313,40 @@ class QueryIntegrationMixin:
                 self.schema_name,
                 e,
             )
+
+    def _integrate_importing_queries(self, query_attrs: dict[str, Any]) -> None:
+        """Integrate import workflow queries into query attributes."""
+        try:
+            from ...extensions.importing import ImportQuery
+
+            import_query_instance = ImportQuery()
+            for field_name, field in ImportQuery._meta.fields.items():
+                resolver_method_name = f"resolve_{field_name}"
+                if hasattr(import_query_instance, resolver_method_name):
+                    resolver_method = getattr(import_query_instance, resolver_method_name)
+
+                    def create_resolver_wrapper(method):
+                        def wrapper(root, info, **kwargs):
+                            return method(info, **kwargs)
+
+                        return wrapper
+
+                    query_attrs[field_name] = graphene.Field(
+                        field.type,
+                        description=field.description,
+                        resolver=create_resolver_wrapper(resolver_method),
+                        args=getattr(field, "args", None),
+                    )
+                else:
+                    query_attrs[field_name] = field
+
+            logger.info(
+                "Importing queries integrated into schema '%s'",
+                self.schema_name,
+            )
+        except ImportError as e:
+            logger.warning(
+                "Could not import importing queries for schema '%s': %s",
+                self.schema_name,
+                e,
+            )

@@ -93,6 +93,7 @@ rail_django/
 | [Data Export](./extensions/exporting.md) | Excel/CSV export | Async jobs, security |
 | [Templating](./extensions/templating.md) | PDF generation | Templates, rendering |
 | [Health Checks](./extensions/health.md) | System monitoring | Components, metrics |
+| [Data Import](./extensions/importing.md) | Template-driven import | Staging, pipeline |
 | [Metadata V2](./extensions/metadata.md) | Schema introspection | Frontend integration |
 | [Reporting](./extensions/reporting.md) | BI dashboards | Datasets, aggregations |
 | [Subscriptions](./extensions/subscriptions.md) | Real-time events | WebSocket, channels |

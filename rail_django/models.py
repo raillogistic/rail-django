@@ -24,6 +24,12 @@ from rail_django.extensions.reporting import (
 )
 from rail_django.extensions.tasks import TaskExecution
 from rail_django.extensions.filters.models import SavedFilter
+from rail_django.extensions.importing import (
+    ImportBatch,
+    ImportIssue,
+    ImportRow,
+    ImportSimulationSnapshot,
+)
 from rail_django.validation.schema_validator import SchemaValidator
 
 
@@ -278,4 +284,8 @@ __all__ = [
     "SchemaSnapshotModel",
     "MetadataDeployVersionModel",
     "SavedFilter",
+    "ImportBatch",
+    "ImportRow",
+    "ImportIssue",
+    "ImportSimulationSnapshot",
 ]

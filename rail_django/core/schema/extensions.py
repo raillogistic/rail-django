@@ -211,6 +211,22 @@ class ExtensionsMixin:
             )
         return table_mutations
 
+    def _build_importing_mutations(self) -> dict[str, Any]:
+        """Build import workflow mutations."""
+        importing_mutations: dict[str, Any] = {}
+        try:
+            from ...extensions.importing import ImportMutations
+
+            for field_name, field in ImportMutations._meta.fields.items():
+                importing_mutations[field_name] = field
+        except ImportError as e:
+            logger.warning(
+                "Could not import importing mutations for schema '%s': %s",
+                self.schema_name,
+                e,
+            )
+        return importing_mutations
+
     def _integrate_table_subscriptions(self) -> None:
         """Integrate Table v3 subscriptions."""
         try:
@@ -413,6 +429,7 @@ class ExtensionsMixin:
                 self._integrate_metadata_queries(query_attrs)
                 self._integrate_form_queries(query_attrs)
                 self._integrate_table_queries(query_attrs)
+                self._integrate_importing_queries(query_attrs)
 
                 # Create Query type
                 query_type = self._create_query_type(query_attrs)
@@ -427,12 +444,14 @@ class ExtensionsMixin:
                 extension_mutations = self._build_extension_mutations()
                 custom_mutations = self._load_mutation_extensions()
                 table_mutations = self._build_table_mutations()
+                importing_mutations = self._build_importing_mutations()
 
                 all_mutations = {
                     **self._mutation_fields,
                     **security_mutations,
                     **extension_mutations,
                     **table_mutations,
+                    **importing_mutations,
                     **custom_mutations,
                 }
 

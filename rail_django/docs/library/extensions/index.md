@@ -13,6 +13,7 @@ Rail Django extensions provide pluggable enterprise features. Each extension can
 | [Health](./health.md) | System monitoring | K8s probes |
 | [Metadata](./metadata.md) | Schema introspection | UI builders |
 | [Form API](../../extensions/form.md) | Form configuration | Dynamic forms |
+| [Data Import](../../extensions/importing.md) | Template-driven import | Staging, pipeline |
 | [Reporting](./reporting.md) | BI dashboards | Aggregations |
 | [Subscriptions](./subscriptions.md) | Real-time events | WebSocket |
 | [Tasks](./tasks.md) | Background jobs | Multiple backends |

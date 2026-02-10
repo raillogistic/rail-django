@@ -36,6 +36,7 @@ Rail Django wraps [Graphene-Django](https://docs.graphene-python.org/projects/dj
 *   [**Testing**](guides/testing.md): Best practices and utilities for testing your GraphQL API.
 *   [**Plugin System**](guides/plugins.md): Extend the framework with custom hooks and logic.
 *   [**Extensions Overview**](extensions/index.md): Audit Logging, Webhooks, Multitenancy, and more.
+*   [**Data Importing**](extensions/importing.md): Template-driven data import pipeline.
 *   [**Migration: Unified Inputs**](guides/migration-unified-inputs.md): Moving to the new Prisma-style relation inputs.
 
 ### Operations & Reference

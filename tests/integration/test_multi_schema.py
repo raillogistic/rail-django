@@ -11,8 +11,11 @@ from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
+from django.http.request import RawPostDataException
 from django.http import JsonResponse
 from django.test import Client, TestCase, override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils.datastructures import MultiValueDict
 from django.urls import include, path, reverse
 
 from rail_django.core.registry import SchemaInfo, SchemaRegistry
@@ -483,6 +486,99 @@ class TestMultiSchemaErrorHandling(TestCase):
 
         self.assertEqual(response.status_code, 413)
         self.assertEqual(payload["errors"][0]["extensions"]["code"], "payload_too_large")
+
+    @patch("graphene_django.views.GraphQLView.dispatch")
+    @patch("rail_django.core.registry.schema_registry")
+    def test_multipart_request_with_consumed_stream_does_not_raise_raw_post_data_exception(
+        self,
+        mock_registry,
+        mock_graphql_dispatch,
+    ):
+        """Les requetes multipart ne doivent pas provoquer RawPostDataException dans dispatch."""
+        schema_info = Mock()
+        schema_info.enabled = True
+        mock_registry.discover_schemas.return_value = None
+        mock_registry.get_schema.return_value = schema_info
+        mock_graphql_dispatch.return_value = JsonResponse({"data": {"ok": True}})
+
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.method = "POST"
+        request.content_type = "multipart/form-data; boundary=----test"
+        request.META = {"CONTENT_TYPE": request.content_type}
+        request.GET = {}
+        request.POST = MultiValueDict({"operations": ['{"query":"mutation { ping }"}']})
+        request.FILES = MultiValueDict()
+        request.COOKIES = {}
+
+        type(request).body = PropertyMock(
+            side_effect=RawPostDataException(
+                "You cannot access body after reading from request's data stream"
+            )
+        )
+
+        with patch.object(view, "_check_graphiql_access", return_value=None), patch.object(
+            view, "_configure_for_schema"
+        ), patch.object(view, "_configure_middleware"), patch.object(
+            view, "_get_schema_instance", return_value=Mock()
+        ):
+            response = view.dispatch(request, schema_name="gql")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_parse_body_supports_graphql_multipart_operations_and_map(self):
+        """parse_body doit reconstruire la query/variables pour les uploads multipart."""
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.META = {"CONTENT_TYPE": "multipart/form-data; boundary=----test"}
+        request.content_type = request.META["CONTENT_TYPE"]
+        request.POST = MultiValueDict(
+            {
+                "operations": [
+                    json.dumps(
+                        {
+                            "query": "mutation UploadFile($file: Upload!) { upload(file: $file) { ok } }",
+                            "variables": {"file": None},
+                        }
+                    )
+                ],
+                "map": [json.dumps({"0": ["variables.file"]})],
+            }
+        )
+        uploaded_file = SimpleUploadedFile("payload.csv", b"id,name\n1,Alice\n")
+        request.FILES = MultiValueDict({"0": [uploaded_file]})
+
+        parsed = view.parse_body(request)
+        self.assertIsInstance(parsed, dict)
+        self.assertIn("query", parsed)
+        self.assertIn("variables", parsed)
+        self.assertIs(parsed["variables"]["file"], uploaded_file)
+
+    def test_parse_body_accepts_string_map_paths(self):
+        """Le payload multipart est reconstruit meme si map contient une string."""
+        view = MultiSchemaGraphQLView()
+        request = Mock()
+        request.META = {"CONTENT_TYPE": "multipart/form-data; boundary=----test"}
+        request.content_type = request.META["CONTENT_TYPE"]
+        request.POST = MultiValueDict(
+            {
+                "operations": [
+                    json.dumps(
+                        {
+                            "query": "mutation UploadFile($file: Upload!) { upload(file: $file) { ok } }",
+                            "variables": {"file": None},
+                        }
+                    )
+                ],
+                "map": [json.dumps({"0": "variables.file"})],
+            }
+        )
+        uploaded_file = SimpleUploadedFile("payload.csv", b"id,name\n1,Alice\n")
+        request.FILES = MultiValueDict({"0": [uploaded_file]})
+
+        parsed = view.parse_body(request)
+        self.assertIsInstance(parsed, dict)
+        self.assertIs(parsed["variables"]["file"], uploaded_file)
 
 
 if __name__ == "__main__":

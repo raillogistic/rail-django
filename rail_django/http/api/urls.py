@@ -8,6 +8,7 @@ from rail_django.extensions.exporting import get_export_urls
 from rail_django.extensions.tasks import get_task_urls
 from rail_django.extensions.templating import template_urlpatterns
 from rail_django.extensions.excel import excel_urlpatterns
+from rail_django.extensions.importing.urls import importing_urlpatterns
 from .views import (
     SchemaDetailAPIView,
     SchemaDiscoveryAPIView,
@@ -62,3 +63,4 @@ urlpatterns += get_export_urls()
 urlpatterns += get_task_urls()
 urlpatterns += template_urlpatterns()
 urlpatterns += excel_urlpatterns()
+urlpatterns += importing_urlpatterns()

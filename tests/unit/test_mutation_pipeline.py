@@ -118,6 +118,28 @@ class TestMutationContext:
 
         assert ctx.user == mock_user
 
+    def test_user_property_falls_back_to_request_user(self):
+        """Test user accessor fallback to context.request.user."""
+        mock_info = Mock()
+        mock_user = Mock()
+        mock_context = Mock(spec=["request"])
+        mock_context.request = Mock()
+        mock_context.request.user = mock_user
+        mock_info.context = mock_context
+
+        mock_model = Mock()
+        mock_model.__name__ = "TestModel"
+
+        ctx = MutationContext(
+            info=mock_info,
+            model=mock_model,
+            operation="create",
+            raw_input={},
+            input_data={},
+        )
+
+        assert ctx.user == mock_user
+
     def test_get_permission_codename(self):
         """Test permission codename generation."""
         mock_info = Mock()
@@ -424,6 +446,20 @@ class TestPipelineUtils:
         result = auto_populate_created_by(input_data, mock_model, mock_user)
 
         assert result["created_by_id"] == 456
+
+    def test_auto_populate_created_by_uses_pk_fallback(self):
+        """Test created_by population when user exposes pk but no id."""
+        mock_model = Mock()
+        mock_model._meta.get_field.return_value = Mock()
+
+        class UserStub:
+            is_authenticated = True
+            pk = 987
+
+        input_data = {"name": "test"}
+        result = auto_populate_created_by(input_data, mock_model, UserStub())
+
+        assert result["created_by_id"] == 987
 
     def test_decode_global_id(self):
         """Test decoding of GraphQL global IDs."""

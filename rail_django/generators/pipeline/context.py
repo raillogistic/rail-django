@@ -142,7 +142,19 @@ class MutationContext:
     @property
     def user(self) -> Any:
         """Convenience accessor for request user."""
-        return getattr(self.info.context, "user", None)
+        context = getattr(self.info, "context", None)
+        if context is None:
+            return None
+
+        user = getattr(context, "user", None)
+        if user is not None:
+            return user
+
+        request = getattr(context, "request", None)
+        if request is not None:
+            return getattr(request, "user", None)
+
+        return None
 
     @property
     def request(self) -> Any:

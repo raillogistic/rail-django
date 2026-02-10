@@ -258,10 +258,16 @@ def auto_populate_created_by(
     try:
         field = model._meta.get_field("created_by")
         if user and getattr(user, "is_authenticated", False) and field:
+            user_id = getattr(user, "id", None)
+            if user_id is None:
+                user_id = getattr(user, "pk", None)
+            if user_id is None:
+                return input_data
+
             result = input_data.copy()
             # Assign FK id directly to avoid requiring nested relation
             # permission checks on the related User retrieve operation.
-            result["created_by_id"] = user.id
+            result["created_by_id"] = user_id
             return result
     except Exception:
         pass
