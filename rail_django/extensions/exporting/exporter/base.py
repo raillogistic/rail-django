@@ -5,6 +5,7 @@ for field extraction and model loading.
 """
 
 import logging
+import re
 from typing import Any, Iterable, Optional, Union
 
 from django.apps import apps
@@ -146,6 +147,78 @@ class ModelExporterBase:
                 f"Model '{self.model_name}' not found in app '{self.app_name}': {e}"
             )
 
+    @staticmethod
+    def _to_snake_case(value: str) -> str:
+        """Convert camelCase/PascalCase to snake_case."""
+        if not value:
+            return value
+        first_pass = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", value)
+        return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", first_pass).lower()
+
+    def _resolve_accessor_path(self, accessor: str) -> str:
+        """Best-effort normalize accessor parts to model field names.
+
+        This allows clients to send camelCase accessors while Django models
+        remain snake_case.
+        """
+        if not accessor:
+            return accessor
+
+        parts = accessor.replace("__", ".").split(".")
+        current_model = self.model
+        resolved_parts: list[str] = []
+
+        for index, part in enumerate(parts):
+            if not part:
+                resolved_parts.append(part)
+                continue
+
+            is_callable = part.endswith("()")
+            part_name = part[:-2] if is_callable else part
+            snake_name = self._to_snake_case(part_name)
+
+            if is_callable:
+                method_name = part_name
+                if not hasattr(current_model, method_name) and snake_name != part_name:
+                    if hasattr(current_model, snake_name):
+                        method_name = snake_name
+                resolved_parts.append(f"{method_name}()")
+                # Callable chains are denied by validation; stop resolving deeper paths.
+                if index < len(parts) - 1:
+                    break
+                continue
+
+            field = self._resolve_model_field(current_model, part_name)
+            selected_name = part_name
+            if field is None and snake_name != part_name:
+                field = self._resolve_model_field(current_model, snake_name)
+                if field is not None:
+                    selected_name = snake_name
+
+            if field is not None:
+                accessor_name = (
+                    field.get_accessor_name()
+                    if hasattr(field, "get_accessor_name")
+                    else getattr(field, "name", selected_name)
+                )
+                resolved_parts.append(accessor_name)
+                related_model = getattr(field, "related_model", None)
+                if related_model is not None:
+                    current_model = related_model
+                continue
+
+            if hasattr(current_model, part_name):
+                resolved_parts.append(part_name)
+            elif snake_name != part_name and hasattr(current_model, snake_name):
+                resolved_parts.append(snake_name)
+            else:
+                resolved_parts.append(part_name)
+                # Unknown intermediate segment: stop deeper normalization.
+                if index < len(parts) - 1:
+                    break
+
+        return ".".join(resolved_parts)
+
     def _normalize_ordering(
         self, ordering: Optional[Union[str, list[str]]]
     ) -> list[str]:
@@ -283,15 +356,15 @@ class ModelExporterBase:
     ) -> dict[str, str]:
         """Parse field configuration to extract accessor and title."""
         if isinstance(field_config, str):
-            accessor = field_config
+            accessor = self._resolve_accessor_path(field_config)
             title = self.get_field_verbose_name(accessor)
             return {"accessor": accessor, "title": title}
         elif isinstance(field_config, dict):
-            accessor = field_config.get("accessor", "")
+            accessor = self._resolve_accessor_path(field_config.get("accessor", ""))
             title = field_config.get("title", accessor)
             return {"accessor": accessor, "title": title}
         else:
-            accessor = str(field_config)
+            accessor = self._resolve_accessor_path(str(field_config))
             return {"accessor": accessor, "title": accessor}
 
     def get_field_verbose_name(self, field_path: str) -> str:
@@ -326,7 +399,8 @@ class ModelExporterBase:
     def get_field_value(self, instance: models.Model, accessor: str) -> Any:
         """Get field value from model instance using accessor path."""
         try:
-            parts = accessor.split(".")
+            resolved_accessor = self._resolve_accessor_path(accessor)
+            parts = resolved_accessor.split(".")
             value = instance
 
             for part in parts:
@@ -367,7 +441,7 @@ class ModelExporterBase:
                 except Exception:
                     pass
 
-            value = self._formatter.apply_field_formatter(value, accessor)
+            value = self._formatter.apply_field_formatter(value, resolved_accessor)
             return self._formatter.format_value(value)
 
         except Exception as e:

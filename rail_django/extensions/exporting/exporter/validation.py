@@ -139,6 +139,8 @@ class ValidationMixin:
                 if not is_last:
                     return "Accessor cannot traverse non-relational field"
                 attr = getattr(current_model, part_name, None)
+                if attr is None:
+                    return "Accessor does not exist on model"
                 if callable(attr) and not self.allow_callables:
                     return "Callable accessors are disabled"
                 return None
@@ -214,10 +216,13 @@ class ValidationMixin:
 
         for field_config in fields:
             parsed_field = self.parse_field_config(field_config)
-            accessor = parsed_field.get("accessor", "").strip()
+            accessor = self._resolve_accessor_path(
+                parsed_field.get("accessor", "").strip()
+            )
             if not accessor:
                 denied_fields.append("<empty>")
                 continue
+            parsed_field["accessor"] = accessor
 
             error = self._validate_accessor(
                 accessor,

@@ -55,7 +55,7 @@ class FieldFormatter:
         if value is None:
             return ""
         if isinstance(value, bool):
-            formatted: Any = "Yes" if value else "No"
+            formatted: Any = "✅" if value else "❌"
         elif isinstance(value, (datetime, date)):
             if isinstance(value, datetime):
                 # Convert timezone-aware datetime to local time

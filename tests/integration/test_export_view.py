@@ -5,6 +5,7 @@ Integration tests for export view endpoints.
 import json
 import os
 from pathlib import Path
+from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -19,7 +20,14 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 def _export_settings():
     return {
-        "export_fields": {"tests.testcustomer": ["nom_client", "email_client"]},
+        "export_fields": {
+            "tests.testcustomer": [
+                "nom_client",
+                "email_client",
+                "solde_compte",
+                "est_actif",
+            ]
+        },
         "require_export_fields": True,
         "require_model_permissions": False,
         "require_field_permissions": False,
@@ -62,6 +70,42 @@ def test_export_view_returns_csv_response():
     assert response.status_code == 200
     assert response["Content-Disposition"] == 'attachment; filename="customers.csv"'
     assert b"Alpha" in response.content
+
+
+@override_settings(RAIL_DJANGO_EXPORT=_export_settings())
+def test_export_view_supports_camel_case_fields_with_falsy_values():
+    User = get_user_model()
+    user = User.objects.create_user(username="export_camel", password="pass12345")
+    token = JWTManager.generate_token(user)["token"]
+
+    TestCustomer.objects.create(
+        nom_client="Gamma",
+        prenom_client="Gina",
+        email_client="gamma@example.com",
+        solde_compte=Decimal("0.00"),
+        est_actif=False,
+    )
+
+    payload = {
+        "app_name": "tests",
+        "model_name": "TestCustomer",
+        "file_extension": "csv",
+        "filename": "customers",
+        "fields": ["soldeCompte", "estActif"],
+    }
+
+    rf = RequestFactory()
+    request = rf.post(
+        "/export/",
+        data=json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    response = ExportView.as_view()(request)
+    assert response.status_code == 200
+    assert "❌".encode("utf-8") in response.content
+    assert b"0.0" in response.content
 
 
 @override_settings(RAIL_DJANGO_EXPORT=_export_settings())

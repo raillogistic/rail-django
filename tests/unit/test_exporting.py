@@ -15,7 +15,7 @@ from rail_django.extensions.exporting import (
     ModelExporter,
     _sanitize_filename,
 )
-from tests.models import TestCustomer
+from tests.models import TestCompany, TestCustomer
 
 pytestmark = pytest.mark.unit
 
@@ -47,9 +47,9 @@ class TestExporting(TestCase):
             est_actif=False,
         )
 
-    def _settings(self, fields, **overrides):
+    def _settings(self, fields, model_label="tests.testcustomer", **overrides):
         settings = {
-            "export_fields": {"tests.testcustomer": list(fields)},
+            "export_fields": {model_label: list(fields)},
             "require_export_fields": True,
             "require_field_permissions": False,
         }
@@ -103,7 +103,7 @@ class TestExporting(TestCase):
         statuses = {row[1] for row in data_rows}
 
         self.assertIn("'=SUM(1,1)", names)
-        self.assertEqual(statuses, {"Yes", "No"})
+        self.assertEqual(statuses, {"✅", "❌"})
 
     def test_field_formatter_mask(self):
         export_settings = self._settings(
@@ -153,4 +153,39 @@ class TestExporting(TestCase):
         )
         data = exporter.export_to_excel(["nom_client"], ordering=["nom_client"])
         self.assertTrue(data.startswith(b"PK"))
+
+    def test_export_to_csv_resolves_camel_case_and_preserves_falsy_values(self):
+        TestCompany.objects.create(
+            nom_entreprise="Acme",
+            secteur_activite="Retail",
+            adresse_entreprise="Main street",
+            email_entreprise="acme@example.com",
+            nombre_employes=0,
+            est_active=False,
+        )
+        exporter = ModelExporter(
+            "tests",
+            "TestCompany",
+            export_settings={
+                "require_export_fields": False,
+                "require_field_permissions": False,
+            },
+        )
+
+        csv_data = exporter.export_to_csv(["nombreEmployes", "estActive"])
+        rows = list(csv.reader(io.StringIO(csv_data)))
+        self.assertEqual(rows[1][0], "0")
+        self.assertEqual(rows[1][1], "❌")
+
+    def test_validate_fields_rejects_unknown_accessor(self):
+        exporter = ModelExporter(
+            "tests",
+            "TestCustomer",
+            export_settings={
+                "require_export_fields": False,
+                "require_field_permissions": False,
+            },
+        )
+        with self.assertRaises(ExportError):
+            exporter.validate_fields(["doesNotExist"])
 
