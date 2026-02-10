@@ -2,6 +2,7 @@
 from django.db import models
 from django.test import TestCase
 from rail_django.extensions.metadata.mapping import registry, FieldTypeRegistry
+from tests.models import TestGeneratedModel
 
 class CustomField(models.Field):
     pass
@@ -57,3 +58,26 @@ class TestFieldTypeRegistry(TestCase):
         # Should return defaults
         self.assertEqual(self.registry.get_graphql_type(field), "String")
         self.assertEqual(self.registry.get_python_type(field), "str")
+
+    def test_extended_builtin_mappings(self):
+        """Common Django field variants should have explicit mappings."""
+        self.assertEqual(
+            self.registry.get_graphql_type(models.PositiveBigIntegerField()), "Int"
+        )
+        self.assertEqual(
+            self.registry.get_graphql_type(models.GenericIPAddressField()), "String"
+        )
+        self.assertEqual(self.registry.get_graphql_type(models.BigAutoField()), "ID")
+        self.assertEqual(
+            self.registry.get_python_type(models.PositiveBigIntegerField()), "int"
+        )
+        self.assertEqual(
+            self.registry.get_python_type(models.GenericIPAddressField()), "str"
+        )
+        self.assertEqual(self.registry.get_python_type(models.BigAutoField()), "int")
+
+    def test_generated_field_uses_output_field_mapping(self):
+        """GeneratedField should reuse the mapping of its output_field."""
+        generated = TestGeneratedModel._meta.get_field("area")
+        self.assertEqual(self.registry.get_graphql_type(generated), "Int")
+        self.assertEqual(self.registry.get_python_type(generated), "int")

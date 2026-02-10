@@ -21,7 +21,12 @@ DEFAULT_OPERATORS = {
     "IntegerField": "eq",
     "SmallIntegerField": "eq",
     "BigIntegerField": "eq",
+    "AutoField": "eq",
+    "BigAutoField": "eq",
+    "SmallAutoField": "eq",
     "PositiveIntegerField": "eq",
+    "PositiveSmallIntegerField": "eq",
+    "PositiveBigIntegerField": "eq",
     "FloatField": "eq",
     "DecimalField": "eq",
     "BooleanField": "eq",
@@ -230,7 +235,12 @@ class FilterExtractorMixin:
                     "IntegerField",
                     "SmallIntegerField",
                     "BigIntegerField",
+                    "AutoField",
+                    "BigAutoField",
+                    "SmallAutoField",
                     "PositiveIntegerField",
+                    "PositiveSmallIntegerField",
+                    "PositiveBigIntegerField",
                     "FloatField",
                     "DecimalField",
                 ):
@@ -526,8 +536,17 @@ class FilterExtractorMixin:
             if hasattr(field, "get_internal_type"):
                 internal_type = field.get_internal_type()
                 if internal_type in (
-                    "IntegerField", "SmallIntegerField", "BigIntegerField",
-                    "PositiveIntegerField", "FloatField", "DecimalField",
+                    "IntegerField",
+                    "SmallIntegerField",
+                    "BigIntegerField",
+                    "AutoField",
+                    "BigAutoField",
+                    "SmallAutoField",
+                    "PositiveIntegerField",
+                    "PositiveSmallIntegerField",
+                    "PositiveBigIntegerField",
+                    "FloatField",
+                    "DecimalField",
                 ):
                     base_type = "Number"
                 elif internal_type in ("BooleanField", "NullBooleanField"):

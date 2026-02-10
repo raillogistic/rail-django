@@ -14,6 +14,9 @@ FIELD_INPUT_TYPE_MAP: dict[type[models.Field], str] = {
     models.URLField: "URL",
     models.SlugField: "SLUG",
     models.UUIDField: "UUID",
+    models.AutoField: "NUMBER",
+    models.BigAutoField: "NUMBER",
+    models.SmallAutoField: "NUMBER",
     models.IntegerField: "NUMBER",
     models.SmallIntegerField: "NUMBER",
     models.BigIntegerField: "NUMBER",
@@ -26,8 +29,10 @@ FIELD_INPUT_TYPE_MAP: dict[type[models.Field], str] = {
     models.DateField: "DATE",
     models.TimeField: "TIME",
     models.DateTimeField: "DATETIME",
+    models.DurationField: "TEXT",
     models.JSONField: "JSON",
     models.TextField: "TEXTAREA",
+    models.GenericIPAddressField: "TEXT",
     models.CharField: "TEXT",
     models.FileField: "FILE",
     models.ImageField: "IMAGE",
@@ -36,6 +41,10 @@ FIELD_INPUT_TYPE_MAP: dict[type[models.Field], str] = {
 
 def map_field_input_type(field: models.Field) -> str:
     """Map a Django field to a Form API input type."""
+    output_field = getattr(field, "output_field", None)
+    if output_field is not None and type(field).__name__ == "GeneratedField":
+        return map_field_input_type(output_field)
+
     if hasattr(field, "choices") and field.choices:
         # Choices are represented as selects unless explicitly overridden.
         return "SELECT"
@@ -50,12 +59,20 @@ def map_field_input_type(field: models.Field) -> str:
 
 def map_graphql_type(field: models.Field) -> str:
     """Map Django field to GraphQL scalar name."""
+    output_field = getattr(field, "output_field", None)
+    if output_field is not None and type(field).__name__ == "GeneratedField":
+        return map_graphql_type(output_field)
+
     field_type = type(field).__name__
     mapping = {
+        "AutoField": "ID",
+        "BigAutoField": "ID",
+        "SmallAutoField": "ID",
         "CharField": "String",
         "TextField": "String",
         "SlugField": "String",
         "URLField": "String",
+        "GenericIPAddressField": "String",
         "EmailField": "String",
         "UUIDField": "String",
         "IntegerField": "Int",
@@ -71,21 +88,32 @@ def map_graphql_type(field: models.Field) -> str:
         "DateField": "Date",
         "DateTimeField": "DateTime",
         "TimeField": "Time",
+        "DurationField": "String",
         "JSONField": "JSONString",
         "FileField": "String",
+        "FilePathField": "String",
         "ImageField": "String",
+        "BinaryField": "String",
     }
     return mapping.get(field_type, "String")
 
 
 def map_python_type(field: models.Field) -> str:
     """Map Django field to a Python type name string."""
+    output_field = getattr(field, "output_field", None)
+    if output_field is not None and type(field).__name__ == "GeneratedField":
+        return map_python_type(output_field)
+
     field_type = type(field).__name__
     mapping = {
+        "AutoField": "int",
+        "BigAutoField": "int",
+        "SmallAutoField": "int",
         "CharField": "str",
         "TextField": "str",
         "SlugField": "str",
         "URLField": "str",
+        "GenericIPAddressField": "str",
         "EmailField": "str",
         "UUIDField": "str",
         "IntegerField": "int",
@@ -101,9 +129,12 @@ def map_python_type(field: models.Field) -> str:
         "DateField": "date",
         "DateTimeField": "datetime",
         "TimeField": "time",
+        "DurationField": "timedelta",
         "JSONField": "dict",
         "FileField": "str",
+        "FilePathField": "str",
         "ImageField": "str",
+        "BinaryField": "bytes",
     }
     return mapping.get(field_type, "str")
 
