@@ -7,7 +7,7 @@ GraphQL mutations for Django models, including CRUD operations and custom method
 The generator uses a pipeline-based architecture for improved testability and customization.
 """
 
-from typing import Any, Dict, Optional, Type, Union, get_origin
+from typing import Any, Optional, Union, get_origin
 
 import graphene
 from django.db import models
@@ -398,25 +398,24 @@ class MutationGenerator:
         """
         Generates all mutations for a model, including CRUD operations and method mutations.
         """
-        from graphene.utils.str_converters import to_snake_case
+        from graphene.utils.str_converters import to_camel_case, to_snake_case
         mutations = {}
-        model_name = to_snake_case(model.__name__)
+        model_class_name = model.__name__
         # Generate CRUD mutations if enabled
         if self.settings.enable_create:
             mutation_class = self.generate_create_mutation(model)
-            mutations[f"create_{model_name}"] = mutation_class.Field()
+            mutations[f"create{model_class_name}"] = mutation_class.Field()
 
         if self.settings.enable_update:
             mutation_class = self.generate_update_mutation(model)
-            mutations[f"update_{model_name}"] = mutation_class.Field()
+            mutations[f"update{model_class_name}"] = mutation_class.Field()
 
         if self.settings.enable_delete:
             mutation_class = self.generate_delete_mutation(model)
-            mutations[f"delete_{model_name}"] = mutation_class.Field()
+            mutations[f"delete{model_class_name}"] = mutation_class.Field()
 
         # Generate bulk mutations if enabled
         if self.settings.enable_bulk_operations:
-            model_class_name = model.__name__
             should_generate = False
 
             # Check exclusion first
@@ -431,13 +430,13 @@ class MutationGenerator:
 
             if should_generate:
                 bulk_create_class = self.generate_bulk_create_mutation(model)
-                mutations[f"bulk_create_{model_name}"] = bulk_create_class.Field()
+                mutations[f"bulkCreate{model_class_name}"] = bulk_create_class.Field()
 
                 bulk_update_class = self.generate_bulk_update_mutation(model)
-                mutations[f"bulk_update_{model_name}"] = bulk_update_class.Field()
+                mutations[f"bulkUpdate{model_class_name}"] = bulk_update_class.Field()
 
                 bulk_delete_class = self.generate_bulk_delete_mutation(model)
-                mutations[f"bulk_delete_{model_name}"] = bulk_delete_class.Field()
+                mutations[f"bulkDelete{model_class_name}"] = bulk_delete_class.Field()
 
         # Generate method mutations if enabled
 
@@ -446,5 +445,6 @@ class MutationGenerator:
             if method_info.is_mutation and not method_info.is_private:
                 mutation = self.generate_method_mutation(model, method_info)
                 if mutation:
-                    mutations[f"{model_name}_{method_name}"] = mutation.Field()
+                    method_token = to_camel_case(to_snake_case(method_name))
+                    mutations[f"{method_token}{model_class_name}"] = mutation.Field()
         return mutations

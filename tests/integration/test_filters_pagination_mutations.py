@@ -6,7 +6,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
-from test_app.models import Category, Client, Comment, Post
+from test_app.models import Category, Comment, Post
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
@@ -36,7 +36,7 @@ def test_posts_query_requires_model_permission(gql_client):
 
     query = """
     query {
-        posts {
+        postList {
             title
         }
     }
@@ -61,14 +61,14 @@ def test_simple_quick_filter(gql_client):
 
     query = """
     query($quick: String) {
-        posts(quick: $quick) {
+        postList(quick: $quick) {
             title
         }
     }
     """
     result = gql_client.execute(query, variables={"quick": "Alpha"})
     assert result.get("errors") is None
-    titles = [item["title"] for item in result["data"]["posts"]]
+    titles = [item["title"] for item in result["data"]["postList"]]
     assert titles == ["Alpha Post"]
 
 
@@ -80,7 +80,7 @@ def test_nested_filters_and_or_not(gql_client):
 
     query = """
     query($where: PostWhereInput) {
-        posts(where: $where, orderBy: ["title"]) {
+        postList(where: $where, orderBy: ["title"]) {
             title
         }
     }
@@ -96,7 +96,7 @@ def test_nested_filters_and_or_not(gql_client):
     }
     result = gql_client.execute(query, variables=variables)
     assert result.get("errors") is None
-    titles = [item["title"] for item in result["data"]["posts"]]
+    titles = [item["title"] for item in result["data"]["postList"]]
     assert titles == ["Alpha", "Beta"]
 
 
@@ -107,7 +107,7 @@ def test_paginated_query_returns_page_info(gql_client):
 
     query = """
     query {
-        postPages(page: 2, perPage: 2, orderBy: ["title"]) {
+        postPage(page: 2, perPage: 2, orderBy: ["title"]) {
             items {
                 title
             }
@@ -125,7 +125,7 @@ def test_paginated_query_returns_page_info(gql_client):
     result = gql_client.execute(query)
     assert result.get("errors") is None
 
-    page = result["data"]["postPages"]
+    page = result["data"]["postPage"]
     assert len(page["items"]) == 2
     assert page["pageInfo"]["totalCount"] == 5
     assert page["pageInfo"]["pageCount"] == 3
@@ -144,14 +144,14 @@ def test_offset_limit_pagination(gql_client):
 
     query = """
     query {
-        posts(offset: 1, limit: 2, orderBy: ["title"]) {
+        postList(offset: 1, limit: 2, orderBy: ["title"]) {
             title
         }
     }
     """
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    titles = [item["title"] for item in result["data"]["posts"]]
+    titles = [item["title"] for item in result["data"]["postList"]]
     assert titles == ["B", "C"]
 
 

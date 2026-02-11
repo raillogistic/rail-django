@@ -6,12 +6,12 @@ registering and unregistering apps and models from schema generation.
 """
 
 import logging
-from typing import Type, Union, Optional
+from typing import Union, Optional
 
 import graphene
 from django.apps import apps
 from django.db import models
-from graphene.utils.str_converters import to_camel_case, to_snake_case
+from graphene.utils.str_converters import to_snake_case
 
 logger = logging.getLogger(__name__)
 
@@ -114,37 +114,10 @@ class RegistrationMixin:
             app_label: Django app label to reload
         """
         try:
-            app_config = apps.get_app_config(app_label)
-            app_models = [
-                model
-                for model in app_config.get_models()
-                if self._is_valid_model(model)
-            ]
-
-            with self._lock:
-                # Remove existing app-related fields
-                for model in app_models:
-                    model_name = to_camel_case(to_snake_case(model.__name__))
-                    plural_name = self._pluralize_name(model_name)
-                    # Remove queries
-                    self._query_fields.pop(model_name, None)
-                    self._query_fields.pop(plural_name, None)
-                    self._query_fields.pop(f"{plural_name}_pages", None)
-
-                    # Remove mutations
-                    mutations = self.mutation_generator.generate_all_mutations(model)
-                    for mutation_name in mutations:
-                        self._mutation_fields.pop(mutation_name, None)
-
-                # Regenerate app schema
-                self._generate_query_fields(app_models)
-                self._generate_mutation_fields(app_models)
-
-                # Update registered models
-                self._registered_models.update(app_models)
-
-                # Rebuild schema
-                self.rebuild_schema()
+            apps.get_app_config(app_label)
+            # Rebuild the full schema to guarantee naming consistency and avoid
+            # stale root fields when naming conventions evolve.
+            self.rebuild_schema()
 
             logger.info(
                 f"Schema reloaded for app '{app_label}' in schema '{self.schema_name}'"

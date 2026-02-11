@@ -1,10 +1,10 @@
 import pytest
+from django.contrib.auth import get_user_model
+
 from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Product
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
-
-from django.contrib.auth import get_user_model
 
 
 @pytest.fixture
@@ -22,19 +22,18 @@ def gql_client():
 
 
 def test_root_query_camelcase(gql_client):
-    """Test that root queries use camelCase (product vs products, products)."""
+    """Test that root queries use deterministic camelCase names."""
     Product.objects.create(name="P1", price=10.0)
 
-    # Single query: product (was product or product__objects)
-    # List query: products (was products or products__objects)
-    # Alias: products (was all_products)
+    # Single query: product
+    # List query: productList
 
     query = """
     query {
-        products {
+        productList {
             name
         }
-        products {
+        productList {
             name
         }
     }
@@ -42,18 +41,17 @@ def test_root_query_camelcase(gql_client):
 
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    assert len(result["data"]["products"]) == 1
-    assert len(result["data"]["products"]) == 1
+    assert len(result["data"]["productList"]) == 1
+    assert len(result["data"]["productList"]) == 1
 
 
 def test_root_query_pagination_camelcase(gql_client):
-    """Test that pagination queries use camelCase (productsPages)."""
+    """Test that pagination queries use deterministic camelCase names."""
     Product.objects.create(name="P1", price=10.0)
 
-    # Was products_pages
     query = """
     query {
-        productPages {
+        productPage {
             items {
                 name
             }
@@ -63,4 +61,4 @@ def test_root_query_pagination_camelcase(gql_client):
 
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    assert len(result["data"]["productPages"]["items"]) == 1
+    assert len(result["data"]["productPage"]["items"]) == 1
