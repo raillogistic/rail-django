@@ -6,7 +6,10 @@ from django.test import RequestFactory
 
 from rail_django.extensions.auth import JWTManager
 from rail_django.extensions.excel.builder import OPENPYXL_AVAILABLE
-from rail_django.extensions.importing.views import ModelImportTemplateDownloadView
+from rail_django.extensions.importing.views import (
+    ModelImportTemplateDownloadView,
+    TEMPLATE_PREFILLED_ROWS,
+)
 from test_app.models import Category
 
 try:  # pragma: no cover - optional dependency
@@ -124,8 +127,9 @@ def test_model_import_template_download_returns_xlsx():
     assert "name" in headers
     assert "price" in headers
     assert "inventory_count" in headers
-    # Header + 500 prefilled template rows.
-    assert sheet.max_row == 501
+    # Header + configured prefilled template rows.
+    expected_max_row = TEMPLATE_PREFILLED_ROWS + 1
+    assert sheet.max_row == expected_max_row
 
     inventory_col = headers.index("inventory_count") + 1
     assert sheet.cell(row=2, column=inventory_col).value == 0
@@ -135,7 +139,7 @@ def test_model_import_template_download_returns_xlsx():
     validations = list(sheet.data_validations.dataValidation)
     assert any(
         str(validation.formula1).startswith("'_choices'!")
-        and f"{category_letter}2:{category_letter}501" in str(validation.sqref)
+        and f"{category_letter}2:{category_letter}{expected_max_row}" in str(validation.sqref)
         for validation in validations
     )
     assert "_choices" in workbook.sheetnames

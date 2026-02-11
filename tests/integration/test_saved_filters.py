@@ -36,7 +36,7 @@ class TestSavedFilters:
         """Test applying a saved filter by name."""
         user = get_user_model().objects.get(username="saved_filter_admin")
         
-        # Create products
+        # Create productList
         _create_product("Laptop", 1000.00)
         _create_product("Mouse", 20.00)
         _create_product("Monitor", 200.00)
@@ -52,7 +52,7 @@ class TestSavedFilters:
 
         query = """
         query {
-            products(savedFilter: "expensive_items") {
+            productList(savedFilter: "expensive_items") {
                 name
                 price
             }
@@ -60,9 +60,9 @@ class TestSavedFilters:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Laptop"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Laptop"
 
         # Verify usage count updated
         sf = SavedFilter.objects.get(name="expensive_items")
@@ -86,16 +86,16 @@ class TestSavedFilters:
 
         query = f"""
         query {{
-            products(savedFilter: "{sf.id}") {{
+            productList(savedFilter: "{sf.id}") {{
                 name
             }}
         }}
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "B"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "B"
 
     def test_saved_filter_and_user_filter_merge(self, gql_client):
         """Test merging saved filter with user provided filter."""
@@ -117,7 +117,7 @@ class TestSavedFilters:
         # User query: savedFilter="gaming_gear" AND price > 1000
         query = """
         query {
-            products(
+            productList(
                 savedFilter: "gaming_gear"
                 where: { price: { gt: 1000.00 } }
             ) {
@@ -127,9 +127,9 @@ class TestSavedFilters:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Gaming Laptop"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Gaming Laptop"
 
     def test_private_filter_visibility(self, gql_client):
         """Test that private filters are only visible to owner."""
@@ -150,23 +150,24 @@ class TestSavedFilters:
         # Admin user tries to use it (should fail/ignore)
         query = """
         query {
-            products(savedFilter: "private_filter") {
+            productList(savedFilter: "private_filter") {
                 name
             }
         }
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        # Should return all products because filter was ignored (not found)
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Secret" 
+        # Should return all productList because filter was ignored (not found)
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Secret" 
         # Note: In this specific test setup with 1 product, ignoring the filter 
         # also returns the product. Let's make it clearer.
         
         _create_product("Public", 10.00)
         result = gql_client.execute(query)
-        products = result["data"]["products"]
+        productList = result["data"]["productList"]
         # If filter applied, we'd see 1. If ignored (default all), we see 2.
-        assert len(products) == 2
+        assert len(productList) == 2
+
 

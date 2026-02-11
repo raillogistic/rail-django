@@ -39,7 +39,7 @@ class TestFilterPresets:
 
         query = """
         query {
-            products(presets: ["expensive"], orderBy: ["name"]) {
+            productList(presets: ["expensive"], orderBy: ["name"]) {
                 name
                 price
             }
@@ -47,9 +47,9 @@ class TestFilterPresets:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Expensive Item"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Expensive Item"
 
     def test_multiple_presets(self, gql_client):
         """Test combining multiple presets."""
@@ -60,7 +60,7 @@ class TestFilterPresets:
         # mid_range is 20-80, expensive is >= 50. Intersection is [50, 80]
         query = """
         query {
-            products(presets: ["mid_range", "expensive"], orderBy: ["name"]) {
+            productList(presets: ["mid_range", "expensive"], orderBy: ["name"]) {
                 name
                 price
             }
@@ -68,9 +68,9 @@ class TestFilterPresets:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Mid"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Mid"
 
     def test_preset_with_user_filters(self, gql_client):
         """Test preset combined with user provided filters."""
@@ -81,7 +81,7 @@ class TestFilterPresets:
         # expensive (>= 50) + name contains "Pro"
         query = """
         query {
-            products(
+            productList(
                 presets: ["expensive"]
                 where: { name: { icontains: "Pro" } }
                 orderBy: ["name"]
@@ -93,9 +93,9 @@ class TestFilterPresets:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Expensive Pro"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Expensive Pro"
 
     def test_complex_preset(self, gql_client):
         """Test a preset with complex logic (AND/OR)."""
@@ -106,7 +106,7 @@ class TestFilterPresets:
         # complex_preset: name contains "pro" AND price >= 100
         query = """
         query {
-            products(presets: ["complex_preset"], orderBy: ["name"]) {
+            productList(presets: ["complex_preset"], orderBy: ["name"]) {
                 name
                 price
             }
@@ -114,9 +114,9 @@ class TestFilterPresets:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Expensive Pro"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Expensive Pro"
 
     def test_unknown_preset_ignored(self, gql_client):
         """Test that unknown presets are ignored without error."""
@@ -124,15 +124,15 @@ class TestFilterPresets:
 
         query = """
         query {
-            products(presets: ["non_existent_preset"]) {
+            productList(presets: ["non_existent_preset"]) {
                 name
             }
         }
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
 
     def test_field_ending_in_count(self, gql_client):
         """Test preset on a field ending in _count (regression test)."""
@@ -146,7 +146,7 @@ class TestFilterPresets:
 
         query = """
         query {
-            products(presets: ["out_of_stock"]) {
+            productList(presets: ["out_of_stock"]) {
                 name
                 inventoryCount
             }
@@ -154,8 +154,9 @@ class TestFilterPresets:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Out of Stock"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Out of Stock"
+
 
 

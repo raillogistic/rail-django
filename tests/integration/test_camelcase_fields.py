@@ -26,7 +26,7 @@ def test_camelcase_field_selection(gql_client):
 
     query = """
     query {
-        products {
+        productList {
             dateCreation
             costPrice
         }
@@ -34,7 +34,7 @@ def test_camelcase_field_selection(gql_client):
     """
     result = gql_client.execute(query)
     assert result.get("errors") is None
-    item = result["data"]["products"][0]
+    item = result["data"]["productList"][0]
     assert "dateCreation" in item
     assert "costPrice" in item
 
@@ -47,7 +47,7 @@ def test_camelcase_filter_input(gql_client):
 
     query = """
     query($where: ProductWhereInput) {
-        products(where: $where) {
+        productList(where: $where) {
             name
         }
     }
@@ -58,7 +58,7 @@ def test_camelcase_filter_input(gql_client):
 
     result = gql_client.execute(query, variables=variables)
     assert result.get("errors") is None
-    items = result["data"]["products"]
+    items = result["data"]["productList"]
     assert len(items) == 1
     assert items[0]["name"] == "P2"
 
@@ -70,7 +70,7 @@ def test_camelcase_filter_operators(gql_client):
 
     query = """
     query($where: CategoryWhereInput) {
-        categories(where: $where) {
+        categoryList(where: $where) {
             name
         }
     }
@@ -80,7 +80,8 @@ def test_camelcase_filter_operators(gql_client):
 
     result = gql_client.execute(query, variables=variables)
     assert result.get("errors") is None
-    items = result["data"]["categories"]
+    items = result["data"]["categoryList"]
     assert len(items) == 1
     assert items[0]["name"] == "Alpha"
+
 

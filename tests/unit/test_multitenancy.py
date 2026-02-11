@@ -70,14 +70,14 @@ class TestMultiTenancy(TestCase):
         client = self._client(self.org1.id)
         query = """
         query {
-            tenantProjects {
+            tenantProjectList {
                 name
             }
         }
         """
         result = client.execute(query)
         self.assertIsNone(result.get("errors"))
-        projects = result["data"]["tenantProjects"]
+        projects = result["data"]["tenantProjectList"]
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0]["name"], "Project 1")
 
@@ -85,7 +85,7 @@ class TestMultiTenancy(TestCase):
         client = self._client(self.org1.id)
         query = f"""
         query {{
-            tenantProjects(include: ["{self.p2.id}"]) {{
+            tenantProjectList(include: ["{self.p2.id}"]) {{
                 pk
                 name
             }}
@@ -93,7 +93,7 @@ class TestMultiTenancy(TestCase):
         """
         result = client.execute(query)
         self.assertIsNone(result.get("errors"))
-        projects = result["data"]["tenantProjects"]
+        projects = result["data"]["tenantProjectList"]
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0]["pk"], str(self.p1.id))
 
@@ -101,7 +101,7 @@ class TestMultiTenancy(TestCase):
         client = self._client()
         query = """
         query {
-            tenantProjects {
+            tenantProjectList {
                 name
             }
         }

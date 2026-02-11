@@ -72,8 +72,8 @@ class TestConditionalAggregationFilters:
     """Test conditional aggregation filters with actual queries."""
 
     def test_filter_by_conditional_count(self, gql_client_advanced):
-        """Filter products by conditional count of related order items."""
-        # Create products with varying order items
+        """Filter productList by conditional count of related order items."""
+        # Create productList with varying order items
         p1 = _create_product("Product A", 100)
         p2 = _create_product("Product B", 200)
         p3 = _create_product("Product C", 300)
@@ -94,13 +94,13 @@ class TestConditionalAggregationFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products with at least 2 high-value order items
+        # Filter productList with at least 2 high-value order items
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -116,7 +116,7 @@ class TestConditionalAggregationFilters:
 
         # Should only include Product A with 3 high-value items
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Product A" in names
         assert "Product B" not in names
         assert "Product C" not in names
@@ -126,7 +126,7 @@ class TestSubqueryFilters:
     """Test subquery filters with actual queries."""
 
     def test_filter_by_subquery_latest_value(self, gql_client_advanced):
-        """Filter products by the max unit price of their order items."""
+        """Filter productList by the max unit price of their order items."""
         p1 = _create_product("Product Alpha", 100)
         p2 = _create_product("Product Beta", 200)
         p3 = _create_product("Product Gamma", 300)
@@ -145,13 +145,13 @@ class TestSubqueryFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products whose highest priced order item exceeds 100
+        # Filter productList whose highest priced order item exceeds 100
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -167,7 +167,7 @@ class TestSubqueryFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         # Product Alpha (150) and Product Gamma (200) should match
         assert "Product Alpha" in names
         assert "Product Gamma" in names
@@ -178,7 +178,7 @@ class TestExistsFilters:
     """Test exists filters with actual queries."""
 
     def test_filter_by_exists(self, gql_client_advanced):
-        """Filter products that have at least one order item."""
+        """Filter productList that have at least one order item."""
         p1 = _create_product("Has Orders", 100)
         p2 = _create_product("No Orders", 200)
 
@@ -187,13 +187,13 @@ class TestExistsFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products that have order items
+        # Filter productList that have order items
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -207,12 +207,12 @@ class TestExistsFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Has Orders" in names
         assert "No Orders" not in names
 
     def test_filter_by_not_exists(self, gql_client_advanced):
-        """Filter products that have no order items."""
+        """Filter productList that have no order items."""
         p1 = _create_product("Has Items", 100)
         p2 = _create_product("Empty", 200)
 
@@ -220,13 +220,13 @@ class TestExistsFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products that have NO order items
+        # Filter productList that have NO order items
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -240,12 +240,12 @@ class TestExistsFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Empty" in names
         assert "Has Items" not in names
 
     def test_filter_by_exists_with_condition(self, gql_client_advanced):
-        """Filter products that have high-quantity order items."""
+        """Filter productList that have high-quantity order items."""
         p1 = _create_product("Bulk Seller", 100)
         p2 = _create_product("Single Units", 200)
         p3 = _create_product("No Sales", 300)
@@ -260,13 +260,13 @@ class TestExistsFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products that have order items with quantity >= 10
+        # Filter productList that have order items with quantity >= 10
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -281,7 +281,7 @@ class TestExistsFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Bulk Seller" in names
         assert "Single Units" not in names
         assert "No Sales" not in names
@@ -291,7 +291,7 @@ class TestWindowFilters:
     """Test window function filters with actual queries."""
 
     def test_window_filter_top_n_overall(self, gql_client_advanced):
-        """Filter products by their overall rank by price."""
+        """Filter productList by their overall rank by price."""
         _create_product("Cheap", 10)
         _create_product("Mid", 50)
         _create_product("Expensive", 100)
@@ -300,14 +300,14 @@ class TestWindowFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["-price"]) {
+            productList(where: $where, orderBy: ["-price"]) {
                 name
                 price
             }
         }
         """
 
-        # Get top 3 most expensive products
+        # Get top 3 most expensive productList
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -322,8 +322,8 @@ class TestWindowFilters:
         )
 
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        names = [p["name"] for p in products]
+        productList = result["data"]["productList"]
+        names = [p["name"] for p in productList]
 
         # Top 3 by price should be Luxury, Premium, Expensive
         assert "Luxury" in names
@@ -347,7 +347,7 @@ class TestWindowFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["category_id", "-price"]) {
+            productList(where: $where, orderBy: ["category_id", "-price"]) {
                 name
                 price
                 category {
@@ -373,13 +373,13 @@ class TestWindowFilters:
         )
 
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        names = [p["name"] for p in products]
+        productList = result["data"]["productList"]
+        names = [p["name"] for p in productList]
 
         # Should have Laptop (top Electronics) and Jacket (top Clothing)
         assert "Laptop" in names
         assert "Jacket" in names
-        # Should not have lower-ranked products
+        # Should not have lower-ranked productList
         assert "Phone" not in names
         assert "Shirt" not in names
 
@@ -398,14 +398,14 @@ class TestCombinedAdvancedFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
                 price
             }
         }
         """
 
-        # Expensive products (>= 200) that have sales
+        # Expensive productList (>= 200) that have sales
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -420,7 +420,7 @@ class TestCombinedAdvancedFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Expensive with Sales" in names
         assert "Cheap with Sales" not in names  # Too cheap
         assert "Expensive no Sales" not in names  # No sales
@@ -430,14 +430,14 @@ class TestFieldComparisonFilters:
     """Test F() expression field comparison filters with actual queries."""
 
     def test_filter_price_greater_than_cost(self, gql_client_advanced):
-        """Filter products where price > cost_price (profitable products)."""
+        """Filter productList where price > cost_price (profitable productList)."""
         _create_product("Profitable", 100, cost_price=50)  # profit margin
         _create_product("Break Even", 100, cost_price=100)  # no margin
         _create_product("Loss", 50, cost_price=80)  # negative margin
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
                 price
                 costPrice
@@ -459,20 +459,20 @@ class TestFieldComparisonFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Profitable" in names
         assert "Break Even" not in names
         assert "Loss" not in names
 
     def test_filter_with_multiplier(self, gql_client_advanced):
-        """Filter products where price >= cost_price * 1.5 (50%+ markup)."""
+        """Filter productList where price >= cost_price * 1.5 (50%+ markup)."""
         _create_product("High Markup", 180, cost_price=100)  # 80% markup
         _create_product("Low Markup", 120, cost_price=100)  # 20% markup
         _create_product("Medium Markup", 150, cost_price=100)  # 50% markup
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -493,20 +493,20 @@ class TestFieldComparisonFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "High Markup" in names
         assert "Medium Markup" in names  # Exactly 50%
         assert "Low Markup" not in names
 
     def test_filter_with_offset(self, gql_client_advanced):
-        """Filter products where price > cost_price + 30 (absolute margin)."""
+        """Filter productList where price > cost_price + 30 (absolute margin)."""
         _create_product("Good Margin", 100, cost_price=50)  # $50 margin
         _create_product("Small Margin", 80, cost_price=60)  # $20 margin
         _create_product("Exact Margin", 80, cost_price=50)  # $30 margin
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -527,7 +527,7 @@ class TestFieldComparisonFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Good Margin" in names
         assert "Small Margin" not in names
         assert "Exact Margin" not in names  # Exactly $30, not greater
@@ -537,7 +537,7 @@ class TestDistinctCountFilters:
     """Test distinct count aggregation filters with actual queries."""
 
     def test_filter_by_distinct_unit_prices(self, gql_client_advanced):
-        """Filter products by count of distinct unit prices in orders."""
+        """Filter productList by count of distinct unit prices in orders."""
         p1 = _create_product("Varied Pricing", 100)
         p2 = _create_product("Fixed Pricing", 200)
         p3 = _create_product("Some Varied", 300)
@@ -559,13 +559,13 @@ class TestDistinctCountFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products with at least 3 distinct unit prices
+        # Filter productList with at least 3 distinct unit prices
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -579,7 +579,7 @@ class TestDistinctCountFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Varied Pricing" in names
         assert "Fixed Pricing" not in names
         assert "Some Varied" not in names
@@ -589,11 +589,11 @@ class TestDateTruncFilters:
     """Test date truncation filters with actual queries."""
 
     def test_filter_by_year(self, gql_client_advanced):
-        """Filter products created in a specific year."""
+        """Filter productList created in a specific year."""
         from django.utils import timezone
         from datetime import timedelta
 
-        # Create products with different date_creation dates
+        # Create productList with different date_creation dates
         p1 = _create_product("This Year Product", 100)
         p2 = _create_product("Last Year Product", 200)
 
@@ -607,13 +607,13 @@ class TestDateTruncFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
         """
 
-        # Filter products created this year
+        # Filter productList created this year
         result = gql_client_advanced.execute(
             query,
             variables={
@@ -627,19 +627,19 @@ class TestDateTruncFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "This Year Product" in names
         assert "Last Year Product" not in names
 
     def test_filter_by_specific_year(self, gql_client_advanced):
-        """Filter products by specific year value."""
+        """Filter productList by specific year value."""
         from django.utils import timezone
 
         p1 = _create_product("Current Product", 100)
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -660,18 +660,18 @@ class TestDateTruncFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Current Product" in names
 
     def test_filter_by_month(self, gql_client_advanced):
-        """Filter products created in a specific month."""
+        """Filter productList created in a specific month."""
         from django.utils import timezone
 
         p1 = _create_product("This Month Product", 100)
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -693,7 +693,7 @@ class TestDateTruncFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "This Month Product" in names
 
 
@@ -701,11 +701,11 @@ class TestExtractDateFilters:
     """Test date extraction filters with actual queries."""
 
     def test_filter_by_day_of_month(self, gql_client_advanced):
-        """Filter products created on the 15th of any month."""
+        """Filter productList created on the 15th of any month."""
         from django.utils import timezone
         from datetime import timedelta
 
-        # Create products
+        # Create productList
         p1 = _create_product("Created on 15th", 100)
         p2 = _create_product("Created on other day", 200)
 
@@ -720,7 +720,7 @@ class TestExtractDateFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -738,12 +738,12 @@ class TestExtractDateFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Created on 15th" in names
         assert "Created on other day" not in names
 
     def test_filter_by_quarter(self, gql_client_advanced):
-        """Filter products created in Q4 (October-December)."""
+        """Filter productList created in Q4 (October-December)."""
         from django.utils import timezone
 
         p1 = _create_product("Q4 Product", 100)
@@ -759,7 +759,7 @@ class TestExtractDateFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -777,12 +777,12 @@ class TestExtractDateFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Q4 Product" in names
         assert "Q2 Product" not in names
 
     def test_filter_by_day_of_week(self, gql_client_advanced):
-        """Filter products created on specific day of week."""
+        """Filter productList created on specific day of week."""
         from django.utils import timezone
         from datetime import timedelta
 
@@ -803,7 +803,7 @@ class TestExtractDateFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -822,12 +822,12 @@ class TestExtractDateFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Monday Product" in names
         assert "Friday Product" not in names
 
     def test_filter_by_hour_range(self, gql_client_advanced):
-        """Filter products by hour range (business hours)."""
+        """Filter productList by hour range (business hours)."""
         from django.utils import timezone
 
         p1 = _create_product("Morning Product", 100)
@@ -843,7 +843,7 @@ class TestExtractDateFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -862,7 +862,7 @@ class TestExtractDateFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Morning Product" in names
         assert "Evening Product" not in names
 
@@ -883,7 +883,7 @@ class TestExtractDateFilters:
 
         query = """
         query($where: ProductWhereInput) {
-            products(where: $where, orderBy: ["name"]) {
+            productList(where: $where, orderBy: ["name"]) {
                 name
             }
         }
@@ -902,8 +902,9 @@ class TestExtractDateFilters:
         )
 
         assert result.get("errors") is None
-        names = [p["name"] for p in result["data"]["products"]]
+        names = [p["name"] for p in result["data"]["productList"]]
         assert "Target Product" in names
         assert "Different Month" not in names
+
 
 

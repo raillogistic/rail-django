@@ -71,7 +71,7 @@ class TestComputedFilters:
 
         query = """
         query {
-            products(where: {
+            productList(where: {
                 profit: { gte: 20.0 }
             }) {
                 name
@@ -81,9 +81,9 @@ class TestComputedFilters:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "High Profit"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "High Profit"
 
     def test_computed_filter_complex(self, gql_client):
         """Test filtering by a complex expression (markup percentage)."""
@@ -94,7 +94,7 @@ class TestComputedFilters:
 
         query = """
         query {
-            products(where: {
+            productList(where: {
                 markupPct: { gt: 50.0 }
             }) {
                 name
@@ -103,9 +103,9 @@ class TestComputedFilters:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        products = result["data"]["products"]
-        assert len(products) == 1
-        assert products[0]["name"] == "Double"
+        productList = result["data"]["productList"]
+        assert len(productList) == 1
+        assert productList[0]["name"] == "Double"
 
     def test_computed_filter_sorting(self, gql_client):
         """Test sorting by computed field (if supported by property ordering logic)."""
@@ -116,7 +116,7 @@ class TestComputedFilters:
         
         query = """
         query {
-            products(
+            productList(
                 where: { profit: { gt: 0 } }
                 orderBy: ["name"]
             ) {
@@ -126,5 +126,6 @@ class TestComputedFilters:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        assert len(result["data"]["products"]) == 1
+        assert len(result["data"]["productList"]) == 1
+
 
