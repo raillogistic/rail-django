@@ -189,3 +189,46 @@ class TestExporting(TestCase):
         with self.assertRaises(ExportError):
             exporter.validate_fields(["doesNotExist"])
 
+    def test_export_to_csv_accepts_camel_case_where_filters(self):
+        export_settings = self._settings(
+            ["nom_client", "est_actif"],
+            filterable_fields={
+                "tests.testcustomer": ["nom_client", "est_actif"],
+            },
+        )
+        exporter = ModelExporter(
+            "tests", "TestCustomer", export_settings=export_settings
+        )
+
+        csv_data = exporter.export_to_csv(
+            ["nom_client", "est_actif"],
+            variables={
+                "where": {
+                    "AND": [
+                        {"estActif": {"eq": True}},
+                        {"nomClient": {"icontains": "alp"}},
+                    ]
+                }
+            },
+        )
+
+        rows = list(csv.reader(io.StringIO(csv_data)))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][0], "Alpha")
+        self.assertNotEqual(rows[1][1], "âŒ")
+
+    def test_validate_filter_input_normalizes_camel_case_fields(self):
+        export_settings = self._settings(
+            ["nom_client", "est_actif"],
+            filterable_fields={"tests.testcustomer": ["nom_client", "est_actif"]},
+        )
+        exporter = ModelExporter(
+            "tests", "TestCustomer", export_settings=export_settings
+        )
+
+        exporter.validate_filter_input({"estActif": {"eq": True}})
+
+        with self.assertRaises(ExportError) as context:
+            exporter.validate_filter_input({"emailClient": {"icontains": "@"}})
+        self.assertIn("email_client", str(context.exception))
+

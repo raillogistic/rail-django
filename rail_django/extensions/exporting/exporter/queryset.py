@@ -16,6 +16,38 @@ from ..exceptions import ExportError
 class QuerysetMixin:
     """Mixin providing queryset building and filter functionality."""
 
+    _LOGICAL_FILTER_KEYS = {"AND", "OR", "NOT"}
+
+    def _normalize_filter_key(self, key: Any) -> Any:
+        """Normalize a filter key from GraphQL naming to internal naming."""
+        if not isinstance(key, str):
+            return key
+        if key in self._LOGICAL_FILTER_KEYS:
+            return key
+
+        normalized = key.replace(".", "__")
+        parts = normalized.split("__")
+        normalized_parts = []
+        for part in parts:
+            if not part:
+                normalized_parts.append(part)
+                continue
+            normalized_parts.append(self._to_snake_case(part))
+        return "__".join(normalized_parts)
+
+    def _normalize_where_input(self, filter_input: Any) -> Any:
+        """Recursively normalize where input keys to snake_case."""
+        if isinstance(filter_input, list):
+            return [self._normalize_where_input(item) for item in filter_input]
+        if not isinstance(filter_input, dict):
+            return filter_input
+
+        normalized: dict[Any, Any] = {}
+        for key, value in filter_input.items():
+            normalized_key = self._normalize_filter_key(key)
+            normalized[normalized_key] = self._normalize_where_input(value)
+        return normalized
+
     def _analyze_filter_tree(
         self, filter_input: Any, *, current_or_depth: int = 0
     ) -> tuple[int, int]:
@@ -162,6 +194,9 @@ class QuerysetMixin:
             return
         if not isinstance(where_input, dict):
             raise ExportError("where must be an object")
+        normalized_where_input = self._normalize_where_input(where_input)
+        if not isinstance(normalized_where_input, dict):
+            raise ExportError("where must be an object")
 
         export_settings = export_settings or self.export_settings
 
@@ -184,13 +219,15 @@ class QuerysetMixin:
             if max_clauses <= 0:
                 max_clauses = 50
             validate_filter_complexity(
-                where_input, max_depth=max_depth, max_clauses=max_clauses
+                normalized_where_input, max_depth=max_depth, max_clauses=max_clauses
             )
         except ImportError:
             # Fall back to existing validation if filter_inputs unavailable
             max_filters = export_settings.get("max_filters", None)
             max_or_depth = export_settings.get("max_or_depth", None)
-            total_filters, max_depth_found = self._analyze_filter_tree(where_input)
+            total_filters, max_depth_found = self._analyze_filter_tree(
+                normalized_where_input
+            )
 
             if max_filters is not None:
                 try:
@@ -217,7 +254,7 @@ class QuerysetMixin:
         # Validate against export-specific field allowlists
         invalid_keys = [
             key
-            for key in self._iter_filter_keys(where_input)
+            for key in self._iter_filter_keys(normalized_where_input)
             if not self._is_filter_key_allowed(key)
         ]
         if invalid_keys:
@@ -344,6 +381,11 @@ class QuerysetMixin:
             return queryset
         if not isinstance(where_input, dict):
             raise ExportError("where must be an object")
+        normalized_where_input = self._normalize_where_input(where_input)
+        if not normalized_where_input:
+            return queryset
+        if not isinstance(normalized_where_input, dict):
+            raise ExportError("where must be an object")
 
         if not self.nested_filter_applicator:
             raise ExportError(
@@ -354,11 +396,11 @@ class QuerysetMixin:
         try:
             # Apply presets if provided
             if presets:
-                where_input = self.nested_filter_applicator.apply_presets(
-                    where_input, presets, self.model
+                normalized_where_input = self.nested_filter_applicator.apply_presets(
+                    normalized_where_input, presets, self.model
                 )
             return self.nested_filter_applicator.apply_where_filter(
-                queryset, where_input, self.model
+                queryset, normalized_where_input, self.model
             )
         except Exception as e:
             raise ExportError(f"Filter application failed: {e}")
