@@ -103,6 +103,7 @@ class ExportView(View):
             model_name = data["model_name"]
             file_extension = str(data["file_extension"]).lower()
             fields = data["fields"]
+            group_by = data.get("group_by")
             audit_details.update({
                 "app_name": app_name,
                 "model_name": model_name,
@@ -119,6 +120,16 @@ class ExportView(View):
                 )
                 return JsonResponse(
                     {"error": 'file_extension must be "xlsx" or "csv"'}, status=400
+                )
+            if group_by is not None and file_extension != "xlsx":
+                log_export_event(
+                    request, success=False,
+                    error_message="group_by is only supported for xlsx exports",
+                    details=audit_details,
+                )
+                return JsonResponse(
+                    {"error": "group_by is only supported for xlsx exports"},
+                    status=400,
                 )
 
             if not isinstance(fields, list) or not fields:
@@ -163,6 +174,7 @@ class ExportView(View):
             presets = data.get("presets")
             schema_name = data.get("schema_name")
             distinct_on = data.get("distinct_on")
+            group_by = data.get("group_by")
             async_request = bool(data.get("async", False))
 
             # Validate optional parameters
@@ -204,6 +216,11 @@ class ExportView(View):
                 fields, user=getattr(request, "user", None),
                 export_settings=export_settings,
             )
+            group_by = exporter.validate_group_by(
+                group_by,
+                user=getattr(request, "user", None),
+                export_settings=export_settings,
+            )
             where_input = variables.get("where", variables) if variables else None
             exporter.validate_filter_input(where_input, export_settings=export_settings)
             ordering_value = exporter._normalize_ordering(ordering) or None
@@ -223,6 +240,7 @@ class ExportView(View):
                     parsed_fields=parsed_fields, variables=variables,
                     ordering=ordering_value, max_rows=max_rows,
                     filename=filename, file_extension=file_extension,
+                    group_by=group_by,
                     export_settings=export_settings,
                 )
                 log_export_event(request, success=True, details=audit_details)
@@ -231,7 +249,7 @@ class ExportView(View):
             return self._generate_export_response(
                 request, exporter, fields, parsed_fields, variables,
                 ordering_value, max_rows, filename, file_extension,
-                export_settings, presets, distinct_on, audit_details,
+                export_settings, presets, distinct_on, group_by, audit_details,
             )
 
         except ExportError as e:
@@ -259,6 +277,7 @@ class ExportView(View):
         presets = data.get("presets")
         schema_name = data.get("schema_name")
         distinct_on = data.get("distinct_on")
+        group_by = data.get("group_by")
         async_value = data.get("async", False)
 
         if async_value is not None and not isinstance(async_value, bool):
@@ -313,20 +332,26 @@ class ExportView(View):
             return JsonResponse(
                 {"error": "distinct_on must be a list"}, status=400
             )
+        if group_by is not None and not isinstance(group_by, str):
+            log_export_event(
+                request, success=False,
+                error_message="group_by must be a string", details=audit_details,
+            )
+            return JsonResponse({"error": "group_by must be a string"}, status=400)
 
         return None
 
     def _generate_export_response(
         self, request, exporter, fields, parsed_fields, variables,
         ordering_value, max_rows, filename, file_extension,
-        export_settings, presets, distinct_on, audit_details,
+        export_settings, presets, distinct_on, group_by, audit_details,
     ):
         """Generate the export response."""
         if file_extension == "xlsx":
             content = exporter.export_to_excel(
                 fields, variables, ordering_value,
                 max_rows=max_rows, parsed_fields=parsed_fields,
-                presets=presets, distinct_on=distinct_on,
+                presets=presets, distinct_on=distinct_on, group_by=group_by,
             )
             content_type = (
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -385,6 +410,7 @@ class ExportView(View):
                 "filename": "string - Custom filename",
                 "ordering": "array - Ordering expressions",
                 "variables": "object - Filter parameters",
+                "group_by": "string - Group rows by field (xlsx only)",
                 "max_rows": "integer - Row limit",
                 "template": "string - Export template name",
                 "async": "boolean - Async export",

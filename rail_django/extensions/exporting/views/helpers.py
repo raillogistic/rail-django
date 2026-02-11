@@ -135,6 +135,7 @@ def enqueue_export_job(
     max_rows: Optional[int],
     filename: str,
     file_extension: str,
+    group_by: Optional[str],
     export_settings: dict[str, Any],
 ) -> JsonResponse:
     """Create and enqueue an export job for async processing.
@@ -148,6 +149,7 @@ def enqueue_export_job(
         max_rows: Maximum rows to export.
         filename: Output filename.
         file_extension: File extension (csv/xlsx).
+        group_by: Optional grouping accessor (xlsx only).
         export_settings: Export configuration.
 
     Returns:
@@ -181,6 +183,7 @@ def enqueue_export_job(
         "variables": variables,
         "ordering": ordering,
         "max_rows": max_rows,
+        "group_by": group_by,
     }
 
     set_export_job(job_id, job, timeout=expires_seconds)

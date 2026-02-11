@@ -254,3 +254,64 @@ class ValidationMixin:
             raise ExportError("No exportable fields were provided")
 
         return parsed_fields
+
+    def validate_group_by(
+        self,
+        group_by: Optional[str],
+        *,
+        user: Optional[Any] = None,
+        export_settings: Optional[dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Validate and normalize a grouping accessor.
+
+        Args:
+            group_by: Grouping accessor path from request payload.
+            user: Optional user for permission checks.
+            export_settings: Optional export settings override.
+
+        Returns:
+            Normalized accessor path, or None when group_by is not provided.
+
+        Raises:
+            ExportError: If accessor is invalid or not permitted.
+        """
+        if group_by is None:
+            return None
+        if not isinstance(group_by, str):
+            raise ExportError("group_by must be a string")
+
+        accessor = self._resolve_accessor_path(group_by.strip())
+        if not accessor:
+            raise ExportError("group_by must be a non-empty string")
+
+        export_settings = export_settings or self.export_settings
+        export_fields = get_export_fields(self.model, export_settings)
+        export_exclude = get_export_exclude(self.model, export_settings)
+        sensitive_fields = [
+            value.lower()
+            for value in (export_settings.get("sensitive_fields") or [])
+            if str(value).strip()
+        ]
+        require_export_fields = bool(export_settings.get("require_export_fields", True))
+        require_field_permissions = bool(
+            export_settings.get("require_field_permissions", True)
+        )
+
+        error = self._validate_accessor(
+            accessor,
+            export_fields,
+            export_exclude,
+            sensitive_fields,
+            require_export_fields,
+        )
+        if error:
+            raise ExportError(f"group_by not allowed: {accessor}")
+
+        if (
+            user is not None
+            and require_field_permissions
+            and not self._has_field_access(user, accessor)
+        ):
+            raise ExportError(f"group_by denied for field: {accessor}")
+
+        return accessor

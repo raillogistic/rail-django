@@ -232,3 +232,42 @@ class TestExporting(TestCase):
             exporter.validate_filter_input({"emailClient": {"icontains": "@"}})
         self.assertIn("email_client", str(context.exception))
 
+    def test_validate_group_by_normalizes_camel_case(self):
+        export_settings = self._settings(["nom_client", "est_actif"])
+        exporter = ModelExporter(
+            "tests", "TestCustomer", export_settings=export_settings
+        )
+        self.assertEqual(exporter.validate_group_by("estActif"), "est_actif")
+
+    def test_validate_group_by_rejects_unallowlisted_field(self):
+        export_settings = self._settings(["nom_client"])
+        exporter = ModelExporter(
+            "tests", "TestCustomer", export_settings=export_settings
+        )
+        with self.assertRaises(ExportError):
+            exporter.validate_group_by("emailClient")
+
+    def test_export_to_excel_with_group_by_returns_valid_workbook(self):
+        if not EXCEL_AVAILABLE:
+            self.skipTest("openpyxl not available")
+
+        import openpyxl
+
+        export_settings = self._settings(["nom_client", "est_actif"])
+        exporter = ModelExporter(
+            "tests", "TestCustomer", export_settings=export_settings
+        )
+
+        payload = exporter.export_to_excel(
+            ["nom_client", "est_actif"],
+            ordering=["nom_client"],
+            group_by="estActif",
+        )
+        workbook = openpyxl.load_workbook(io.BytesIO(payload))
+        sheet = workbook.active
+
+        self.assertEqual(sheet.cell(row=1, column=1).value, "#")
+        self.assertIn("Est", str(sheet.cell(row=2, column=1).value))
+        merged_ranges = {str(cell_range) for cell_range in sheet.merged_cells.ranges}
+        self.assertIn("A2:C2", merged_ranges)
+

@@ -152,3 +152,72 @@ def test_export_view_returns_excel_response():
     assert file_path.stat().st_size > 0
 
 
+@override_settings(RAIL_DJANGO_EXPORT=_export_settings())
+def test_export_view_rejects_group_by_for_csv():
+    User = get_user_model()
+    user = User.objects.create_user(username="export_group_csv", password="pass12345")
+    token = JWTManager.generate_token(user)["token"]
+
+    payload = {
+        "app_name": "tests",
+        "model_name": "TestCustomer",
+        "file_extension": "csv",
+        "filename": "customers",
+        "fields": ["nom_client", "email_client"],
+        "group_by": "estActif",
+    }
+
+    rf = RequestFactory()
+    request = rf.post(
+        "/export/",
+        data=json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    response = ExportView.as_view()(request)
+    assert response.status_code == 400
+    body = json.loads(response.content.decode("utf-8"))
+    assert "xlsx" in body["error"]
+
+
+@override_settings(RAIL_DJANGO_EXPORT=_export_settings())
+def test_export_view_supports_group_by_for_excel():
+    if not EXCEL_AVAILABLE:
+        pytest.skip("openpyxl not available")
+
+    User = get_user_model()
+    user = User.objects.create_user(
+        username="export_group_excel", password="pass12345"
+    )
+    token = JWTManager.generate_token(user)["token"]
+
+    TestCustomer.objects.create(
+        nom_client="Grouped",
+        prenom_client="Gina",
+        email_client="grouped@example.com",
+        est_actif=True,
+    )
+
+    payload = {
+        "app_name": "tests",
+        "model_name": "TestCustomer",
+        "file_extension": "xlsx",
+        "filename": "customers",
+        "fields": ["nom_client", "email_client"],
+        "group_by": "estActif",
+    }
+
+    rf = RequestFactory()
+    request = rf.post(
+        "/export/",
+        data=json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    response = ExportView.as_view()(request)
+    assert response.status_code == 200
+    assert response.content.startswith(b"PK")
+
+

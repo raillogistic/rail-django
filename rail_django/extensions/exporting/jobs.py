@@ -212,10 +212,13 @@ def run_export_job(job_id: str) -> None:
         ordering = payload.get("ordering")
         variables = payload.get("variables") or {}
         max_rows = payload.get("max_rows")
+        group_by = payload.get("group_by")
         file_extension = payload["file_extension"]
         filename = payload["filename"]
         if file_extension not in {"csv", "xlsx"}:
             raise ExportError("Unsupported export format")
+        if group_by and file_extension != "xlsx":
+            raise ExportError("group_by is only supported for xlsx exports")
 
         storage_dir = get_export_storage_dir(export_settings)
         file_path = storage_dir / f"{job_id}.{file_extension}"
@@ -258,6 +261,7 @@ def run_export_job(job_id: str) -> None:
                     parsed_fields=parsed_fields,
                     output=handle,
                     progress_callback=progress_callback,
+                    group_by=group_by,
                 )
             content_type = (
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
