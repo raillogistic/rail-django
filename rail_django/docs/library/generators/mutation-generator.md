@@ -421,12 +421,12 @@ class Order(models.Model):
 **Generated GraphQL:**
 ```graphql
 type Mutation {
-  orderConfirm(id: ID!, notifyCustomer: Boolean): OrderConfirmPayload
+  confirmOrder(id: ID!, input: OrderConfirmInput): OrderConfirmPayload
 }
 
 type OrderConfirmPayload {
   ok: Boolean!
-  order: Order
+  result: Order
   errors: [MutationError]
 }
 ```
@@ -434,9 +434,9 @@ type OrderConfirmPayload {
 **Usage:**
 ```graphql
 mutation {
-  orderConfirm(id: "123", notifyCustomer: true) {
+  confirmOrder(id: "123", input: { notifyCustomer: true }) {
     ok
-    order {
+    result {
       id
       status
     }
@@ -657,13 +657,13 @@ mutation_gen = MutationGenerator(type_gen)
 mutations = mutation_gen.generate_all_mutations(Product)
 
 # mutations = {
-#   "create_product": CreateProductMutation.Field(),
-#   "update_product": UpdateProductMutation.Field(),
-#   "delete_product": DeleteProductMutation.Field(),
-#   "bulk_create_product": BulkCreateProductMutation.Field(),
-#   "bulk_update_product": BulkUpdateProductMutation.Field(),
-#   "bulk_delete_product": BulkDeleteProductMutation.Field(),
-#   "product_confirm": ProductConfirmMutation.Field(),  # Method mutation
+#   "createProduct": CreateProductMutation.Field(),
+#   "updateProduct": UpdateProductMutation.Field(),
+#   "deleteProduct": DeleteProductMutation.Field(),
+#   "bulkCreateProduct": BulkCreateProductMutation.Field(),
+#   "bulkUpdateProduct": BulkUpdateProductMutation.Field(),
+#   "bulkDeleteProduct": BulkDeleteProductMutation.Field(),
+#   "confirmProduct": ProductConfirmMutation.Field(),  # Method mutation
 # }
 
 # Create Mutation class

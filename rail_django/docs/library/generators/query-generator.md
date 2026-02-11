@@ -1,4 +1,4 @@
-# Query Generator
+﻿# Query Generator
 
 > **Module Path:** `rail_django.generators.queries.generator`
 
@@ -8,27 +8,27 @@ The QueryGenerator creates GraphQL query fields for Django models, including sin
 
 ```
                          QueryGenerator
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
+                              â”‚
+        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+        â”‚                     â”‚                     â”‚
+        â–¼                     â–¼                     â–¼
    Single Queries        List Queries        Paginated Queries
-   product(id: ID)       products(...)       productsPaginated(...)
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-                              ▼
-                     ┌─────────────────┐
-                     │ Advanced Filter │
-                     │   Generator     │
-                     └─────────────────┘
-                              │
-                              ▼
-                     ┌─────────────────┐
-                     │  Optimization   │
-                     │ select_related  │
-                     │ prefetch_related│
-                     └─────────────────┘
+   product(id: ID)       productList(...)       productPage(...)
+        â”‚                     â”‚                     â”‚
+        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
+                              â–¼
+                     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                     â”‚ Advanced Filter â”‚
+                     â”‚   Generator     â”‚
+                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚
+                              â–¼
+                     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                     â”‚  Optimization   â”‚
+                     â”‚ select_related  â”‚
+                     â”‚ prefetch_relatedâ”‚
+                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ## Class Reference
@@ -46,10 +46,10 @@ query_gen = QueryGenerator(type_gen, schema_name="default")
 product_query = query_gen.generate_single_query(Product)
 
 # Generate list query
-products_query = query_gen.generate_list_query(Product)
+product_list = query_gen.generate_list_query(Product)
 
 # Generate paginated query
-products_paginated = query_gen.generate_paginated_query(Product)
+product_paginated = query_gen.generate_paginated_query(Product)
 ```
 
 #### Constructor Parameters
@@ -114,13 +114,13 @@ query {
 ### List Query
 
 ```python
-products_query = query_gen.generate_list_query(Product)
+product_list = query_gen.generate_list_query(Product)
 ```
 
 **Generated GraphQL:**
 ```graphql
 type Query {
-  products(
+  productList(
     where: ProductWhereInput
     orderBy: [String]
     limit: Int
@@ -140,7 +140,7 @@ type Query {
 **Usage:**
 ```graphql
 query {
-  products(
+  productList(
     where: { status: { eq: "active" }, price: { gt: 100 } }
     orderBy: ["-price", "name"]
     limit: 20
@@ -157,30 +157,30 @@ query {
 ### Paginated Query
 
 ```python
-products_paginated = query_gen.generate_paginated_query(Product)
+product_paginated = query_gen.generate_paginated_query(Product)
 ```
 
 **Generated GraphQL:**
 ```graphql
 type Query {
-  productsPaginated(
+  productPage(
     where: ProductWhereInput
     orderBy: [String]
     page: Int
-    pageSize: Int
+    perPage: Int
   ): ProductPaginatedResult
 }
 
 type ProductPaginatedResult {
   items: [Product]
-  pagination: PaginationInfo
+  pageInfo: PaginationInfo
 }
 
 type PaginationInfo {
   totalCount: Int!
-  totalPages: Int!
+  pageCount: Int!
   currentPage: Int!
-  pageSize: Int!
+  perPage: Int!
   hasNextPage: Boolean!
   hasPreviousPage: Boolean!
 }
@@ -189,19 +189,19 @@ type PaginationInfo {
 **Usage:**
 ```graphql
 query {
-  productsPaginated(
+  productPage(
     where: { category: { name: { eq: "Electronics" } } }
     page: 1
-    pageSize: 20
+    perPage: 20
   ) {
     items {
       id
       name
       price
     }
-    pagination {
+    pageInfo {
       totalCount
-      totalPages
+      pageCount
       hasNextPage
     }
   }
@@ -211,13 +211,13 @@ query {
 ### Grouping Query
 
 ```python
-products_grouped = query_gen.generate_grouping_query(Product)
+product_grouped = query_gen.generate_grouping_query(Product)
 ```
 
 **Generated GraphQL:**
 ```graphql
 type Query {
-  productsGrouped(
+  productGroup(
     groupBy: [String!]!
     aggregations: [AggregationInput]
     where: ProductWhereInput
@@ -235,7 +235,7 @@ type GroupingBucket {
 **Usage:**
 ```graphql
 query {
-  productsGrouped(
+  productGroup(
     groupBy: ["status", "category__name"]
     aggregations: [
       { field: "price", function: SUM, alias: "totalValue" }
@@ -299,7 +299,7 @@ input DecimalFilter {
 **Simple Filter:**
 ```graphql
 query {
-  products(where: { status: { eq: "active" } }) {
+  productList(where: { status: { eq: "active" } }) {
     id
     name
   }
@@ -309,7 +309,7 @@ query {
 **Multiple Conditions (AND):**
 ```graphql
 query {
-  products(where: {
+  productList(where: {
     status: { eq: "active" }
     price: { gte: 100, lte: 500 }
   }) {
@@ -322,7 +322,7 @@ query {
 **OR Conditions:**
 ```graphql
 query {
-  products(where: {
+  productList(where: {
     OR: [
       { status: { eq: "active" } }
       { featured: { eq: true } }
@@ -337,7 +337,7 @@ query {
 **Nested Relations:**
 ```graphql
 query {
-  products(where: {
+  productList(where: {
     category: {
       name: { icontains: "electronics" }
     }
@@ -354,7 +354,7 @@ query {
 **Complex Query:**
 ```graphql
 query {
-  products(where: {
+  productList(where: {
     AND: [
       { status: { eq: "active" } }
       { OR: [
@@ -376,7 +376,7 @@ query {
 
 ```graphql
 query {
-  products(
+  productList(
     orderBy: ["name", "-price", "category__name"]
   ) {
     id
@@ -422,7 +422,7 @@ class Product(models.Model):
 
 ```graphql
 query {
-  products(orderBy: ["-profit_margin"]) {
+  productList(orderBy: ["-profit_margin"]) {
     name
     profitMargin
   }
@@ -437,7 +437,7 @@ Default pagination style:
 
 ```graphql
 query {
-  products(offset: 20, limit: 10) {
+  productList(offset: 20, limit: 10) {
     id
     name
   }
@@ -450,9 +450,9 @@ Using paginated queries:
 
 ```graphql
 query {
-  productsPaginated(page: 3, pageSize: 20) {
+  productPage(page: 3, perPage: 20) {
     items { id name }
-    pagination {
+    pageInfo {
       totalCount
       currentPage
       hasNextPage
@@ -481,7 +481,7 @@ The generator automatically optimizes queries:
 
 ```python
 # For this query:
-# products { category { name } tags { name } }
+# productList { category { name } tags { name } }
 
 # Generated resolver applies:
 queryset = Product.objects.all()
@@ -615,9 +615,9 @@ Query = type(
     (graphene.ObjectType,),
     {
         "product": product_single,
-        "products": product_list,
-        "products_paginated": product_paginated,
-        "products_grouped": product_grouped
+        "productList": product_list,
+        "productPage": product_paginated,
+        "productGroup": product_grouped
     }
 )
 ```
@@ -638,6 +638,9 @@ class Article(models.Model):
 # Generate query using custom manager
 articles_query = query_gen.generate_list_query(Article, manager_name="published")
 ```
+
+In the schema naming contract, this manager-backed field is exposed with a
+suffix: `articleListByPublished` (and `articlePageByPublished` for pagination).
 
 ### Adding Filtering to Custom Query
 
@@ -715,3 +718,4 @@ query_gen._enforce_model_permission(info, Product, "list", graphql_meta)
 - [Filter Generator](./filter-generator.md) - Advanced filtering
 - [GraphQLMeta](../core/graphql-meta.md) - Query configuration
 - [RBAC System](../security/rbac.md) - Permission checks
+

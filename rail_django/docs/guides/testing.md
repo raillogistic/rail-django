@@ -81,7 +81,7 @@ When testing queries, assert the absence of errors and verify the returned data 
 def test_query_posts(gql_client):
     query = """
     query {
-        posts {
+        postList {
             title
         }
     }
@@ -89,8 +89,8 @@ def test_query_posts(gql_client):
     result = gql_client.execute(query)
 
     assert result.get("errors") is None
-    assert "posts" in result["data"]
-    assert isinstance(result["data"]["posts"], list)
+    assert "postList" in result["data"]
+    assert isinstance(result["data"]["postList"], list)
 ```
 
 ### Testing Mutations
@@ -153,7 +153,7 @@ Rail Django's advanced filtering can be tested by passing variables to the `wher
 def test_filtering(gql_client):
     query = """
     query($where: PostWhereInput) {
-        posts(where: $where) {
+        postList(where: $where) {
             title
         }
     }

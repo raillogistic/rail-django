@@ -47,7 +47,7 @@ class TestPaginatedFeatures:
         # "expensive" preset defined in Product model (>= 50.0)
         query = """
         query {
-            productPages(
+            productPage(
                 presets: ["expensive"]
                 orderBy: ["price"]
                 page: 1
@@ -65,7 +65,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
         assert data["pageInfo"]["totalCount"] == 2
         names = sorted([p["name"] for p in data["items"]])
         assert names == ["Expensive Item", "Mid Item"]
@@ -88,7 +88,7 @@ class TestPaginatedFeatures:
 
         query = """
         query {
-            productPages(
+            productPage(
                 savedFilter: "cheap_products"
                 page: 1
                 perPage: 10
@@ -104,7 +104,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
         assert data["pageInfo"]["totalCount"] == 2
         names = sorted([p["name"] for p in data["items"]])
         assert names == ["Cheap A", "Cheap B"]
@@ -128,7 +128,7 @@ class TestPaginatedFeatures:
 
         query = """
         query {
-            productPages(
+            productPage(
                 distinctOn: ["category_id"]
                 orderBy: ["category_id", "-price"]
                 page: 1
@@ -150,7 +150,7 @@ class TestPaginatedFeatures:
              print(f"Skipping due to error: {result['errors']}")
              return
 
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
         
         # Check logic based on DB capabilities
         if connection.vendor == "postgresql" or (connection.vendor == "sqlite" and connection.Database.sqlite_version_info >= (3, 25, 0)):
@@ -163,7 +163,7 @@ class TestPaginatedFeatures:
         # Query for non-existent products
         query = """
         query {
-            productPages(
+            productPage(
                 where: { name: { eq: "NonExistent" } }
                 page: 1
                 perPage: 10
@@ -183,7 +183,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
 
         # Should return consistent pagination for empty results
         assert data["pageInfo"]["totalCount"] == 0
@@ -203,7 +203,7 @@ class TestPaginatedFeatures:
         # Request page 100 with 2 per page (only 2 pages exist)
         query = """
         query {
-            productPages(
+            productPage(
                 page: 100
                 perPage: 2
             ) {
@@ -220,7 +220,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
 
         # Should clamp to last page (page 2)
         assert data["pageInfo"]["totalCount"] == 3
@@ -237,7 +237,7 @@ class TestPaginatedFeatures:
         # Combine "expensive" preset (>= 50) with additional where filter
         query = """
         query {
-            productPages(
+            productPage(
                 presets: ["expensive"]
                 where: { name: { icontains: "Phone" } }
                 page: 1
@@ -255,7 +255,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
 
         # Should only return expensive items with "Phone" in name
         # "Expensive Phone" matches both (price >= 50 AND name contains "Phone")
@@ -273,7 +273,7 @@ class TestPaginatedFeatures:
         # Filter for expensive but include the cheap one
         query = f"""
         query {{
-            productPages(
+            productPage(
                 where: {{ price: {{ gte: 50.00 }} }}
                 include: ["{p1.id}"]
                 page: 1
@@ -291,7 +291,7 @@ class TestPaginatedFeatures:
         """
         result = gql_client.execute(query)
         assert result.get("errors") is None
-        data = result["data"]["productPages"]
+        data = result["data"]["productPage"]
 
         # Should return expensive items PLUS the included cheap one
         assert data["pageInfo"]["totalCount"] == 3

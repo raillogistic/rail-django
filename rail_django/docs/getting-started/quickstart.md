@@ -67,11 +67,11 @@ python manage.py migrate
 Start your server (`python manage.py runserver`) and open `http://localhost:8000/graphql/`.
 
 ### Querying Data
-Rail Django has automatically created `products` and `categories` queries.
+Rail Django has automatically created `productList` and `categoryList` root queries.
 
 ```graphql
 query ListActiveProducts {
-  products(where: { isActive: { eq: true } }) {
+  productList(where: { isActive: { eq: true } }) {
     id
     name
     price

@@ -15,6 +15,9 @@ For every model registered in the schema, Rail Django can generate a standard se
 | **Bulk Update** | `bulkUpdate<Model>` | Modifies multiple instances in one request. |
 | **Bulk Delete** | `bulkDelete<Model>` | Deletes multiple instances by ID. |
 
+Method mutations follow the same camelCase contract and are exposed as:
+`<methodName><ModelName>` (example: `confirmOrder`, `runQueryReportingDataset`).
+
 ### Standard CRUD Example
 
 Using an E-commerce scenario where we manage `Products`:
@@ -198,9 +201,9 @@ class Order(models.Model):
 Called via GraphQL:
 ```graphql
 mutation ShipOrder($id: ID!) {
-  orderMarkAsShipped(id: $id, trackingNumber: "XYZ-123") {
+  markAsShippedOrder(id: $id, input: { trackingNumber: "XYZ-123" }) {
     ok
-    object {
+    result {
       id
       status
     }

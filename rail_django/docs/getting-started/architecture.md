@@ -13,7 +13,7 @@ The `SchemaRegistry` (`rail_django.core.registry`) is the central brain. It:
 ### 2. Schema Builder & Generators
 For each registered schema, a `SchemaBuilder` (`rail_django.core.schema`) orchestrates the creation of the GraphQL schema. It delegates to specialized generators:
 *   **TypeGenerator**: Converts Django Models -> Graphene Types. It handles field naming (snake_case -> camelCase) and type mapping.
-*   **QueryGenerator**: Creates standard queries (`<Model>List`, `<Model>Get`) with built-in filtering and pagination.
+*   **QueryGenerator**: Creates standard queries (`<model>`, `<model>List`, `<model>Page`, `<model>Group`) with built-in filtering and pagination.
 *   **MutationGenerator**: Creates standard mutations (`create<Model>`, `update<Model>`, `delete<Model>`).
 
 ### 3. Middleware Pipeline

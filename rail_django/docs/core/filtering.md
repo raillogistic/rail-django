@@ -8,7 +8,7 @@ All list queries accept a `where` argument (typed as `<Model>WhereInput`).
 
 ```graphql
 query {
-  products(where: { price: { lte: 50 } }) {
+  productList(where: { price: { lte: 50 } }) {
     name
     price
   }
@@ -110,7 +110,7 @@ class Product(models.Model):
 ```graphql
 query {
   # Searches SKU, Name, and Description for "premium"
-  products(quick: "premium") {
+  productList(quick: "premium") {
     name
   }
 }
@@ -137,7 +137,7 @@ class Product(models.Model):
 ```graphql
 query {
   # Find products with a profit margin > 20
-  products(where: { profit_margin: { gt: 20 } }) {
+  productList(where: { profit_margin: { gt: 20 } }) {
     name
   }
 }
@@ -160,7 +160,7 @@ class Product(models.Model):
 
 ```graphql
 query {
-  products(presets: ["low_stock"]) {
+  productList(presets: ["low_stock"]) {
     name
     inventoryCount
   }
@@ -173,7 +173,7 @@ User-defined filters stored in the database.
 ```graphql
 query {
   # Apply a filter saved by the user
-  orders(savedFilter: "high-value-pending") {
+  orderList(savedFilter: "high-value-pending") {
     orderNumber
   }
 }

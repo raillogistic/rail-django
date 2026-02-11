@@ -11,7 +11,7 @@ Find all orders from customers in the USA:
 
 ```graphql
 query {
-  orders(where: {
+  orderList(where: {
     customer: {
       country: { eq: "USA" }
     }
@@ -27,7 +27,7 @@ Find products that are either on sale OR in the "Clearance" category:
 
 ```graphql
 query {
-  products(where: {
+  productList(where: {
     OR: [
       { status: { eq: "sale" } },
       { category: { slug: { eq: "clearance" } } }
@@ -42,22 +42,22 @@ query {
 ## Pagination & Metadata
 
 ### Offset Pagination
-The standard `products` query returns a list. Use `limit` and `offset`:
+The standard `productList` query returns a list. Use `limit` and `offset`:
 
 ```graphql
 query {
-  products(limit: 10, offset: 20) {
+  productList(limit: 10, offset: 20) {
     name
   }
 }
 ```
 
 ### Page-Based Metadata
-Use the `...Pages` query to get total counts and total pages for UI pagination:
+Use the `...Page` query to get total counts and total pages for UI pagination:
 
 ```graphql
 query {
-  productsPages(page: 1, perPage: 12) {
+  productPage(page: 1, perPage: 12) {
     items {
       id
       name
@@ -77,7 +77,7 @@ Get aggregated counts directly from your GraphQL query:
 
 ```graphql
 query {
-  productsGroups(groupBy: "status") {
+  productGroup(groupBy: "status") {
     key # e.g. "ACTIVE"
     label
     count
@@ -90,7 +90,7 @@ Sort by multiple fields, including related fields:
 
 ```graphql
 query {
-  products(orderBy: ["category__name", "-price"]) {
+  productList(orderBy: ["category__name", "-price"]) {
     name
     price
     category { name }

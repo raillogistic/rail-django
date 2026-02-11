@@ -9,14 +9,28 @@ For every model registered in your schema, Rail Django generates a set of root q
 | Query Name | Format | Description |
 |------------|--------|-------------|
 | **Single Object** | `<model>` | Fetch a single instance by ID (or other lookup fields). |
-| **List** | `<model>s` | Fetch a list of instances with filtering, sorting, and pagination. |
-| **Paginated** | `<model>sPages` | Fetch a list with detailed page metadata (total count, page count). |
-| **Grouped** | `<model>sGroups` | Aggregated data (e.g., counts grouped by a specific field). |
+| **List** | `<model>List` | Fetch a list of instances with filtering, sorting, and pagination. |
+| **Paginated** | `<model>Page` | Fetch a list with detailed page metadata (total count, page count). |
+| **Grouped** | `<model>Group` | Aggregated data (e.g., counts grouped by a specific field). |
+
+### Manager-Specific Query Suffix
+
+When a model exposes non-default managers, Rail Django adds a manager suffix:
+
+- Default manager (`objects`): no suffix.
+- Custom manager (`published`): `ByPublished`.
+
+Examples for model `Article`:
+
+- `articleList`
+- `articlePage`
+- `articleListByPublished`
+- `articlePageByPublished`
 
 ### Example: Basic List Query
 ```graphql
 query ListAllProducts {
-  products {
+  productList {
     id
     name
     price
@@ -34,7 +48,7 @@ Use the `where` argument to apply filters to fields:
 
 ```graphql
 query FilteredProducts {
-  products(where: {
+  productList(where: {
     isActive: { eq: true },
     price: { gte: 50.00 },
     name: { icontains: "premium" }
@@ -50,7 +64,7 @@ You can filter by related objects as deep as needed:
 
 ```graphql
 query ProductsByCategory {
-  products(where: {
+  productList(where: {
     category: { slug: { eq: "electronics" } },
     supplier: { country: { in: ["US", "CA"] } }
   }) {
@@ -68,7 +82,7 @@ Combine filters with boolean logic to create complex queries. These operators ma
 
 ```graphql
 query AdvancedSearch {
-  products(where: {
+  productList(where: {
     # Match products that are either cheap OR promoted
     OR: [
       { price: { lt: 10.00 } },
@@ -96,7 +110,7 @@ Sorting by multiple fields is essential for "tie-breaking." For example, if many
 query SortedProducts {
   # 1. Sort by price (most expensive first)
   # 2. Then by name (alphabetical) for products with same price
-  products(orderBy: ["-price", "name"]) {
+  productList(orderBy: ["-price", "name"]) {
     name
     price
   }
@@ -114,7 +128,7 @@ Best for small datasets or internal tools where you need to skip a specific numb
 
 ```graphql
 query PaginatedOrders {
-  orders(limit: 20, offset: 40) {
+  orderList(limit: 20, offset: 40) {
     orderNumber
     totalAmount
   }
@@ -122,11 +136,11 @@ query PaginatedOrders {
 ```
 
 ### Page-Based Pagination (Traditional)
-Best for search results where users expect "Page 1, 2, 3" navigation. Use the `...Pages` query.
+Best for search results where users expect "Page 1, 2, 3" navigation. Use the `...Page` query.
 
 ```graphql
 query OrdersByPage {
-  ordersPages(page: 3, perPage: 10) {
+  orderPage(page: 3, perPage: 10) {
     items {
       id
       orderNumber
@@ -148,7 +162,7 @@ Best for "Infinite Scroll" or very large datasets. Instead of an offset, it uses
 
 ```graphql
 query InfiniteScrollProducts($after: String) {
-  productsConnection(first: 10, after: $after) {
+  productList(first: 10, after: $after) {
     edges {
       cursor
       node {
@@ -178,7 +192,7 @@ Because Rail Django only fetches what you ask for, you can significantly reduce 
 
 ```graphql
 query OptimizedProduct {
-  products {
+  productList {
     # ONLY these columns will be fetched from the DB
     id
     name
@@ -195,11 +209,11 @@ query OptimizedProduct {
 
 ## Grouping and Aggregation
 
-Use the `...Groups` query to perform server-side grouping:
+Use the `...Group` query to perform server-side grouping:
 
 ```graphql
 query OrderCountsByStatus {
-  ordersGroups(groupBy: "status") {
+  orderGroup(groupBy: "status") {
     key # The group value (e.g. "SHIPPED")
     label # A display-friendly label
     count # Number of items in this group

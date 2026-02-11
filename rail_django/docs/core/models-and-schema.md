@@ -67,9 +67,9 @@ Nested lists support an embedded `filters` (or `where`) argument.
 
 ```graphql
 query {
-  customerGet(id: "1") {
+  customer(id: "1") {
     # Fetch only paid orders for this customer
-    orders(filters: { status: { exact: "paid" } }) {
+    orders(where: { status: { exact: "paid" } }) {
       orderNumber
       totalAmount
     }
