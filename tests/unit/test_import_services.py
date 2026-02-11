@@ -209,6 +209,33 @@ def test_stage_parsed_rows_accepts_foreign_key_id_alias_column():
     assert str(row.normalized_values["category"]) == str(category.pk)
 
 
+def test_commit_uses_model_default_when_optional_non_null_field_is_blank():
+    descriptor = resolve_template_descriptor("test_app", "Product")
+    batch = _make_batch()
+    stage_parsed_rows(
+        batch=batch,
+        descriptor=descriptor,
+        parsed_rows=[
+            {
+                "id": "",
+                "name": "Default Inventory Product",
+                "price": "20.00",
+                "cost_price": "7.00",
+                "inventory_count": "",
+            }
+        ],
+    )
+
+    validate_dataset(batch=batch, descriptor=descriptor)
+    summary = run_simulation(batch)
+    assert summary["can_commit"] is True
+
+    commit_summary = commit_batch(batch=batch, descriptor=descriptor)
+    assert commit_summary["committed_rows"] == 1
+    created = Product.objects.get(name="Default Inventory Product")
+    assert created.inventory_count == 0
+
+
 @pytest.mark.skipif(Workbook is None, reason="openpyxl is required for XLSX parsing")
 def test_parse_uploaded_file_xlsx_keeps_alignment_with_blank_leading_header():
     import io

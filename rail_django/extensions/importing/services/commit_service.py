@@ -46,6 +46,37 @@ def _is_fk_field(field: Any) -> bool:
     )
 
 
+def _normalize_non_null_value_for_commit(
+    *,
+    field: Any,
+    value: Any,
+    action: str,
+    field_name: str,
+    row_number: int,
+) -> tuple[bool, Any]:
+    """
+    Return `(skip_assignment, normalized_value)` for commit assignment safety.
+
+    - CREATE + None on non-null field with default: skip assignment so DB/model default applies.
+    - UPDATE + None on non-null field: skip assignment to preserve existing value.
+    - Non-null field without default on CREATE and None: raise validation-like import error.
+    """
+    if value is not None:
+        return False, value
+    if getattr(field, "null", False):
+        return False, value
+    if action == ImportRowAction.CREATE and field.has_default():
+        return True, None
+    if action == ImportRowAction.UPDATE:
+        return True, None
+    raise ImportServiceError(
+        ImportIssueCode.INVALID_FIELD_VALUE,
+        f"Field '{field_name}' cannot be empty.",
+        row_number=row_number,
+        field_path=field_name,
+    )
+
+
 @transaction.atomic
 def commit_batch(
     *,
@@ -94,11 +125,23 @@ def commit_batch(
                     if field_name == pk_name:
                         continue
                     field = model_fields.get(field_name)
+                    if field is not None:
+                        skip_assignment, normalized_value = _normalize_non_null_value_for_commit(
+                            field=field,
+                            value=value,
+                            action=row.action,
+                            field_name=field_name,
+                            row_number=row.row_number,
+                        )
+                        if skip_assignment:
+                            continue
+                    else:
+                        normalized_value = value
                     if field is not None and _is_fk_field(field):
-                        setattr(instance, field.attname, value)
+                        setattr(instance, field.attname, normalized_value)
                         update_fields.append(field.attname)
                     else:
-                        setattr(instance, field_name, value)
+                        setattr(instance, field_name, normalized_value)
                         update_fields.append(field_name)
                 if update_fields:
                     instance.save(update_fields=sorted(set(update_fields)))
@@ -109,10 +152,22 @@ def commit_batch(
                     if field_name not in editable or field_name == pk_name:
                         continue
                     field = model_fields.get(field_name)
-                    if field is not None and _is_fk_field(field):
-                        create_payload[field.attname] = value
+                    if field is not None:
+                        skip_assignment, normalized_value = _normalize_non_null_value_for_commit(
+                            field=field,
+                            value=value,
+                            action=row.action,
+                            field_name=field_name,
+                            row_number=row.row_number,
+                        )
+                        if skip_assignment:
+                            continue
                     else:
-                        create_payload[field_name] = value
+                        normalized_value = value
+                    if field is not None and _is_fk_field(field):
+                        create_payload[field.attname] = normalized_value
+                    else:
+                        create_payload[field_name] = normalized_value
                 model.objects.create(**create_payload)
                 create_count += 1
     except Exception as exc:

@@ -40,9 +40,22 @@ def _is_fk_field(field: Any) -> bool:
 
 
 def _coerce_value(value: Any, field) -> Any:
-    if value in ("", None):
-        return None
     internal_type = field.get_internal_type()
+    if value in ("", None):
+        if getattr(field, "null", False):
+            return None
+        if field.has_default():
+            return field.get_default()
+        if internal_type in {
+            "CharField",
+            "TextField",
+            "SlugField",
+            "EmailField",
+            "URLField",
+            "FilePathField",
+        }:
+            return ""
+        return None
     try:
         if internal_type in {"IntegerField", "AutoField", "BigIntegerField", "PositiveIntegerField"}:
             return int(value)
@@ -99,6 +112,7 @@ def _validate_row_values(
 ) -> tuple[dict[str, Any], list[ImportIssue]]:
     required_fields = {column["name"] for column in descriptor["required_columns"]}
     field_map = {field.name: field for field in model._meta.fields}
+    pk_name = model._meta.pk.name
     normalized_values: dict[str, Any] = {}
     issues: list[ImportIssue] = []
 
@@ -134,8 +148,14 @@ def _validate_row_values(
         if field is None:
             normalized_values[normalized_key] = raw_value
             continue
+        if field.name == pk_name and raw_value in ("", None):
+            normalized_values[normalized_key] = None
+            continue
         try:
-            normalized_values[normalized_key] = _coerce_value(raw_value, field)
+            coerced_value = _coerce_value(raw_value, field)
+            if coerced_value is None and not getattr(field, "null", False):
+                raise ValueError(f"Field '{normalized_key}' cannot be empty.")
+            normalized_values[normalized_key] = coerced_value
         except (ValueError, TypeError, InvalidOperation):
             issues.append(
                 _row_error(
