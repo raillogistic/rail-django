@@ -9,7 +9,7 @@ import graphene
 class DynamicFilterTestModel(models.Model):
     name = models.CharField(max_length=100)
     age = models.IntegerField()
-    is_active = models.BooleanField()
+    is_active = models.BooleanField(verbose_name="Est actif")
     created_at = models.DateTimeField()
 
     class Meta:
@@ -115,3 +115,22 @@ class TestDynamicFilteringMetadata(TestCase):
             custom_opt = result['options'][0]
             self.assertEqual(custom_opt['lookup'], "custom_op")
             self.assertEqual(custom_opt['label'], "custom_op") # Fallback to name
+
+    def test_field_label_uses_verbose_name_with_snake_case_filter_name(self):
+        """Filter label should prioritize Django field verbose_name for snake_case names."""
+        model = DynamicFilterTestModel
+
+        input_field = MagicMock()
+        input_type = MagicMock()
+        del input_type.of_type
+        input_type._meta.name = "BooleanFilterInput"
+
+        op_eq = MagicMock()
+        op_eq.type = graphene.Boolean
+        input_type._meta.fields = {"eq": op_eq}
+        input_field.type = input_type
+
+        result = self.extractor._analyze_filter_field(model, "is_active", input_field)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["field_label"], "Est actif")

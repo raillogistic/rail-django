@@ -165,20 +165,39 @@ class FilterExtractorMixin:
             field_label = field_name
             is_nested = False
             related_model_name = None
+            matched_field_prefix = None
 
             candidates = []
             for f in model._meta.get_fields():
                 if not hasattr(f, "name"):
                     continue
-                camel_name = to_camel_case(f.name)
-                if camel_name == field_name:
-                    candidates.append((f, 10))
-                elif field_name.startswith(camel_name + "_"):
-                    candidates.append((f, 5))
+                model_field_name = f.name
+                camel_name = to_camel_case(model_field_name)
+                if field_name == model_field_name:
+                    candidates.append((f, 30, model_field_name))
+                    continue
+                if field_name == camel_name:
+                    candidates.append((f, 25, camel_name))
+                    continue
+                if field_name.startswith(model_field_name + "_"):
+                    candidates.append((f, 20, model_field_name))
+                    continue
+                if field_name.startswith(camel_name + "_"):
+                    candidates.append((f, 15, camel_name))
+                    continue
+
+                normalized_field_name = field_name.replace("_", "").lower()
+                if normalized_field_name == model_field_name.replace("_", "").lower():
+                    candidates.append((f, 10, model_field_name))
+                    continue
+                if normalized_field_name == camel_name.replace("_", "").lower():
+                    candidates.append((f, 10, model_field_name))
 
             candidates.sort(key=lambda x: x[1], reverse=True)
             if candidates:
-                model_field = candidates[0][0]
+                best_candidate = candidates[0]
+                model_field = best_candidate[0]
+                matched_field_prefix = best_candidate[2]
 
             if user and model_field is not None:
                 try:
@@ -195,23 +214,35 @@ class FilterExtractorMixin:
                 is_nested = model_field.is_relation
                 if is_nested and model_field.related_model:
                     related_model_name = f"{model_field.related_model._meta.app_label}.{model_field.related_model.__name__}"
-                camel_field = to_camel_case(model_field.name)
-                if field_name != camel_field:
-                    suffix = field_name.replace(camel_field, "")
-                    if suffix == "_some":
-                        field_label += f" ({_('At least one')})"
-                    elif suffix == "_every":
-                        field_label += f" ({_('All')})"
-                    elif suffix == "_none":
-                        field_label += f" ({_('None')})"
-                    elif suffix == "_count":
-                        field_label += f" ({_('Count')})"
-                    elif suffix == "_agg":
-                        field_label += f" ({_('Aggregation')})"
-                    elif suffix == "_trunc":
-                        field_label += f" ({_('Truncated date')})"
-                    elif suffix == "_extract":
-                        field_label += f" ({_('Date extraction')})"
+                suffix = ""
+                prefix_candidates = [
+                    matched_field_prefix,
+                    model_field.name,
+                    to_camel_case(model_field.name),
+                ]
+                for prefix in prefix_candidates:
+                    if not prefix:
+                        continue
+                    if field_name == prefix:
+                        suffix = ""
+                        break
+                    if field_name.startswith(prefix + "_"):
+                        suffix = field_name[len(prefix):]
+                        break
+                if suffix == "_some":
+                    field_label += f" ({_('At least one')})"
+                elif suffix == "_every":
+                    field_label += f" ({_('All')})"
+                elif suffix == "_none":
+                    field_label += f" ({_('None')})"
+                elif suffix == "_count":
+                    field_label += f" ({_('Count')})"
+                elif suffix == "_agg":
+                    field_label += f" ({_('Aggregation')})"
+                elif suffix == "_trunc":
+                    field_label += f" ({_('Truncated date')})"
+                elif suffix == "_extract":
+                    field_label += f" ({_('Date extraction')})"
             else:
                 labels = {
                     "id": "ID",

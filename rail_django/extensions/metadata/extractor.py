@@ -76,8 +76,15 @@ class ModelSchemaExtractor(
             "verbose_name": str(meta.verbose_name),
             "verbose_name_plural": str(meta.verbose_name_plural),
             "primary_key": to_camel_case(meta.pk.name) if meta.pk else "id",
-            "ordering": [("-" + to_camel_case(o[1:])) if o.startswith("-") else to_camel_case(o) for o in meta.ordering] if meta.ordering else [],
-            "unique_together": [[to_camel_case(f) for f in ut] for ut in meta.unique_together]
+            "ordering": [
+                ("-" + to_camel_case(o[1:])) if o.startswith("-") else to_camel_case(o)
+                for o in meta.ordering
+            ]
+            if meta.ordering
+            else [],
+            "unique_together": [
+                [to_camel_case(f) for f in ut] for ut in meta.unique_together
+            ]
             if meta.unique_together
             else [],
             "fields": self._extract_fields(
@@ -131,6 +138,7 @@ class ModelSchemaExtractor(
     ) -> list[dict]:
         """Extract available PDF templates for the model."""
         from graphene.utils.str_converters import to_camel_case
+
         templates = []
         # Filter templates for this model
         for url_path, definition in template_registry.all().items():
@@ -154,7 +162,9 @@ class ModelSchemaExtractor(
                         "allowed": access.allowed,
                         "denial_reason": access.reason,
                         "allow_client_data": definition.allow_client_data,
-                        "client_data_fields": [to_camel_case(f) for f in definition.client_data_fields],
+                        "client_data_fields": [
+                            to_camel_case(f) for f in definition.client_data_fields
+                        ],
                         "client_data_schema": None,  # complex to serialize fully
                     }
                 )
@@ -174,9 +184,8 @@ class ModelSchemaExtractor(
         enable_authorization = getattr(
             getattr(authz_manager, "settings", None), "enable_authorization", True
         )
-        require_model_permissions = (
-            enable_authorization
-            and getattr(settings, "require_model_permissions", True)
+        require_model_permissions = enable_authorization and getattr(
+            settings, "require_model_permissions", True
         )
 
         def _normalize_operation(op: str) -> str:
@@ -289,7 +298,12 @@ class ModelSchemaExtractor(
                 return True, required_permissions, requires_authentication, None
 
             if not user or not getattr(user, "is_authenticated", False):
-                return False, required_permissions, requires_authentication, "Authentication required"
+                return (
+                    False,
+                    required_permissions,
+                    requires_authentication,
+                    "Authentication required",
+                )
 
             missing = [
                 perm
@@ -307,8 +321,8 @@ class ModelSchemaExtractor(
 
         # CRUD
         if settings.enable_create:
-            allowed, required_permissions, requires_authentication, reason = _evaluate_access(
-                operation="create"
+            allowed, required_permissions, requires_authentication, reason = (
+                _evaluate_access(operation="create")
             )
             results.append(
                 {
@@ -326,8 +340,8 @@ class ModelSchemaExtractor(
                 }
             )
         if settings.enable_update:
-            allowed, required_permissions, requires_authentication, reason = _evaluate_access(
-                operation="update", instance=instance
+            allowed, required_permissions, requires_authentication, reason = (
+                _evaluate_access(operation="update", instance=instance)
             )
             results.append(
                 {
@@ -345,8 +359,8 @@ class ModelSchemaExtractor(
                 }
             )
         if settings.enable_delete:
-            allowed, required_permissions, requires_authentication, reason = _evaluate_access(
-                operation="delete", instance=instance
+            allowed, required_permissions, requires_authentication, reason = (
+                _evaluate_access(operation="delete", instance=instance)
             )
             results.append(
                 {
@@ -368,7 +382,9 @@ class ModelSchemaExtractor(
         introspector = ModelIntrospector.for_model(model)
         from graphene.utils.str_converters import to_camel_case
 
-        def _infer_guard_operation(name: Optional[str], action_kind: Optional[str] = None) -> str:
+        def _infer_guard_operation(
+            name: Optional[str], action_kind: Optional[str] = None
+        ) -> str:
             if action_kind == "confirm":
                 return "update"
             lowered = str(name or "").lower()
@@ -376,7 +392,9 @@ class ModelSchemaExtractor(
                 return "create"
             if lowered.startswith(("delete", "remove", "archive", "purge", "clear")):
                 return "delete"
-            if lowered.startswith(("update", "set", "edit", "patch", "upsert", "enable", "disable")):
+            if lowered.startswith(
+                ("update", "set", "edit", "patch", "upsert", "enable", "disable")
+            ):
                 return "update"
             if "delete" in lowered or "remove" in lowered:
                 return "delete"
@@ -397,11 +415,13 @@ class ModelSchemaExtractor(
             ]
             action_kind = getattr(method, "_action_kind", None)
             guard_operation = _infer_guard_operation(name, action_kind)
-            allowed, required_permissions, requires_authentication, reason = _evaluate_access(
-                operation="custom",
-                guard_operation=guard_operation,
-                instance=instance,
-                extra_permissions=requires_permissions,
+            allowed, required_permissions, requires_authentication, reason = (
+                _evaluate_access(
+                    operation="custom",
+                    guard_operation=guard_operation,
+                    instance=instance,
+                    extra_permissions=requires_permissions,
+                )
             )
 
             results.append(
