@@ -65,8 +65,10 @@ class UpdateModelImportBatchActionEnum(graphene.Enum):
 
 class ImportColumnRuleType(graphene.ObjectType):
     name = graphene.String(required=True)
+    label = graphene.String()
     required = graphene.Boolean(required=True)
     data_type = graphene.String(required=True)
+    default_value = graphene.JSONString()
     format_hint = graphene.String()
     allowed_values = graphene.List(graphene.NonNull(graphene.String))
 

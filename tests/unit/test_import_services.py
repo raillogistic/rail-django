@@ -36,6 +36,17 @@ def _make_batch() -> ImportBatch:
     )
 
 
+def test_template_descriptor_excludes_json_fields():
+    descriptor = resolve_template_descriptor("rail_django", "ImportRow")
+    column_names = {
+        column["name"]
+        for column in descriptor["required_columns"] + descriptor["optional_columns"]
+    }
+    assert "source_values" not in column_names
+    assert "edited_values" not in column_names
+    assert "normalized_values" not in column_names
+
+
 def test_parse_uploaded_file_handles_utf8_sig_and_latin1():
     utf8_content = "\ufeffid,name,price,cost_price,inventory_count\n,Équipement,10.5,2.0,1\n"
     parsed_utf8 = parse_uploaded_file(
@@ -201,6 +212,29 @@ def test_stage_parsed_rows_accepts_foreign_key_id_alias_column():
                 "cost_price": "3.00",
                 "inventory_count": "2",
                 "category_id": str(category.pk),
+            }
+        ],
+    )
+
+    row = batch.rows.get(row_number=2)
+    assert str(row.normalized_values["category"]) == str(category.pk)
+
+
+def test_stage_parsed_rows_accepts_foreign_key_choice_value_with_label_suffix():
+    descriptor = resolve_template_descriptor("test_app", "Product")
+    category = Category.objects.create(name="Peripherals", description="Input devices")
+    batch = _make_batch()
+    stage_parsed_rows(
+        batch=batch,
+        descriptor=descriptor,
+        parsed_rows=[
+            {
+                "id": "",
+                "name": "Label Choice Product",
+                "price": "13.00",
+                "cost_price": "4.00",
+                "inventory_count": "2",
+                "category": f"{category.pk} | {category.description}",
             }
         ],
     )

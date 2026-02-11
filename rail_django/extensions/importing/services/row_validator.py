@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -20,6 +21,8 @@ from ..models import (
     ImportRowStatus,
 )
 from ..types import ImportTemplateDescriptor
+
+FK_WITH_LABEL_PATTERN = re.compile(r"^\s*(?P<identifier>[^|]+?)\s*\|\s*.+$")
 
 
 def _to_bool(value: Any) -> bool:
@@ -69,7 +72,12 @@ def _coerce_value(value: Any, field) -> Any:
             target_field = getattr(field, "target_field", None)
             if target_field is None:
                 return value
-            return _coerce_value(value, target_field)
+            normalized_fk_value = value
+            if isinstance(value, str):
+                match = FK_WITH_LABEL_PATTERN.match(value)
+                if match:
+                    normalized_fk_value = match.group("identifier").strip()
+            return _coerce_value(normalized_fk_value, target_field)
         if internal_type == "DateField" and isinstance(value, str):
             return date.fromisoformat(value).isoformat()
         if internal_type == "DateTimeField" and isinstance(value, str):

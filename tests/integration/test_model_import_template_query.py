@@ -40,6 +40,16 @@ query ModelImportTemplate($appLabel: String!, $modelName: String!) {
     maxRows
     maxFileSizeBytes
     downloadUrl
+    requiredColumns {
+      name
+      label
+      defaultValue
+    }
+    optionalColumns {
+      name
+      label
+      defaultValue
+    }
   }
 }
 """
@@ -60,6 +70,11 @@ def test_model_import_template_query_returns_payload(auth_client):
     assert payload["maxRows"] > 0
     assert payload["maxFileSizeBytes"] > 0
     assert payload["downloadUrl"]
+    assert any(column["name"] == "name" and column["label"] for column in payload["requiredColumns"])
+    inventory_column = next(
+        column for column in payload["optionalColumns"] if column["name"] == "inventory_count"
+    )
+    assert inventory_column["defaultValue"] is not None
 
 
 def test_model_import_template_query_requires_authentication(anonymous_client):
@@ -68,4 +83,3 @@ def test_model_import_template_query_requires_authentication(anonymous_client):
         variables={"appLabel": "test_app", "modelName": "Product"},
     )
     assert result.get("errors") is not None
-

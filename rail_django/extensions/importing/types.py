@@ -23,8 +23,10 @@ class ImportLimits:
 
 class ImportColumnRule(TypedDict):
     name: str
+    label: NotRequired[str | None]
     required: bool
     data_type: str
+    default_value: NotRequired[Any | None]
     format_hint: NotRequired[str | None]
     allowed_values: NotRequired[list[str] | None]
 
