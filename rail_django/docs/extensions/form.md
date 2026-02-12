@@ -14,6 +14,102 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+## Generated ModelForm Contract
+
+The generated ModelForm contract queries are enabled for all models by default.
+
+Queries:
+
+- `modelFormContract`
+- `modelFormContractPages`
+- `modelFormInitialData`
+
+### Exclude models via settings
+
+```python
+RAIL_DJANGO_FORM = {
+    "generated_form_excluded_models": [
+        "store.Product",
+        "store.Order",
+    ],
+}
+```
+
+### Override per model via metadata
+
+```python
+class Product(models.Model):
+    class GraphQLMeta(RailGraphQLMeta):
+        custom_metadata = {
+            "generated_form": {
+                "enabled": False,  # explicit opt-out for this model
+            }
+        }
+```
+
+`custom_metadata.generated_form.enabled` is evaluated first and overrides the
+settings exclusion list when present.
+
+### Generated contract query example
+
+```graphql
+query ProductContract {
+  modelFormContract(appLabel: "store", modelName: "Product", mode: CREATE) {
+    id
+    appLabel
+    modelName
+    mode
+    version
+    configVersion
+    fields {
+      path
+      label
+      kind
+      required
+      readOnly
+    }
+    sections {
+      id
+      fieldPaths
+      visible
+    }
+    mutationBindings {
+      createOperation
+      updateOperation
+      bulkCreateOperation
+      bulkUpdateOperation
+    }
+    errorPolicy {
+      canonicalFormErrorKey
+      fieldPathNotation
+      bulkRowPrefixPattern
+    }
+  }
+}
+```
+
+### Initial data query with runtime overrides
+
+```graphql
+query ProductInitialData($id: ID!, $runtimeOverrides: [ModelFormRuntimeOverrideInput!]) {
+  modelFormInitialData(
+    appLabel: "store"
+    modelName: "Product"
+    objectId: $id
+    includeNested: true
+    runtimeOverrides: $runtimeOverrides
+  ) {
+    objectId
+    values
+    readonlyValues
+    loadedAt
+  }
+}
+```
+
+If a model is excluded or disabled, the generated queries return:
+`Generated form contract is not enabled for '<app>.<Model>'.`
+
 ## Core Queries
 
 ### formConfig

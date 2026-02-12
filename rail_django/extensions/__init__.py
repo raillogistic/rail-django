@@ -62,9 +62,11 @@ from .metadata import (
 # Form API extension
 from .form import (
     FormConfigExtractor,
+    ModelFormContractExtractor,
     FormConfigType,
     FormDataType,
     FormQuery,
+    ModelFormContractType,
     FieldConfigType as FormFieldConfigType,
 )
 
@@ -168,8 +170,10 @@ __all__ = [
     # Form API
     "FormQuery",
     "FormConfigExtractor",
+    "ModelFormContractExtractor",
     "FormConfigType",
     "FormDataType",
+    "ModelFormContractType",
     "FormFieldConfigType",
     # PDF templating
     "PdfTemplateView",

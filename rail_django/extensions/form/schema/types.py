@@ -421,3 +421,218 @@ class RelationInput(graphene.InputObjectType):
     delete = graphene.List(graphene.ID)
     set = graphene.List(graphene.ID)
     clear = graphene.Boolean()
+
+
+class ModelFormModeEnum(graphene.Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    VIEW = "VIEW"
+
+    class Meta:
+        name = "ModelFormMode"
+
+
+class ModelFormFieldKindEnum(graphene.Enum):
+    TEXT = "TEXT"
+    TEXTAREA = "TEXTAREA"
+    NUMBER = "NUMBER"
+    DECIMAL = "DECIMAL"
+    BOOLEAN = "BOOLEAN"
+    DATE = "DATE"
+    TIME = "TIME"
+    DATETIME = "DATETIME"
+    CHOICE = "CHOICE"
+    MULTI_CHOICE = "MULTI_CHOICE"
+    JSON = "JSON"
+    FILE = "FILE"
+    RELATION = "RELATION"
+    CUSTOM = "CUSTOM"
+
+    class Meta:
+        name = "ModelFormFieldKind"
+
+
+class ModelFormRelationTypeEnum(graphene.Enum):
+    FOREIGN_KEY = "FOREIGN_KEY"
+    ONE_TO_ONE = "ONE_TO_ONE"
+    MANY_TO_MANY = "MANY_TO_MANY"
+    REVERSE_FK = "REVERSE_FK"
+    REVERSE_M2M = "REVERSE_M2M"
+
+    class Meta:
+        name = "ModelFormRelationType"
+
+
+class ModelFormNestedActionEnum(graphene.Enum):
+    CONNECT = "CONNECT"
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DISCONNECT = "DISCONNECT"
+    DELETE = "DELETE"
+    SET = "SET"
+    CLEAR = "CLEAR"
+
+    class Meta:
+        name = "ModelFormNestedAction"
+
+
+class ModelFormErrorSourceEnum(graphene.Enum):
+    OPERATION = "OPERATION"
+    EXECUTION = "EXECUTION"
+    TRANSPORT = "TRANSPORT"
+
+    class Meta:
+        name = "ModelFormErrorSource"
+
+
+class ModelFormBulkCommitPolicyEnum(graphene.Enum):
+    ATOMIC = "ATOMIC"
+
+    class Meta:
+        name = "ModelFormBulkCommitPolicy"
+
+
+class ModelFormUpdateTargetPolicyEnum(graphene.Enum):
+    PRIMARY_KEY_ONLY = "PRIMARY_KEY_ONLY"
+
+    class Meta:
+        name = "ModelFormUpdateTargetPolicy"
+
+
+class ModelFormConflictPolicyEnum(graphene.Enum):
+    REJECT_STALE = "REJECT_STALE"
+
+    class Meta:
+        name = "ModelFormConflictPolicy"
+
+
+class ModelRefContractInput(graphene.InputObjectType):
+    app_label = graphene.String(required=True, name="appLabel")
+    model_name = graphene.String(required=True, name="modelName")
+
+    class Meta:
+        name = "ModelRefInput"
+
+
+class ModelFormRuntimeOverrideInput(graphene.InputObjectType):
+    path = graphene.String(required=True)
+    value = graphene.JSONString()
+    action = graphene.String(default_value="REPLACE")
+
+    class Meta:
+        name = "ModelFormRuntimeOverrideInput"
+
+
+class ModelFormValidatorType(graphene.ObjectType):
+    type = graphene.String(required=True)
+    message = graphene.String()
+    params = graphene.JSONString()
+
+
+class ModelFormFieldType(graphene.ObjectType):
+    path = graphene.String(required=True)
+    field_name = graphene.String(required=True)
+    label = graphene.String(required=True)
+    kind = ModelFormFieldKindEnum(required=True)
+    graphql_type = graphene.String(required=True)
+    python_type = graphene.String(required=True)
+    required = graphene.Boolean(required=True)
+    nullable = graphene.Boolean(required=True)
+    read_only = graphene.Boolean(required=True)
+    hidden = graphene.Boolean(required=True)
+    default_value = graphene.JSONString()
+    constraints = graphene.JSONString()
+    validators = graphene.List(ModelFormValidatorType, required=True)
+    ui = graphene.JSONString()
+    metadata = graphene.JSONString()
+
+
+class ModelFormSectionType(graphene.ObjectType):
+    id = graphene.String(required=True)
+    title = graphene.String()
+    description = graphene.String()
+    field_paths = graphene.List(graphene.String, required=True)
+    order = graphene.Int()
+    layout = graphene.JSONString()
+    visible = graphene.Boolean(required=True)
+
+
+class ModelFormRelationActionPolicyType(graphene.ObjectType):
+    path = graphene.String(required=True)
+    allowed_actions = graphene.List(ModelFormNestedActionEnum, required=True)
+    blocked_actions = graphene.List(ModelFormNestedActionEnum, required=True)
+    nested_enabled = graphene.Boolean(required=True)
+
+
+class ModelFormRelationType(graphene.ObjectType):
+    path = graphene.String(required=True)
+    label = graphene.String(required=True)
+    relation_type = ModelFormRelationTypeEnum(required=True)
+    to_many = graphene.Boolean(required=True)
+    related_app_label = graphene.String(required=True)
+    related_model_name = graphene.String(required=True)
+    policy = graphene.Field(ModelFormRelationActionPolicyType, required=True)
+    nested_form = graphene.JSONString()
+
+
+class ModelFormMutationBindingsType(graphene.ObjectType):
+    create_operation = graphene.String(required=True)
+    update_operation = graphene.String(required=True)
+    bulk_create_operation = graphene.String(required=True)
+    bulk_update_operation = graphene.String(required=True)
+    update_target_policy = ModelFormUpdateTargetPolicyEnum(required=True)
+    bulk_commit_policy = ModelFormBulkCommitPolicyEnum(required=True)
+    conflict_policy = ModelFormConflictPolicyEnum(required=True)
+
+
+class ModelFormErrorPolicyType(graphene.ObjectType):
+    canonical_form_error_key = graphene.String(required=True)
+    field_path_notation = graphene.String(required=True)
+    bulk_row_prefix_pattern = graphene.String(required=True)
+
+
+class ModelFormContractType(graphene.ObjectType):
+    id = graphene.ID(required=True)
+    app_label = graphene.String(required=True)
+    model_name = graphene.String(required=True)
+    mode = ModelFormModeEnum(required=True)
+    version = graphene.String(required=True)
+    config_version = graphene.String(required=True)
+    generated_at = graphene.DateTime(required=True)
+    fields = graphene.List(ModelFormFieldType, required=True)
+    sections = graphene.List(ModelFormSectionType, required=True)
+    relations = graphene.List(ModelFormRelationType, required=True)
+    mutation_bindings = graphene.Field(ModelFormMutationBindingsType, required=True)
+    error_policy = graphene.Field(ModelFormErrorPolicyType, required=True)
+
+
+class ModelFormContractPageType(graphene.ObjectType):
+    page = graphene.Int(required=True)
+    per_page = graphene.Int(required=True)
+    total = graphene.Int(required=True)
+    results = graphene.List(ModelFormContractType, required=True)
+
+
+class ModelFormInitialDataType(graphene.ObjectType):
+    app_label = graphene.String(required=True)
+    model_name = graphene.String(required=True)
+    object_id = graphene.ID(required=True)
+    values = graphene.JSONString(required=True)
+    readonly_values = graphene.JSONString()
+    loaded_at = graphene.DateTime(required=True)
+
+
+class ModelFormErrorType(graphene.ObjectType):
+    field = graphene.String(required=True)
+    message = graphene.String(required=True)
+    code = graphene.String()
+    source = ModelFormErrorSourceEnum(required=True)
+    row_index = graphene.Int()
+    meta = graphene.JSONString()
+
+
+class ModelFormMutationOutcomeType(graphene.ObjectType):
+    ok = graphene.Boolean(required=True)
+    errors = graphene.List(ModelFormErrorType, required=True)
+    conflict = graphene.Boolean(required=True)
+    form_error_key = graphene.String(required=True)

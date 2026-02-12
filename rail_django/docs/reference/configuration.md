@@ -178,6 +178,43 @@ the mapping with `mutation_settings.model_permission_codenames`, or disable the
 default check with `mutation_settings.require_model_permissions`. GraphQLMeta
 access guards for the operation override the default model permission check.
 
+## Form extension settings
+
+Generated ModelForm contract queries (`modelFormContract`,
+`modelFormContractPages`, `modelFormInitialData`) are enabled by default for all
+models.
+
+Use `RAIL_DJANGO_FORM` to configure exclusions and metadata key resolution:
+
+```python
+RAIL_DJANGO_FORM = {
+    "generated_form_excluded_models": ["store.Product", "store.Order"],
+    "generated_form_metadata_key": "generated_form",
+}
+```
+
+Key options:
+
+- `generated_form_excluded_models`: list of model identifiers (`app_label.ModelName`)
+  that should not expose generated form contract queries by default.
+- `generated_form_metadata_key`: metadata key used on
+  `GraphQLMeta.custom_metadata` (default: `generated_form`).
+
+Per-model metadata override:
+
+```python
+class Product(models.Model):
+    class GraphQLMeta(RailGraphQLMeta):
+        custom_metadata = {
+            "generated_form": {
+                "enabled": False,
+            }
+        }
+```
+
+If `custom_metadata.generated_form.enabled` is set, it takes precedence over
+`generated_form_excluded_models`.
+
 ## Multi-tenancy settings
 
 Multi-tenancy is opt-in and scopes GraphQL queries, mutations, and nested

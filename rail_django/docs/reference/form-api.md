@@ -4,6 +4,100 @@ This reference covers the Form API GraphQL schema exposed by the `form` extensio
 
 ## Queries
 
+### `modelFormContract`
+
+Fetch generated contract data for a single model. Enabled by default for all
+models unless excluded/disabled.
+
+```graphql
+query ModelFormContract($appLabel: String!, $modelName: String!) {
+  modelFormContract(appLabel: $appLabel, modelName: $modelName, mode: CREATE) {
+    id
+    appLabel
+    modelName
+    mode
+    version
+    configVersion
+    fields {
+      path
+      label
+      kind
+      required
+      readOnly
+      constraints
+      validators {
+        type
+        message
+        params
+      }
+    }
+    sections {
+      id
+      title
+      fieldPaths
+      visible
+    }
+    mutationBindings {
+      createOperation
+      updateOperation
+      bulkCreateOperation
+      bulkUpdateOperation
+      updateTargetPolicy
+      bulkCommitPolicy
+      conflictPolicy
+    }
+    errorPolicy {
+      canonicalFormErrorKey
+      fieldPathNotation
+      bulkRowPrefixPattern
+    }
+  }
+}
+```
+
+### `modelFormContractPages`
+
+Fetch paginated generated contracts.
+
+```graphql
+query ModelFormContractPages($page: Int!, $perPage: Int!, $models: [ModelRefInput!]) {
+  modelFormContractPages(page: $page, perPage: $perPage, models: $models, mode: CREATE) {
+    page
+    perPage
+    total
+    results {
+      id
+      appLabel
+      modelName
+      mode
+      version
+    }
+  }
+}
+```
+
+### `modelFormInitialData`
+
+Fetch initial values for generated forms.
+
+```graphql
+query ModelFormInitialData($appLabel: String!, $modelName: String!, $id: ID!) {
+  modelFormInitialData(
+    appLabel: $appLabel
+    modelName: $modelName
+    objectId: $id
+    includeNested: true
+  ) {
+    appLabel
+    modelName
+    objectId
+    values
+    readonlyValues
+    loadedAt
+  }
+}
+```
+
 ### `formConfig`
 
 Fetch configuration only (ideal for CREATE mode).
@@ -82,6 +176,33 @@ query FormTypes($models: [ModelRef!]!) {
   }
 }
 ```
+
+## Generated Contract Enable/Disable Rules
+
+Generated contract queries are enabled by default for all models.
+
+Disable via settings:
+
+```python
+RAIL_DJANGO_FORM = {
+    "generated_form_excluded_models": ["store.Product"],
+}
+```
+
+Disable/enable per model via metadata:
+
+```python
+class Product(models.Model):
+    class GraphQLMeta(RailGraphQLMeta):
+        custom_metadata = {
+            "generated_form": {
+                "enabled": False,
+            }
+        }
+```
+
+When `custom_metadata.generated_form.enabled` is present, it overrides
+`generated_form_excluded_models`.
 
 ## Inputs
 

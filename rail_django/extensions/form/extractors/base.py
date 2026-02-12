@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from django.apps import apps
+from django.db import models
 from django.utils import timezone
 from graphql import GraphQLError
 
@@ -169,6 +170,8 @@ class FormConfigExtractor(
         *,
         object_id: str,
         user: Any = None,
+        include_nested: bool = False,
+        max_nested_depth: int = 2,
     ) -> dict[str, Any]:
         try:
             model = apps.get_model(app_name, model_name)
@@ -193,10 +196,31 @@ class FormConfigExtractor(
                         if field.many_to_many or field.one_to_many:
                             related_manager = getattr(instance, field.name, None)
                             if related_manager is not None:
-                                data[field.name] = [obj.pk for obj in related_manager.all()]
+                                if include_nested:
+                                    data[field.name] = [
+                                        self._serialize_related_instance(
+                                            obj,
+                                            depth=1,
+                                            max_depth=max_nested_depth,
+                                        )
+                                        for obj in related_manager.all()
+                                    ]
+                                else:
+                                    data[field.name] = [
+                                        obj.pk for obj in related_manager.all()
+                                    ]
                         else:
                             related_obj = getattr(instance, field.name, None)
-                            data[field.name] = related_obj.pk if related_obj else None
+                            if include_nested and related_obj is not None:
+                                data[field.name] = self._serialize_related_instance(
+                                    related_obj,
+                                    depth=1,
+                                    max_depth=max_nested_depth,
+                                )
+                            else:
+                                data[field.name] = (
+                                    related_obj.pk if related_obj else None
+                                )
                     except Exception:
                         data[field.name] = None
                 continue
@@ -211,3 +235,28 @@ class FormConfigExtractor(
 
         # Convert keys to camelCase for frontend consistency
         return {to_camel_case(k): v for k, v in data.items()}
+
+    def _serialize_related_instance(
+        self,
+        instance: models.Model,
+        *,
+        depth: int,
+        max_depth: int,
+    ) -> dict[str, Any]:
+        from graphene.utils.str_converters import to_camel_case
+
+        payload: dict[str, Any] = {"id": getattr(instance, "pk", None)}
+        if depth > max_depth:
+            return payload
+
+        for field in instance._meta.get_fields():
+            if field.is_relation:
+                continue
+            if not hasattr(field, "name"):
+                continue
+            try:
+                value = getattr(instance, field.name)
+                payload[to_camel_case(field.name)] = self._to_json_value(value)
+            except Exception:
+                payload[to_camel_case(field.name)] = None
+        return payload
