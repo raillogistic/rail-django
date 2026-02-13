@@ -204,6 +204,12 @@ class Product(models.Model):
 When `custom_metadata.generated_form.enabled` is present, it overrides
 `generated_form_excluded_models`.
 
+If you exclude a model globally but set `enabled: True` in
+`custom_metadata.generated_form`, the model is included again.
+
+When a model is disabled/excluded, generated queries return:
+`Generated form contract is not enabled for '<app>.<Model>'.`
+
 ## Inputs
 
 ### `RelationInput`

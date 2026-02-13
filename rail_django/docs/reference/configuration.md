@@ -215,6 +215,9 @@ class Product(models.Model):
 If `custom_metadata.generated_form.enabled` is set, it takes precedence over
 `generated_form_excluded_models`.
 
+`RAIL_DJANGO_FORM` is resolved through cached settings; restart Django workers
+after changes (or clear cache in tests) to apply updates immediately.
+
 ## Multi-tenancy settings
 
 Multi-tenancy is opt-in and scopes GraphQL queries, mutations, and nested

@@ -50,6 +50,9 @@ class Product(models.Model):
 `custom_metadata.generated_form.enabled` is evaluated first and overrides the
 settings exclusion list when present.
 
+If you exclude a model globally but need one exception, set
+`custom_metadata.generated_form.enabled = True` on that model.
+
 ### Generated contract query example
 
 ```graphql
@@ -109,6 +112,9 @@ query ProductInitialData($id: ID!, $runtimeOverrides: [ModelFormRuntimeOverrideI
 
 If a model is excluded or disabled, the generated queries return:
 `Generated form contract is not enabled for '<app>.<Model>'.`
+
+After changing `RAIL_DJANGO_FORM`, restart your Django processes so cached form
+settings are reloaded.
 
 ## Core Queries
 
