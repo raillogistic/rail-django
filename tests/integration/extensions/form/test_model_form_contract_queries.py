@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
-from test_app.models import Category, Product
+from test_app.models import Category, OrderItem, Product
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
@@ -126,3 +126,47 @@ def test_model_form_initial_data_supports_nested_and_runtime_overrides(gql_clien
     assert values["inventoryCount"] == 99
     assert isinstance(values["category"], dict)
     assert str(values["category"]["id"]) == str(category.pk)
+
+
+def test_model_form_initial_data_supports_nested_fields_filter(gql_client):
+    category = Category.objects.create(name="Hardware", description="Devices")
+    product = Product.objects.create(
+        name="Starter",
+        price=10,
+        inventory_count=2,
+        category=category,
+    )
+    order_item = OrderItem.objects.create(product=product, quantity=3, unit_price=10)
+
+    query = """
+    query($id: ID!, $nestedFields: [String!]) {
+      payload: modelFormInitialData(
+        appLabel: "test_app"
+        modelName: "Product"
+        objectId: $id
+        includeNested: true
+        nestedFields: $nestedFields
+      ) {
+        appLabel
+        modelName
+        objectId
+        values
+      }
+    }
+    """
+    variables = {
+        "id": str(product.pk),
+        "nestedFields": ["category"],
+    }
+    result = gql_client.execute(query, variables=variables)
+    assert result.get("errors") is None
+
+    payload = result["data"]["payload"]
+    values = _decode_json(payload["values"])
+
+    assert isinstance(values["category"], dict)
+    assert str(values["category"]["id"]) == str(category.pk)
+
+    assert isinstance(values["orderItems"], list)
+    assert len(values["orderItems"]) == 1
+    assert values["orderItems"][0] == order_item.pk

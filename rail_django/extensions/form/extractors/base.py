@@ -171,6 +171,7 @@ class FormConfigExtractor(
         object_id: str,
         user: Any = None,
         include_nested: bool = False,
+        nested_fields: Optional[list[str]] = None,
         max_nested_depth: int = 2,
     ) -> dict[str, Any]:
         try:
@@ -185,6 +186,21 @@ class FormConfigExtractor(
                 f"Instance '{app_name}.{model_name}' with id {object_id} not found."
             )
 
+        from graphene.utils.str_converters import to_camel_case
+
+        nested_field_set: set[str] = set()
+        for item in nested_fields or []:
+            normalized = str(item or "").strip()
+            if normalized:
+                nested_field_set.add(normalized)
+
+        def should_include_nested_relation(field_name: str) -> bool:
+            if nested_field_set:
+                return field_name in nested_field_set or (
+                    to_camel_case(field_name) in nested_field_set
+                )
+            return include_nested
+
         data: dict[str, Any] = {}
         for field in model._meta.get_fields():
             if field.is_relation:
@@ -192,11 +208,14 @@ class FormConfigExtractor(
                 if not hasattr(field, "name"):
                     continue
                 if field.one_to_many or field.many_to_many or field.one_to_one or field.many_to_one:
+                    include_this_relation_nested = should_include_nested_relation(
+                        field.name
+                    )
                     try:
                         if field.many_to_many or field.one_to_many:
                             related_manager = getattr(instance, field.name, None)
                             if related_manager is not None:
-                                if include_nested:
+                                if include_this_relation_nested:
                                     data[field.name] = [
                                         self._serialize_related_instance(
                                             obj,
@@ -211,7 +230,7 @@ class FormConfigExtractor(
                                     ]
                         else:
                             related_obj = getattr(instance, field.name, None)
-                            if include_nested and related_obj is not None:
+                            if include_this_relation_nested and related_obj is not None:
                                 data[field.name] = self._serialize_related_instance(
                                     related_obj,
                                     depth=1,
@@ -230,8 +249,6 @@ class FormConfigExtractor(
                 data[field.name] = self._to_json_value(value)
             except Exception:
                 data[field.name] = None
-
-        from graphene.utils.str_converters import to_camel_case
 
         # Convert keys to camelCase for frontend consistency
         return {to_camel_case(k): v for k, v in data.items()}

@@ -95,6 +95,7 @@ class FormQuery(graphene.ObjectType):
         model_name=graphene.String(required=True, name="modelName"),
         object_id=graphene.ID(required=True, name="objectId"),
         include_nested=graphene.Boolean(default_value=False, name="includeNested"),
+        nested_fields=graphene.List(graphene.String, name="nestedFields"),
         runtime_overrides=graphene.List(
             ModelFormRuntimeOverrideInput,
             name="runtimeOverrides",
@@ -284,6 +285,7 @@ class FormQuery(graphene.ObjectType):
         model_name: str,
         object_id: str,
         include_nested: bool = False,
+        nested_fields: Optional[list[str]] = None,
         runtime_overrides: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         extractor = ModelFormContractExtractor(
@@ -304,5 +306,6 @@ class FormQuery(graphene.ObjectType):
             object_id=object_id,
             user=user,
             include_nested=include_nested,
+            nested_fields=nested_fields,
             runtime_overrides=runtime_overrides or [],
         )
