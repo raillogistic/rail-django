@@ -55,7 +55,9 @@ class ModelFormContractExtractor(FormConfigExtractor):
             )
 
         config = self.extract(app_name, model_name, user=user, mode=mode)
-        fields = self._build_fields(config)
+        primary_key_name = getattr(getattr(model, "_meta", None), "pk", None)
+        primary_key_name = getattr(primary_key_name, "name", None)
+        fields = self._build_fields(config, primary_key_name=primary_key_name)
         sections = self._build_sections(config, fields)
         relations = self._build_relations(config, include_nested=include_nested)
 
@@ -154,25 +156,35 @@ class ModelFormContractExtractor(FormConfigExtractor):
         except LookupError as exc:
             raise GraphQLError(f"Model '{app_name}.{model_name}' not found.") from exc
 
-    def _build_fields(self, config: dict[str, Any]) -> list[dict[str, Any]]:
+    def _build_fields(
+        self,
+        config: dict[str, Any],
+        *,
+        primary_key_name: str | None = None,
+    ) -> list[dict[str, Any]]:
         fields: list[dict[str, Any]] = []
         for field in config.get("fields", []) or []:
             path = normalize_path(field.get("field_name") or field.get("name"))
             if not path:
                 continue
+            field_name = field.get("field_name") or path
+            is_primary_key = (
+                bool(primary_key_name)
+                and str(field_name).lower() == str(primary_key_name).lower()
+            )
             kind = FIELD_KIND_MAP.get(str(field.get("input_type") or "").upper(), "CUSTOM")
             fields.append(
                 {
                     "path": path,
-                    "field_name": field.get("field_name") or path,
+                    "field_name": field_name,
                     "label": field.get("label") or path,
                     "kind": kind,
                     "graphql_type": field.get("graphql_type") or "String",
                     "python_type": field.get("python_type") or "str",
                     "required": bool(field.get("required", False)),
                     "nullable": bool(field.get("nullable", True)),
-                    "read_only": bool(field.get("read_only", False)),
-                    "hidden": bool(field.get("hidden", False)),
+                    "read_only": bool(field.get("read_only", False) or is_primary_key),
+                    "hidden": bool(field.get("hidden", False) or is_primary_key),
                     "default_value": field.get("default_value"),
                     "constraints": field.get("constraints") or {},
                     "validators": field.get("validators") or [],
