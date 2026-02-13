@@ -399,23 +399,26 @@ class MutationGenerator:
         Generates all mutations for a model, including CRUD operations and method mutations.
         """
         from graphene.utils.str_converters import to_camel_case, to_snake_case
+
         mutations = {}
         model_class_name = model.__name__
-        # Generate CRUD mutations if enabled
-        if self.settings.enable_create:
+        is_managed = getattr(model._meta, "managed", True)
+
+        # Generate CRUD mutations if enabled and model is managed
+        if is_managed and self.settings.enable_create:
             mutation_class = self.generate_create_mutation(model)
             mutations[f"create{model_class_name}"] = mutation_class.Field()
 
-        if self.settings.enable_update:
+        if is_managed and self.settings.enable_update:
             mutation_class = self.generate_update_mutation(model)
             mutations[f"update{model_class_name}"] = mutation_class.Field()
 
-        if self.settings.enable_delete:
+        if is_managed and self.settings.enable_delete:
             mutation_class = self.generate_delete_mutation(model)
             mutations[f"delete{model_class_name}"] = mutation_class.Field()
 
-        # Generate bulk mutations if enabled
-        if self.settings.enable_bulk_operations:
+        # Generate bulk mutations if enabled and model is managed
+        if is_managed and self.settings.enable_bulk_operations:
             should_generate = False
 
             # Check exclusion first

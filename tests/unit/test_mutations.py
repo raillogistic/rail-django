@@ -254,3 +254,26 @@ class TestAdvancedMutationFeatures(TestCase):
         self.type_generator = TypeGenerator()
         self.input_generator = self.type_generator
 
+
+class UnmanagedTestModel(models.Model):
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "test_app"
+        managed = False
+
+
+class TestUnmanagedMutations(TestCase):
+    def setUp(self):
+        self.type_generator = TypeGenerator()
+        self.mutation_generator = MutationGenerator(self.type_generator)
+
+    def test_no_mutations_for_unmanaged_model(self):
+        mutations = self.mutation_generator.generate_all_mutations(UnmanagedTestModel)
+        self.assertNotIn("createUnmanagedTestModel", mutations)
+        self.assertNotIn("updateUnmanagedTestModel", mutations)
+        self.assertNotIn("deleteUnmanagedTestModel", mutations)
+        self.assertNotIn("bulkCreateUnmanagedTestModel", mutations)
+        self.assertNotIn("bulkUpdateUnmanagedTestModel", mutations)
+        self.assertNotIn("bulkDeleteUnmanagedTestModel", mutations)
+
