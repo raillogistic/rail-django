@@ -21,6 +21,62 @@ logger = logging.getLogger(__name__)
 class FieldExtractorMixin:
     """Mixin for extracting fields and relationships."""
 
+    @staticmethod
+    def _split_relation_verbose_name(raw_value: Any) -> tuple[Optional[str], Optional[str]]:
+        text = str(raw_value or "").strip()
+        if "/" not in text:
+            return None, None
+
+        left, right = text.split("/", 1)
+        left_value = left.strip() or None
+        right_value = right.strip() or None
+        return left_value, right_value
+
+    @staticmethod
+    def _normalize_relation_name(raw_name: Optional[str]) -> Optional[str]:
+        if not raw_name:
+            return None
+        cleaned = str(raw_name).replace("_", "").strip()
+        return cleaned or None
+
+    def _get_relationship_label(
+        self,
+        *,
+        field: Any,
+        related_model: type[models.Model],
+        is_reverse: bool,
+    ) -> str:
+        field_name = field.name if hasattr(field, "name") else field.get_accessor_name()
+        field_verbose_name = str(
+            getattr(
+                field,
+                "verbose_name",
+                field_name,
+            )
+        )
+
+        if not is_reverse:
+            forward_label, _ = self._split_relation_verbose_name(field_verbose_name)
+            return forward_label or field_verbose_name
+
+        # Reverse relations should use the source field verbose_name when available.
+        source_field = getattr(field, "field", None)
+        source_verbose_name = getattr(source_field, "verbose_name", None)
+        _, reverse_label = self._split_relation_verbose_name(source_verbose_name)
+        if reverse_label:
+            return reverse_label
+
+        if bool(getattr(field, "many_to_many", False) or getattr(field, "one_to_many", False)):
+            return str(related_model._meta.verbose_name_plural)
+        if bool(getattr(field, "one_to_one", False)):
+            return str(related_model._meta.verbose_name)
+
+        fallback_name = None
+        if hasattr(field, "get_accessor_name"):
+            fallback_name = field.get_accessor_name()
+        normalized_name = self._normalize_relation_name(fallback_name)
+        return normalized_name or field_verbose_name
+
     def _to_json_value(self, value: Any) -> Any:
         """Coerce values into JSON-serializable structures."""
         if value is None:
@@ -331,18 +387,18 @@ class FieldExtractorMixin:
                 model, field_key, graphql_meta=graphql_meta
             )
 
+            relationship_label = self._get_relationship_label(
+                field=field,
+                related_model=related_model,
+                is_reverse=is_reverse,
+            )
+
             return {
                 "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
                 "field_name": field.name
                 if hasattr(field, "name")
                 else field.get_accessor_name(),
-                "verbose_name": str(
-                    getattr(
-                        field,
-                        "verbose_name",
-                        field.name if hasattr(field, "name") else "",
-                    )
-                ),
+                "verbose_name": relationship_label,
                 "help_text": str(getattr(field, "help_text", "") or ""),
                 "related_app": related_model._meta.app_label,
                 "related_model": related_model.__name__,
