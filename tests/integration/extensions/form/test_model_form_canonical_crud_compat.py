@@ -53,6 +53,10 @@ def test_pages_query_and_authorization_path(gql_client, limited_user):
     denied = gql_client.execute(query, user=limited_user)
     assert denied.get("errors"), "Expected permission denial for page query."
 
+    allowed = gql_client.execute(query)
+    assert allowed.get("errors") is None
+    assert allowed["data"][CANONICAL_PRODUCT_FIXTURE.page_query]["pageInfo"]["totalCount"] >= 1
+
 
 def test_create_update_delete_canonical_mutation_paths(gql_client, limited_user):
     category = Category.objects.create(name="Canonical", description="")
@@ -73,7 +77,15 @@ def test_create_update_delete_canonical_mutation_paths(gql_client, limited_user)
     )
     assert denied_create.get("errors") is None
     assert denied_create["data"][CANONICAL_PRODUCT_FIXTURE.create_operation]["ok"] is False
-    assert denied_create["data"][CANONICAL_PRODUCT_FIXTURE.create_operation]["errors"]
+    denied_create_errors = denied_create["data"][CANONICAL_PRODUCT_FIXTURE.create_operation]["errors"]
+    assert denied_create_errors
+    assert denied_create_errors[0]["field"] in (None, "__all__")
+
+    invalid_create = gql_client.execute(
+        create_mutation,
+        variables={"input": {"price": 10}},
+    )
+    assert invalid_create.get("errors")
 
     created = gql_client.execute(
         create_mutation,
@@ -105,6 +117,15 @@ def test_create_update_delete_canonical_mutation_paths(gql_client, limited_user)
     )
     assert denied_update.get("errors") is None
     assert denied_update["data"][CANONICAL_PRODUCT_FIXTURE.update_operation]["ok"] is False
+    assert denied_update["data"][CANONICAL_PRODUCT_FIXTURE.update_operation]["errors"]
+
+    invalid_update = gql_client.execute(
+        update_mutation,
+        variables={"id": product_id, "input": {"name": ""}},
+    )
+    assert invalid_update.get("errors") is None
+    assert invalid_update["data"][CANONICAL_PRODUCT_FIXTURE.update_operation]["ok"] is False
+    assert invalid_update["data"][CANONICAL_PRODUCT_FIXTURE.update_operation]["errors"]
 
     updated = gql_client.execute(
         update_mutation,
@@ -129,6 +150,7 @@ def test_create_update_delete_canonical_mutation_paths(gql_client, limited_user)
     )
     assert denied_delete.get("errors") is None
     assert denied_delete["data"][CANONICAL_PRODUCT_FIXTURE.delete_operation]["ok"] is False
+    assert denied_delete["data"][CANONICAL_PRODUCT_FIXTURE.delete_operation]["errors"]
 
     deleted = gql_client.execute(delete_mutation, variables={"id": product_id})
     assert deleted.get("errors") is None

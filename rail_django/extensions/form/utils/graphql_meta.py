@@ -20,6 +20,7 @@ def get_model_form_mutation_bindings(model: Any) -> dict[str, Any]:
         "update_operation": f"update{model_name}",
         "bulk_create_operation": f"bulkCreate{model_name}",
         "bulk_update_operation": f"bulkUpdate{model_name}",
+        "update_identifier_key": "objectId",
         "update_target_policy": "PRIMARY_KEY_ONLY",
         "bulk_commit_policy": "ATOMIC",
         "conflict_policy": "REJECT_STALE",

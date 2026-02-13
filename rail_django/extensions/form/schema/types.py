@@ -580,9 +580,23 @@ class ModelFormMutationBindingsType(graphene.ObjectType):
     update_operation = graphene.String(required=True)
     bulk_create_operation = graphene.String(required=True)
     bulk_update_operation = graphene.String(required=True)
+    update_identifier_key = graphene.String()
     update_target_policy = ModelFormUpdateTargetPolicyEnum(required=True)
     bulk_commit_policy = ModelFormBulkCommitPolicyEnum(required=True)
     conflict_policy = ModelFormConflictPolicyEnum(required=True)
+
+
+class ModelFormSubmitBindingsType(graphene.ObjectType):
+    create_operation = graphene.String(required=True)
+    update_operation = graphene.String(required=True)
+    default_identifier_key = graphene.String(required=True)
+    form_error_key = graphene.String(required=True)
+
+
+class ModelFormSubmitContractType(graphene.ObjectType):
+    app_label = graphene.String(required=True)
+    model_name = graphene.String(required=True)
+    bindings = graphene.Field(ModelFormSubmitBindingsType, required=True)
 
 
 class ModelFormErrorPolicyType(graphene.ObjectType):

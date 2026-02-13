@@ -13,7 +13,7 @@ from graphql import GraphQLError
 
 from ..extractors.base import FormConfigExtractor
 from ..extractors.model_form_contract_extractor import ModelFormContractExtractor
-from ..config import is_generated_form_enabled
+from ..config import DEFAULT_FORM_ERROR_KEY, is_generated_form_enabled
 from ..codegen.typescript_generator import generate_typescript_definitions
 from .types import (
     FormConfigType,
@@ -23,6 +23,7 @@ from .types import (
     ModelFormContractType,
     ModelFormInitialDataType,
     ModelFormModeEnum,
+    ModelFormSubmitContractType,
     ModelFormRuntimeOverrideInput,
     ModelRefContractInput,
     ModelRefInput,
@@ -69,6 +70,13 @@ class FormQuery(graphene.ObjectType):
         mode=ModelFormModeEnum(default_value="CREATE"),
         include_nested=graphene.Boolean(default_value=False, name="includeNested"),
         description="Get generated model-form contract for one model.",
+    )
+
+    model_form_submit_contract = graphene.Field(
+        ModelFormSubmitContractType,
+        app_label=graphene.String(required=True, name="appLabel"),
+        model_name=graphene.String(required=True, name="modelName"),
+        description="Get submit-only generated model-form bindings for one model.",
     )
 
     model_form_contract_pages = graphene.Field(
@@ -198,6 +206,41 @@ class FormQuery(graphene.ObjectType):
             include_nested=include_nested,
             enforce_opt_in=True,
         )
+
+    def resolve_model_form_submit_contract(
+        self,
+        info,
+        app_label: str,
+        model_name: str,
+    ) -> dict[str, Any]:
+        extractor = ModelFormContractExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        user = getattr(info.context, "user", None)
+
+        contract = extractor.extract_contract(
+            app_label,
+            model_name,
+            user=user,
+            mode="UPDATE",
+            include_nested=False,
+            enforce_opt_in=True,
+        )
+        bindings = contract.get("mutation_bindings") or {}
+
+        return {
+            "app_label": app_label,
+            "model_name": model_name,
+            "bindings": {
+                "create_operation": bindings.get("create_operation")
+                or f"create{model_name}",
+                "update_operation": bindings.get("update_operation")
+                or f"update{model_name}",
+                "default_identifier_key": bindings.get("update_identifier_key")
+                or "objectId",
+                "form_error_key": DEFAULT_FORM_ERROR_KEY,
+            },
+        }
 
     def resolve_model_form_contract_pages(
         self,
