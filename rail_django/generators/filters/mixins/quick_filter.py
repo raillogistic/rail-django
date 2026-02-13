@@ -8,7 +8,8 @@ search term, similar to a search box in a UI.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Type
+from decimal import Decimal, InvalidOperation
+from typing import List, Optional, Sequence, Type
 
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -24,6 +25,15 @@ class QuickFilterMixin:
     Provides the ability to search across multiple text fields with a single
     search term, similar to a search box in a UI.
     """
+
+    def _is_sensitive_field_name(self, field_name: str) -> bool:
+        """Return True when a field name looks sensitive and should be excluded."""
+        lowered = field_name.lower()
+        return (
+            "password" in lowered
+            or "token" in lowered
+            or "secret" in lowered
+        )
 
     def _get_field_from_path(
         self, model: Type[models.Model], field_path: str
@@ -59,36 +69,63 @@ class QuickFilterMixin:
 
     def get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
         """
-        Get default searchable fields for quick filter.
+        Get default searchable direct primitive fields for quick filter.
 
         Args:
             model: Django model to get searchable fields for
 
         Returns:
-            List of field names suitable for quick search
+            List of direct primitive field names suitable for quick search
         """
-        searchable_fields = []
+        searchable_fields: List[str] = []
+        supported_types = (
+            models.CharField,
+            models.TextField,
+            models.EmailField,
+            models.IntegerField,
+            models.FloatField,
+            models.DecimalField,
+            models.BooleanField,
+        )
 
-        for field in model._meta.get_fields():
-            if hasattr(field, "name"):
-                if isinstance(field, (models.CharField, models.TextField)):
-                    # Skip very short fields and sensitive fields
-                    if (
-                        (
-                            hasattr(field, "max_length")
-                            and field.max_length
-                            and field.max_length < 10
-                        )
-                        or "password" in field.name.lower()
-                        or "token" in field.name.lower()
-                        or "secret" in field.name.lower()
-                    ):
-                        continue
-                    searchable_fields.append(field.name)
-                elif isinstance(field, models.EmailField):
-                    searchable_fields.append(field.name)
+        for field in model._meta.concrete_fields:
+            field_name = getattr(field, "name", None)
+            if not field_name:
+                continue
+            if getattr(field, "is_relation", False):
+                continue
+            if isinstance(field, models.AutoField) or getattr(field, "primary_key", False):
+                continue
+            if self._is_sensitive_field_name(field_name):
+                continue
+            if isinstance(field, supported_types):
+                searchable_fields.append(field_name)
 
         return searchable_fields
+
+    def merge_quick_filter_fields(
+        self,
+        model: Type[models.Model],
+        extra_fields: Optional[Sequence[str]] = None,
+    ) -> List[str]:
+        """
+        Merge model default quick fields with extra configured quick fields.
+
+        Defaults are preserved first; configured fields are appended if missing.
+        """
+        merged: List[str] = self.get_default_quick_filter_fields(model)
+        seen = set(merged)
+
+        for field_path in extra_fields or []:
+            if not isinstance(field_path, str):
+                continue
+            normalized = field_path.strip()
+            if not normalized or normalized in seen:
+                continue
+            merged.append(normalized)
+            seen.add(normalized)
+
+        return merged
 
     def build_quick_filter_q(
         self,
@@ -123,13 +160,24 @@ class QuickFilterMixin:
                     ):
                         q_objects |= Q(**{f"{field_path}__icontains": search_value})
                     elif isinstance(
-                        field,
-                        (models.IntegerField, models.FloatField, models.DecimalField),
+                        field, models.IntegerField
                     ):
+                        try:
+                            numeric_value = int(search_value)
+                            q_objects |= Q(**{field_path: numeric_value})
+                        except (ValueError, TypeError):
+                            continue
+                    elif isinstance(field, models.FloatField):
                         try:
                             numeric_value = float(search_value)
                             q_objects |= Q(**{field_path: numeric_value})
                         except (ValueError, TypeError):
+                            continue
+                    elif isinstance(field, models.DecimalField):
+                        try:
+                            numeric_value = Decimal(search_value)
+                            q_objects |= Q(**{field_path: numeric_value})
+                        except (InvalidOperation, ValueError, TypeError):
                             continue
                     elif isinstance(field, models.BooleanField):
                         if search_value.lower() in ["true", "1", "yes", "on"]:

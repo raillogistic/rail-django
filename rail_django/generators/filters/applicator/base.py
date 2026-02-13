@@ -106,8 +106,12 @@ class BaseFilterApplicatorMixin:
             try:
                 from ....core.meta import get_model_graphql_meta
                 meta = get_model_graphql_meta(model)
-                if meta and meta.quick_filter_fields:
-                    quick_filter_fields = meta.quick_filter_fields
+                meta_quick_fields = (
+                    list(getattr(meta, "quick_filter_fields", [])) if meta else []
+                )
+                quick_filter_fields = self._get_quick_mixin().merge_quick_filter_fields(
+                    model, meta_quick_fields
+                )
             except (ImportError, AttributeError):
                 pass
 

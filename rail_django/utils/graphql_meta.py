@@ -36,9 +36,11 @@ def get_quick_filter_fields(model: type[models.Model]) -> list[str]:
     """
     Shortcut to fetch the quick filter field paths for a model.
     """
-
+    from ..generators.filters.mixins.quick_filter import QuickFilterMixin
     meta = get_model_graphql_meta(model)
-    return list(meta.quick_filter_fields)
+    return QuickFilterMixin().merge_quick_filter_fields(
+        model, list(meta.quick_filter_fields)
+    )
 
 
 def get_filter_fields(model: type[models.Model]) -> dict[str, list[str]]:

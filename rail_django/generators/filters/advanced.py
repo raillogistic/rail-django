@@ -29,6 +29,7 @@ from .mixins import (
     SchemaSettingsMixin,
     HistoricalModelMixin,
     GraphQLMetaIntegrationMixin,
+    QuickFilterMixin,
 )
 
 logger = logging.getLogger(__name__)
@@ -156,31 +157,27 @@ class AdvancedFilterGenerator(
                         field_name=field_name
                     )
 
-            # Add quick filter for text search across multiple fields
-            text_fields = [
-                f.name
-                for f in model._meta.get_fields()
-                if hasattr(f, "name")
-                and isinstance(f, (models.CharField, models.TextField))
-                and f.name not in ("polymorphic_ctype",)
-                and "_ptr" not in f.name
-            ]
-            if text_fields:
+            # Add quick filter across merged primitive/default + GraphQLMeta fields
+            quick_fields = self.get_quick_filter_fields(model)
+            if quick_fields:
                 filters["quick"] = django_filters.CharFilter(
-                    method="filter_quick", help_text="Quick search across text fields"
+                    method="filter_quick", help_text="Quick search across configured fields"
                 )
 
-            def make_filter_quick_method(text_fields_list):
-                """Create a filter_quick method that searches across text fields."""
+            def make_filter_quick_method(model_class, quick_fields_list):
+                """Create a filter_quick method that searches across configured fields."""
+                quick_mixin = QuickFilterMixin()
 
                 def filter_quick(self, queryset, name, value):
                     if not value:
                         return queryset
-                    from django.db.models import Q
-
-                    q_objects = Q()
-                    for field_name in text_fields_list:
-                        q_objects |= Q(**{f"{field_name}__icontains": value})
+                    q_objects = quick_mixin.build_quick_filter_q(
+                        model_class,
+                        value,
+                        quick_filter_fields=quick_fields_list,
+                    )
+                    if not q_objects:
+                        return queryset
                     return queryset.filter(q_objects)
 
                 return filter_quick
@@ -190,7 +187,7 @@ class AdvancedFilterGenerator(
                 (FilterSet,),
                 {
                     **filters,
-                    "filter_quick": make_filter_quick_method(text_fields),
+                    "filter_quick": make_filter_quick_method(model, quick_fields),
                     "Meta": type(
                         "Meta",
                         (),

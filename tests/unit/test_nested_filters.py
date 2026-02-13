@@ -45,6 +45,7 @@ from rail_django.generators.filters import (
     QuickFilterMixin,
     IncludeFilterMixin,
     HistoricalModelMixin,
+    GraphQLMetaIntegrationMixin,
 )
 from test_app.models import Category, Post, Tag, Product, Comment, Profile, OrderItem
 
@@ -908,33 +909,31 @@ class TestQuickFilterMixin(TestCase):
         from rail_django.generators.filters import QuickFilterMixin
         self.mixin = QuickFilterMixin()
 
-    def test_get_default_quick_filter_fields_returns_text_fields(self):
-        """Should return CharField and TextField names."""
-        fields = self.mixin.get_default_quick_filter_fields(Category)
+    def test_get_default_quick_filter_fields_returns_primitive_fields(self):
+        """Should return direct primitive fields for quick search."""
+        fields = self.mixin.get_default_quick_filter_fields(Product)
 
-        # Category has name (CharField) and description (TextField)
         self.assertIn("name", fields)
-        self.assertIn("description", fields)
+        self.assertIn("price", fields)
+        self.assertIn("cost_price", fields)
+        self.assertIn("inventory_count", fields)
+        self.assertNotIn("category", fields)
 
-    def test_get_default_quick_filter_fields_excludes_short_fields(self):
-        """Should exclude fields with max_length < 10."""
+    def test_get_default_quick_filter_fields_includes_short_primitive_fields(self):
+        """Should include short primitive fields."""
         from django.db import models
 
-        # Create a mock model with a short field
         class MockModel:
             class _meta:
-                @staticmethod
-                def get_fields():
-                    short_field = models.CharField(max_length=5)
-                    short_field.name = "code"
-                    long_field = models.CharField(max_length=100)
-                    long_field.name = "name"
-                    return [short_field, long_field]
+                short_field = models.CharField(max_length=5)
+                short_field.name = "code"
+                short_field.is_relation = False
+                short_field.primary_key = False
+                concrete_fields = [short_field]
 
         fields = self.mixin.get_default_quick_filter_fields(MockModel)
 
-        self.assertNotIn("code", fields)
-        self.assertIn("name", fields)
+        self.assertIn("code", fields)
 
     def test_get_default_quick_filter_fields_excludes_sensitive_fields(self):
         """Should exclude password, token, secret fields."""
@@ -942,17 +941,23 @@ class TestQuickFilterMixin(TestCase):
 
         class MockModel:
             class _meta:
-                @staticmethod
-                def get_fields():
-                    password = models.CharField(max_length=100)
-                    password.name = "password"
-                    token = models.CharField(max_length=100)
-                    token.name = "api_token"
-                    secret = models.CharField(max_length=100)
-                    secret.name = "secret_key"
-                    name = models.CharField(max_length=100)
-                    name.name = "name"
-                    return [password, token, secret, name]
+                password = models.CharField(max_length=100)
+                password.name = "password"
+                password.is_relation = False
+                password.primary_key = False
+                token = models.CharField(max_length=100)
+                token.name = "api_token"
+                token.is_relation = False
+                token.primary_key = False
+                secret = models.CharField(max_length=100)
+                secret.name = "secret_key"
+                secret.is_relation = False
+                secret.primary_key = False
+                name = models.CharField(max_length=100)
+                name.name = "name"
+                name.is_relation = False
+                name.primary_key = False
+                concrete_fields = [password, token, secret, name]
 
         fields = self.mixin.get_default_quick_filter_fields(MockModel)
 
@@ -978,6 +983,35 @@ class TestQuickFilterMixin(TestCase):
         q = self.mixin.build_quick_filter_q(Category, "test", quick_filter_fields=["name"])
 
         self.assertIsInstance(q, Q)
+
+    def test_merge_quick_filter_fields_keeps_defaults_and_adds_meta(self):
+        """Should merge configured quick fields with default primitive fields."""
+        fields = self.mixin.merge_quick_filter_fields(
+            Category, extra_fields=["posts__title", "name"]
+        )
+
+        self.assertIn("name", fields)
+        self.assertIn("description", fields)
+        self.assertIn("posts__title", fields)
+
+
+class TestGraphQLMetaIntegrationMixin(TestCase):
+    """Test GraphQLMeta quick filter merge behaviour."""
+
+    def test_get_quick_filter_fields_merges_graphql_meta_with_defaults(self):
+        class _MetaMock:
+            quick_filter_fields = ["posts__title"]
+
+        class _MixinUnderTest(GraphQLMetaIntegrationMixin):
+            pass
+
+        mixin = _MixinUnderTest()
+        with patch.object(mixin, "get_graphql_meta", return_value=_MetaMock()):
+            fields = mixin.get_quick_filter_fields(Category)
+
+        self.assertIn("name", fields)
+        self.assertIn("description", fields)
+        self.assertIn("posts__title", fields)
 
 
 class TestIncludeFilterMixin(TestCase):
