@@ -565,6 +565,7 @@ class ModelFormRelationActionPolicyType(graphene.ObjectType):
 
 
 class ModelFormRelationType(graphene.ObjectType):
+    name = graphene.String(required=True)
     path = graphene.String(required=True)
     label = graphene.String(required=True)
     relation_type = ModelFormRelationTypeEnum(required=True)
