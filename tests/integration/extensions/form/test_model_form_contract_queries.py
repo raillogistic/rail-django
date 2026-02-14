@@ -55,6 +55,10 @@ def test_model_form_contract_and_pages_queries(gql_client):
         id
         appLabel
         modelName
+        relations {
+          name
+          path
+        }
         mutationBindings {
           createOperation
           updateOperation
@@ -79,6 +83,12 @@ def test_model_form_contract_and_pages_queries(gql_client):
     assert contract["appLabel"] == "test_app"
     assert contract["modelName"] == "Product"
     assert contract["mutationBindings"]["createOperation"] == "createProduct"
+    order_items_relation = next(
+        (item for item in contract["relations"] if item["path"] == "order_items"),
+        None,
+    )
+    assert order_items_relation is not None
+    assert order_items_relation["name"] == "orderItems"
 
     page = result["data"]["page"]
     assert page["page"] == 1

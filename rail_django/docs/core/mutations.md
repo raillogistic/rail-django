@@ -70,6 +70,25 @@ Each relation field accepts an object with the following operators:
 - **`disconnect`**: Remove the link to a related object.
 - **`set`**: Replace the entire collection with a new set of IDs (for many-to-many).
 
+### Default client normalization expectations
+
+Generated clients (including `rail-react` ModelForm) commonly normalize relation values as:
+
+- singular scalar -> `connect`
+- update-mode to-many scalar list -> `set` (replacement semantics)
+- singular `null` -> `clear`
+- to-many object list -> per-item inference:
+  - identity key (`id`, `pk`, `objectId`, `object_id`) -> `update`
+  - no identity key -> `create`
+
+### Policy-failure behavior
+
+When relation policy blocks an inferred or explicit action:
+
+- mutation returns `ok: false`
+- `errors` include a relation-scoped field path
+- no automatic fallback operator is applied
+
 ### Example: One-to-Many (Order with Items)
 
 In this example, we create an `Order` and simultaneously create several `OrderItems` and connect them to existing `Products`.

@@ -6,6 +6,17 @@ This tutorial covers advanced mutation patterns, including bulk operations and n
 
 Rail Django allows you to create and update related objects in a single request using the `connect`, `create`, and `set` operators.
 
+### Client-side defaults you can rely on
+
+Generated clients can infer unified nested operators from direct form values:
+
+- singular scalar -> `connect`
+- update-mode to-many scalar list -> `set`
+- singular `null` -> `clear`
+- to-many object list -> `update` when `id`/`pk`/`objectId`/`object_id` is present, otherwise `create`
+
+Blocked inferred or explicit actions should fail fast with relation-scoped validation errors.
+
 ### Creating with Relationships
 Create a Post and its Tags at the same time:
 

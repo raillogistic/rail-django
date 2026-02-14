@@ -56,3 +56,19 @@ def test_model_form_contract_extractor_builds_mutation_bindings():
     bindings = contract["mutation_bindings"]
     assert bindings["create_operation"] == "createProduct"
     assert bindings["update_target_policy"] == "PRIMARY_KEY_ONLY"
+
+
+def test_default_sections_include_forward_relations_in_declared_order():
+    extractor = ModelFormContractExtractor(schema_name="default")
+    contract = extractor.extract_contract(
+        "test_app",
+        "Post",
+        mode="CREATE",
+        enforce_opt_in=False,
+    )
+
+    default_section = contract["sections"][0]
+    field_paths = default_section["field_paths"]
+
+    assert field_paths.index("title") < field_paths.index("category")
+    assert field_paths.index("category") < field_paths.index("tags")

@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from django.apps import apps
 from django.utils import timezone
+from graphene.utils.str_converters import to_camel_case
 from graphql import GraphQLError
 
 from ..config import (
@@ -58,8 +59,13 @@ class ModelFormContractExtractor(FormConfigExtractor):
         primary_key_name = getattr(getattr(model, "_meta", None), "pk", None)
         primary_key_name = getattr(primary_key_name, "name", None)
         fields = self._build_fields(config, primary_key_name=primary_key_name)
-        sections = self._build_sections(config, fields)
         relations = self._build_relations(config, include_nested=include_nested)
+        sections = self._build_sections(
+            config,
+            fields,
+            model=model,
+            relations=relations,
+        )
 
         contract: dict[str, Any] = {
             "id": f"{app_name}.{model_name}.{str(mode).upper()}",
@@ -200,10 +206,18 @@ class ModelFormContractExtractor(FormConfigExtractor):
         self,
         config: dict[str, Any],
         fields: list[dict[str, Any]],
+        *,
+        model: Any | None = None,
+        relations: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         sections = config.get("sections") or []
+        normalized_relations = relations or []
         if not sections:
-            field_paths = [item["path"] for item in fields]
+            field_paths = self._build_default_section_paths(
+                model=model,
+                fields=fields,
+                relations=normalized_relations,
+            )
             return [
                 {
                     "id": "default",
@@ -232,6 +246,55 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 }
             )
         return normalized_sections
+
+    def _build_default_section_paths(
+        self,
+        *,
+        model: Any | None,
+        fields: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+    ) -> list[str]:
+        known_field_paths = [
+            item["path"] for item in fields if normalize_path(item.get("path"))
+        ]
+        known_relation_paths = [
+            str(item.get("name") or item.get("path"))
+            for item in relations
+            if item.get("name") or normalize_path(item.get("path"))
+        ]
+        known_paths = set([*known_field_paths, *known_relation_paths])
+        ordered_paths: list[str] = []
+        seen: set[str] = set()
+
+        def add_path(path: str | None) -> None:
+            normalized = normalize_path(path)
+            if not normalized or normalized in seen or normalized not in known_paths:
+                return
+            seen.add(normalized)
+            ordered_paths.append(normalized)
+
+        # Preserve declared model field order, including forward many-to-many
+        # relations which Django stores separately.
+        if model is not None and getattr(model, "_meta", None) is not None:
+            local_fields = list(getattr(model._meta, "local_fields", []) or [])
+            local_many_to_many = list(
+                getattr(model._meta, "local_many_to_many", []) or []
+            )
+            declared_fields = sorted(
+                [*local_fields, *local_many_to_many],
+                key=lambda field: getattr(field, "creation_counter", 0),
+            )
+            for field in declared_fields:
+                add_path(getattr(field, "name", None))
+
+        # Keep backend extractor ordering as fallback for anything not covered
+        # by declared local model fields.
+        for path in known_field_paths:
+            add_path(path)
+        for path in known_relation_paths:
+            add_path(path)
+
+        return ordered_paths
 
     def _build_relations(
         self,
@@ -263,6 +326,8 @@ class ModelFormContractExtractor(FormConfigExtractor):
             ]
             relations.append(
                 {
+                    "name": relation.get("name")
+                    or to_camel_case(str(relation.get("field_name") or relation.get("name") or "")),
                     "path": normalize_path(
                         relation.get("field_name") or relation.get("name")
                     ),
