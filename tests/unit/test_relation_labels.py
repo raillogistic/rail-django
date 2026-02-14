@@ -1,6 +1,7 @@
 from django.db import models
 from django.test import TestCase
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from rail_django.extensions.form.extractors.base import FormConfigExtractor
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
@@ -182,3 +183,39 @@ class TestRelationLabels(TestCase):
             is_reverse=True,
         )
         self.assertEqual(label, "Ordres")
+
+    def test_form_relations_respect_graphql_meta_forward_exclusion(self):
+        extractor = FormConfigExtractor()
+        graphql_meta = MagicMock()
+        graphql_meta.should_expose_field.side_effect = (
+            lambda field_name, for_input=False: field_name != "product"
+        )
+
+        relations = extractor._extract_relations(
+            LabelOrderItem,
+            user=None,
+            graphql_meta=graphql_meta,
+        )
+
+        self.assertFalse(any(rel["field_name"] == "product" for rel in relations))
+        graphql_meta.should_expose_field.assert_any_call("product", for_input=True)
+
+    def test_form_relations_respect_graphql_meta_reverse_exclusion(self):
+        from test_app.models import Product as FixtureProduct
+
+        extractor = FormConfigExtractor()
+        graphql_meta = MagicMock()
+        graphql_meta.should_expose_field.side_effect = (
+            lambda field_name, for_input=False: field_name != "order_items"
+        )
+
+        relations = extractor._extract_relations(
+            FixtureProduct,
+            user=None,
+            graphql_meta=graphql_meta,
+        )
+
+        self.assertFalse(any(rel["field_name"] == "order_items" for rel in relations))
+        graphql_meta.should_expose_field.assert_any_call(
+            "order_items", for_input=True
+        )

@@ -53,6 +53,37 @@ settings exclusion list when present.
 If you exclude a model globally but need one exception, set
 `custom_metadata.generated_form.enabled = True` on that model.
 
+### Exclude unsafe reverse relations from generated contracts
+
+When a reverse relation points to a non-nullable FK (for example
+`Product.orderItems` -> `OrderItem.product`), using relation actions like `set`
+or `disconnect` can fail because the backend must temporarily null the FK.
+
+If that relation should be managed elsewhere (for example through `Order`),
+exclude it from Product input exposure:
+
+```python
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
+
+class Product(models.Model):
+    class GraphQLMeta(RailGraphQLMeta):
+        fields = RailGraphQLMeta.Fields(
+            read_only=["order_items"],  # or exclude=["order_items"]
+        )
+        relations = {
+            "order_items": RailGraphQLMeta.FieldRelation(
+                connect=RailGraphQLMeta.RelationOperation(enabled=False),
+                create=RailGraphQLMeta.RelationOperation(enabled=False),
+                update=RailGraphQLMeta.RelationOperation(enabled=False),
+                disconnect=RailGraphQLMeta.RelationOperation(enabled=False),
+                set=RailGraphQLMeta.RelationOperation(enabled=False),
+            )
+        }
+```
+
+Generated ModelForm contracts follow GraphQLMeta input exposure. After changing
+GraphQLMeta, refresh/restart the backend so cached form configs are rebuilt.
+
 ### Generated contract query example
 
 ```graphql

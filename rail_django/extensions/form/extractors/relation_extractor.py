@@ -87,6 +87,19 @@ class RelationExtractorMixin:
             field_key = (
                 field.name if hasattr(field, "name") else field.get_accessor_name()
             )
+
+            # Keep relation exposure consistent with GraphQLMeta field policies.
+            # This lets include/exclude/read_only rules hide unsupported reverse
+            # relation paths from generated form contracts.
+            if graphql_meta is not None:
+                try:
+                    if not graphql_meta.should_expose_field(
+                        field_key, for_input=True
+                    ):
+                        continue
+                except Exception:
+                    pass
+
             rel_schema = self._extract_relation(
                 model,
                 field,

@@ -70,6 +70,42 @@ Each relation field accepts an object with the following operators:
 - **`disconnect`**: Remove the link to a related object.
 - **`set`**: Replace the entire collection with a new set of IDs (for many-to-many).
 
+### Reverse FK caution (`set` / `disconnect` on non-nullable FK)
+
+For reverse one-to-many relations, `set` and `disconnect` clear existing links
+by setting the child FK to `null` before reconnecting.
+
+If that child FK is non-nullable, the mutation fails with a validation/integrity
+error (for example: `product_id` cannot be null).
+
+Typical case:
+- `Product` has reverse relation `orderItems`
+- `OrderItem.product` is `ForeignKey(..., null=False)`
+- `updateProduct(input: { orderItems: { set: [...] } })` fails while clearing old rows
+
+In this schema shape, prefer managing `OrderItem` from the owning `Order` flow
+and exclude the reverse relation from Product mutation input/form contracts.
+
+```python
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
+
+class Product(models.Model):
+    # ...
+    class GraphQLMeta(RailGraphQLMeta):
+        fields = RailGraphQLMeta.Fields(
+            read_only=["order_items"],  # or exclude=["order_items"] to hide entirely
+        )
+        relations = {
+            "order_items": RailGraphQLMeta.FieldRelation(
+                connect=RailGraphQLMeta.RelationOperation(enabled=False),
+                create=RailGraphQLMeta.RelationOperation(enabled=False),
+                update=RailGraphQLMeta.RelationOperation(enabled=False),
+                disconnect=RailGraphQLMeta.RelationOperation(enabled=False),
+                set=RailGraphQLMeta.RelationOperation(enabled=False),
+            )
+        }
+```
+
 ### Default client normalization expectations
 
 Generated clients (including `rail-react` ModelForm) commonly normalize relation values as:
