@@ -176,6 +176,11 @@ class ModelFormContractExtractor(FormConfigExtractor):
             if not path:
                 continue
             field_name = field.get("field_name") or path
+            contract_name = (
+                str(field.get("name")).strip()
+                if field.get("name")
+                else to_camel_case(str(field_name))
+            )
             is_primary_key = (
                 bool(primary_key_name)
                 and str(field_name).lower() == str(primary_key_name).lower()
@@ -183,6 +188,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             kind = FIELD_KIND_MAP.get(str(field.get("input_type") or "").upper(), "CUSTOM")
             fields.append(
                 {
+                    "name": contract_name,
                     "path": path,
                     "field_name": field_name,
                     "label": field.get("label") or path,

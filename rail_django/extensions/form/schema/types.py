@@ -530,6 +530,7 @@ class ModelFormValidatorType(graphene.ObjectType):
 
 
 class ModelFormFieldType(graphene.ObjectType):
+    name = graphene.String(required=True)
     path = graphene.String(required=True)
     field_name = graphene.String(required=True)
     label = graphene.String(required=True)
