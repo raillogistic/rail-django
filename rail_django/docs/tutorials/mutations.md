@@ -6,6 +6,29 @@ This tutorial covers advanced mutation patterns, including bulk operations and n
 
 Rail Django allows you to create and update related objects in a single request using the `connect`, `create`, and `set` operators.
 
+### `connect`, `disconnect`, `set` behavior
+
+- `connect` adds links.
+- `disconnect` removes specific links.
+- `set` replaces the whole linked collection.
+
+For this mutation:
+
+```graphql
+mutation {
+  updateProduct(
+    id: "9"
+    input: { orderItems: { set: ["5", "8", "17", "19", "29"] } }
+  ) {
+    ok
+    errors { field message }
+  }
+}
+```
+
+`set` means Product `9` must end with exactly those `orderItems` IDs.
+Any previous linked item not in that list is removed.
+
 ### Client-side defaults you can rely on
 
 Generated clients can infer unified nested operators from direct form values:
@@ -51,6 +74,36 @@ mutation {
     ok
   }
 }
+```
+
+### Reverse relation caveat
+
+For reverse one-to-many relations, `set` and `disconnect` may attempt to set the
+child FK to `null`. If that FK is non-nullable, mutation fails.
+
+If a relation is operationally owned by another model (for example `OrderItem`
+managed via `Order`, not via `Product`), hide that reverse field from Product
+mutation input using GraphQLMeta `fields.read_only` (or `fields.exclude`) and
+disable relation operations for that path.
+
+```python
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
+
+class Product(models.Model):
+    # ...
+    class GraphQLMeta(RailGraphQLMeta):
+        fields = RailGraphQLMeta.Fields(
+            read_only=["order_items"],  # or exclude=["order_items"]
+        )
+        relations = {
+            "order_items": RailGraphQLMeta.FieldRelation(
+                connect=RailGraphQLMeta.RelationOperation(enabled=False),
+                create=RailGraphQLMeta.RelationOperation(enabled=False),
+                update=RailGraphQLMeta.RelationOperation(enabled=False),
+                disconnect=RailGraphQLMeta.RelationOperation(enabled=False),
+                set=RailGraphQLMeta.RelationOperation(enabled=False),
+            )
+        }
 ```
 
 ## Bulk Operations

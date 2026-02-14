@@ -81,6 +81,9 @@ class Product(models.Model):
         }
 ```
 
+Note: this exclusion is explicit (metadata-driven), not automatic. The generated
+ModelForm contract mirrors what your `GraphQLMeta` exposes for mutation input.
+
 Generated ModelForm contracts follow GraphQLMeta input exposure. After changing
 GraphQLMeta, refresh/restart the backend so cached form configs are rebuilt.
 

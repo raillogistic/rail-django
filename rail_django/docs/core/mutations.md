@@ -70,6 +70,36 @@ Each relation field accepts an object with the following operators:
 - **`disconnect`**: Remove the link to a related object.
 - **`set`**: Replace the entire collection with a new set of IDs (for many-to-many).
 
+### `connect` vs `disconnect` vs `set` (to-many quick reference)
+
+- `connect: [ids...]`
+  - Additive.
+  - Links the provided IDs and keeps existing links.
+- `disconnect: [ids...]`
+  - Subtractive.
+  - Removes only the provided linked IDs.
+- `set: [ids...]`
+  - Replacement.
+  - Final linked set becomes exactly the provided IDs.
+  - Existing links not in the list are removed first.
+
+Example (`Product.orderItems`):
+
+```graphql
+mutation {
+  updateProduct(
+    id: "9"
+    input: { orderItems: { set: ["5", "8", "17", "19", "29"] } }
+  ) {
+    ok
+    errors { field message }
+  }
+}
+```
+
+This means: "after mutation, product `9` should be linked to only those
+`orderItems` IDs." It is not additive.
+
 ### Reverse FK caution (`set` / `disconnect` on non-nullable FK)
 
 For reverse one-to-many relations, `set` and `disconnect` clear existing links
@@ -105,6 +135,9 @@ class Product(models.Model):
             )
         }
 ```
+
+You can apply this pattern directly in
+`rail_backend/apps/store/models.py` on `Product.GraphQLMeta`.
 
 ### Default client normalization expectations
 
