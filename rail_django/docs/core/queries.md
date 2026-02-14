@@ -11,7 +11,7 @@ For every model registered in your schema, Rail Django generates a set of root q
 | **Single Object** | `<model>` | Fetch a single instance by ID (or other lookup fields). |
 | **List** | `<model>List` | Fetch a list of instances with filtering, sorting, and pagination. |
 | **Paginated** | `<model>Page` | Fetch a list with detailed page metadata (total count, page count). |
-| **Grouped** | `<model>Group` | Aggregated data (e.g., counts grouped by a specific field). |
+| **Grouped** | `<model>Group` | Aggregated data (for example, counts grouped by a specific field). |
 
 ### Manager-Specific Query Suffix
 
@@ -76,9 +76,9 @@ query ProductsByCategory {
 ### Logic Operators (AND, OR, NOT)
 Combine filters with boolean logic to create complex queries. These operators map directly to Django's `Q` objects, allowing for efficient database execution.
 
-*   **AND**: Implicitly applied between fields in a `where` block, but can be used explicitly for nesting.
-*   **OR**: Matches if *any* of the provided conditions are true.
-*   **NOT**: Inverts the condition (useful for "is not" or "excluding" logic).
+- **AND**: Implicitly applied between fields in a `where` block, but can be used explicitly for nesting.
+- **OR**: Matches if *any* of the provided conditions are true.
+- **NOT**: Inverts the condition (useful for "is not" or "excluding" logic).
 
 ```graphql
 query AdvancedSearch {
@@ -123,8 +123,8 @@ Rail Django provides three distinct ways to handle large datasets, depending on 
 
 ### Offset Pagination (Simple)
 Best for small datasets or internal tools where you need to skip a specific number of items.
-*   **Pros**: Simple to implement.
-*   **Cons**: Performance degrades on very large offsets; results can "shift" if items are added/deleted while paging.
+- **Pros**: Simple to implement.
+- **Cons**: Performance degrades on very large offsets; results can "shift" if items are added/deleted while paging.
 
 ```graphql
 query PaginatedOrders {
@@ -157,8 +157,8 @@ query OrdersByPage {
 
 ### Cursor-Based Pagination (Relay)
 Best for "Infinite Scroll" or very large datasets. Instead of an offset, it uses an opaque "cursor" to point to a specific record.
-*   **Pros**: High performance; consistent results even if data changes between requests.
-*   **Cons**: Cannot jump to a specific page number.
+- **Pros**: High performance; consistent results even if data changes between requests.
+- **Cons**: Cannot jump to a specific page number.
 
 ```graphql
 query InfiniteScrollProducts($after: String) {
@@ -214,7 +214,7 @@ Use the `...Group` query to perform server-side grouping:
 ```graphql
 query OrderCountsByStatus {
   orderGroup(groupBy: "status") {
-    key # The group value (e.g. "SHIPPED")
+    key # The group value (for example "SHIPPED")
     label # A display-friendly label
     count # Number of items in this group
   }

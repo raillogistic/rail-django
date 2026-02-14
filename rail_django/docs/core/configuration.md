@@ -1,115 +1,139 @@
-# Complete Configuration
+﻿# Core configuration
 
-Rail Django is highly configurable via the `RAIL_DJANGO_GRAPHQL` dictionary in your project's `settings.py`. This document serves as the authoritative reference for all available configuration options.
+Rail Django reads runtime configuration from `RAIL_DJANGO_GRAPHQL`, then merges
+that data with library defaults from `rail_django.config.defaults`.
 
-## General Structure
+This page focuses on settings actively consumed by the current codebase.
 
-Settings are grouped into logical sections. You only need to define the sections and keys you wish to override from the defaults.
+## Configure by section
+
+Define only the sections you need in `settings.py`.
 
 ```python
-# settings.py
 RAIL_DJANGO_GRAPHQL = {
-    "schema_settings": { ... },
-    "query_settings": { ... },
-    "mutation_settings": { ... },
-    "security_settings": { ... },
-    "performance_settings": { ... },
-    "middleware_settings": { ... },
-    "error_handling": { ... },
+    "schema_settings": {},
+    "type_generation_settings": {},
+    "query_settings": {},
+    "filtering_settings": {},
+    "mutation_settings": {},
+    "subscription_settings": {},
+    "performance_settings": {},
+    "security_settings": {},
+    "middleware_settings": {},
+    "persisted_query_settings": {},
+    "multitenancy_settings": {},
+    "error_handling": {},
 }
 ```
 
-## Schema Settings (`schema_settings`)
+## `schema_settings`
 
-Controls global schema behavior and discovery.
+Use this section to control root schema behavior and exposure.
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `auto_camelcase` | `bool` | `True` | Automatically convert snake_case Python names to camelCase GraphQL names. |
-| `enable_introspection` | `bool` | `True` | Enable the `__schema` and `__type` queries. |
-| `enable_graphiql` | `bool` | `True` | Enable the interactive GraphiQL IDE. |
-| `authentication_required` | `bool` | `False` | Require a valid user for ALL GraphQL operations by default. |
-| `show_metadata` | `bool` | `False` | Enable the Schema Metadata extension. |
-| `excluded_apps` | `list` | `[]` | Django apps to completely ignore during schema discovery. |
-| `query_extensions` | `list` | `[]` | Dotted paths to additional Query classes to merge into the root schema. |
-| `mutation_extensions` | `list` | `[]` | Dotted paths to additional Mutation classes. |
+Common keys:
 
-## Query Settings (`query_settings`)
+- `authentication_required` (default: `False`)
+- `enable_introspection` (default: `True`)
+- `enable_graphiql` (default: `True`)
+- `auto_camelcase` (default: `True`)
+- `excluded_apps` and `excluded_models`
+- `enable_extension_mutations` (default: `True`)
+- `query_field_allowlist`, `mutation_field_allowlist`,
+  `subscription_field_allowlist`
 
-Configures how data is fetched and presented.
+## `query_settings`
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `default_page_size` | `int` | `20` | Items returned per page when no limit is specified. |
-| `max_page_size` | `int` | `100` | Hard limit on items per page. |
-| `use_relay` | `bool` | `False` | Use Relay-style Connections instead of simple lists and offset pagination. |
-| `require_model_permissions` | `bool` | `True` | Enforce Django model `view` permissions for queries. |
-| `generate_filters` | `bool` | `True` | Automatically generate the `where` argument for list queries. |
-| `additional_lookup_fields`| `dict` | `{}` | Map of models to lists of fields that can be used for single item lookups. |
+Use this section to tune list/read behavior.
 
-## Mutation Settings (`mutation_settings`)
+Common keys:
 
-Configures data modification operations.
+- `default_page_size` (default: `20`)
+- `max_page_size` (default: `100`)
+- `use_relay` (default: `False`)
+- `generate_filters` (default: `True`)
+- `generate_ordering` (default: `True`)
+- `require_model_permissions` (default: `True`)
+- `model_permission_codename` (default: `"view"`)
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `generate_create` | `bool` | `True` | Auto-generate `create<Model>` mutations. |
-| `generate_update` | `bool` | `True` | Auto-generate `update<Model>` mutations. |
-| `generate_delete` | `bool` | `True` | Auto-generate `delete<Model>` mutations. |
-| `enable_bulk_operations` | `bool` | `True` | Enable bulk CUD operations. |
-| `enable_nested_relations`| `bool` | `True` | Enable the "Unified Input" format for managing relationships. |
-| `require_model_permissions`| `bool` | `True` | Enforce `add`, `change`, and `delete` permissions. |
-| `enable_method_mutations` | `bool` | `True` | Allow exposing model methods as mutations via `GraphQLMeta`. |
+## `mutation_settings`
 
-## Security Settings (`security_settings`)
+Use this section to control generated mutation behavior.
 
-Controls the security posture and validation.
+Common keys:
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enable_authentication` | `bool` | `True` | Integrate with Django's authentication system. |
-| `enable_authorization` | `bool` | `True` | Enable granular RBAC and operation guards. |
-| `enable_field_permissions`| `bool` | `True` | Enable field-level visibility and access control. |
-| `enable_policy_engine` | `bool` | `True` | Enable the allow/deny policy manager. |
-| `enable_input_validation`| `bool` | `True` | Sanitize and validate all incoming GraphQL inputs. |
-| `enable_rate_limiting` | `bool` | `False` | Enable request rate limiting. |
+- `generate_create`, `generate_update`, `generate_delete`
+- `enable_bulk_operations` (default: `True`)
+- `enable_method_mutations` (default: `True`)
+- `require_model_permissions` (default: `True`)
+- `model_permission_codenames` (create/add, update/change, delete/delete)
+- `enable_nested_relations` (default: `True`)
+- `relation_max_nesting_depth` (default: `3`)
 
-## Performance Settings (`performance_settings`)
+## `performance_settings`
 
-Optimizes database and query execution.
+Use this section for query optimization and guardrails.
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enable_select_related` | `bool` | `True` | Automatically optimize ForeignKey relationships. |
-| `enable_prefetch_related`| `bool` | `True` | Automatically optimize ManyToMany relationships. |
-| `enable_dataloader` | `bool` | `True` | Use DataLoaders for batching deep relationship queries. |
-| `max_query_depth` | `int` | `10` | Maximum allowed nesting depth for queries. |
-| `max_query_complexity` | `int` | `1000` | Maximum allowed calculated complexity score. |
+Common keys:
 
-## Middleware Settings (`middleware_settings`)
+- `enable_select_related`, `enable_prefetch_related`
+- `enable_query_optimization`
+- `max_query_depth` (default: `10`)
+- `max_query_complexity` (default: `1000`)
+- `query_timeout` (default: `30`)
+- `enable_query_caching` and `query_cache_timeout`
 
-Enables/disables specific middleware layers.
+## `security_settings`
 
-| Setting | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enable_performance_middleware` | `bool` | `True` | Track and log execution time. |
-| `enable_logging_middleware` | `bool` | `True` | Log GraphQL operations and errors. |
-| `log_queries` | `bool` | `True` | Log query operations. |
-| `log_mutations` | `bool` | `True` | Log mutation operations. |
-| `log_field_level` | `bool` | `False` | Log non-root field resolutions (very verbose). |
-| `log_introspection` | `bool` | `False` | Log introspection fields (`__schema`, `__type`, `__typename`). |
-| `log_errors` | `bool` | `True` | Log errors during field resolution. |
-| `performance_threshold_ms` | `int` | `1000` | Threshold for logging "slow" queries. |
+Use this section for authorization, validation, and request controls.
 
-## Environment Variables
+Common keys:
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `GRAPHQL_PERFORMANCE_HEADERS` | Include execution metrics in HTTP headers. | `False` |
-| `JWT_SECRET_KEY` | Key used for signing JWT tokens. | `SECRET_KEY` |
+- `enable_authentication`
+- `enable_authorization`
+- `enable_policy_engine`
+- `enable_field_permissions`
+- `enable_input_validation`
+- `enable_sql_injection_protection`
+- `enable_xss_protection`
+- `enable_rate_limiting`
+- `permission_cache_ttl_seconds`
+- `input_allowed_html_tags` and `input_allowed_html_attributes`
 
-## See Also
+## `middleware_settings`
 
-- [Queries Reference](./queries.md)
-- [Mutations Reference](./mutations.md)
-- [Performance Optimization](./performance.md)
+Use this section to toggle middleware behavior and logging detail.
+
+Common keys:
+
+- `enable_authentication_middleware`
+- `enable_rate_limiting_middleware`
+- `enable_field_permission_middleware`
+- `enable_logging_middleware`
+- `log_queries`, `log_mutations`, `log_errors`
+- `performance_threshold_ms`
+
+## Extension-specific settings
+
+Some extensions read dedicated top-level settings in addition to
+`RAIL_DJANGO_GRAPHQL`.
+
+Examples:
+
+- `RAIL_DJANGO_EXPORT`
+- `GRAPHQL_ENABLE_AUDIT_LOGGING`
+- `AUDIT_STORE_IN_DATABASE`, `AUDIT_STORE_IN_FILE`, `AUDIT_RETENTION_DAYS`
+- `JWT_*` and `MFA_*` keys for auth flows
+
+## Validate your configuration
+
+After changing settings, run security and runtime checks.
+
+```bash
+python manage.py security_check --verbose
+python manage.py health_monitor --summary-only
+```
+
+## Next steps
+
+Continue with [performance](./performance.md), [mutations](./mutations.md), and
+[security reference](../reference/security.md).

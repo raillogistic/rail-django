@@ -98,8 +98,21 @@ class AccessGuardMiddleware(BaseMiddleware):
         schema_name = getattr(info.context, "schema_name", None)
         schema_settings = SchemaSettings.from_schema(schema_name)
         user = getattr(info.context, "user", None)
+        request = getattr(info, "context", None)
 
-        if schema_settings.authentication_required:
+        is_open_test_endpoint = False
+        try:
+            from ...graphql.views.utils import (
+                _is_test_graphql_endpoint_enabled,
+                _is_test_graphql_endpoint_request,
+            )
+
+            if request is not None and _is_test_graphql_endpoint_request(request):
+                is_open_test_endpoint = _is_test_graphql_endpoint_enabled()
+        except Exception:
+            is_open_test_endpoint = False
+
+        if schema_settings.authentication_required and not is_open_test_endpoint:
             if not user or not getattr(user, "is_authenticated", False):
                 raise PermissionError("Authentication required")
 

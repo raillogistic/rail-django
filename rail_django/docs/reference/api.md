@@ -1,4 +1,4 @@
-# API Reference
+# Public API reference
 
 ## Form API
 

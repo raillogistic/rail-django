@@ -1,22 +1,31 @@
 # Tutorials
 
-Master Rail Django with these step-by-step guides.
+This section gives you practical, task-oriented walkthroughs. Each tutorial
+focuses on one capability and includes examples you can adapt to your project.
 
-## Foundational Tutorials
+## Foundational tutorials
 
-*   [**Building Your First API**](first-api.md): A comprehensive introduction to creating a GraphQL API from scratch.
-*   [**Configuration Deep Dive**](configuration.md): Learn how to customize every aspect of the framework.
+Start here if you are new to Rail Django.
 
-## Feature Tutorials
+- [Build your first API](first-api.md)
+- [Configuration tutorial](configuration.md)
 
-*   [**Mastering Queries**](queries.md): Learn about advanced filtering, pagination, and performance optimization.
-*   [**Mastering Mutations**](mutations.md): Implement complex data modifications and nested operations.
+## Query and mutation tutorials
 
-## Security Tutorials
+Use these tutorials to work with filtering, pagination, and nested writes.
 
-*   [**Authentication & MFA**](authentication.md): Implementing secure identity verification.
-*   [**Granular Permissions**](permissions.md): Implementing RBAC and field-level security.
+- [Queries tutorial](queries.md)
+- [Mutations tutorial](mutations.md)
 
----
+## Security tutorials
 
-Looking for something else? Check the [Core Concepts](../core/queries.md) or the [API Reference](../reference/api.md).
+Use these guides to secure authentication and authorization.
+
+- [Authentication tutorial](authentication.md)
+- [Permissions walkthrough](permissions.md)
+
+## Next steps
+
+After finishing these tutorials, continue with the
+[core concepts](../core/queries.md) and
+[API reference](../reference/api.md).

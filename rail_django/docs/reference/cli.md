@@ -1,147 +1,183 @@
-# CLI Reference
+﻿# CLI reference
 
-Rail Django includes a command-line tool `rail-admin` and several custom Django management commands to help you develop, secure, and monitor your application.
+Rail Django provides `rail-admin` plus Django management commands for
+scaffolding, security operations, schema export, and extension workflows.
+This reference reflects commands currently present in the repository.
 
 ## `rail-admin`
 
-The `rail-admin` tool is the entry point for scaffolding new projects. It wraps `django-admin` but uses the Rail Django project template by default.
+Use `rail-admin` as a `django-admin` wrapper that injects Rail Django project
+templates.
 
 ### `startproject`
 
-Creates a new Rail Django project with the recommended directory structure, security settings, and GraphQL configuration.
+Create a project from the Rail Django template.
 
 ```bash
 rail-admin startproject <project_name> [destination]
 ```
 
-**Arguments:**
+When you do not pass custom template flags, `rail-admin` adds the framework
+project template automatically and performs post-processing for template files.
 
-*   `project_name`: Name of the project (and the python package).
-*   `destination` (optional): Directory to create the project in. Defaults to a directory named `<project_name>`.
+## Core management commands
 
-**Example:**
-
-```bash
-# Create a new project in the current directory
-rail-admin startproject my_api .
-```
-
----
-
-## Management Commands
-
-Rail Django provides several custom management commands. Run these using `python manage.py <command>`.
+Run commands with `python manage.py <command>`.
 
 ### `startapp`
 
-A custom version of Django's `startapp` that creates an app structure optimized for Rail Django (including `schemas.py` and `graphql/` directories).
+Create an app with Rail Django scaffolding.
 
 ```bash
 python manage.py startapp <app_name> [options]
 ```
 
-**Options:**
+Options:
 
-*   `--minimal`: Create a stripped-down app structure (omits standard Django views/admin if you only need GraphQL).
+- `--minimal`: Use the minimal app template.
 
 ### `security_check`
 
-Audits your current configuration for security vulnerabilities and best practices.
+Check security configuration and output recommendations.
 
 ```bash
 python manage.py security_check [options]
 ```
 
-**Options:**
+Options:
 
-*   `--fix`: Attempt to automatically fix common configuration issues.
-*   `--verbose`: Display detailed output for every check performed.
-*   `--format`: Output format, `text` (default) or `json`.
+- `--fix`
+- `--verbose`
+- `--format text|json`
 
 ### `setup_security`
 
-Interactive or automated setup of advanced security features like MFA, Audit Logging, and Rate Limiting.
+Generate and apply security setup helpers.
 
 ```bash
 python manage.py setup_security [options]
 ```
 
-**Options:**
+Options:
 
-*   `--enable-mfa`: Configure Multi-Factor Authentication.
-*   `--enable-audit`: Enable audit logging (default: True).
-*   `--create-settings`: Generate a `security_settings.py` file.
-*   `--migrate`: Automatically run database migrations for security tables.
-*   `--force`: Overwrite existing security configuration files.
+- `--enable-mfa`
+- `--enable-audit`
+- `--create-settings`
+- `--settings-file <path>`
+- `--migrate`
+- `--force`
 
 ### `audit_management`
 
-Manage security and compliance audit logs, including export and cleanup.
+Export, clean up, or summarize audit events.
 
 ```bash
-python manage.py audit_management <subcommand> [options]
+python manage.py audit_management <action> [options]
 ```
 
-**Subcommands:**
+Actions:
 
-*   **`export`**: Export logs to a file.
-    *   `--output <file>`: (Required) Path to the output file.
-    *   `--format <fmt>`: Output format, `json` (default) or `csv`.
-    *   `--days <n>`: Export logs from the last N days (default: 30).
-*   **`cleanup`**: Delete old logs to free up space.
-    *   `--days <n>`: (Required) Delete logs older than N days.
-    *   `--dry-run`: Show what would be deleted without executing.
-*   **`summary`**: Show a quick security summary.
-    *   `--hours <n>`: Show summary for the last N hours (default: 24).
+- `export --format json|csv --days <n> --output <file>`
+- `cleanup --days <n> [--dry-run]`
+- `summary --hours <n>`
 
 ### `health_monitor`
 
-Run continuous health monitoring of the GraphQL system with optional alerting.
+Run one-time or continuous health monitoring.
 
 ```bash
 python manage.py health_monitor [options]
 ```
 
-**Options:**
+Options:
 
-*   `--summary-only`: Perform a single check, display the report, and exit.
-*   `--duration <min>`: Run monitoring for N minutes (runs indefinitely if omitted).
-*   `--interval <sec>`: Time between checks in seconds (default: 60).
-*   `--enable-alerts`: Enable email alerts (requires email settings).
-*   `--alert-recipients`: Space-separated list of email addresses.
-*   `--config-file <path>`: Path to a JSON configuration file defining check thresholds.
+- `--summary-only`
+- `--duration <minutes>`
+- `--interval <seconds>`
+- `--config-file <json-path>`
+- `--enable-alerts`
+- `--alert-recipients <email ...>`
 
 ### `run_performance_benchmarks`
 
-Execute performance tests to detect N+1 issues, verify caching, and check load capacity.
+Run performance benchmark suites.
 
 ```bash
 python manage.py run_performance_benchmarks [options]
 ```
 
-**Options:**
+Options:
 
-*   `--test <type>`: Test to run (`n_plus_one`, `caching`, `load`, `complexity`, or `all`).
-*   `--output-dir <path>`: Directory for results (default: `benchmark_results`).
-*   `--verbose`: Display detailed performance metrics.
-*   `--data-sizes`: Comma-separated list of sizes for N+1 tests (default: `10,50,100`).
-*   `--concurrent-users`: Users for load tests (default: `1,5,10`).
+- `--test n_plus_one|caching|load|complexity|all`
+- `--output-dir <path>`
+- `--data-sizes <csv>`
+- `--concurrent-users <csv>`
+- `--requests-per-user <int>`
+- `--query-depths <csv>`
+- `--cache-scenarios <csv>`
+- `--verbose`
+- `--no-cleanup`
 
 ### `render_pdf`
 
-Render a registered PDF template to a file using the framework's templating system.
+Render a registered template to PDF or HTML.
 
 ```bash
 python manage.py render_pdf <template_path> --pk <id> [options]
 ```
 
-**Arguments:**
+Options:
 
-*   `template_path`: The URL path/key of the registered template.
+- `--output, -o <path>`
+- `--client-data <json>`
+- `--html`
 
-**Options:**
+### `eject_schema`
 
-*   `--pk <id>`: (Required) The Primary Key of the model instance to render.
-*   `--output <file>` / `-o`: Output file path.
-*   `--client-data <json>`: Optional JSON string for custom data injection.
-*   `--html`: Render an HTML preview instead of a PDF.
+Export GraphQL schema as SDL or introspection JSON.
+
+```bash
+python manage.py eject_schema [options]
+```
+
+Options:
+
+- `--out <path>`
+- `--json`
+- `--indent <int>`
+
+### `bump_metadata_deploy_version`
+
+Bump metadata deployment version values.
+
+```bash
+python manage.py bump_metadata_deploy_version [options]
+```
+
+Options:
+
+- `--key <name>`
+- `--value <value>`
+
+### `manage_schema_versions`
+
+This command exists but intentionally raises an error because schema versioning
+was removed.
+
+```bash
+python manage.py manage_schema_versions
+```
+
+## Form extension commands
+
+When the form extension command modules are available in your project, you can
+use these commands:
+
+- `python manage.py export_form_schema --app <label> --model <name> [--out <file>]`
+- `python manage.py generate_form_types --app <label> --model <name> [--out <file>]`
+
+## Next steps
+
+For project setup flows, continue with
+[installation](../getting-started/installation.md) and
+[quickstart](../getting-started/quickstart.md).

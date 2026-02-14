@@ -6,7 +6,12 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.http import HttpRequest
-from ..utils import _get_authenticated_user, _get_effective_schema_settings
+from ..utils import (
+    _get_authenticated_user,
+    _get_effective_schema_settings,
+    _is_test_graphql_endpoint_enabled,
+    _is_test_graphql_endpoint_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,15 @@ class AuthenticationMixin:
             schema_settings.get("graphiql_superuser_only", False)
             and str(getattr(schema_info, "name", "")).lower() == "graphiql"
         )
+
+        # Dedicated integration endpoint must stay open in non-production:
+        # tests authenticate explicitly via login() to attach identity context.
+        if (
+            _is_test_graphql_endpoint_request(request)
+            and _is_test_graphql_endpoint_enabled()
+            and not superuser_only
+        ):
+            return True
 
         user = self._resolve_request_user(request)
         if user and getattr(user, "is_authenticated", False):

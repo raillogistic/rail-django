@@ -1,4 +1,4 @@
-# Migration Guide
+# Migration overview
 
 This guide summarizes notable changes and new configuration knobs.
 

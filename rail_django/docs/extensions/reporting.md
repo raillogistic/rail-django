@@ -4,7 +4,7 @@ Rail Django includes a reporting and business intelligence module for defining a
 
 ## Overview
 
-The reporting extension allows you to:
+The reporting extension lets you:
 - Define **Datasets** as data sources (models or custom queries).
 - Configure **Dimensions** for grouping (by date, category, status, etc.).
 - Define **Metrics** for aggregation (sum, count, average, etc.).

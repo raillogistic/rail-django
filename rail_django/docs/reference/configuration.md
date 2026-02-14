@@ -140,7 +140,7 @@ When enabled, Unified Input Types are generated for relationships (Foreign Keys,
 Key options:
 - `enable_nested_relations` (default: `True`): master toggle.
 - `relation_max_nesting_depth` (default: 3): Max depth for nested create/update inputs to prevent infinite recursion.
-- `nested_relations_config` (dict): Per-model enable/disable override (e.g. `{"Post": False}`).
+- `nested_relations_config` (dict): Per-model enable/disable override (for example `{"Post": False}`).
 
 Rail Django uses a pipeline-based architecture for mutation handling. Each mutation
 step is a separate class that can be customized, skipped, or reordered. See
@@ -777,7 +777,7 @@ Notes:
   have an explicit `export_fields` entry to allow accessors.
 - Accessors must be full-path allowlisted (`author.username`), not base field names.
 - Filters and ordering are allowlisted via `filterable_fields` / `orderable_fields`.
-- Add GraphQL special filter keys (e.g., `quick`) to `filterable_special_fields`.
+- Add GraphQL special filter keys (for example, `quick`) to `filterable_special_fields`.
 - Async jobs require a shared cache between web and workers.
 - Callable accessors are disabled by default; enable `allow_callables` for explicit
   allowlisted method access.

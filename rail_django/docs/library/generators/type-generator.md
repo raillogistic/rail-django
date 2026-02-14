@@ -1,4 +1,4 @@
-# Type Generator
+# Type generator internals
 
 > **Module Path:** `rail_django.generators.types.generator`
 
@@ -561,4 +561,4 @@ reverse = type_gen._get_reverse_relations(Product)
 - [Query Generator](./query-generator.md) - Uses generated types
 - [Mutation Generator](./mutation-generator.md) - Uses generated inputs
 - [GraphQLMeta](../core/graphql-meta.md) - Field configuration
-- [Custom Scalars](../core/scalars.md) - Scalar type details
+- [Custom Scalars](../../reference/api.md) - Scalar type details

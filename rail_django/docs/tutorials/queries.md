@@ -78,7 +78,7 @@ Get aggregated counts directly from your GraphQL query:
 ```graphql
 query {
   productGroup(groupBy: "status") {
-    key # e.g. "ACTIVE"
+    key # for example "ACTIVE"
     label
     count
   }

@@ -1,4 +1,4 @@
-# Background Tasks
+# Background tasks extension
 
 Rail Django includes a powerful background task system for offloading long-running operations asynchronously, providing real-time progress tracking and reliable execution.
 

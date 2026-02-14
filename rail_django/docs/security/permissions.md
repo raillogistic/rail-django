@@ -1,221 +1,118 @@
-# Permissions & RBAC
+﻿# Permissions and RBAC
 
-Rail Django provides a granular and flexible permission system that combines standard Django permissions with Role-Based Access Control (RBAC), field-level security, and a powerful policy engine.
+Rail Django combines Django permissions, RBAC role evaluation, field-level
+access control, and policy evaluation.
 
-## Overview
+This page describes the permission behavior available in the current security
+and permissions extensions.
 
-The security system allows you to:
-- Define **Roles** that group multiple permissions.
-- Restrict access to **Models** and **Operations** (CRUD).
-- Control **Field Visibility** (Visible, Masked, Hidden, Redacted) based on roles.
-- Implement **Object-Level Permissions** (e.g., "users can only edit their own projects").
-- Use a **Policy Engine** for complex allow/deny rules with priorities.
-- Audit permission decisions.
-
-## Global Configuration
-
-### Global Authentication
-By default, Rail Django allows anonymous access if the underlying Django view does not restrict it. You can enforce authentication globally across your entire GraphQL schema:
+## Enable permission controls
 
 ```python
-# settings.py
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
-        "authentication_required": True, # Blocks all anonymous queries/mutations
+        "authentication_required": True,
+    },
+    "query_settings": {
+        "require_model_permissions": True,
+        "model_permission_codename": "view",
+    },
+    "mutation_settings": {
+        "require_model_permissions": True,
+        "model_permission_codenames": {
+            "create": "add",
+            "update": "change",
+            "delete": "delete",
+        },
     },
     "security_settings": {
         "enable_authorization": True,
         "enable_field_permissions": True,
         "enable_policy_engine": True,
+        "enable_permission_cache": True,
     },
 }
 ```
 
-## Role-Based Access Control (RBAC)
+## RBAC role management
 
-RBAC allows you to group permissions into logical roles like `admin`, `editor`, and `viewer`.
-
-### Defining Roles
-Define your hierarchy in an initialization module (e.g., `apps.py` or a dedicated `security.py`):
+Use `role_manager` to register role definitions and inherit permissions.
 
 ```python
-from rail_django.security import role_manager, RoleDefinition
+from rail_django.security.rbac import role_manager, RoleDefinition
 
-# 1. Base Viewer: Can only see public data
 role_manager.register_role(
     RoleDefinition(
-        name="viewer",
-        description="Read-only access to public data",
-        permissions=["cms.view_article", "auth.view_user"]
-    )
-)
-
-# 2. Editor: Inherits from Viewer + can modify content
-role_manager.register_role(
-    RoleDefinition(
-        name="editor",
-        description="Can create and edit articles",
-        permissions=["cms.add_article", "cms.change_article"],
-        parent_roles=["viewer"]
-    )
-)
-
-# 3. Admin: Full control
-role_manager.register_role(
-    RoleDefinition(
-        name="admin",
-        description="System administrator",
-        permissions=["*"], # Wildcard for all permissions
-        parent_roles=["editor"]
+        name="catalog_editor",
+        description="Can update product catalog",
+        permissions=["store.change_product", "store.view_product"],
     )
 )
 ```
 
-## Per-Model Security (GraphQLMeta)
+## Policy rules
 
-The `GraphQLMeta` class on your models is the primary way to enforce security rules.
-
-### Operation Guards & Field Security
-The following example demonstrates a `Profile` model with different rules for **Admins** and **Standard Users**.
-
-```python
-from django.db import models
-
-class Profile(models.Model):
-    user = models.OneToOneField("auth.User", on_delete=models.CASCADE)
-    full_name = models.CharField(max_length=255)
-    salary = models.DecimalField(max_digits=10, decimal_places=2)
-    ssn = models.CharField(max_length=11)
-    is_verified = models.BooleanField(default=False)
-
-    class GraphQLMeta:
-        # Operation Guards: Who can do what?
-        access = {
-            "operations": {
-                "list": {"roles": ["viewer", "editor", "admin"]},
-                "create": {"roles": ["admin"]}, # Only Admins create profiles
-                "update": {
-                    "roles": ["editor", "admin"],
-                    "condition": "is_owner_or_admin" # Custom logic
-                },
-                "delete": {"roles": ["admin"]} # Only Admins delete
-            }
-        }
-
-        # Field-Level Security: Sensitive data masking
-        field_permissions = {
-            "salary": {
-                "roles": ["admin"], # Only Admins see exact salary
-                "visibility": "hidden" # Everyone else sees null
-            },
-            "ssn": {
-                "roles": ["admin"],
-                "visibility": "masked",
-                "mask_value": "***-**-XXXX" # Editors see masked version
-            }
-        }
-
-    def is_owner_or_admin(self, user, operation, info):
-        """Row-Level Security (RLS) Logic"""
-        if user.is_superuser or "admin" in user.roles:
-            return True
-        return self.user == user
-```
-
-### Row-Level Security (RLS)
-While Operation Guards control *if* an action can be taken, RLS controls *which* rows are returned.
-
-#### Using `get_queryset` for Automatic Filtering
-You can restrict the list of objects a user sees by overriding `get_queryset` logic via the policy engine or model managers:
-
-```python
-# Policy-based RLS
-from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
-
-policy_manager.register_policy(
-    AccessPolicy(
-        name="users_only_see_own_profiles",
-        effect=PolicyEffect.ALLOW,
-        roles=["viewer"],
-        # Dynamic filter injected into the database query
-        row_filter=lambda user: {"user": user} if not user.is_staff else {}
-    )
-)
-```
-
-## User vs Admin Narrative
-
-| Feature | Standard User (`viewer`) | Administrator (`admin`) |
-|---------|---------------------------|-------------------------|
-| **List Profiles** | Sees only their own profile (RLS). | Sees all profiles in the system. |
-| **View `salary`** | Field is `null` (Hidden). | Sees actual decimal value. |
-| **View `ssn`** | Sees `***-**-XXXX` (Masked). | Sees actual social security number. |
-| **Delete Profile** | Operation Blocked (403). | Allowed to delete any profile. |
-| **Update Verification**| Operation Blocked. | Allowed to verify users. |
-
-## Policy Engine
-
-The policy engine allows for high-level rules that span multiple models or fields.
+Use `policy_manager` for cross-cutting allow or deny logic.
 
 ```python
 from rail_django.security import AccessPolicy, PolicyEffect, policy_manager
 
 policy_manager.register_policy(
     AccessPolicy(
-        name="deny_sensitive_to_contractors",
+        name="deny_sensitive_for_contractors",
         effect=PolicyEffect.DENY,
         priority=100,
         roles=["contractor"],
-        fields=["*token*", "*secret*", "ssn"],
-        reason="Contractors cannot access sensitive identity fields"
+        fields=["*token*", "*secret*"],
+        reason="Contractor access is restricted for sensitive fields.",
     )
 )
 ```
 
-Rules are evaluated by priority. If priorities are equal, **DENY** takes precedence over **ALLOW**.
+## Field-level access
 
-## Field Visibility Types
+Field-level decisions are handled by `field_permission_manager` in
+`rail_django.security.field_permissions`. Visibility outcomes include normal
+access, masking, and hidden behavior depending on policy and role context.
 
-| Type | Behavior |
-|------|----------|
-| `VISIBLE` | Field is accessible normally. |
-| `MASKED` | Value is partially hidden (e.g., `***@***.com`). |
-| `HIDDEN` | Field is not visible (returns `null` or error). |
-| `REDACTED` | Content is completely replaced by a placeholder. |
+## Permission inspection queries
 
-## GraphQL API
-
-Users can inspect their own permissions and roles:
+The permissions extension exposes runtime permission inspection.
 
 ```graphql
 query MyPermissions {
   myPermissions {
-    roles
-    permissions
-    isSuperuser
+    modelName
+    canRead
+    canCreate
+    canUpdate
+    canDelete
   }
 }
 ```
 
-Debug permission decisions:
+Explain a permission decision:
+
 ```graphql
-query Explain {
-  explainPermission(permission: "store.change_product", objectId: "42") {
+query Explain($permission: String!, $modelName: String) {
+  explainPermission(permission: $permission, modelName: $modelName) {
     allowed
     reason
+    roles
+    effectivePermissions
+    policyDecision { name effect priority reason }
   }
 }
 ```
 
-## Best Practices
+## Best practices
 
-1. **Principle of Least Privilege**: Start with no permissions and grant them explicitly.
-2. **Use Roles**: Avoid assigning raw permissions to users; use roles for better management.
-3. **Document Roles**: Use the `description` field in `RoleDefinition` to keep track of what roles are for.
-4. **Test Permissions**: Write unit tests to ensure your security rules behave as expected.
+- Keep `authentication_required` enabled for production schemas.
+- Prefer role assignment over direct user permission grants.
+- Keep model and mutation permission checks enabled.
+- Use policy rules for exceptional cases, not baseline access design.
 
-## See Also
+## Next steps
 
-- [Authentication](./authentication.md)
-- [Validation](./validation.md)
-- [Audit Logging](../extensions/audit-logging.md)
+Continue with [validation](./validation.md) and
+[security reference](../reference/security.md).

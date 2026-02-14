@@ -20,7 +20,7 @@ query {
 Each field type has specific operators.
 
 ### String Filters
-*   `exact`, `icontains` (case-insensitive contains), `istartswith`, `in`, `isNull`.
+- `exact`, `icontains` (case-insensitive contains), `istartswith`, `in`, `isNull`.
 
 ```graphql
 where: {
@@ -30,7 +30,7 @@ where: {
 ```
 
 ### Number Filters
-*   `exact`, `gt`, `gte`, `lt`, `lte`, `in`, `range`.
+- `exact`, `gt`, `gte`, `lt`, `lte`, `in`, `range`.
 
 ```graphql
 where: {
@@ -40,7 +40,7 @@ where: {
 ```
 
 ### Boolean Filters
-*   `exact`, `isNull`.
+- `exact`, `isNull`.
 
 ```graphql
 where: {
@@ -76,10 +76,10 @@ where: {
 ```
 
 ### To-Many Relations (Reverse/ManyToMany)
-*   `_some`: At least one related record matches.
-*   `_every`: All related records match.
-*   `_none`: No related records match.
-*   `_count`: Filter by the number of related records.
+- `_some`: At least one related record matches.
+- `_every`: All related records match.
+- `_none`: No related records match.
+- `_count`: Filter by the number of related records.
 
 ```graphql
 # Customers who have at least one 'paid' order

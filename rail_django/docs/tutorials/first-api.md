@@ -1,4 +1,4 @@
-# Building Your First API
+# Build your first API
 
 This tutorial will guide you through building a complete e-commerce API from scratch using Rail Django. By the end, you'll have a fully functional GraphQL API with products, categories, orders, and customers.
 

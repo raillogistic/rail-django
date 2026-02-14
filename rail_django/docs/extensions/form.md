@@ -1,4 +1,4 @@
-# Form API
+# Form API extension
 
 The Form API provides first-class, model-backed form configuration and data loading for dynamic frontends. It replaces the legacy form2 metadata flow with a single, form-focused contract.
 

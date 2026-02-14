@@ -8,27 +8,27 @@ The QueryGenerator creates GraphQL query fields for Django models, including sin
 
 ```
                          QueryGenerator
-                              â”‚
-        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-        â”‚                     â”‚                     â”‚
-        â–¼                     â–¼                     â–¼
+                              |
+        +---------------------+---------------------+
+        |                     |                     |
+        v                     v                     v
    Single Queries        List Queries        Paginated Queries
    product(id: ID)       productList(...)       productPage(...)
-        â”‚                     â”‚                     â”‚
-        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â–¼
-                     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                     â”‚ Advanced Filter â”‚
-                     â”‚   Generator     â”‚
-                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚
-                              â–¼
-                     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                     â”‚  Optimization   â”‚
-                     â”‚ select_related  â”‚
-                     â”‚ prefetch_relatedâ”‚
-                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+        |                     |                     |
+        +---------------------+---------------------+
+                              |
+                              v
+                     +-------------------+
+                     | Advanced Filter   |
+                     | Generator         |
+                     +-------------------+
+                              |
+                              v
+                     +-------------------+
+                     | Optimization      |
+                     | select_related    |
+                     | prefetch_related  |
+                     +-------------------+
 ```
 
 ## Class Reference
@@ -715,7 +715,6 @@ query_gen._enforce_model_permission(info, Product, "list", graphql_meta)
 
 - [Schema Builder](../core/schema-builder.md) - Uses QueryGenerator
 - [Type Generator](./type-generator.md) - Provides types
-- [Filter Generator](./filter-generator.md) - Advanced filtering
+- [Filter Generator](../../core/filtering.md) - Advanced filtering
 - [GraphQLMeta](../core/graphql-meta.md) - Query configuration
 - [RBAC System](../security/rbac.md) - Permission checks
-

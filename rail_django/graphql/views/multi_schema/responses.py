@@ -14,6 +14,9 @@ class ResponseMixin:
     def _schema_not_found_response(self, schema_name: str) -> JsonResponse:
         return JsonResponse({"errors": [{"message": f"Schema '{schema_name}' not found", "extensions": {"code": "SCHEMA_NOT_FOUND", "schema_name": schema_name}}]}, status=404)
 
+    def _test_endpoint_blocked_response(self, schema_name: str) -> JsonResponse:
+        return self._schema_not_found_response(schema_name)
+
     def _schema_disabled_response(self, schema_name: str) -> JsonResponse:
         return JsonResponse({"errors": [{"message": f"Schema '{schema_name}' is currently disabled", "extensions": {"code": "SCHEMA_DISABLED", "schema_name": schema_name}}]}, status=403)
 

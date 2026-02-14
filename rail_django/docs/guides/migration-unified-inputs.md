@@ -1,6 +1,6 @@
 # Migration Guide: Unified Relation Inputs
 
-Rail Django has moved from the "Dual Field" pattern (e.g., `author` + `nested_author`) to "Unified Relation Inputs" (Prisma-style). This guide explains how to migrate your client applications.
+Rail Django has moved from the "Dual Field" pattern (for example, `author` + `nested_author`) to "Unified Relation Inputs" (Prisma-style). This guide explains how to migrate your client applications.
 
 ## What Changed?
 

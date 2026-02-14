@@ -42,6 +42,10 @@ class ResponseMixin:
                          "extensions": {"code": "SCHEMA_NOT_FOUND", "schema_name": schema_name}}]},
             status=404)
 
+    def _test_endpoint_blocked_response(self, schema_name: str) -> JsonResponse:
+        """Return an indistinguishable not-found response when test endpoint is blocked."""
+        return self._schema_not_found_response(schema_name)
+
     def _schema_disabled_response(self, schema_name: str) -> JsonResponse:
         """Return a 403 response for disabled schemas."""
         return JsonResponse(

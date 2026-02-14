@@ -12,7 +12,7 @@ The generator adds helper fields automatically based on your model definitions:
 
 1.  **Display Labels**: For fields with `choices`, it adds a `*Desc` field.
     *   Model: `status = models.CharField(choices=OrderStatus.choices)`
-    *   GraphQL: `status` (value, e.g., "PAID"), `statusDesc` (label, e.g., "Paid").
+    *   GraphQL: `status` (value, for example, "PAID"), `statusDesc` (label, for example, "Paid").
 2.  **Counts**: For `ManyToMany` and reverse relationships, it adds a `*Count` field.
     *   Model: `Customer` has `orders`.
     *   GraphQL: `orders` (list), `ordersCount` (int).
@@ -23,8 +23,8 @@ The generator adds helper fields automatically based on your model definitions:
 
 By default, Rail Django converts all field names to **camelCase** to match GraphQL conventions.
 
-*   Python: `first_name`
-*   GraphQL: `firstName`
+- Python: `first_name`
+- GraphQL: `firstName`
 
 ## Customizing Types with `GraphQLMeta`
 
@@ -58,8 +58,8 @@ class Product(models.Model):
 
 Rail Django automatically handles relationships (`ForeignKey`, `ManyToManyField`).
 
-*   **Forward Relations**: Exposed as nested types (e.g., `product.category`).
-*   **Reverse Relations**: Exposed as list fields (e.g., `category.products`).
+- **Forward Relations**: Exposed as nested types (for example, `product.category`).
+- **Reverse Relations**: Exposed as list fields (for example, `category.products`).
 
 ### Filtering on Relations
 
@@ -110,5 +110,5 @@ query {
 ## Historical Models
 
 If you use `django-simple-history`, Rail Django automatically detects it and adds:
-*   `instanceId`: ID of the original object.
-*   `historyChanges`: JSON object detailing what changed in that revision.
+- `instanceId`: ID of the original object.
+- `historyChanges`: JSON object detailing what changed in that revision.

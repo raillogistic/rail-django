@@ -1,53 +1,66 @@
-# Input Validation
+﻿# Input validation
 
-Rail Django includes a robust validation system to sanitize inputs and prevent common attacks like XSS and SQL Injection.
+Rail Django includes a unified input validation pipeline in
+`rail_django.security.validation`. It sanitizes incoming payloads, applies
+pattern checks, and produces structured validation reports.
 
-## Automatic Sanitization
+## Use the validation decorator
 
-By default, the framework sanitizes string inputs to strip potentially dangerous characters. This is controlled by `security_settings.enable_input_validation`.
-
-## The `@validate_input` Decorator
-
-You can explicitly validate inputs on any resolver using the `@validate_input` decorator.
+Use `@validate_input` on resolvers or handlers where you need explicit input
+validation.
 
 ```python
 from rail_django.security.validation import validate_input
 
 @validate_input()
 def resolve_create_comment(root, info, input):
-    # 'input' is now sanitized and validated
     return Comment.objects.create(**input)
 ```
 
-## Global Input Validator
+## Use the global validator
 
-You can use the global `input_validator` for manual checks.
+For manual checks, use `input_validator`.
 
 ```python
 from rail_django.security.validation import input_validator
 
-def my_function(data):
-    report = input_validator.validate_payload(data)
-    
-    if report.has_issues:
-        for issue in report.issues:
-            print(f"Validation error in {issue.path}: {issue.message}")
-        raise ValueError("Invalid input")
+report = input_validator.validate_payload({"email": "person@example.com"})
+if report.has_issues:
+    raise ValueError("Input payload failed validation")
 ```
 
-## Configuration
+## Security settings
 
-You can customize the HTML sanitizer and severity thresholds in `settings.py`.
+These keys are read from `RAIL_DJANGO_GRAPHQL["security_settings"]`.
 
 ```python
-# settings.py
 RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
-        "input_allowed_html_tags": ["b", "i", "u", "a"],
-        "input_allowed_html_attributes": {"a": ["href"]},
-        "input_failure_severity": "high", # Only block 'high' severity issues
+        "enable_input_validation": True,
         "enable_sql_injection_protection": True,
         "enable_xss_protection": True,
+        "input_allow_html": False,
+        "input_allowed_html_tags": ["p", "br", "strong", "em"],
+        "input_allowed_html_attributes": {"a": ["href", "title"]},
+        "input_max_string_length": None,
+        "input_truncate_long_strings": False,
+        "input_failure_severity": "high",
+        "input_pattern_scan_limit": 10000,
     }
 }
 ```
+
+## Validate and sanitize payloads
+
+For explicit sanitize-and-raise behavior, use the sanitizer API.
+
+```python
+from rail_django.security.validation import graphql_sanitizer
+
+clean_payload = graphql_sanitizer.sanitize_and_validate(payload)
+```
+
+## Next steps
+
+Continue with [permissions](./permissions.md) and
+[core mutations](../core/mutations.md).

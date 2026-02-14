@@ -1,4 +1,4 @@
-# Permissions Tutorial
+# Permissions walkthrough
 
 Learn how to implement granular access control in your GraphQL API.
 

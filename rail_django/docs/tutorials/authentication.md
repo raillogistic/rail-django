@@ -11,8 +11,6 @@ Rail Django supports multiple authentication methods:
 3. **Cookie-based JWT** - JWTs stored in HTTP-only cookies
 4. **Multi-Factor Authentication (MFA)** - TOTP-based 2FA
 
----
-
 ## JWT Authentication
 
 ### How It Works
@@ -60,8 +58,6 @@ mutation {
   }
 }
 ```
-
----
 
 ## Multi-Factor Authentication (MFA)
 

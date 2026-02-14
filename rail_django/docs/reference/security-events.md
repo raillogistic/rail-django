@@ -1,4 +1,4 @@
-# Security Events System
+# Security events reference
 
 ## Overview
 

@@ -1,4 +1,4 @@
-# Multitenancy
+# Multitenancy extension
 
 Module: `rail_django.extensions.multitenancy`
 

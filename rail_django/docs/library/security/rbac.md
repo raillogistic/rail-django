@@ -220,7 +220,7 @@ def resolve_sensitive_data(root, info):
 
 ## Contextual Permissions
 
-For owner-based access (e.g., `update_own`):
+For owner-based access (for example, `update_own`):
 
 ```python
 from rail_django.security.rbac import PermissionContext, role_manager
@@ -501,7 +501,7 @@ def remove_role(user, role_name):
 
 ## Related Modules
 
-- [Field Permissions](./field-permissions.md) - Field-level access
-- [Policies](./policies.md) - Allow/deny rules
-- [Audit](./audit.md) - Permission auditing
+- [Field Permissions](../../security/permissions.md) - Field-level access
+- [Policies](../../reference/security.md) - Allow/deny rules
+- [Audit](../../extensions/audit-logging.md) - Permission auditing
 - [GraphQLMeta](../core/graphql-meta.md) - Per-model configuration

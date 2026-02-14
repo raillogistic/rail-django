@@ -1,58 +1,75 @@
-# Rail Django Documentation
+# Rail Django documentation
 
-Welcome to the official documentation for **Rail Django**, a production-ready GraphQL framework for Django.
+Rail Django is a production-ready GraphQL framework for Django. This
+documentation helps you move from installation to production operations, with
+clear references for schema generation, security, and extensions.
 
-Rail Django wraps [Graphene-Django](https://docs.graphene-python.org/projects/django/en/latest/) to provide a battery-included experience with automatic schema generation, enhanced security, and enterprise-grade features.
+Rail Django builds on
+[Graphene-Django](https://docs.graphene-python.org/projects/django/en/latest/)
+and adds automatic schema generation, policy-driven security, and operational
+tooling for larger deployments.
 
-## 📚 Table of Contents
+## Start here
 
-### Getting Started
-*   [**Installation**](getting-started/installation.md): Set up Rail Django in your environment.
-*   [**Quickstart**](getting-started/quickstart.md): Build your first API in under 5 minutes.
-*   [**Architecture**](getting-started/architecture.md): Understand how Rail Django works under the hood.
+If you are new to Rail Django, begin with setup and your first API build.
 
-### Tutorials
-*   [**Building Your First API**](tutorials/first-api.md): Complete beginner tutorial.
-*   [**Authentication Tutorial**](tutorials/authentication.md): Secure your API with JWT and MFA.
-*   [**Permissions Tutorial**](tutorials/permissions.md): Implement granular access control.
-*   [**Queries Deep Dive**](tutorials/queries.md): Master complex query patterns.
-*   [**Mutations Deep Dive**](tutorials/mutations.md): Master data modification.
-*   [**Configuration Tutorial**](tutorials/configuration.md): Customize the framework.
+- [Installation](getting-started/installation.md)
+- [Quickstart tutorial](getting-started/quickstart.md)
+- [Architecture](getting-started/architecture.md)
 
-### Core Concepts
-*   [**Models & Schema**](core/models-and-schema.md): How Django models map to GraphQL types.
-*   [**Queries**](core/queries.md): Fetching data with advanced filtering and pagination.
-*   [**Filtering**](core/filtering.md): Deep dive into the `where` argument.
-*   [**Mutations**](core/mutations.md): Creating, updating, and deleting data.
-*   [**Configuration Reference**](core/configuration.md): Global settings reference.
-*   [**Performance**](core/performance.md): Optimization, caching, and N+1 prevention.
+## Learn by tutorial
 
-### Security
-*   [**Authentication & MFA**](security/authentication.md): Identity verification strategies.
-*   [**Permissions (RBAC)**](security/permissions.md): Role-based and field-level access control.
-*   [**Validation**](security/validation.md): Input validation and data integrity.
+Use the tutorials to implement real features end to end.
 
-### Advanced Features & Extensions
-*   [**Testing**](guides/testing.md): Best practices and utilities for testing your GraphQL API.
-*   [**Plugin System**](guides/plugins.md): Extend the framework with custom hooks and logic.
-*   [**Extensions Overview**](extensions/index.md): Audit Logging, Webhooks, Multitenancy, and more.
-*   [**Data Importing**](extensions/importing.md): Template-driven data import pipeline.
-*   [**Migration: Unified Inputs**](guides/migration-unified-inputs.md): Moving to the new Prisma-style relation inputs.
+- [Build your first API](tutorials/first-api.md)
+- [Authentication tutorial](tutorials/authentication.md)
+- [Permissions walkthrough](tutorials/permissions.md)
+- [Queries tutorial](tutorials/queries.md)
+- [Mutations tutorial](tutorials/mutations.md)
+- [Configuration tutorial](tutorials/configuration.md)
 
-### Operations & Reference
-*   [**Production Deployment**](operations/deployment.md): Best practices for going live.
-*   [**Troubleshooting**](guides/troubleshooting.md): Common issues and how to solve them.
-*   [**API Reference**](reference/api.md): Public API documentation.
-*   [**CLI Reference**](reference/cli.md): `rail-admin` command usage.
-*   [**GraphQLMeta**](reference/meta.md): The comprehensive guide to `class GraphQLMeta`.
+## Core concepts
 
-## 🚀 Key Features
+These pages explain the default behavior and key framework contracts.
 
-*   **Auto-CamelCase**: Automatic conversion of snake_case Python fields to camelCase GraphQL fields.
-*   **Performance**: Automatic `select_related` and `prefetch_related` optimization.
-*   **Security**: Built-in Rate Limiting, Query Depth Analysis, and Field-Level Permissions.
-*   **Developer Experience**: Custom CLI for project scaffolding and clean architecture.
+- [Models and schema](core/models-and-schema.md)
+- [Queries](core/queries.md)
+- [Filtering](core/filtering.md)
+- [Mutations](core/mutations.md)
+- [Configuration](core/configuration.md)
+- [Performance](core/performance.md)
 
-## 🤝 Contributing
+## Security
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/raillogistic/rail-django/blob/main/CONTRIBUTING.md) for details.
+Use this section to configure authentication, authorization, and validation.
+
+- [Authentication](security/authentication.md)
+- [Permissions](security/permissions.md)
+- [Validation](security/validation.md)
+
+## Extensions and guides
+
+Use optional modules and implementation guides to fit your architecture.
+
+- [Extensions overview](extensions/index.md)
+- [Data importing](extensions/importing.md)
+- [Testing guide](guides/testing.md)
+- [Plugin guide](guides/plugins.md)
+- [Migration to unified relation inputs](guides/migration-unified-inputs.md)
+- [Troubleshooting](guides/troubleshooting.md)
+
+## Reference and operations
+
+Use these references for day-to-day implementation and production maintenance.
+
+- [Deployment](operations/deployment.md)
+- [API reference](reference/api.md)
+- [CLI reference](reference/cli.md)
+- [GraphQLMeta reference](reference/meta.md)
+- [Security reference](reference/security.md)
+
+## Next steps
+
+After you complete quickstart, move to
+[mutations](core/mutations.md) and [permissions](security/permissions.md) to
+define your production data and access model.

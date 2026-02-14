@@ -28,7 +28,7 @@ The `RailGraphQLTestClient` is the primary tool for executing GraphQL operations
 
 ### build_schema
 
-The `build_schema` helper allows you to dynamically generate a Graphene schema for tests without needing a full Django setup or a pre-defined registry.
+The `build_schema` helper lets you dynamically generate a Graphene schema for tests without needing a full Django setup or a pre-defined registry.
 
 - **Usage**: `harness = build_schema(schema_name="test", apps=["my_app"])`
 - **Returns**: A `SchemaHarness` object containing the `schema`, `builder`, and `registry`.

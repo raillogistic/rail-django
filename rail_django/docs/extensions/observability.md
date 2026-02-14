@@ -1,4 +1,4 @@
-# Observability
+# Observability extension
 
 Rail Django provides deep insights into your GraphQL API by integrating with industry-standard observability tools like **Sentry**, **OpenTelemetry**, and **Prometheus**.
 

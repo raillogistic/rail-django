@@ -1,19 +1,31 @@
-# Authentication & MFA
+﻿# Authentication and MFA
 
-Rail Django provides a comprehensive security layer on top of Django's native authentication, including full JWT support and Multi-Factor Authentication (MFA).
+Rail Django ships JWT-based authentication, cookie support, and MFA helpers.
+This page documents the auth contracts that exist in the current extension
+implementation.
 
-## Overview
+## Authentication architecture
 
-The authentication system features:
-- **JWT (JSON Web Token)**: Built-in mutations for login, refresh, and logout.
-- **Session Support**: Compatibility with standard Django session-based auth.
-- **MFA (Multi-Factor Authentication)**: TOTP-based second factor (Google Authenticator, etc.).
-- **Middleware**: Automatic user population in GraphQL context.
-- **Secure by Default**: Protection against common vulnerabilities (CSRF, Brute force).
+GraphQL auth is provided by `rail_django.extensions.auth` and MFA flows are
+provided by `rail_django.extensions.mfa`.
 
-## Configuration
+Core auth mutations exposed by `AuthMutations`:
 
-Enable authentication in your settings:
+- `login`
+- `verifyMfaLogin`
+- `refreshToken`
+- `revokeSession`
+- `revokeAllSessions`
+- `logout`
+
+Core auth queries:
+
+- `me`
+- `viewer`
+
+## Enable authentication
+
+Use schema and security settings, then include Django authentication middleware.
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -25,96 +37,109 @@ RAIL_DJANGO_GRAPHQL = {
     },
 }
 
-# Middleware setup
 MIDDLEWARE = [
     # ...
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "rail_django.middleware.auth.GraphQLAuthenticationMiddleware",
-    # ...
 ]
 ```
 
-## JWT Authentication
+## Login and token refresh
 
-Rail Django uses JWT for stateless authentication, ideal for mobile and modern web apps.
-
-### Authentication Mutations
-
-#### 1. Login
-Authenticates credentials and returns tokens.
+Example login mutation:
 
 ```graphql
 mutation Login($username: String!, $password: String!) {
   login(username: $username, password: $password) {
     ok
-    token # Access Token
+    token
     refreshToken
-    user { username }
+    mfaRequired
+    mfaSetupRequired
+    ephemeralToken
+    errors
   }
 }
 ```
 
-#### 2. Token Refresh
-Use the refresh token to obtain a new access token when it expires.
+Example refresh mutation:
 
 ```graphql
-mutation Refresh($token: String!) {
-  refreshToken(refreshToken: $token) {
+mutation Refresh($refreshToken: String) {
+  refreshToken(refreshToken: $refreshToken) {
+    ok
     token
+    refreshToken
     expiresAt
+    errors
   }
 }
 ```
 
-### Using the Token
-Include the token in the `Authorization` header of your requests:
-`Authorization: Bearer <your_token>`
+## JWT settings
 
-## Multi-Factor Authentication (MFA)
-
-Rail Django supports TOTP (Time-based One-Time Password) for an extra layer of security.
-
-### Activation
-Enable MFA in your settings:
+The auth extension reads these settings directly:
 
 ```python
-RAIL_DJANGO_GRAPHQL = {
-    "mfa_settings": {
-        "enabled": True,
-        "issuer_name": "MyProject",
-        "enforce_for_staff": True,
-    }
+JWT_SECRET_KEY = "<secret>"  # defaults to Django SECRET_KEY
+JWT_ACCESS_TOKEN_LIFETIME = 3600
+JWT_REFRESH_TOKEN_LIFETIME = 86400
+JWT_ROTATE_REFRESH_TOKENS = True
+JWT_REFRESH_REUSE_DETECTION = True
+JWT_REFRESH_TOKEN_CACHE = "default"
+
+JWT_AUTH_COOKIE = "jwt"
+JWT_REFRESH_COOKIE = "refresh_token"
+JWT_COOKIE_SECURE = True
+JWT_COOKIE_SAMESITE = "Lax"
+```
+
+## MFA login flow
+
+When MFA is required for a user, `login` returns `mfaRequired: true` and an
+`ephemeralToken`. Complete login with:
+
+```graphql
+mutation VerifyMfa($code: String!, $ephemeralToken: String!) {
+  verifyMfaLogin(code: $code, ephemeralToken: $ephemeralToken) {
+    ok
+    token
+    refreshToken
+    errors
+  }
 }
 ```
 
-### MFA Flow
+MFA policy and behavior are controlled by `MFA_*` settings, including:
 
-1. **Setup**: Use `setupTotp` to get a secret and QR code.
-2. **Verification**: Confirm the device with `verifyTotp` using the code from the app.
-3. **Login**: If MFA is enabled, `login` will return `mfaRequired: true`.
-4. **Completion**: Use `completeMfaLogin` with the code from the authenticator app.
+- `MFA_ENABLED`
+- `MFA_REQUIRED_FOR_ALL_USERS`
+- `MFA_REQUIRED_FOR_STAFF`
+- `MFA_TOTP_VALIDITY_WINDOW`
+- `MFA_BACKUP_CODES_COUNT`
 
-### Backup Codes
-Upon successful MFA setup, the system provides one-time backup codes. Users should save these to regain access if they lose their device.
+## Session revocation
 
-## Cookie Authentication
-For web applications on the same domain, you can enable HTTP-only cookies for enhanced security against XSS:
+Use `revokeSession(sessionId: String!)` to revoke a refresh-token family, or
+`revokeAllSessions` to revoke the current session context.
 
-```python
-JWT_ALLOW_COOKIE_AUTH = True
-JWT_COOKIE_SECURE = True
-JWT_COOKIE_HTTPONLY = True
+## Current user query
+
+Use `me` (or `viewer`) to fetch authenticated user data plus permissions and
+roles resolved by the extension.
+
+```graphql
+query Me {
+  me {
+    id
+    username
+    permissions
+    roles { name }
+  }
+}
 ```
 
-## Best Practices
+## Next steps
 
-1. **Short-lived Tokens**: Keep access token lifetime short (e.g., 15-30 minutes).
-2. **Secure Refresh Tokens**: Refresh tokens should have longer lifetimes but be stored securely.
-3. **HTTPS**: Never transmit tokens over unencrypted connections.
-4. **MFA Enforcement**: Require MFA for users with elevated permissions (staff, admins).
-
-## See Also
-
-- [Permissions & RBAC](./permissions.md)
-- [Audit Logging](../extensions/audit-logging.md)
-- [Validation](./validation.md)
+Continue with [permissions](./permissions.md) and
+[audit logging](../extensions/audit-logging.md).

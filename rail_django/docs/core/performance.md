@@ -37,7 +37,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## Query Protection
 
-To prevent malicious or accidental performance degradation, Rail Django allows you to set strict limits on query complexity.
+To prevent malicious or accidental performance degradation, Rail Django lets you set strict limits on query complexity.
 
 ### Depth Limiting
 Restricts how deep a query can nest relationships.
@@ -65,7 +65,7 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-You can define different limits for different contexts (e.g., stricter limits for login, more generous for premium users).
+You can define different limits for different contexts (for example, stricter limits for login, more generous for premium users).
 
 ## Caching Strategies
 

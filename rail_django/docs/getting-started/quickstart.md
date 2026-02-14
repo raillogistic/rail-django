@@ -1,4 +1,4 @@
-# Quickstart Guide
+# Quickstart tutorial
 
 Build a complete, secured GraphQL API with Rail Django in just a few minutes. This guide will walk you through creating a simple store API with Products and Categories.
 

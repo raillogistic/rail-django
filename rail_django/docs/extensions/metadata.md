@@ -103,7 +103,7 @@ query AvailableModels {
 
 ### Instance-Aware Metadata (FSM)
 
-You can retrieve metadata specific to a model instance (e.g., valid state transitions) by providing an `objectId`.
+You can retrieve metadata specific to a model instance (for example, valid state transitions) by providing an `objectId`.
 
 ```graphql
 query InstanceMetadata($app: String!, $model: String!, $id: ID!) {
@@ -168,8 +168,8 @@ Each field type exposes typed operators:
 
 The metadata API provides specific fields to help build dynamic filtering interfaces automatically:
 
-- **`base_type`**: Hints at the type of UI widget to render for the field (e.g., "String", "Number", "Boolean", "Date", "Relationship", "JSON").
-- **`label`** (on filter options): Human-readable, localized label for the operator (e.g., "Equals", "Greater than").
+- **`base_type`**: Hints at the type of UI widget to render for the field (for example, "String", "Number", "Boolean", "Date", "Relationship", "JSON").
+- **`label`** (on filter options): Human-readable, localized label for the operator (for example, "Equals", "Greater than").
 
 Example query for building a filter panel:
 
@@ -317,7 +317,7 @@ Each model has a tracked version key (`metadata_version:{app}:{model}`). When me
 
 ### Invalidation
 
-To invalidate metadata for a specific model (e.g., after a schema migration or permission change), use:
+To invalidate metadata for a specific model (for example, after a schema migration or permission change), use:
 
 ```python
 from rail_django.extensions.metadata.utils import invalidate_metadata_cache
@@ -330,10 +330,10 @@ This bumps the version token, effectively invalidating all cached entries for th
 
 ## Internationalization (i18n)
 
-The metadata extension supports internationalization. Field labels, help text, descriptions, and filter operator labels (e.g., "At least one", "All") are returned in the active language of the request. Ensure `django.middleware.locale.LocaleMiddleware` is enabled.
+The metadata extension supports internationalization. Field labels, help text, descriptions, and filter operator labels (for example, "At least one", "All") are returned in the active language of the request. Ensure `django.middleware.locale.LocaleMiddleware` is enabled.
 
 ## See Also
 
-- [Filtering Guide](../guides/filtering.md)
+- [Filtering Guide](../core/filtering.md)
 - [Permissions](../security/permissions.md)
 - [GraphQLMeta Reference](../reference/meta.md)

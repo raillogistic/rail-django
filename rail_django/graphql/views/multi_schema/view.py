@@ -30,6 +30,8 @@ from graphql import ExecutionResult
 from ..utils import (
     _get_effective_schema_settings,
     _host_allowed,
+    _is_test_graphql_endpoint_enabled,
+    _is_test_graphql_endpoint_request,
 )
 from .authentication import AuthenticationMixin
 from .introspection import IntrospectionMixin
@@ -79,6 +81,8 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
             if request_files is not None and not isinstance(request_files, (dict, MultiValueDict)):
                 request.__dict__["FILES"] = MultiValueDict()
             if not hasattr(request, "COOKIES") or not isinstance(request.COOKIES, dict): request.COOKIES = {}
+            if _is_test_graphql_endpoint_request(request) and not _is_test_graphql_endpoint_enabled():
+                return self._test_endpoint_blocked_response(schema_name)
 
             request_is_batch = None
             if request.method == "POST":

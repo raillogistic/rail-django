@@ -281,6 +281,10 @@ class MeQuery(graphene.ObjectType):
     me = graphene.Field(
         lambda: UserType(), description="Informations de l'utilisateur connecte"
     )
+    viewer = graphene.Field(
+        lambda: UserType(),
+        description="Alias de `me` pour les tests d'integration",
+    )
 
     def resolve_me(self, info):
         """
@@ -310,3 +314,7 @@ class MeQuery(graphene.ObjectType):
             # Silently ignore and return None if auth fails
             pass
         return None
+
+    def resolve_viewer(self, info):
+        """Return the authenticated user through a stable integration-test alias."""
+        return self.resolve_me(info)

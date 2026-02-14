@@ -65,7 +65,7 @@ RAIL_DJANGO_GRAPHQL = {
 
 ## Per-Schema Configuration
 
-If your project has multiple schemas (e.g., Public API vs Admin API), you can define them in `RAIL_DJANGO_GRAPHQL_SCHEMAS`.
+If your project has multiple schemas (for example, Public API vs Admin API), you can define them in `RAIL_DJANGO_GRAPHQL_SCHEMAS`.
 
 ```python
 RAIL_DJANGO_GRAPHQL_SCHEMAS = {

@@ -8,11 +8,11 @@ This guide covers common issues, error messages, and "gotchas" you might encount
 
 **Message**: `Circular reference detected in nested data for {model_name}. Path: {path}`
 
-**Cause**: This occurs during nested mutation operations (e.g., creating a user and their profile simultaneously) when the data structure creates a cycle (User -> Profile -> User).
+**Cause**: This occurs during nested mutation operations (for example, creating a user and their profile simultaneously) when the data structure creates a cycle (User -> Profile -> User).
 
 **Solution**:
-*   Break the cycle by using ID references for one side of the relationship instead of nesting full objects.
-*   Use the `connect` operation to link existing objects rather than creating new ones inline.
+- Break the cycle by using ID references for one side of the relationship instead of nesting full objects.
+- Use the `connect` operation to link existing objects rather than creating new ones inline.
 
 ### Query Complexity Exceeded
 
@@ -21,8 +21,8 @@ This guide covers common issues, error messages, and "gotchas" you might encount
 **Cause**: The query is too deep or requests too many fields, violating the security limits configured in `RAIL_DJANGO_GRAPHQL['security']`.
 
 **Solution**:
-*   Simplify the query on the client side.
-*   Increase `max_query_complexity` or `max_query_depth` in your settings if the query is legitimate.
+- Simplify the query on the client side.
+- Increase `max_query_complexity` or `max_query_depth` in your settings if the query is legitimate.
 
 ### TenantAccessError
 
@@ -31,8 +31,8 @@ This guide covers common issues, error messages, and "gotchas" you might encount
 **Cause**: The multi-tenancy middleware has detected an attempt to access or modify data belonging to a different tenant.
 
 **Solution**:
-*   Verify that the request includes the correct tenant identifier (e.g., via headers or subdomain).
-*   Check that the `TenantMiddleware` is installed and correctly configured.
+- Verify that the request includes the correct tenant identifier (for example, via headers or subdomain).
+- Check that the `TenantMiddleware` is installed and correctly configured.
 
 ## "Missing" Data
 
@@ -48,9 +48,9 @@ If a field exists on your Django model but isn't showing up in the GraphQL schem
 
 The `FieldPermissionMiddleware` may redact data based on security rules.
 
-*   `***HIDDEN***`: The field is masked.
-*   `pa***wd`: The field is redacted.
-*   `null`: The field permission level is `HIDDEN` for the current user.
+- `***HIDDEN***`: The field is masked.
+- `pa***wd`: The field is redacted.
+- `null`: The field permission level is `HIDDEN` for the current user.
 
 **Debugging**: Check your logs for `Field permission rule registered for {key}` to see what rules are active.
 

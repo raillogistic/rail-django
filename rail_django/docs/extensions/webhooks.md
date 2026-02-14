@@ -1,6 +1,6 @@
 # Webhooks
 
-Rail Django includes a powerful webhook system that allows you to notify external services in real-time when events occur in your application.
+Rail Django includes a powerful webhook system that lets you notify external services in real-time when events occur in your application.
 
 ## Overview
 

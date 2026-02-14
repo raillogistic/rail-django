@@ -60,7 +60,7 @@ mutation UpdateProduct($id: ID!) {
 
 ## Nested Operations (Unified Input)
 
-Rail Django uses a "Unified Input" format for managing relationships (Foreign Keys, Many-to-Many, etc.). This allows you to perform complex related-data operations, such as creating an Order and all its Items, in a single atomic request.
+Rail Django uses a "Unified Input" format for managing relationships (Foreign Keys, Many-to-Many, etc.). This lets you perform complex related-data operations, such as creating an Order and all its Items, in a single atomic request.
 
 Each relation field accepts an object with the following operators:
 

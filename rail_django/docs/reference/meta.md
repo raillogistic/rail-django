@@ -1,6 +1,6 @@
 # GraphQLMeta Reference
 
-`GraphQLMeta` is the configuration hub for each model. It allows you to declare how the framework should treat the model in the GraphQL schema.
+`GraphQLMeta` is the configuration hub for each model. It lets you declare how the framework should treat the model in the GraphQL schema.
 
 ## Full Reference
 
@@ -51,21 +51,21 @@ class Order(models.Model):
 ## Detailed Options
 
 ### `Fields`
-*   `include`: Explicit list of fields to expose.
-*   `exclude`: Fields to hide.
-*   `read_only`: Exposed in Queries, hidden in Mutation inputs.
-*   `write_only`: Hidden in Queries, exposed in Mutation inputs.
+- `include`: Explicit list of fields to expose.
+- `exclude`: Fields to hide.
+- `read_only`: Exposed in Queries, hidden in Mutation inputs.
+- `write_only`: Hidden in Queries, exposed in Mutation inputs.
 
 ### `Filtering`
-*   `quick`: List of fields for the `quick` search argument.
-*   `presets`: Map of named filters.
-*   `custom`: Map of filter names to model methods.
+- `quick`: List of fields for the `quick` search argument.
+- `presets`: Map of named filters.
+- `custom`: Map of filter names to model methods.
 
 ### `AccessControl`
-*   `operations`: Dict mapping `create`, `retrieve`, `update`, `delete` to `OperationGuard`.
-*   `fields`: List of `FieldGuard` objects.
+- `operations`: Dict mapping `create`, `retrieve`, `update`, `delete` to `OperationGuard`.
+- `fields`: List of `FieldGuard` objects.
 
 ### `Resolvers`
-*   `queries`: Custom root query fields for this model.
-*   `mutations`: Custom mutations for this model.
-*   `fields`: Custom field resolvers (e.g. `{"full_name": "resolve_full_name"}`).
+- `queries`: Custom root query fields for this model.
+- `mutations`: Custom mutations for this model.
+- `fields`: Custom field resolvers (for example `{"full_name": "resolve_full_name"}`).

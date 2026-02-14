@@ -1,4 +1,4 @@
-# GraphQL Subscriptions
+# GraphQL subscriptions extension
 
 Rail Django supports real-time GraphQL subscriptions via WebSocket, allowing clients to receive instant updates when data changes in the system.
 

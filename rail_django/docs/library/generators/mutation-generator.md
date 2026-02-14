@@ -1,4 +1,4 @@
-# Mutation Generator
+# Mutation generator internals
 
 > **Module Path:** `rail_django.generators.mutations.generator`
 
@@ -715,7 +715,7 @@ class Product(models.Model):
 
 - [Schema Builder](../core/schema-builder.md) - Uses MutationGenerator
 - [Type Generator](./type-generator.md) - Provides input types
-- [Pipeline System](./pipeline.md) - Mutation execution flow
-- [Nested Handler](./nested-handler.md) - Nested operation handling
-- [Input Validation](../security/validation.md) - Input sanitization
+- [Pipeline System](../../core/mutations.md) - Mutation execution flow
+- [Nested Handler](../../core/mutations.md#nested-operations-unified-input) - Nested operation handling
+- [Input Validation](../security/index.md) - Input sanitization
 - [RBAC System](../security/rbac.md) - Permission checks

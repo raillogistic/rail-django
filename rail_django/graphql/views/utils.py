@@ -8,7 +8,10 @@ and authentication that are used by MultiSchemaGraphQLView and SchemaListView.
 import logging
 from typing import Any, Optional
 
+from django.conf import settings
 from django.http import HttpRequest
+
+from rail_django.core.settings import get_test_graphql_endpoint_path
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,41 @@ INTROSPECTION_FIELDS = {"__schema", "__type", "__typename"}
 
 class SchemaRegistryUnavailable(Exception):
     """Raised when the schema registry cannot be accessed."""
+
+
+def _get_runtime_environment() -> str:
+    """Resolve runtime environment name with sensible defaults."""
+    env = getattr(settings, "ENVIRONMENT", None)
+    if env:
+        return str(env).strip().lower()
+    return "production" if not getattr(settings, "DEBUG", False) else "development"
+
+
+def _is_production_environment() -> bool:
+    """Return True when the runtime is considered production."""
+    return _get_runtime_environment() in {"prod", "production"}
+
+
+def _is_test_graphql_endpoint_enabled() -> bool:
+    """
+    Decide whether the dedicated test endpoint should be exposed.
+
+    Explicit setting `RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT` overrides defaults.
+    Without override, endpoint is enabled for non-production environments only.
+    """
+    explicit = getattr(settings, "RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT", None)
+    if explicit is not None:
+        return bool(explicit)
+    return not _is_production_environment()
+
+
+def _is_test_graphql_endpoint_request(request: HttpRequest) -> bool:
+    """Return True if the incoming request targets the dedicated test endpoint."""
+    path = str(getattr(request, "path", "") or "")
+    endpoint_path = get_test_graphql_endpoint_path().rstrip("/")
+    if not endpoint_path:
+        return False
+    return path == endpoint_path or path.startswith(endpoint_path + "/")
 
 
 def _normalize_host(host: str) -> str:

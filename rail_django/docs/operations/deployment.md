@@ -8,7 +8,7 @@ Before going live, ensure you have completed the following:
 
 - [ ] **Security**: `DEBUG = False` and a strong `SECRET_KEY`.
 - [ ] **GraphQL Security**: Disable introspection and GraphiQL in public environments.
-- [ ] **HTTPS**: Configure SSL/TLS certificates (e.g., Let's Encrypt).
+- [ ] **HTTPS**: Configure SSL/TLS certificates (for example, Let's Encrypt).
 - [ ] **Database**: Use a production-grade database like PostgreSQL with connection pooling.
 - [ ] **Observability**: Enable Sentry and OpenTelemetry for error tracking and tracing.
 - [ ] **Rate Limiting**: Enable limits to protect against brute force and DoS.

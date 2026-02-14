@@ -1,4 +1,4 @@
-# Installation
+# Installation guide
 
 This guide covers the requirements and steps to install Rail Django and set up your development environment.
 

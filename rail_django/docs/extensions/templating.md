@@ -1,10 +1,10 @@
 # PDF & Excel Templating
 
-Rail Django provides a powerful templating extension that allows you to generate professional PDF documents and Excel spreadsheets directly from your Django models.
+Rail Django provides a powerful templating extension that lets you generate professional PDF documents and Excel spreadsheets directly from your Django models.
 
 ## Overview
 
-The templating system allows you to:
+The templating system lets you:
 - Generate PDFs from HTML/CSS using **WeasyPrint** or **wkhtmltopdf**.
 - Create dynamic Excel reports from model data.
 - Serve generated documents via REST endpoints.

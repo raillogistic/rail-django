@@ -4,7 +4,7 @@ This tutorial covers advanced mutation patterns, including bulk operations and n
 
 ## Nested Mutations (Unified Input)
 
-Rail Django allows you to create and update related objects in a single request using the `connect`, `create`, and `set` operators.
+Rail Django lets you create and update related objects in a single request using the `connect`, `create`, and `set` operators.
 
 ### `connect`, `disconnect`, `set` behavior
 

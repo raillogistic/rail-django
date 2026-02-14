@@ -1,4 +1,4 @@
-# Health Checks
+# Health checks extension
 
 Rail Django includes a comprehensive health monitoring system with endpoints for Kubernetes probes, load balancers, and external monitoring systems.
 

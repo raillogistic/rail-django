@@ -158,7 +158,7 @@ and `create`/`update`/`set` structures) and applies related-model field rules.
 
 ### Classification tags
 
-You can tag fields or models with classifications (e.g., `pii`, `financial`) and
+You can tag fields or models with classifications (for example, `pii`, `financial`) and
 apply policies once per tag:
 
 ```python

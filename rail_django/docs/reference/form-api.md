@@ -1,4 +1,4 @@
-# Form API Reference
+# Form contract API reference
 
 This reference covers the Form API GraphQL schema exposed by the `form` extension.
 

@@ -6,8 +6,6 @@ L'extension d'importation de données (`rail_django.extensions.importing`) fourn
 
 Le processus suit un cycle de vie par étapes (Staging) permettant la validation, la correction manuelle et la simulation avant l'engagement final en base de données.
 
----
-
 ## Cycle de vie d'un import (Import Lifecycle)
 
 Un import se déroule en cinq étapes principales :
@@ -17,8 +15,6 @@ Un import se déroule en cinq étapes principales :
 3.  **Révision et Correction** (`updateModelImportBatch` avec `PATCH_ROWS`) : Le client peut corriger les erreurs de validation directement sur les lignes stockées.
 4.  **Validation et Simulation** (`VALIDATE` et `SIMULATE`) : Le système vérifie les doublons et simule l'insertion/mise à jour pour détecter les erreurs potentielles.
 5.  **Engagement (Commit)** (`COMMIT`) : Les données sont appliquées atomiquement au modèle cible.
-
----
 
 ## Configuration
 
@@ -47,8 +43,6 @@ class Product(models.Model):
             "max_rows": 5000,
         }
 ```
-
----
 
 ## API GraphQL
 
@@ -130,8 +124,6 @@ mutation {
 }
 ```
 
----
-
 ## Statuts de lot (Batch Status)
 
 | Statut | Description |
@@ -144,15 +136,11 @@ mutation {
 | `COMMITTED` | Données importées avec succès dans la base de données. |
 | `FAILED` | Échec critique du processus. |
 
----
-
 ## Sécurité
 
 - **Permissions** : L'utilisateur doit avoir les permissions Django `add` ou `change` sur le modèle cible.
 - **Validation** : Nettoyage automatique des entrées (XSS, SQLi).
 - **Atomicité** : Le commit final s'exécute dans une transaction atomique. En cas d'erreur sur une seule ligne, l'import complet est annulé.
-
----
 
 ## Voir aussi
 

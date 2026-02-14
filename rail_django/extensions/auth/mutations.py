@@ -6,6 +6,7 @@ including login, registration, token refresh, and logout.
 """
 
 import logging
+import re
 
 import graphene
 from django.conf import settings
@@ -21,10 +22,26 @@ from .queries import (
 )
 from .utils import _get_effective_permissions
 from ...security import security, EventType, Outcome
+from ...utils.sanitization import sanitize_log_value
 from ..mfa.manager import mfa_manager
 from ..mfa.models import MFADevice
 
 logger = logging.getLogger(__name__)
+
+_SENSITIVE_AUTH_LOG_PATTERNS = (
+    re.compile(r"(?i)(password\s*[=:]\s*)([^\s,;]+)"),
+    re.compile(r"(?i)(token\s*[=:]\s*)([^\s,;]+)"),
+    re.compile(r"(?i)(authorization\s*[=:]\s*)([^\s,;]+)"),
+    re.compile(r"(?i)(secret\s*[=:]\s*)([^\s,;]+)"),
+)
+
+
+def _redact_auth_log_value(value: object) -> str:
+    """Redact obvious credential material from auth-related log messages."""
+    text = str(sanitize_log_value(value))
+    for pattern in _SENSITIVE_AUTH_LOG_PATTERNS:
+        text = pattern.sub(r"\1[REDACTED]", text)
+    return text
 
 
 class LoginMutation(graphene.Mutation):
@@ -128,10 +145,11 @@ class LoginMutation(graphene.Mutation):
             )
 
         except Exception as e:
-            logger.error(f"Erreur lors de la connexion: {e}")
+            safe_error = _redact_auth_log_value(e)
+            logger.error(f"Erreur lors de la connexion: {safe_error}")
             # Log error
             security.auth_failure(
-                request=request, username=username, reason=str(e)
+                request=request, username=username, reason=safe_error
             )
             return AuthPayload(ok=False, errors=["Erreur interne lors de la connexion"])
 
@@ -212,7 +230,9 @@ class VerifyMFALoginMutation(graphene.Mutation):
             )
 
         except Exception as e:
-            logger.error(f"Erreur lors de la validation MFA: {e}")
+            logger.error(
+                f"Erreur lors de la validation MFA: {_redact_auth_log_value(e)}"
+            )
             return AuthPayload(
                 ok=False, errors=["Erreur interne lors de la validation MFA"]
             )
@@ -350,7 +370,7 @@ class RegisterMutation(graphene.Mutation):
             )
 
         except Exception as e:
-            logger.error(f"Erreur lors de l'inscription: {e}")
+            logger.error(f"Erreur lors de l'inscription: {_redact_auth_log_value(e)}")
             return AuthPayload(
                 ok=False, errors=["Erreur interne lors de l'inscription"]
             )
@@ -464,7 +484,9 @@ class RefreshTokenMutation(graphene.Mutation):
             )
 
         except Exception as e:
-            logger.error(f"Erreur lors du rafraichissement du token: {e}")
+            logger.error(
+                f"Erreur lors du rafraichissement du token: {_redact_auth_log_value(e)}"
+            )
             return AuthPayload(
                 ok=False, errors=["Erreur interne lors du rafraichissement du token"]
             )
@@ -525,7 +547,7 @@ class LogoutMutation(graphene.Mutation):
             return LogoutMutation(ok=True, errors=[])
 
         except Exception as e:
-            logger.error(f"Erreur lors de la deconnexion: {e}")
+            logger.error(f"Erreur lors de la deconnexion: {_redact_auth_log_value(e)}")
             return LogoutMutation(
                 ok=False, errors=["Erreur interne lors de la deconnexion"]
             )
@@ -559,7 +581,9 @@ class RevokeSessionMutation(graphene.Mutation):
 
             return RevokeSessionMutation(ok=True, errors=[])
         except Exception as e:
-            logger.error(f"Erreur lors de la revocation de session: {e}")
+            logger.error(
+                f"Erreur lors de la revocation de session: {_redact_auth_log_value(e)}"
+            )
             return RevokeSessionMutation(
                 ok=False, errors=["Erreur interne lors de la revocation"]
             )
@@ -622,7 +646,9 @@ class RevokeAllSessionsMutation(graphene.Mutation):
             return RevokeAllSessionsMutation(ok=True, errors=[])
 
         except Exception as e:
-            logger.error(f"Erreur lors de la revocation des sessions: {e}")
+            logger.error(
+                f"Erreur lors de la revocation des sessions: {_redact_auth_log_value(e)}"
+            )
             return RevokeAllSessionsMutation(
                 ok=False, errors=["Erreur interne"]
             )
