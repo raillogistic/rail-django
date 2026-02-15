@@ -2,7 +2,9 @@
 Field-level filter applicator methods for regular fields, count, computed, array, and FTS filters.
 """
 import logging
-from typing import Any, Dict, List, Optional, Type
+import re
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, Optional, Type
 
 from django.db import models
 from django.db.models import Count, Exists, F, OuterRef, Q
@@ -16,8 +18,12 @@ class FieldFilterApplicatorMixin:
     """Mixin for field-level filter application."""
 
     def _build_field_q(
-        self, field_name: str, filter_value: Dict[str, Any],
-        model: Type[models.Model], prefix: str = ""
+        self,
+        field_name: str,
+        filter_value: Dict[str, Any],
+        model: Type[models.Model],
+        prefix: str = "",
+        property_context: Optional[Dict[str, Any]] = None,
     ) -> Q:
         """Build a Q object for a field filter."""
         from ..security import FilterSecurityError, validate_regex_pattern
@@ -27,10 +33,20 @@ class FieldFilterApplicatorMixin:
 
         # Handle relation suffixes
         if field_name.endswith("_rel"):
-            return self._build_q_from_where(filter_value, model, f"{full_field_path[:-4]}__")
+            return self._build_q_from_where(
+                filter_value,
+                model,
+                f"{full_field_path[:-4]}__",
+                property_context=property_context,
+            )
 
         if field_name.endswith("_some"):
-            return self._build_q_from_where(filter_value, model, f"{field_name[:-5]}__")
+            return self._build_q_from_where(
+                filter_value,
+                model,
+                f"{field_name[:-5]}__",
+                property_context=property_context,
+            )
 
         if field_name.endswith("_every"):
             base_field = field_name[:-6]
@@ -39,7 +55,12 @@ class FieldFilterApplicatorMixin:
                 if relation_field is not None:
                     related_model = getattr(relation_field, "related_model", None)
                     if related_model is not None:
-                        matching_q = self._build_q_from_where(filter_value, related_model, "")
+                        matching_q = self._build_q_from_where(
+                            filter_value,
+                            related_model,
+                            "",
+                            property_context=property_context,
+                        )
                         fk_field = self._get_fk_to_parent(related_model, model)
                         if fk_field:
                             non_matching = related_model.objects.filter(
@@ -49,10 +70,20 @@ class FieldFilterApplicatorMixin:
                             return Q(Exists(has_children)) & ~Q(Exists(non_matching))
             except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
-            return self._build_q_from_where(filter_value, model, f"{base_field}__")
+            return self._build_q_from_where(
+                filter_value,
+                model,
+                f"{base_field}__",
+                property_context=property_context,
+            )
 
         if field_name.endswith("_none"):
-            return ~self._build_q_from_where(filter_value, model, f"{field_name[:-5]}__")
+            return ~self._build_q_from_where(
+                filter_value,
+                model,
+                f"{field_name[:-5]}__",
+                property_context=property_context,
+            )
 
         if field_name.endswith("_cond_agg"):
             return self._build_conditional_aggregation_q(full_field_path[:-9], filter_value)
@@ -82,6 +113,17 @@ class FieldFilterApplicatorMixin:
                 pass
             if not is_real_field:
                 return self._build_count_q(field_name[:-6], filter_value)
+
+        if (
+            prefix == ""
+            and self._is_property_field(model, field_name)
+            and property_context is not None
+        ):
+            return self._build_property_q(
+                field_name,
+                filter_value,
+                property_context=property_context,
+            )
 
         # Regular field filter
         for op, op_value in filter_value.items():
@@ -121,6 +163,274 @@ class FieldFilterApplicatorMixin:
             else:
                 q &= Q(**{f"{full_field_path}__{lookup}": op_value})
         return q
+
+    def _is_property_field(self, model: Type[models.Model], field_name: str) -> bool:
+        try:
+            model._meta.get_field(field_name)
+            return False
+        except FieldDoesNotExist:
+            descriptor = getattr(model, field_name, None)
+            return isinstance(descriptor, property)
+
+    def _build_property_q(
+        self,
+        field_name: str,
+        filter_value: Dict[str, Any],
+        *,
+        property_context: Dict[str, Any],
+    ) -> Q:
+        base_queryset = property_context.get("queryset")
+        if base_queryset is None:
+            return Q()
+
+        cache = property_context.setdefault("cache", {})
+        cache_key = (
+            field_name,
+            self._freeze_filter_value(filter_value),
+        )
+        if cache_key not in cache:
+            matching_ids: list[Any] = []
+            for instance in base_queryset:
+                try:
+                    value = getattr(instance, field_name)
+                except Exception:
+                    continue
+                if self._property_value_matches(value, filter_value):
+                    matching_ids.append(getattr(instance, "pk", None))
+            cache[cache_key] = [pk for pk in matching_ids if pk is not None]
+
+        return Q(pk__in=cache[cache_key])
+
+    def _freeze_filter_value(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return tuple(
+                (str(k), self._freeze_filter_value(v))
+                for k, v in sorted(value.items(), key=lambda item: str(item[0]))
+            )
+        if isinstance(value, (list, tuple)):
+            return tuple(self._freeze_filter_value(item) for item in value)
+        if isinstance(value, set):
+            return tuple(
+                sorted(
+                    (self._freeze_filter_value(item) for item in value),
+                    key=lambda item: str(item),
+                )
+            )
+        return value
+
+    def _normalize_operator_name(self, operator: str) -> str:
+        raw = str(operator or "").strip()
+        if not raw:
+            return raw
+        snake = re.sub(r"(?<!^)(?=[A-Z])", "_", raw).lower()
+        return snake
+
+    def _property_value_matches(
+        self,
+        value: Any,
+        filter_value: Dict[str, Any],
+    ) -> bool:
+        from ..security import FilterSecurityError, validate_regex_pattern
+
+        for operator, raw_operand in filter_value.items():
+            if raw_operand is None:
+                continue
+
+            normalized_operator = self._normalize_operator_name(operator)
+            lookup = self._get_lookup_for_operator(normalized_operator)
+            if not lookup:
+                lookup = self._get_lookup_for_operator(str(operator))
+            if not lookup:
+                continue
+
+            operand = raw_operand
+            if lookup in ("regex", "iregex"):
+                max_regex_len = DEFAULT_MAX_REGEX_LENGTH
+                reject_unsafe = True
+                if self.filtering_settings:
+                    max_regex_len = getattr(
+                        self.filtering_settings,
+                        "max_regex_length",
+                        max_regex_len,
+                    )
+                    reject_unsafe = getattr(
+                        self.filtering_settings,
+                        "reject_unsafe_regex",
+                        True,
+                    )
+                try:
+                    operand = validate_regex_pattern(
+                        operand,
+                        max_length=max_regex_len,
+                        check_redos=reject_unsafe,
+                    )
+                except FilterSecurityError:
+                    return False
+
+            if not self._evaluate_property_lookup(value, lookup, operand):
+                return False
+
+        return True
+
+    def _evaluate_property_lookup(
+        self,
+        value: Any,
+        lookup: str,
+        operand: Any,
+    ) -> bool:
+        if lookup == "exact":
+            return value == operand
+        if lookup == "neq":
+            return value != operand
+        if lookup == "gt":
+            try:
+                return value > operand
+            except Exception:
+                return False
+        if lookup == "gte":
+            try:
+                return value >= operand
+            except Exception:
+                return False
+        if lookup == "lt":
+            try:
+                return value < operand
+            except Exception:
+                return False
+        if lookup == "lte":
+            try:
+                return value <= operand
+            except Exception:
+                return False
+        if lookup == "contains":
+            if value is None:
+                return False
+            if isinstance(value, (list, tuple, set)):
+                return operand in value
+            return str(operand) in str(value)
+        if lookup == "icontains":
+            if value is None:
+                return False
+            return str(operand).lower() in str(value).lower()
+        if lookup == "startswith":
+            if value is None:
+                return False
+            return str(value).startswith(str(operand))
+        if lookup == "istartswith":
+            if value is None:
+                return False
+            return str(value).lower().startswith(str(operand).lower())
+        if lookup == "endswith":
+            if value is None:
+                return False
+            return str(value).endswith(str(operand))
+        if lookup == "iendswith":
+            if value is None:
+                return False
+            return str(value).lower().endswith(str(operand).lower())
+        if lookup == "in":
+            if not isinstance(operand, (list, tuple, set)):
+                return False
+            return value in operand
+        if lookup == "not_in":
+            if not isinstance(operand, (list, tuple, set)):
+                return False
+            return value not in operand
+        if lookup == "isnull":
+            return (value is None) == bool(operand)
+        if lookup == "regex":
+            if value is None:
+                return False
+            try:
+                return re.search(str(operand), str(value)) is not None
+            except re.error:
+                return False
+        if lookup == "iregex":
+            if value is None:
+                return False
+            try:
+                return re.search(str(operand), str(value), flags=re.IGNORECASE) is not None
+            except re.error:
+                return False
+        if lookup == "between":
+            if not isinstance(operand, (list, tuple)) or len(operand) != 2:
+                return False
+            lower, upper = operand
+            try:
+                return value >= lower and value <= upper
+            except Exception:
+                return False
+        if lookup == "year":
+            if value is None or not hasattr(value, "year"):
+                return False
+            try:
+                return int(value.year) == int(operand)
+            except Exception:
+                return False
+        if lookup == "month":
+            if value is None or not hasattr(value, "month"):
+                return False
+            try:
+                return int(value.month) == int(operand)
+            except Exception:
+                return False
+        if lookup == "day":
+            if value is None or not hasattr(value, "day"):
+                return False
+            try:
+                return int(value.day) == int(operand)
+            except Exception:
+                return False
+        if lookup == "week_day":
+            if value is None or not hasattr(value, "isoweekday"):
+                return False
+            try:
+                django_week_day = (int(value.isoweekday()) % 7) + 1
+                return django_week_day == int(operand)
+            except Exception:
+                return False
+        if lookup == "hour":
+            if value is None or not hasattr(value, "hour"):
+                return False
+            try:
+                return int(value.hour) == int(operand)
+            except Exception:
+                return False
+        if lookup == "date":
+            if value is None:
+                return False
+            if isinstance(value, datetime):
+                candidate = value.date()
+            elif isinstance(value, date):
+                candidate = value
+            else:
+                return False
+            if isinstance(operand, datetime):
+                expected = operand.date()
+            elif isinstance(operand, date):
+                expected = operand
+            else:
+                return False
+            return candidate == expected
+        if lookup == "today":
+            if not operand:
+                return True
+            today = date.today()
+            if isinstance(value, datetime):
+                return value.date() == today
+            if isinstance(value, date):
+                return value == today
+            return False
+        if lookup == "yesterday":
+            if not operand:
+                return True
+            yesterday = date.today() - timedelta(days=1)
+            if isinstance(value, datetime):
+                return value.date() == yesterday
+            if isinstance(value, date):
+                return value == yesterday
+            return False
+        return False
 
     def _build_numeric_q(self, field_path: str, filter_value: Dict[str, Any]) -> Q:
         """Build Q object for numeric-like filters."""

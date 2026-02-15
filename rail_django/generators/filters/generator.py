@@ -41,6 +41,7 @@ from .generator_utils import (
     get_filter_input_for_field,
     is_historical_model,
     generate_computed_filters,
+    generate_property_filters,
     generate_array_field_filters,
     generate_date_trunc_filters,
     generate_date_extract_filters,
@@ -210,6 +211,7 @@ class NestedFilterInputGenerator:
             fields.update(generate_historical_filters(model))
 
         fields.update(generate_computed_filters(model))
+        fields.update(generate_property_filters(model))
 
         return fields
 

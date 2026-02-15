@@ -157,7 +157,10 @@ class BaseFilterApplicatorMixin:
             queryset = self.prepare_queryset_for_window_filter(queryset, window_filter)
 
         # Build main Q object
-        q_object = self._build_q_from_where(where_input, model)
+        property_context = {"queryset": queryset, "cache": {}}
+        q_object = self._build_q_from_where(
+            where_input, model, property_context=property_context
+        )
 
         # Apply full-text search
         if search_input and self.filtering_settings and self.filtering_settings.enable_full_text_search:
@@ -237,7 +240,11 @@ class BaseFilterApplicatorMixin:
         return queryset
 
     def _build_q_from_where(
-        self, where_input: Dict[str, Any], model: Type[models.Model], prefix: str = ""
+        self,
+        where_input: Dict[str, Any],
+        model: Type[models.Model],
+        prefix: str = "",
+        property_context: Optional[Dict[str, Any]] = None,
     ) -> Q:
         """Build a Q object from where input dictionary."""
         q = Q()
@@ -246,16 +253,37 @@ class BaseFilterApplicatorMixin:
                 continue
             if key == "AND" and isinstance(value, list):
                 for item in value:
-                    q &= self._build_q_from_where(item, model, prefix)
+                    q &= self._build_q_from_where(
+                        item,
+                        model,
+                        prefix,
+                        property_context=property_context,
+                    )
             elif key == "OR" and isinstance(value, list):
                 or_q = Q()
                 for item in value:
-                    or_q |= self._build_q_from_where(item, model, prefix)
+                    or_q |= self._build_q_from_where(
+                        item,
+                        model,
+                        prefix,
+                        property_context=property_context,
+                    )
                 q &= or_q
             elif key == "NOT" and isinstance(value, dict):
-                q &= ~self._build_q_from_where(value, model, prefix)
+                q &= ~self._build_q_from_where(
+                    value,
+                    model,
+                    prefix,
+                    property_context=property_context,
+                )
             elif isinstance(value, dict):
-                field_q = self._build_field_q(key, value, model, prefix)
+                field_q = self._build_field_q(
+                    key,
+                    value,
+                    model,
+                    prefix,
+                    property_context=property_context,
+                )
                 if field_q:
                     q &= field_q
         return q

@@ -6,12 +6,13 @@ import json
 import logging
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, get_args, get_origin
 from uuid import UUID
 
 from django.db import models
 from ...security.field_permissions import field_permission_manager, FieldVisibility
 from ...core.settings import MutationGeneratorSettings
+from ...generators.introspector import ModelIntrospector
 from .utils import _classify_field, _get_fsm_transitions
 from .mapping import registry
 
@@ -20,6 +21,19 @@ logger = logging.getLogger(__name__)
 
 class FieldExtractorMixin:
     """Mixin for extracting fields and relationships."""
+
+    _PROPERTY_PYTHON_TO_GRAPHQL: dict[type, str] = {
+        str: "String",
+        int: "Int",
+        float: "Float",
+        bool: "Boolean",
+        dict: "JSONString",
+        date: "Date",
+        datetime: "DateTime",
+        time: "Time",
+        Decimal: "Float",
+        UUID: "String",
+    }
 
     @staticmethod
     def _split_relation_verbose_name(raw_value: Any) -> tuple[Optional[str], Optional[str]]:
@@ -124,6 +138,8 @@ class FieldExtractorMixin:
                 continue
             if not hasattr(field, "name"):
                 continue
+            if not self._is_field_exposed(graphql_meta, field.name):
+                continue
 
             field_schema = self._extract_field(
                 model,
@@ -134,7 +150,215 @@ class FieldExtractorMixin:
             )
             if field_schema and field_schema.get("readable", True):
                 fields.append(field_schema)
+
+        fields.extend(
+            self._extract_property_fields(
+                model,
+                user,
+                graphql_meta=graphql_meta,
+                existing_field_names={
+                    str(f.get("field_name"))
+                    for f in fields
+                    if isinstance(f, dict) and f.get("field_name")
+                },
+                field_metadata=field_metadata,
+            )
+        )
         return fields
+
+    def _is_field_exposed(
+        self,
+        graphql_meta: Optional[Any],
+        field_name: str,
+    ) -> bool:
+        if graphql_meta is None:
+            return True
+        try:
+            return bool(graphql_meta.should_expose_field(field_name))
+        except Exception:
+            return True
+
+    def _extract_property_fields(
+        self,
+        model: type[models.Model],
+        user: Any,
+        *,
+        graphql_meta: Optional[Any],
+        existing_field_names: set[str],
+        field_metadata: dict[str, Any],
+    ) -> list[dict]:
+        introspector = ModelIntrospector.for_model(model)
+        property_fields: list[dict] = []
+
+        for prop_name, prop_info in introspector.get_model_properties().items():
+            if prop_name in existing_field_names:
+                continue
+            if not self._is_field_exposed(graphql_meta, prop_name):
+                continue
+
+            property_schema = self._extract_property_field(
+                model,
+                prop_name,
+                prop_info,
+                user,
+                field_metadata=field_metadata.get(prop_name),
+            )
+            if property_schema and property_schema.get("readable", True):
+                property_fields.append(property_schema)
+
+        property_fields.sort(key=lambda item: str(item.get("name") or ""))
+        return property_fields
+
+    def _extract_property_field(
+        self,
+        model: type[models.Model],
+        property_name: str,
+        property_info: Any,
+        user: Any,
+        *,
+        field_metadata: Optional[dict[str, Any]] = None,
+    ) -> Optional[dict]:
+        try:
+            from graphene.utils.str_converters import to_camel_case
+
+            readable, writable, visibility = True, False, "VISIBLE"
+            if user:
+                try:
+                    perm = field_permission_manager.check_field_permission(
+                        user, model, property_name, instance=None
+                    )
+                    readable = perm.visibility != FieldVisibility.HIDDEN
+                    writable = False
+                    visibility = (
+                        perm.visibility.name
+                        if hasattr(perm.visibility, "name")
+                        else "VISIBLE"
+                    )
+                except Exception:
+                    pass
+
+            return_type = getattr(property_info, "return_type", Any)
+            graphql_type = self._map_property_graphql_type(return_type)
+            python_type = self._map_property_python_type(return_type)
+            custom_metadata = (
+                self._to_json_value(field_metadata)
+                if field_metadata is not None
+                else None
+            )
+
+            return {
+                "name": to_camel_case(property_name),
+                "field_name": property_name,
+                "verbose_name": str(
+                    getattr(property_info, "verbose_name", None)
+                    or property_name.replace("_", " ").strip()
+                    or property_name
+                ),
+                "help_text": "",
+                "field_type": "Property",
+                "graphql_type": graphql_type,
+                "python_type": python_type,
+                "required": False,
+                "nullable": True,
+                "blank": True,
+                "editable": False,
+                "unique": False,
+                "max_length": None,
+                "min_length": None,
+                "max_value": None,
+                "min_value": None,
+                "decimal_places": None,
+                "max_digits": None,
+                "choices": None,
+                "default_value": None,
+                "has_default": False,
+                "auto_now": False,
+                "auto_now_add": False,
+                "validators": [],
+                "regex_pattern": None,
+                "readable": readable,
+                "writable": writable,
+                "visibility": visibility,
+                "is_primary_key": False,
+                "is_indexed": False,
+                "is_relation": False,
+                "is_computed": True,
+                "is_file": False,
+                "is_image": False,
+                "is_json": graphql_type == "JSONString",
+                "is_date": graphql_type == "Date",
+                "is_datetime": graphql_type == "DateTime",
+                "is_numeric": graphql_type in {"Int", "Float", "Decimal"},
+                "is_boolean": graphql_type == "Boolean",
+                "is_text": graphql_type in {"String", "ID"},
+                "is_rich_text": False,
+                "is_fsm_field": False,
+                "fsm_transitions": [],
+                "custom_metadata": custom_metadata,
+            }
+        except Exception as e:
+            logger.warning("Error extracting property field %s: %s", property_name, e)
+            return None
+
+    def _map_property_graphql_type(self, annotation: Any) -> str:
+        if annotation in (None, Any):
+            return "String"
+
+        if isinstance(annotation, str):
+            normalized = annotation.strip()
+            if not normalized:
+                return "String"
+            return {
+                "str": "String",
+                "string": "String",
+                "int": "Int",
+                "float": "Float",
+                "bool": "Boolean",
+                "dict": "JSONString",
+                "date": "Date",
+                "datetime": "DateTime",
+                "time": "Time",
+            }.get(normalized.lower(), "String")
+
+        mapped = self._PROPERTY_PYTHON_TO_GRAPHQL.get(annotation)
+        if mapped:
+            return mapped
+
+        origin = get_origin(annotation)
+        if origin in (list, tuple, set):
+            inner_args = get_args(annotation)
+            inner_type = (
+                self._map_property_graphql_type(inner_args[0])
+                if inner_args
+                else "String"
+            )
+            return f"[{inner_type}]"
+
+        if origin is dict:
+            return "JSONString"
+
+        if origin is None and hasattr(annotation, "__args__"):
+            args = [a for a in getattr(annotation, "__args__", ()) if a is not type(None)]
+            if len(args) == 1:
+                return self._map_property_graphql_type(args[0])
+
+        if origin is not None:
+            args = [a for a in get_args(annotation) if a is not type(None)]
+            if len(args) == 1:
+                return self._map_property_graphql_type(args[0])
+
+        return "String"
+
+    def _map_property_python_type(self, annotation: Any) -> str:
+        if annotation in (None, Any):
+            return "Any"
+        if isinstance(annotation, str):
+            return annotation or "Any"
+        if hasattr(annotation, "__name__"):
+            return str(annotation.__name__)
+
+        rendered = str(annotation).replace("typing.", "")
+        return rendered or "Any"
 
     def _extract_field(
         self,

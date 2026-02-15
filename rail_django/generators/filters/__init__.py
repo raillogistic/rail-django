@@ -61,8 +61,10 @@ from .applicator import (
 # Generator utility exports
 from .generator_utils import (
     get_filter_input_for_field,
+    get_filter_input_for_python_type,
     is_historical_model,
     generate_computed_filters,
+    generate_property_filters,
     generate_array_field_filters,
     generate_date_trunc_filters,
     generate_date_extract_filters,
@@ -156,8 +158,10 @@ __all__ = [
     "apply_where_filter",
     # Generator utilities
     "get_filter_input_for_field",
+    "get_filter_input_for_python_type",
     "is_historical_model",
     "generate_computed_filters",
+    "generate_property_filters",
     "generate_array_field_filters",
     "generate_date_trunc_filters",
     "generate_date_extract_filters",

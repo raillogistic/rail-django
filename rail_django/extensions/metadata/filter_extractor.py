@@ -290,6 +290,8 @@ class FilterExtractorMixin:
                     base_type = "Relationship"
                 elif internal_type == "JSONField":
                     base_type = "JSON"
+            else:
+                base_type = self._base_type_from_filter_input(type_name)
 
             options = []
             if hasattr(input_type, "_meta") and hasattr(input_type._meta, "fields"):
@@ -411,8 +413,10 @@ class FilterExtractorMixin:
                 from ...core.settings import FilteringSettings
                 filtering_settings = FilteringSettings.from_schema(self.schema_name)
                 supports_fts = getattr(filtering_settings, "enable_full_text_search", False)
-            except Exception: pass
-        except Exception: pass
+            except Exception:
+                pass
+        except Exception:
+            pass
 
         return {
             "style": "NESTED",
@@ -457,11 +461,11 @@ class FilterExtractorMixin:
         """
         relation_filters = []
         for field in model._meta.get_fields():
-            if not hasattr(field, "name"): continue
+            if not hasattr(field, "name"):
+                continue
             is_fk = isinstance(field, models.ForeignKey)
             is_o2o = isinstance(field, models.OneToOneField)
             is_m2m = isinstance(field, models.ManyToManyField)
-            is_reverse = hasattr(field, "related_model") and not hasattr(field, "remote_field")
             is_reverse_m2m = hasattr(field, "many_to_many") and field.many_to_many
             is_reverse_fk = hasattr(field, "one_to_many") and field.one_to_many
 
@@ -697,3 +701,17 @@ class FilterExtractorMixin:
         except Exception:
             pass
         return 999
+
+    def _base_type_from_filter_input(self, input_type_name: str) -> str:
+        normalized = str(input_type_name or "").lower()
+        if normalized in {"intfilterinput", "floatfilterinput"}:
+            return "Number"
+        if normalized == "booleanfilterinput":
+            return "Boolean"
+        if normalized in {"datefilterinput", "datetimefilterinput"}:
+            return "Date"
+        if normalized == "jsonfilterinput":
+            return "JSON"
+        if normalized in {"idfilterinput", "uuidfilterinput"}:
+            return "String"
+        return "String"

@@ -11,7 +11,6 @@ from graphql import GraphQLError
 from ...utils.graphql_meta import get_model_graphql_meta
 from ...core.security import get_authz_manager
 from .utils import (
-    _cache_version,
     get_cached_schema,
     set_cached_schema,
     get_model_version,
@@ -306,6 +305,15 @@ class ModelSchemaExtractor(
         self, model: Any, user: Any, instance: Any = None
     ) -> list[dict]:
         """Extract available mutations for the model."""
+        import inspect
+        import json
+        from datetime import date, datetime, time
+        from decimal import Decimal
+        from typing import Union, get_args, get_origin
+
+        from graphene.types.structures import List as GrapheneList
+        from graphene.types.structures import NonNull
+        from graphene.utils.str_converters import to_camel_case
 
         settings = MutationGeneratorSettings.from_schema(self.schema_name)
         results: list[dict] = []
@@ -369,6 +377,370 @@ class ModelSchemaExtractor(
             if not perms:
                 return "Authentication required"
             return f"Permission required: {', '.join(perms)}"
+
+        def _to_json_safe(value: Any) -> Any:
+            if value in (inspect._empty,):
+                return None
+            try:
+                json.dumps(value)
+                return value
+            except Exception:
+                return str(value)
+
+        def _normalize_graphql_type_name(raw_type: Any) -> str:
+            if isinstance(raw_type, str):
+                candidate = raw_type.strip()
+            else:
+                candidate = str(raw_type or "").strip()
+
+            if candidate.endswith("!"):
+                candidate = candidate[:-1]
+            if not candidate:
+                return "String"
+            return candidate
+
+        def _graphql_type_from_annotation(annotation: Any) -> str:
+            if annotation in (None, inspect._empty):
+                return "String"
+
+            if isinstance(annotation, str):
+                normalized = annotation.replace("typing.", "").strip()
+                base = normalized.split("[", 1)[0].strip()
+                lowered = base.lower()
+                if lowered in {"str", "string"}:
+                    return "String"
+                if lowered in {"int", "integer"}:
+                    return "Int"
+                if lowered in {"float", "double", "decimal"}:
+                    return "Float"
+                if lowered in {"bool", "boolean"}:
+                    return "Boolean"
+                if lowered in {"dict", "mapping", "json"}:
+                    return "JSONString"
+                if lowered in {"list", "tuple", "set"}:
+                    return "[JSONString]"
+                if lowered in {"date"}:
+                    return "Date"
+                if lowered in {"datetime"}:
+                    return "DateTime"
+                if lowered in {"time"}:
+                    return "Time"
+                return "String"
+
+            origin = get_origin(annotation)
+            if origin is Union:
+                args = [arg for arg in get_args(annotation) if arg is not type(None)]
+                if args:
+                    return _graphql_type_from_annotation(args[0])
+                return "String"
+            if origin in {list, tuple, set}:
+                args = get_args(annotation)
+                if args:
+                    inner = _graphql_type_from_annotation(args[0])
+                    return f"[{inner}]"
+                return "[JSONString]"
+            if origin is dict:
+                return "JSONString"
+
+            mapping = {
+                str: "String",
+                int: "Int",
+                float: "Float",
+                bool: "Boolean",
+                dict: "JSONString",
+                list: "[JSONString]",
+                Any: "JSONString",
+                date: "Date",
+                datetime: "DateTime",
+                time: "Time",
+                Decimal: "Float",
+            }
+            return mapping.get(annotation, "String")
+
+        def _unwrap_graphene_type(graphene_type: Any) -> tuple[Any, bool]:
+            required = False
+            inner = graphene_type
+            while True:
+                if isinstance(inner, NonNull):
+                    required = True
+                    inner = inner.of_type
+                    continue
+                break
+            return inner, required
+
+        def _graphene_type_name(graphene_type: Any) -> str:
+            inner, _ = _unwrap_graphene_type(graphene_type)
+
+            if isinstance(inner, GrapheneList):
+                return f"[{_graphene_type_name(inner.of_type)}]"
+
+            meta = getattr(inner, "_meta", None)
+            if meta and getattr(meta, "name", None):
+                return str(meta.name)
+
+            name = getattr(inner, "__name__", None)
+            if name:
+                return str(name)
+
+            return _normalize_graphql_type_name(inner)
+
+        def _extract_enum_choices(graphene_type: Any) -> list[dict]:
+            inner, _ = _unwrap_graphene_type(graphene_type)
+            if isinstance(inner, GrapheneList):
+                inner = inner.of_type
+            inner, _ = _unwrap_graphene_type(inner)
+
+            enum_cls = None
+            meta = getattr(inner, "_meta", None)
+            if meta is not None:
+                enum_cls = getattr(meta, "enum", None)
+
+            if enum_cls is None or not hasattr(enum_cls, "__members__"):
+                return []
+
+            values: list[dict[str, str]] = []
+            for member in enum_cls.__members__.values():
+                raw_value = getattr(member, "value", member)
+                value = str(raw_value)
+                label = str(getattr(member, "name", value)).replace("_", " ").title()
+                values.append({"value": value, "label": label})
+            return values
+
+        def _normalize_choice_payload(raw_choices: Any) -> list[dict]:
+            if raw_choices is None:
+                return []
+
+            normalized: list[dict[str, str]] = []
+            source: list[Any]
+            if isinstance(raw_choices, (tuple, list)):
+                source = list(raw_choices)
+            else:
+                source = [raw_choices]
+
+            for entry in source:
+                if isinstance(entry, dict):
+                    value = entry.get("value")
+                    label = entry.get("label")
+                    if value is None:
+                        continue
+                    normalized.append(
+                        {
+                            "value": str(value),
+                            "label": str(label if label is not None else value),
+                        }
+                    )
+                    continue
+                if isinstance(entry, (tuple, list)) and len(entry) >= 1:
+                    value = entry[0]
+                    label = entry[1] if len(entry) > 1 else entry[0]
+                    if value is None:
+                        continue
+                    normalized.append({"value": str(value), "label": str(label)})
+                    continue
+                if entry is None:
+                    continue
+                normalized.append({"value": str(entry), "label": str(entry)})
+
+            return normalized
+
+        def _action_field_overrides(method: Any) -> dict[str, dict[str, Any]]:
+            action_ui = getattr(method, "_action_ui", None)
+            if not isinstance(action_ui, dict):
+                return {}
+            fields = action_ui.get("fields")
+            if not isinstance(fields, dict):
+                return {}
+            output: dict[str, dict[str, Any]] = {}
+            for key, value in fields.items():
+                if not isinstance(value, dict):
+                    continue
+                output[str(key)] = value
+            return output
+
+        def _resolve_signature_input_fields(method_info: Any, method: Any) -> list[dict]:
+            fields_overrides = _action_field_overrides(method)
+            entries: list[dict[str, Any]] = []
+
+            arguments = getattr(method_info, "arguments", {}) or {}
+            for arg_name, arg_info in arguments.items():
+                field_name = str(arg_name)
+                override = fields_overrides.get(field_name, {})
+                annotation = arg_info.get("type")
+                graphql_type = override.get("graphql_type") or override.get("type")
+                if not graphql_type:
+                    graphql_type = _graphql_type_from_annotation(annotation)
+                graphql_type = _normalize_graphql_type_name(graphql_type)
+
+                required = bool(arg_info.get("required", False))
+                if "required" in override:
+                    required = bool(override.get("required"))
+
+                default_value = (
+                    override.get("default")
+                    if "default" in override
+                    else arg_info.get("default")
+                )
+                if default_value is inspect._empty:
+                    default_value = None
+
+                description = (
+                    override.get("description")
+                    or override.get("help_text")
+                    or override.get("label")
+                )
+                if description is not None:
+                    description = str(description)
+
+                choices = _normalize_choice_payload(override.get("choices"))
+
+                entries.append(
+                    {
+                        "name": to_camel_case(field_name),
+                        "field_name": field_name,
+                        "field_type": graphql_type,
+                        "graphql_type": graphql_type,
+                        "required": required,
+                        "default_value": _to_json_safe(default_value),
+                        "description": description,
+                        "choices": choices,
+                        "related_model": None,
+                    }
+                )
+
+            return entries
+
+        def _resolve_custom_input_fields(
+            method_info: Any, method: Any, action_kind: Optional[str]
+        ) -> list[dict]:
+            if action_kind == "confirm":
+                return []
+
+            custom_input_type = getattr(method, "_mutation_input_type", None)
+            if custom_input_type is None:
+                return _resolve_signature_input_fields(method_info, method)
+
+            input_meta = getattr(custom_input_type, "_meta", None)
+            input_fields = getattr(input_meta, "fields", None) if input_meta else None
+            if not isinstance(input_fields, dict):
+                return _resolve_signature_input_fields(method_info, method)
+
+            entries: list[dict[str, Any]] = []
+            for field_name, input_field in input_fields.items():
+                raw_type = getattr(input_field, "type", None)
+                graphql_type = _graphene_type_name(raw_type)
+                _, required = _unwrap_graphene_type(raw_type)
+
+                default_value = getattr(input_field, "default_value", None)
+                if default_value is inspect._empty:
+                    default_value = None
+
+                choices = _extract_enum_choices(raw_type)
+                description = getattr(input_field, "description", None)
+                if description is not None:
+                    description = str(description)
+
+                entries.append(
+                    {
+                        "name": to_camel_case(str(field_name)),
+                        "field_name": str(field_name),
+                        "field_type": graphql_type,
+                        "graphql_type": graphql_type,
+                        "required": required,
+                        "default_value": _to_json_safe(default_value),
+                        "description": description,
+                        "choices": choices,
+                        "related_model": None,
+                    }
+                )
+
+            return entries
+
+        def _resolve_input_type_name(
+            method: Any,
+            method_name: str,
+            action_kind: Optional[str],
+            input_fields: list[dict],
+        ) -> Optional[str]:
+            if action_kind == "confirm" or not input_fields:
+                return None
+
+            custom_input_type = getattr(method, "_mutation_input_type", None)
+            if custom_input_type is not None:
+                meta = getattr(custom_input_type, "_meta", None)
+                if meta and getattr(meta, "name", None):
+                    return str(meta.name)
+                type_name = getattr(custom_input_type, "__name__", None)
+                if type_name:
+                    return str(type_name)
+
+            return f"{model_name}{method_name.title()}Input"
+
+        def _resolve_return_type_name(method: Any) -> Optional[str]:
+            custom_output_type = getattr(method, "_mutation_output_type", None)
+            if custom_output_type is not None:
+                meta = getattr(custom_output_type, "_meta", None)
+                if meta and getattr(meta, "name", None):
+                    return str(meta.name)
+                type_name = getattr(custom_output_type, "__name__", None)
+                if type_name:
+                    return str(type_name)
+
+            signature = inspect.signature(method)
+            return_annotation = signature.return_annotation
+            if return_annotation in (inspect._empty, None):
+                return "Boolean"
+            return _graphql_type_from_annotation(return_annotation)
+
+        def _humanize_method_name(name: str) -> str:
+            source = to_camel_case(str(name or ""))
+            if not source:
+                return "Action"
+            parts: list[str] = []
+            for char in source:
+                if char.isupper():
+                    parts.append(" ")
+                parts.append(char)
+            label = "".join(parts).strip()
+            return label[:1].upper() + label[1:]
+
+        def _resolve_action_metadata(
+            method: Any,
+            method_name: str,
+            action_kind: Optional[str],
+            description: Optional[str],
+            has_inputs: bool,
+        ) -> dict[str, Any]:
+            payload = getattr(method, "_action_ui", None)
+            if isinstance(payload, dict):
+                action_payload = dict(payload)
+            else:
+                action_payload = {}
+
+            mode = action_payload.get("mode")
+            if not mode:
+                if action_kind == "confirm":
+                    mode = "confirm"
+                elif action_kind == "form" or has_inputs:
+                    mode = "form"
+                else:
+                    mode = "confirm"
+                action_payload["mode"] = mode
+
+            action_payload.setdefault("title", _humanize_method_name(method_name))
+            if mode == "confirm":
+                action_payload.setdefault(
+                    "message", description or "Voulez-vous executer cette action ?"
+                )
+                action_payload.setdefault("confirm_label", "Confirmer")
+                action_payload.setdefault("cancel_label", "Annuler")
+            else:
+                action_payload.setdefault(
+                    "description", description or "Renseignez les informations requises."
+                )
+                action_payload.setdefault("submit_label", "Executer")
+                action_payload.setdefault("cancel_label", "Annuler")
+            action_payload.setdefault("severity", "default")
+            return action_payload
 
         def _evaluate_access(
             *,
@@ -469,6 +841,12 @@ class ModelSchemaExtractor(
                     "mutation_type": "create",
                     "model_name": model_name,
                     "requires_authentication": requires_authentication,
+                    "input_type": None,
+                    "return_type": None,
+                    "form_config": None,
+                    "success_message": None,
+                    "error_messages": None,
+                    "action": None,
                 }
             )
         if settings.enable_update:
@@ -488,6 +866,12 @@ class ModelSchemaExtractor(
                     "mutation_type": "update",
                     "model_name": model_name,
                     "requires_authentication": requires_authentication,
+                    "input_type": None,
+                    "return_type": None,
+                    "form_config": None,
+                    "success_message": None,
+                    "error_messages": None,
+                    "action": None,
                 }
             )
         if settings.enable_delete:
@@ -507,12 +891,17 @@ class ModelSchemaExtractor(
                     "mutation_type": "delete",
                     "model_name": model_name,
                     "requires_authentication": requires_authentication,
+                    "input_type": None,
+                    "return_type": None,
+                    "form_config": None,
+                    "success_message": None,
+                    "error_messages": None,
+                    "action": None,
                 }
             )
 
         # Method mutations
         introspector = ModelIntrospector.for_model(model)
-        from graphene.utils.str_converters import to_camel_case
 
         def _infer_guard_operation(
             name: Optional[str], action_kind: Optional[str] = None
@@ -556,19 +945,53 @@ class ModelSchemaExtractor(
                 )
             )
 
+            input_fields = _resolve_custom_input_fields(info, method, action_kind)
+            description = (
+                str(
+                    getattr(method, "_mutation_description", None)
+                    or method.__doc__
+                    or ""
+                ).strip()
+                or None
+            )
+            action_payload = _resolve_action_metadata(
+                method,
+                name,
+                action_kind,
+                description,
+                has_inputs=bool(input_fields),
+            )
+
+            form_config: dict[str, Any] = {}
+            if getattr(method, "_is_business_logic", False):
+                form_config["category"] = getattr(
+                    method, "_business_logic_category", "general"
+                )
+            if action_kind:
+                form_config["action_kind"] = action_kind
+            resolved_form_config = form_config or None
+
             results.append(
                 {
                     "name": to_camel_case(name),
                     "operation": "custom",
-                    "description": str(method.__doc__ or "").strip(),
+                    "description": description,
                     "method_name": name,
-                    "input_fields": [],  # Argument extraction omitted for brevity
+                    "input_fields": input_fields,
                     "allowed": allowed,
                     "required_permissions": required_permissions,
                     "reason": reason,
                     "mutation_type": "custom",
                     "model_name": model_name,
                     "requires_authentication": requires_authentication,
+                    "input_type": _resolve_input_type_name(
+                        method, name, action_kind, input_fields
+                    ),
+                    "return_type": _resolve_return_type_name(method),
+                    "form_config": resolved_form_config,
+                    "success_message": None,
+                    "error_messages": None,
+                    "action": action_payload,
                 }
             )
 

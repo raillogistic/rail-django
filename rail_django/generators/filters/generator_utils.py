@@ -10,7 +10,10 @@ filters, date filters, and other auxiliary filter generation tasks.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Optional, Type
+from datetime import date, datetime, time
+from decimal import Decimal
+from typing import Any, Dict, Optional, Type, get_args, get_origin
+from uuid import UUID
 
 import graphene
 from django.core.exceptions import FieldDoesNotExist
@@ -80,6 +83,19 @@ FILTER_TYPE_NAME_MAP: Dict[str, Type[graphene.InputObjectType]] = {
     "uuid": UUIDFilterInput,
 }
 
+PYTHON_TYPE_TO_FILTER_INPUT: Dict[type[Any], Type[graphene.InputObjectType]] = {
+    str: StringFilterInput,
+    int: IntFilterInput,
+    float: FloatFilterInput,
+    Decimal: FloatFilterInput,
+    bool: BooleanFilterInput,
+    date: DateFilterInput,
+    datetime: DateTimeFilterInput,
+    time: StringFilterInput,
+    UUID: UUIDFilterInput,
+    dict: JSONFilterInput,
+}
+
 
 def get_filter_input_for_field(
     field: models.Field,
@@ -112,6 +128,57 @@ def get_filter_input_for_field(
             return filter_input
 
     return None
+
+
+def get_filter_input_for_python_type(
+    python_type: Any,
+) -> Type[graphene.InputObjectType]:
+    """
+    Resolve a GraphQL filter input type from a Python type annotation.
+
+    Args:
+        python_type: Return annotation from a model property.
+
+    Returns:
+        GraphQL InputObjectType class. Falls back to StringFilterInput.
+    """
+    if python_type in (None, Any):
+        return StringFilterInput
+
+    if isinstance(python_type, str):
+        normalized = python_type.strip().lower()
+        string_map = {
+            "str": StringFilterInput,
+            "string": StringFilterInput,
+            "int": IntFilterInput,
+            "float": FloatFilterInput,
+            "decimal": FloatFilterInput,
+            "bool": BooleanFilterInput,
+            "boolean": BooleanFilterInput,
+            "date": DateFilterInput,
+            "datetime": DateTimeFilterInput,
+            "time": StringFilterInput,
+            "uuid": UUIDFilterInput,
+            "dict": JSONFilterInput,
+            "json": JSONFilterInput,
+        }
+        return string_map.get(normalized, StringFilterInput)
+
+    direct = PYTHON_TYPE_TO_FILTER_INPUT.get(python_type)
+    if direct:
+        return direct
+
+    origin = get_origin(python_type)
+    if origin is not None:
+        if origin in (list, tuple, set):
+            return StringFilterInput
+
+        args = [arg for arg in get_args(python_type) if arg is not type(None)]
+        if len(args) == 1:
+            return get_filter_input_for_python_type(args[0])
+        return StringFilterInput
+
+    return StringFilterInput
 
 
 def is_historical_model(model: Type[models.Model]) -> bool:
@@ -169,6 +236,40 @@ def generate_computed_filters(
 
     except Exception as e:
         logger.debug(f"Error generating computed filters for {model.__name__}: {e}")
+
+    return fields
+
+
+def generate_property_filters(
+    model: Type[models.Model],
+) -> Dict[str, graphene.InputField]:
+    """
+    Generate typed filters for exposed model properties.
+
+    Property filter type is inferred from the property's return annotation.
+    """
+    fields: Dict[str, graphene.InputField] = {}
+    try:
+        from ...core.meta import get_model_graphql_meta
+        from ..introspector import ModelIntrospector
+
+        graphql_meta = get_model_graphql_meta(model)
+        introspector = ModelIntrospector.for_model(model)
+
+        for property_name, property_info in introspector.get_model_properties().items():
+            if graphql_meta and not graphql_meta.should_expose_field(property_name):
+                continue
+
+            filter_input = get_filter_input_for_python_type(
+                getattr(property_info, "return_type", Any)
+            )
+            fields[property_name] = graphene.InputField(
+                filter_input,
+                name=to_camel_case(property_name),
+                description=f"Filter by computed property {property_name}",
+            )
+    except Exception as e:
+        logger.debug(f"Error generating property filters for {model.__name__}: {e}")
 
     return fields
 
@@ -351,8 +452,10 @@ __all__ = [
     "FILTER_TYPE_NAME_MAP",
     # Functions
     "get_filter_input_for_field",
+    "get_filter_input_for_python_type",
     "is_historical_model",
     "generate_computed_filters",
+    "generate_property_filters",
     "generate_array_field_filters",
     "generate_date_trunc_filters",
     "generate_date_extract_filters",

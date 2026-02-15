@@ -175,6 +175,8 @@ class MutationSchemaType(graphene.ObjectType):
     description = graphene.String()
     method_name = graphene.String()
     input_fields = graphene.List(InputFieldSchemaType, required=True)
+    input_type = graphene.String()
+    return_type = graphene.String()
     allowed = graphene.Boolean(required=True)
     required_permissions = graphene.List(graphene.String)
     reason = graphene.String()
@@ -184,6 +186,8 @@ class MutationSchemaType(graphene.ObjectType):
     model_name = graphene.String()
     form_config = graphene.JSONString()
     success_message = graphene.String()
+    error_messages = graphene.JSONString()
+    action = graphene.JSONString()
     requires_authentication = graphene.Boolean()
 
 
