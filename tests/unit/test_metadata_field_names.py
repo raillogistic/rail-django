@@ -196,7 +196,7 @@ class TestMetadataFieldNames(TestCase):
                 self.assertEqual(recent_preset['name'], 'recentItems')
 
     def test_custom_mutation_naming(self):
-        """Test that custom mutations have camelCase names."""
+        """Test that custom mutations use GraphQL field naming (<method><Model>)."""
         with unittest.mock.patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta') as mock_get_meta:
             mock_get_meta.return_value = MagicMock(custom_metadata=None, field_groups=[])
 
@@ -216,7 +216,13 @@ class TestMetadataFieldNames(TestCase):
                         mock_introspector = MagicMock()
                         mock_method_info = MagicMock()
                         mock_method_info.is_mutation = True
-                        mock_method_info.method.__doc__ = "Test doc"
+                        mock_method_info.arguments = {}
+
+                        def _sample_method(_self):
+                            """Test doc"""
+                            return True
+
+                        mock_method_info.method = _sample_method
 
                         mock_introspector.get_model_methods.return_value = {
                             "custom_action": mock_method_info,
@@ -241,10 +247,12 @@ class TestMetadataFieldNames(TestCase):
 
                         custom_action = next((m for m in mutations if m['method_name'] == 'custom_action'), None)
                         self.assertIsNotNone(custom_action)
-                        self.assertEqual(custom_action['name'], 'customAction')
+                        self.assertEqual(
+                            custom_action['name'], 'customActionFieldNameTestModel'
+                        )
 
                         do_something = next((m for m in mutations if m['method_name'] == 'do_something'), None)
                         self.assertIsNotNone(do_something)
-                        self.assertEqual(do_something['name'], 'doSomething')
-
-
+                        self.assertEqual(
+                            do_something['name'], 'doSomethingFieldNameTestModel'
+                        )

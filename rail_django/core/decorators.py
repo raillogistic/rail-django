@@ -5,7 +5,7 @@ and schema registration.
 
 import logging
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, Optional
 
 import graphene
 
@@ -16,6 +16,7 @@ def mutation(
     input_type: Optional[type[graphene.InputObjectType]] = None,
     output_type: Optional[type[graphene.ObjectType]] = None,
     description: Optional[str] = None,
+    button_title: Optional[str] = None,
 ):
     """
     Decorator to mark a model method as a GraphQL mutation.
@@ -24,6 +25,7 @@ def mutation(
         input_type: Custom input type for the mutation
         output_type: Custom output type for the mutation
         description: Description for the mutation
+        button_title: Title shown on action buttons in metadata-driven UIs
 
     Example:
         @mutation(description="Activate user account")
@@ -44,6 +46,15 @@ def mutation(
         wrapper._mutation_input_type = input_type
         wrapper._mutation_output_type = output_type
         wrapper._mutation_description = description or func.__doc__
+        action_ui = getattr(func, "_action_ui", None)
+        if isinstance(action_ui, dict):
+            action_payload = dict(action_ui)
+        else:
+            action_payload = {}
+        if button_title:
+            action_payload["button_title"] = button_title
+        if action_payload:
+            wrapper._action_ui = action_payload
 
         return wrapper
 
@@ -183,6 +194,7 @@ def business_logic(
     category: str = "general",
     requires_permission: Optional[str] = None,
     atomic: bool = True,
+    button_title: Optional[str] = None,
 ):
     """
     Decorator to mark a method as custom business logic that should be exposed as a mutation.
@@ -191,6 +203,7 @@ def business_logic(
         category: Category of business logic (e.g., "workflow", "approval", "processing")
         requires_permission: Permission required to execute this mutation
         atomic: Whether to wrap execution in a database transaction
+        button_title: Title shown on action buttons in metadata-driven UIs
 
     Example:
         @business_logic(category="approval", requires_permission="can_approve_posts")
@@ -214,6 +227,15 @@ def business_logic(
         wrapper._business_logic_category = category
         wrapper._requires_permission = requires_permission
         wrapper._atomic = atomic
+        action_ui = getattr(func, "_action_ui", None)
+        if isinstance(action_ui, dict):
+            action_payload = dict(action_ui)
+        else:
+            action_payload = {}
+        if button_title:
+            action_payload["button_title"] = button_title
+        if action_payload:
+            wrapper._action_ui = action_payload
 
         return wrapper
 

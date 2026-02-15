@@ -313,7 +313,7 @@ class ModelSchemaExtractor(
 
         from graphene.types.structures import List as GrapheneList
         from graphene.types.structures import NonNull
-        from graphene.utils.str_converters import to_camel_case
+        from graphene.utils.str_converters import to_camel_case, to_snake_case
 
         settings = MutationGeneratorSettings.from_schema(self.schema_name)
         results: list[dict] = []
@@ -727,6 +727,11 @@ class ModelSchemaExtractor(
                 action_payload["mode"] = mode
 
             action_payload.setdefault("title", _humanize_method_name(method_name))
+            button_title = action_payload.get("button_title")
+            if isinstance(button_title, str) and button_title.strip():
+                action_payload["button_title"] = button_title.strip()
+            else:
+                action_payload["button_title"] = str(action_payload.get("title") or "")
             if mode == "confirm":
                 action_payload.setdefault(
                     "message", description or "Voulez-vous executer cette action ?"
@@ -923,6 +928,12 @@ class ModelSchemaExtractor(
                 return "create"
             return "update"
 
+        def _resolve_method_mutation_field_name(method_name: str) -> str:
+            method_token = to_camel_case(to_snake_case(str(method_name or "")))
+            if not method_token:
+                method_token = to_camel_case(str(method_name or ""))
+            return f"{method_token}{model_name}"
+
         for name, info in introspector.get_model_methods().items():
             if not info.is_mutation:
                 continue
@@ -973,7 +984,7 @@ class ModelSchemaExtractor(
 
             results.append(
                 {
-                    "name": to_camel_case(name),
+                    "name": _resolve_method_mutation_field_name(name),
                     "operation": "custom",
                     "description": description,
                     "method_name": name,
