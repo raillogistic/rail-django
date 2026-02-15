@@ -57,7 +57,8 @@ query ModelFormContract($appLabel: String!, $modelName: String!) {
 
 ### `modelFormContractPages`
 
-Fetch paginated generated contracts.
+Fetch paginated generated contracts. Pagination is applied before contract
+extraction, so extraction work scales with the requested page size.
 
 ```graphql
 query ModelFormContractPages($page: Int!, $perPage: Int!, $models: [ModelRefInput!]) {
@@ -78,7 +79,8 @@ query ModelFormContractPages($page: Int!, $perPage: Int!, $models: [ModelRefInpu
 
 ### `modelFormInitialData`
 
-Fetch initial values for generated forms.
+Fetch initial values for generated forms. This query enforces `view` access for
+the target object and returns a GraphQL error when access is denied.
 
 ```graphql
 query ModelFormInitialData($appLabel: String!, $modelName: String!, $id: ID!) {
@@ -185,9 +187,22 @@ Disable via settings:
 
 ```python
 RAIL_DJANGO_FORM = {
+    "enable_cache": True,
+    "cache_ttl_seconds": 3600,
+    "initial_data_relation_limit": 200,
     "generated_form_excluded_models": ["store.Product"],
+    "generated_form_metadata_key": "generated_form",
 }
 ```
+
+Configuration notes:
+
+- `enable_cache` and `cache_ttl_seconds` control generated form config cache
+  reads and writes.
+- `initial_data_relation_limit` caps emitted to-many relation items per relation
+  in `modelFormInitialData` (`0` disables the cap).
+- Generated contracts and initial-data payloads both honor `GraphQLMeta` input
+  exposure, including `exclude` and `read_only` rules.
 
 Disable/enable per model via metadata:
 

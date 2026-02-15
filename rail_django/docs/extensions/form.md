@@ -24,16 +24,47 @@ Queries:
 - `modelFormContractPages`
 - `modelFormInitialData`
 
+The generated endpoints now enforce consistent exposure and authorization
+behavior for both contracts and initial values.
+
+### Authorization and exposure behavior
+
+Generated form queries align with `GraphQLMeta` input exposure and permission
+checks so contracts and initial payloads stay consistent.
+
+- `modelFormInitialData` enforces `view` access for the target object and
+  returns a GraphQL error when access is denied.
+- Scalar field exposure now follows `GraphQLMeta.should_expose_field(...,
+  for_input=True)` the same way relation exposure already does.
+- Nested initial-data serialization uses the same exposure gate, so read-only
+  and excluded input fields are not emitted accidentally.
+- `modelFormContractPages` paginates model references before contract
+  extraction, so page size controls extraction cost.
+
 ### Exclude models via settings
 
 ```python
 RAIL_DJANGO_FORM = {
+    "enable_cache": True,
+    "cache_ttl_seconds": 3600,
+    "initial_data_relation_limit": 200,
     "generated_form_excluded_models": [
         "store.Product",
         "store.Order",
     ],
+    "generated_form_metadata_key": "generated_form",
 }
 ```
+
+Setting notes:
+
+- `enable_cache`: enables generated form config cache reads and writes.
+- `cache_ttl_seconds`: cache TTL used for generated form config payloads.
+- `initial_data_relation_limit`: caps to-many relation items emitted by
+  `modelFormInitialData` per relation (`0` disables the cap).
+- `generated_form_excluded_models`: excludes models by default.
+- `generated_form_metadata_key`: custom metadata key on
+  `GraphQLMeta.custom_metadata`.
 
 ### Override per model via metadata
 
@@ -301,7 +332,12 @@ uploadConfig {
 
 ## Caching
 
-Each form config includes a stable `configVersion` hash. Use it to invalidate client caches.
+Generated form configs include a stable `configVersion` hash for client cache
+invalidation and an internal version token for server cache key rotation.
+
+If you update model metadata or exposure rules and need immediate backend cache
+rotation, call `invalidate_form_cache(app_label, model_name)` from
+`rail_django.extensions.form.utils`.
 
 ## Error Contract
 

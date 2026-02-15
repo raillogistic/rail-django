@@ -12,6 +12,14 @@ from typing import Any, Optional
 from django.conf import settings
 from django.core.cache import cache
 
+from ..config import get_form_settings
+
+
+def _is_cache_enabled() -> bool:
+    if getattr(settings, "DEBUG", False):
+        return False
+    return bool(get_form_settings().enable_cache)
+
 
 def get_form_version(app: str, model: str) -> str:
     """Get a version token for a model's form config."""
@@ -51,7 +59,7 @@ def get_cached_config(
     object_id: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
-    if getattr(settings, "DEBUG", False):
+    if not _is_cache_enabled():
         return None
     key = _make_cache_key(app, model, user_id=user_id, object_id=object_id, mode=mode)
     return cache.get(key)
@@ -66,10 +74,21 @@ def set_cached_config(
     object_id: Optional[str] = None,
     mode: Optional[str] = None,
 ) -> None:
-    if getattr(settings, "DEBUG", False):
+    if not _is_cache_enabled():
+        return
+    ttl_seconds = int(get_form_settings().cache_ttl_seconds)
+    if ttl_seconds <= 0:
         return
     key = _make_cache_key(app, model, user_id=user_id, object_id=object_id, mode=mode)
-    cache.set(key, data, timeout=3600)
+    cache.set(key, data, timeout=ttl_seconds)
+
+
+def invalidate_form_cache(app: str, model: str) -> str:
+    """Rotate cache version token for a model and return the new version."""
+    key = f"form_version:{app}:{model}"
+    version = str(int(time.time() * 1000))
+    cache.set(key, version, timeout=None)
+    return version
 
 
 def compute_config_version(payload: dict[str, Any]) -> str:

@@ -43,9 +43,11 @@ def is_action_allowed(
     if not action_name:
         return True
 
-    blocked_actions = {str(item).lower() for item in policy.get("blocked", [])}
-    allowed_actions = {str(item).lower() for item in policy.get("allowed", [])}
-    default_allow = bool(policy.get("default_allow", True))
+    blocked_source = policy.get("blocked") or policy.get("blocked_actions") or []
+    allowed_source = policy.get("allowed") or policy.get("allowed_actions") or []
+    blocked_actions = {str(item).lower() for item in blocked_source}
+    allowed_actions = {str(item).lower() for item in allowed_source}
+    default_allow = bool(policy.get("default_allow", policy.get("defaultAllow", True)))
 
     if action_name in blocked_actions:
         return False

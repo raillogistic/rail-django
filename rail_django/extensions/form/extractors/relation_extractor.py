@@ -5,12 +5,15 @@ Relationship extraction for Form API.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Optional
 
 from django.db import models
 
 from ....security.field_permissions import FieldVisibility, field_permission_manager
 from ....security.rbac import PermissionContext, role_manager
+
+logger = logging.getLogger(__name__)
 
 
 class RelationExtractorMixin:
@@ -77,6 +80,7 @@ class RelationExtractorMixin:
         model: type[models.Model],
         user: Any,
         *,
+        instance: Optional[models.Model] = None,
         graphql_meta: Optional[Any] = None,
     ) -> list[dict[str, Any]]:
         relationships: list[dict[str, Any]] = []
@@ -105,6 +109,7 @@ class RelationExtractorMixin:
                 model,
                 field,
                 user,
+                instance=instance,
                 field_metadata=field_metadata.get(field_key),
                 graphql_meta=graphql_meta,
             )
@@ -118,6 +123,7 @@ class RelationExtractorMixin:
         field: Any,
         user: Any,
         *,
+        instance: Optional[models.Model] = None,
         field_metadata: Optional[dict[str, Any]] = None,
         graphql_meta: Optional[Any] = None,
     ) -> Optional[dict[str, Any]]:
@@ -146,7 +152,7 @@ class RelationExtractorMixin:
             if user and hasattr(field, "name"):
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=None
+                        user, model, field.name, instance=instance
                     )
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write
@@ -212,6 +218,15 @@ class RelationExtractorMixin:
                 "writable": writable,
             }
         except Exception:
+            logger.warning(
+                "Failed to extract relation metadata for %s.%s.",
+                model._meta.label,
+                (
+                    getattr(field, "name", None)
+                    or getattr(field, "get_accessor_name", lambda: "<unknown>")()
+                ),
+                exc_info=True,
+            )
             return None
 
     def _serialize_metadata(self, metadata: Any) -> Any:

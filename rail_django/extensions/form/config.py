@@ -22,6 +22,7 @@ class FormSettings:
     cache_ttl_seconds: int = 3600
     generated_form_metadata_key: str = "generated_form"
     generated_form_excluded_models: tuple[str, ...] = field(default_factory=tuple)
+    initial_data_relation_limit: int = 200
 
 
 def _as_model_identifier(model: Any) -> str:
@@ -39,6 +40,7 @@ def get_form_settings() -> FormSettings:
             raw.get("generated_form_metadata_key", "generated_form")
         ),
         generated_form_excluded_models=tuple(str(item) for item in excluded_models),
+        initial_data_relation_limit=max(int(raw.get("initial_data_relation_limit", 200)), 0),
     )
 
 

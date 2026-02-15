@@ -110,35 +110,49 @@ class ModelFormContractExtractor(FormConfigExtractor):
         page: int = 1,
         per_page: int = 50,
     ) -> dict[str, Any]:
-        contracts: list[dict[str, Any]] = []
+        eligible_refs: list[dict[str, str]] = []
         for ref in model_refs or []:
             app_name = ref.get("app_label") or ref.get("app")
             model_name = ref.get("model_name") or ref.get("model")
             if not app_name or not model_name:
                 continue
             try:
-                contracts.append(
-                    self.extract_contract(
-                        app_name,
-                        model_name,
-                        user=user,
-                        mode=mode,
-                        include_nested=include_nested,
-                        enforce_opt_in=True,
-                    )
-                )
+                model = self._resolve_model(app_name, model_name)
             except GraphQLError:
                 continue
+            if not is_generated_form_enabled(model):
+                continue
+            eligible_refs.append(
+                {
+                    "app_label": model._meta.app_label,
+                    "model_name": model.__name__,
+                }
+            )
 
         safe_page = max(int(page or 1), 1)
         safe_per_page = max(min(int(per_page or 50), 200), 1)
         start = (safe_page - 1) * safe_per_page
         end = start + safe_per_page
+
+        page_refs = eligible_refs[start:end]
+        contracts: list[dict[str, Any]] = []
+        for ref in page_refs:
+            contracts.append(
+                self.extract_contract(
+                    ref["app_label"],
+                    ref["model_name"],
+                    user=user,
+                    mode=mode,
+                    include_nested=include_nested,
+                    enforce_opt_in=False,
+                )
+            )
+
         return {
             "page": safe_page,
             "per_page": safe_per_page,
-            "total": len(contracts),
-            "results": contracts[start:end],
+            "total": len(eligible_refs),
+            "results": contracts,
         }
 
     def extract_initial_data_payload(

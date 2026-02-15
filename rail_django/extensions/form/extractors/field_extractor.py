@@ -5,6 +5,7 @@ Field extraction for Form API.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Optional
@@ -14,6 +15,8 @@ from django.db import models
 
 from ....security.field_permissions import FieldVisibility, field_permission_manager
 from ..utils.type_mapping import map_field_input_type, map_graphql_type, map_python_type
+
+logger = logging.getLogger(__name__)
 
 
 class FieldExtractorMixin:
@@ -65,6 +68,18 @@ class FieldExtractorMixin:
                 continue
             if not hasattr(field, "name"):
                 continue
+            if graphql_meta is not None:
+                try:
+                    if not graphql_meta.should_expose_field(
+                        field.name, for_input=True
+                    ):
+                        continue
+                except Exception:
+                    logger.debug(
+                        "Failed to apply GraphQLMeta field exposure rule for %s.%s.",
+                        model._meta.label,
+                        field.name,
+                    )
             field_schema = self._extract_field(
                 model,
                 field,
@@ -92,7 +107,7 @@ class FieldExtractorMixin:
             if user:
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=None
+                        user, model, field.name, instance=instance
                     )
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write
@@ -198,4 +213,10 @@ class FieldExtractorMixin:
                 "writable": writable,
             }
         except Exception:
+            logger.warning(
+                "Failed to extract field metadata for %s.%s.",
+                model._meta.label,
+                getattr(field, "name", "<unknown>"),
+                exc_info=True,
+            )
             return None

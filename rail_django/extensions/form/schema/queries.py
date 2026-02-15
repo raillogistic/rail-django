@@ -294,10 +294,31 @@ class FormQuery(graphene.ObjectType):
         user = getattr(info.context, "user", None)
 
         # Keep explicit guard and message to drive frontend fallback decisions.
-        model = apps.get_model(app_label, model_name)
+        try:
+            model = apps.get_model(app_label, model_name)
+        except LookupError as exc:
+            raise GraphQLError(
+                f"Model '{app_label}.{model_name}' not found."
+            ) from exc
         if not is_generated_form_enabled(model):
             raise GraphQLError(
                 f"Generated form contract is not enabled for '{app_label}.{model_name}'."
+            )
+
+        permission_snapshot = extractor.extract(
+            app_label,
+            model_name,
+            user=user,
+            object_id=object_id,
+            mode="UPDATE",
+        )
+        permissions = permission_snapshot.get("permissions") or {}
+        operation_matrix = permissions.get("operations") or {}
+        view_operation = operation_matrix.get("view") or {}
+        can_view = bool(view_operation.get("allowed", permissions.get("can_view", True)))
+        if not can_view:
+            raise GraphQLError(
+                str(view_operation.get("reason") or "Permission denied.")
             )
 
         return extractor.extract_initial_data_payload(

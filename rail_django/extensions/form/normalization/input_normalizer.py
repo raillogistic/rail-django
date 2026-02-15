@@ -17,16 +17,30 @@ PRIMARY_KEY_FIELDS = {"id", "pk", "object_id", "objectId"}
 
 def normalize_values(values: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {}
-    relations = {rel.get("name"): rel for rel in config.get("relations", [])}
+    relations: Dict[str, Dict[str, Any]] = {}
+    for relation in config.get("relations", []) or []:
+        if not isinstance(relation, dict):
+            continue
+        for alias in (
+            relation.get("name"),
+            relation.get("field_name"),
+            relation.get("path"),
+        ):
+            key = str(alias or "").strip()
+            if key:
+                relations[key] = relation
     relation_policies = config.get("relation_policies") or {}
 
     for key, value in (values or {}).items():
-        if key in relations:
+        relation = relations.get(key)
+        if relation:
             relation_input = normalize_relation_input(value)
             for action_name in relation_input.keys():
                 enforce_action_allowed(
                     relation_policies,
-                    path=relations[key].get("field_name") or key,
+                    path=relation.get("field_name")
+                    or relation.get("path")
+                    or key,
                     action=action_name,
                 )
             normalized[key] = relation_input

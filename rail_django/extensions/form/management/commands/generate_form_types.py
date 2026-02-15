@@ -4,7 +4,6 @@ Generate TypeScript definitions for Form API.
 
 from __future__ import annotations
 
-import json
 from typing import Any, List
 
 from django.core.management.base import BaseCommand

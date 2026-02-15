@@ -317,7 +317,7 @@ class PermissionExtractorMixin:
                     continue
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field_name, instance=None
+                        user, model, field_name, instance=instance
                     )
                     entry["can_read"] = perm.visibility != FieldVisibility.HIDDEN
                     entry["can_write"] = perm.can_write

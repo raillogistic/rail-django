@@ -3,7 +3,9 @@ import json
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.test import override_settings
 
+from rail_django.extensions.form.config import get_form_settings
 from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Category, OrderItem, Product
 
@@ -96,6 +98,29 @@ def test_model_form_contract_and_pages_queries(gql_client):
     assert page["perPage"] == 10
     assert page["total"] >= 1
     assert any(item["modelName"] == "Product" for item in page["results"])
+
+
+def test_model_form_contract_excludes_read_only_graphqlmeta_fields(gql_client):
+    query = """
+    query {
+      contract: modelFormContract(
+        appLabel: "test_app"
+        modelName: "Product"
+        mode: CREATE
+      ) {
+        fields {
+          fieldName
+        }
+      }
+    }
+    """
+    result = gql_client.execute(query)
+    assert result.get("errors") is None
+
+    field_names = {
+        item["fieldName"] for item in result["data"]["contract"]["fields"] or []
+    }
+    assert "date_creation" not in field_names
 
 
 def test_model_form_contract_resolves_operation_permissions_for_limited_user(gql_client):
@@ -237,3 +262,94 @@ def test_model_form_initial_data_supports_nested_fields_filter(gql_client):
     assert isinstance(values["orderItems"], list)
     assert len(values["orderItems"]) == 1
     assert values["orderItems"][0] == order_item.pk
+
+
+def test_model_form_initial_data_requires_view_access(gql_client):
+    User = get_user_model()
+    limited_user = User.objects.create_user(
+        username="form_contract_initial_data_limited",
+        password="pass12345",
+    )
+    category = Category.objects.create(name="Private", description="")
+    product = Product.objects.create(
+        name="Private Product",
+        price=10,
+        inventory_count=2,
+        category=category,
+    )
+
+    query = """
+    query($id: ID!) {
+      payload: modelFormInitialData(
+        appLabel: "test_app"
+        modelName: "Product"
+        objectId: $id
+      ) {
+        objectId
+      }
+    }
+    """
+    result = gql_client.execute(query, variables={"id": str(product.pk)}, user=limited_user)
+    assert result.get("errors")
+    message = str(result["errors"][0]["message"]).lower()
+    assert "permission required" in message or "authentication required" in message
+
+
+def test_model_form_initial_data_unknown_model_returns_graphql_error(gql_client):
+    query = """
+    query {
+      payload: modelFormInitialData(
+        appLabel: "test_app"
+        modelName: "MissingModel"
+        objectId: "1"
+      ) {
+        objectId
+      }
+    }
+    """
+    result = gql_client.execute(query)
+    assert result.get("errors")
+    assert "not found" in str(result["errors"][0]["message"]).lower()
+
+
+@override_settings(
+    RAIL_DJANGO_FORM={
+        "initial_data_relation_limit": 3,
+    }
+)
+def test_model_form_initial_data_applies_to_many_relation_limit(gql_client):
+    get_form_settings.cache_clear()
+    try:
+        category = Category.objects.create(name="Bulk", description="")
+        product = Product.objects.create(
+            name="Limited Product",
+            price=10,
+            inventory_count=2,
+            category=category,
+        )
+        for idx in range(5):
+            OrderItem.objects.create(
+                product=product,
+                quantity=idx + 1,
+                unit_price=idx + 1,
+            )
+
+        query = """
+        query($id: ID!) {
+          payload: modelFormInitialData(
+            appLabel: "test_app"
+            modelName: "Product"
+            objectId: $id
+            includeNested: false
+          ) {
+            values
+          }
+        }
+        """
+        result = gql_client.execute(query, variables={"id": str(product.pk)})
+        assert result.get("errors") is None
+        values = _decode_json(result["data"]["payload"]["values"])
+        assert isinstance(values["orderItems"], list)
+        assert len(values["orderItems"]) == 3
+    finally:
+        get_form_settings.cache_clear()

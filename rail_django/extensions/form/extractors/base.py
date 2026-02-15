@@ -4,9 +4,11 @@ FormConfigExtractor implementation.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from django.apps import apps
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.utils import timezone
 from graphql import GraphQLError
@@ -22,7 +24,10 @@ from ..utils.cache import (
     get_form_version,
     set_cached_config,
 )
+from ..config import get_form_settings
 from ..utils.graphql_meta import get_graphql_meta
+
+logger = logging.getLogger(__name__)
 
 
 class FormConfigExtractor(
@@ -64,14 +69,14 @@ class FormConfigExtractor(
         if object_id:
             try:
                 instance = model.objects.get(pk=object_id)
-            except Exception:
+            except (model.DoesNotExist, ObjectDoesNotExist, TypeError, ValueError):
                 instance = None
 
         fields = self._extract_fields(
             model, user, instance=instance, graphql_meta=graphql_meta
         )
         relations = self._extract_relations(
-            model, user, graphql_meta=graphql_meta
+            model, user, instance=instance, graphql_meta=graphql_meta
         )
 
         permissions = self._extract_permissions(
@@ -194,12 +199,15 @@ class FormConfigExtractor(
 
         try:
             instance = model.objects.get(pk=object_id)
-        except Exception:
+        except (model.DoesNotExist, ObjectDoesNotExist, TypeError, ValueError):
             raise GraphQLError(
                 f"Instance '{app_name}.{model_name}' with id {object_id} not found."
             )
 
         from graphene.utils.str_converters import to_camel_case
+
+        graphql_meta = get_graphql_meta(model)
+        relation_limit = int(get_form_settings().initial_data_relation_limit)
 
         nested_field_set: set[str] = set()
         for item in nested_fields or []:
@@ -216,6 +224,18 @@ class FormConfigExtractor(
 
         data: dict[str, Any] = {}
         for field in model._meta.get_fields():
+            field_name = getattr(field, "name", None)
+            if field_name and graphql_meta is not None:
+                try:
+                    if not graphql_meta.should_expose_field(field_name, for_input=True):
+                        continue
+                except Exception:
+                    logger.debug(
+                        "Failed to evaluate field exposure for initial data: %s.%s.",
+                        model._meta.label,
+                        field_name,
+                    )
+
             if field.is_relation:
                 # For relations, return ids
                 if not hasattr(field, "name"):
@@ -228,6 +248,9 @@ class FormConfigExtractor(
                         if field.many_to_many or field.one_to_many:
                             related_manager = getattr(instance, field.name, None)
                             if related_manager is not None:
+                                relation_qs = related_manager.all()
+                                if relation_limit > 0:
+                                    relation_qs = relation_qs[:relation_limit]
                                 if include_this_relation_nested:
                                     data[field.name] = [
                                         self._serialize_related_instance(
@@ -235,12 +258,17 @@ class FormConfigExtractor(
                                             depth=1,
                                             max_depth=max_nested_depth,
                                         )
-                                        for obj in related_manager.all()
+                                        for obj in relation_qs
                                     ]
                                 else:
-                                    data[field.name] = [
-                                        obj.pk for obj in related_manager.all()
-                                    ]
+                                    try:
+                                        data[field.name] = list(
+                                            relation_qs.values_list("pk", flat=True)
+                                        )
+                                    except Exception:
+                                        data[field.name] = [
+                                            obj.pk for obj in relation_qs
+                                        ]
                         else:
                             related_obj = getattr(instance, field.name, None)
                             if include_this_relation_nested and related_obj is not None:
@@ -254,6 +282,12 @@ class FormConfigExtractor(
                                     related_obj.pk if related_obj else None
                                 )
                     except Exception:
+                        logger.debug(
+                            "Failed to extract relation initial value for %s.%s.",
+                            model._meta.label,
+                            field.name,
+                            exc_info=True,
+                        )
                         data[field.name] = None
                 continue
 
@@ -261,6 +295,12 @@ class FormConfigExtractor(
                 value = getattr(instance, field.name)
                 data[field.name] = self._to_json_value(value)
             except Exception:
+                logger.debug(
+                    "Failed to extract scalar initial value for %s.%s.",
+                    model._meta.label,
+                    field.name,
+                    exc_info=True,
+                )
                 data[field.name] = None
 
         # Convert keys to camelCase for frontend consistency
@@ -279,14 +319,30 @@ class FormConfigExtractor(
         if depth > max_depth:
             return payload
 
+        graphql_meta = get_graphql_meta(instance.__class__)
         for field in instance._meta.get_fields():
             if field.is_relation:
                 continue
             if not hasattr(field, "name"):
                 continue
             try:
+                if not graphql_meta.should_expose_field(field.name, for_input=True):
+                    continue
+            except Exception:
+                logger.debug(
+                    "Failed to evaluate nested field exposure for %s.%s.",
+                    instance.__class__._meta.label,
+                    field.name,
+                )
+            try:
                 value = getattr(instance, field.name)
                 payload[to_camel_case(field.name)] = self._to_json_value(value)
             except Exception:
+                logger.debug(
+                    "Failed to serialize nested field %s.%s.",
+                    instance.__class__._meta.label,
+                    field.name,
+                    exc_info=True,
+                )
                 payload[to_camel_case(field.name)] = None
         return payload

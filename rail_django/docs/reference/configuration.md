@@ -184,10 +184,14 @@ Generated ModelForm contract queries (`modelFormContract`,
 `modelFormContractPages`, `modelFormInitialData`) are enabled by default for all
 models.
 
-Use `RAIL_DJANGO_FORM` to configure exclusions and metadata key resolution:
+Use `RAIL_DJANGO_FORM` to configure cache behavior, relation payload limits,
+exclusions, and metadata key resolution:
 
 ```python
 RAIL_DJANGO_FORM = {
+    "enable_cache": True,
+    "cache_ttl_seconds": 3600,
+    "initial_data_relation_limit": 200,
     "generated_form_excluded_models": ["store.Product", "store.Order"],
     "generated_form_metadata_key": "generated_form",
 }
@@ -199,6 +203,10 @@ Key options:
   that should not expose generated form contract queries by default.
 - `generated_form_metadata_key`: metadata key used on
   `GraphQLMeta.custom_metadata` (default: `generated_form`).
+- `enable_cache`: toggles generated form config caching.
+- `cache_ttl_seconds`: TTL for generated form config cache entries.
+- `initial_data_relation_limit`: max items emitted for each to-many relation in
+  `modelFormInitialData` (`0` disables the cap).
 
 Per-model metadata override:
 
