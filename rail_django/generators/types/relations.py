@@ -57,15 +57,25 @@ class RelationInputTypeGenerator:
             else:
                 fields["connect"] = graphene.InputField(graphene.ID)
 
-        # 2. Disconnect (ID) - Only for M2M/Reverse
+        # 2. Disconnect operation
+        # - M2M/Reverse: accepts list of IDs to remove
+        # - Singular FK/O2O: accepts boolean flag to clear current relation
         disconnect_enabled = config.disconnect.enabled if config else True
-        if is_list and disconnect_enabled:
-            fields["disconnect"] = graphene.InputField(graphene.List(graphene.ID))
+        if disconnect_enabled:
+            if is_list:
+                fields["disconnect"] = graphene.InputField(graphene.List(graphene.ID))
+            else:
+                fields["disconnect"] = graphene.InputField(graphene.Boolean)
 
-        # 3. Set (ID) - Only for M2M/Reverse (Replaces all)
+        # 3. Set operation
+        # - M2M/Reverse: replace all by list of IDs
+        # - Singular FK/O2O: replace current relation by ID (or null)
         set_enabled = config.set.enabled if config else True
-        if is_list and set_enabled:
-            fields["set"] = graphene.InputField(graphene.List(graphene.ID))
+        if set_enabled:
+            if is_list:
+                fields["set"] = graphene.InputField(graphene.List(graphene.ID))
+            else:
+                fields["set"] = graphene.InputField(graphene.ID)
 
         style = getattr(config, "style", "unified") if config else "unified"
 

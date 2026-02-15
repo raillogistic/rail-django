@@ -1,564 +1,162 @@
 # Type generator internals
 
-> **Module Path:** `rail_django.generators.types.generator`
+> **Module path:** `rail_django.generators.types.generator`
 
-The TypeGenerator creates GraphQL types from Django models, including object types, input types, filter types, enums, and interfaces.
+`TypeGenerator` is the model-to-type bridge used by Rail Django. It builds
+GraphQL object types, mutation input types, and optional `django-filter`
+filtersets, and it applies field policy from `GraphQLMeta`.
 
-## Architecture Overview
+## Constructor and settings
 
-```
-                          TypeGenerator
-                               │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-        ▼                      ▼                      ▼
-   Object Types           Input Types            Filter Types
-   (DjangoObjectType)    (InputObjectType)       (FilterSet)
-        │                      │                      │
-        ├──────────────────────┼──────────────────────┤
-        │                      │                      │
-        ▼                      ▼                      ▼
-   Enum Types            Union Types            Interface Types
-   (Graphene.Enum)       (Graphene.Union)      (Graphene.Interface)
-```
-
-## Class Reference
-
-### TypeGenerator
+Create one generator per schema.
 
 ```python
 from rail_django.generators.types import TypeGenerator
 
-# Create generator for default schema
 type_gen = TypeGenerator(schema_name="default")
-
-# Generate object type for a model
-ProductType = type_gen.generate_object_type(Product)
-
-# Generate input type for mutations
-ProductInput = type_gen.generate_input_type(Product, mutation_type="create")
-
-# Generate filter type
-ProductFilter = type_gen.generate_filter_type(Product)
 ```
 
-#### Constructor Parameters
+Constructor arguments:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `settings` | `TypeGeneratorSettings` | `None` | Type generation settings |
-| `mutation_settings` | `MutationGeneratorSettings` | `None` | Mutation settings for inputs |
-| `schema_name` | `str` | `"default"` | Schema identifier |
+- `settings: TypeGeneratorSettings | None`
+- `mutation_settings: MutationGeneratorSettings | None`
+- `schema_name: str = "default"`
 
-#### Key Properties
+When settings are omitted, the generator loads schema-scoped settings via
+`TypeGeneratorSettings.from_schema(...)` and
+`MutationGeneratorSettings.from_schema(...)`.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `schema_name` | `str` | Current schema name |
-| `settings` | `TypeGeneratorSettings` | Type generation settings |
-| `mutation_settings` | `MutationGeneratorSettings` | Mutation generation settings |
-| `custom_scalars` | `dict` | Enabled custom scalar types |
-| `query_optimizer` | `QueryOptimizer` | Query optimization helper |
+## Public generation methods
 
-## Object Type Generation
+These methods are the main API.
 
-### generate_object_type()
+| Method | Returns | Notes |
+|---|---|---|
+| `generate_object_type(model)` | `DjangoObjectType` subclass | Cached per model |
+| `generate_input_type(model, ...)` | `InputObjectType` subclass | Cached by model + options |
+| `generate_filter_type(model)` | `FilterSet` subclass or `None` | Requires `django-filter` and `generate_filters=True` |
+| `handle_custom_fields(field)` | Graphene scalar type | Fallback for unmapped custom fields |
 
-Creates a DjangoObjectType for a model:
+## Object type behavior
 
-```python
-ProductType = type_gen.generate_object_type(Product)
+Object generation includes more than plain model fields.
 
-# Generated type includes:
-# - All exposed model fields
-# - Relationship fields (ForeignKey, ManyToMany)
-# - Reverse relations
-# - Enum fields for choices
-# - Custom scalar mappings
-```
+- Respects include/exclude/read-write field policy from `GraphQLMeta`.
+- Adds `pk` and `desc` helper fields.
+- Adds `row_permissions` metadata (`can_update`, `can_delete`, reasons).
+- Adds reverse relation fields and `<relation>_count`.
+- Adds `<relation>_stats` for numeric aggregates on reverse relations.
+- Adds `<field>_desc` for choice fields.
+- Applies tenant scoping in relation resolvers.
+- Uses DataLoader for eligible reverse many-to-one relations.
 
-#### What Gets Generated
+The generator excludes `polymorphic_ctype` and inheritance pointer fields
+(`*_ptr`) automatically.
 
-```python
-# For this model:
-class Product(models.Model):
-    name = models.CharField(max_length=255)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    tags = models.ManyToManyField(Tag)
-    created_at = models.DateTimeField(auto_now_add=True)
+## Input type behavior
 
-# TypeGenerator creates:
-class ProductType(DjangoObjectType):
-    class Meta:
-        model = Product
-        fields = ["id", "name", "price", "status", "category", "tags", "created_at"]
-
-    # Auto-generated enum for choices
-    status = graphene.Field(ProductStatusEnum)
-
-    # Optimized relation resolvers
-    def resolve_category(self, info):
-        # Uses select_related optimization
-        ...
-
-    def resolve_tags(self, info):
-        # Uses prefetch_related optimization
-        ...
-```
-
-#### Field Type Mapping
-
-Django fields are mapped to GraphQL types:
-
-| Django Field | GraphQL Type |
-|-------------|--------------|
-| `CharField` | `String` |
-| `TextField` | `String` |
-| `IntegerField` | `Int` |
-| `FloatField` | `Float` |
-| `DecimalField` | `Decimal` (custom scalar) |
-| `BooleanField` | `Boolean` |
-| `DateField` | `Date` (custom scalar) |
-| `DateTimeField` | `DateTime` (custom scalar) |
-| `TimeField` | `Time` (custom scalar) |
-| `UUIDField` | `UUID` (custom scalar) |
-| `EmailField` | `Email` (custom scalar) |
-| `URLField` | `URL` (custom scalar) |
-| `JSONField` | `JSON` (custom scalar) |
-| `BinaryField` | `Binary` (custom scalar) |
-| `FileField` | `String` (URL) |
-| `ImageField` | `String` (URL) |
-| `ForeignKey` | Related object type |
-| `ManyToManyField` | List of related type |
-
-#### Custom Field Mappings
-
-Add custom mappings in settings:
+Input generation supports both top-level fields and nested relation operations.
 
 ```python
-RAIL_DJANGO_GRAPHQL = {
-    "type_generation_settings": {
-        "custom_field_mappings": {
-            "myapp.fields.MoneyField": "Decimal",
-            "myapp.fields.PhoneField": "Phone"
-        }
-    }
-}
-```
-
-## Input Type Generation
-
-### generate_input_type()
-
-Creates input types for mutations:
-
-```python
-# Create input
-CreateProductInput = type_gen.generate_input_type(
-    Product,
-    mutation_type="create"
-)
-
-# Update input (partial)
-UpdateProductInput = type_gen.generate_input_type(
+CreateInput = type_gen.generate_input_type(Product, mutation_type="create")
+UpdateInput = type_gen.generate_input_type(
     Product,
     mutation_type="update",
-    partial=True
+    partial=True,
 )
 ```
 
-#### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `model` | `Type[Model]` | Required | Django model class |
-| `mutation_type` | `str` | `"create"` | `"create"` or `"update"` |
-| `partial` | `bool` | `False` | Make all fields optional |
-| `include_reverse_relations` | `bool` | `True` | Include nested inputs |
-| `exclude_fields` | `list[str]` | `None` | Fields to exclude |
-| `depth` | `int` | `0` | Current nesting depth |
-
-#### Input Type Behavior
-
-**Create Input:**
-```graphql
-input CreateProductInput {
-  name: String!        # Required (no default, not blank)
-  price: Decimal!      # Required
-  status: String       # Optional (has default)
-  categoryId: ID!      # Required FK
-  tagIds: [ID]         # Optional M2M
-
-  # Nested create (if enabled)
-  items: [ProductItemInput]
-}
-```
-
-**Update Input:**
-```graphql
-input UpdateProductInput {
-  id: ID!              # Required for update
-  name: String         # Optional
-  price: Decimal       # Optional
-  status: String       # Optional
-  categoryId: ID       # Optional
-  tagIds: [ID]         # Optional
-}
-```
-
-### Nested Input Types
-
-For related models, nested inputs are generated:
-
-```python
-# Enable in settings
-"mutation_settings": {
-    "enable_nested_relations": True
-}
-```
-
-```graphql
-input CreateOrderInput {
-  customer: CustomerInput  # Nested create
-  customerId: ID           # Or use existing
-  items: [OrderItemInput!] # Nested list
-}
-
-input OrderItemInput {
-  productId: ID!
-  quantity: Int!
-  price: Decimal
-}
-```
-
-### Relation Input Types
-
-The `RelationInputTypeGenerator` creates unified inputs:
-
-```python
-# Generated for each relation
-input OrderItemsInput {
-  set: [ID]              # Replace all
-  add: [ID]              # Add to existing
-  remove: [ID]           # Remove specific
-  create: [OrderItemCreateInput]  # Create new
-  update: [OrderItemUpdateInput]  # Update existing
-  delete: [ID]           # Delete specific
-}
-```
-
-## Filter Type Generation
-
-### generate_filter_type()
-
-Creates Django-filter FilterSets:
-
-```python
-ProductFilter = type_gen.generate_filter_type(Product)
-```
-
-#### Generated Filter
-
-```python
-class ProductFilter(FilterSet):
-    class Meta:
-        model = Product
-        fields = {
-            "name": ["exact", "icontains", "startswith"],
-            "price": ["exact", "gt", "gte", "lt", "lte", "range"],
-            "status": ["exact", "in"],
-            "created_at": ["exact", "gt", "gte", "lt", "lte", "year", "month"],
-            # ... more fields
-        }
-```
+Key behavior:
 
-#### Filter Configuration
+- For `create`, requiredness follows model null/default/blank semantics.
+- For `update`, non-ID fields stay optional to support partial updates.
+- Read-only fields are excluded from input generation.
+- Reverse relations can be included unless disabled.
 
-Filters are configured via GraphQLMeta:
+### Unified relation inputs
 
-```python
-class Product(models.Model):
-    class GraphQLMeta:
-        filtering = GraphQLMetaConfig.Filtering(
-            fields={
-                "price": GraphQLMetaConfig.FilterField(
-                    lookups=["gt", "lt", "between"]
-                )
-            }
-        )
-```
+Relation inputs are generated by `RelationInputTypeGenerator` with operations:
 
-## Enum Generation
+- `connect`
+- `disconnect` (list relations)
+- `set` (list relations)
+- `create`
+- `update`
 
-### Choice Field Enums
+`GraphQLMeta.relations` can disable specific operations per field. If relation
+style is `id_only`, nested `create` and `update` are disabled.
 
-Automatically generated for choice fields:
-
-```python
-class Product(models.Model):
-    STATUS_CHOICES = [
-        ("draft", "Draft"),
-        ("active", "Active"),
-        ("archived", "Archived")
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+## Filter type behavior
 
-# Generated enum:
-class ProductStatusEnum(graphene.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-```
-
-### Enum Registry
-
-Enums are cached to avoid duplicates:
-
-```python
-# Get or create enum for a field
-StatusEnum = type_gen._get_or_create_enum_for_field(Product, status_field)
-```
-
-## Type Registry
-
-Generated types are cached:
-
-```python
-# Object types
-type_gen._type_registry[Product]  # ProductType
-
-# Input types
-type_gen._input_type_registry[Product]  # ProductInput
-
-# Filter types
-type_gen._filter_type_registry[Product]  # ProductFilter
-
-# Enums
-type_gen._enum_registry["ProductStatus"]  # ProductStatusEnum
-```
-
-## Field Exclusion
-
-### Global Exclusions
-
-```python
-RAIL_DJANGO_GRAPHQL = {
-    "type_generation_settings": {
-        "exclude_fields": {
-            "Product": ["internal_notes", "cost_price"],
-            "*": ["password"]  # All models
-        }
-    }
-}
-```
-
-### GraphQLMeta Exclusions
-
-```python
-class Product(models.Model):
-    class GraphQLMeta:
-        fields = GraphQLMetaConfig.Fields(
-            exclude=["internal_notes"]
-        )
-```
-
-### Automatic Exclusions
-
-- `polymorphic_ctype` (Django Polymorphic)
-- Fields ending with `_ptr` (model inheritance)
-- Fields marked as masked/hidden in access config
-
-## Reverse Relations
-
-Reverse relations are automatically included:
-
-```python
-# Model
-class Order(models.Model):
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-
-# Generated on CustomerType:
-class CustomerType(DjangoObjectType):
-    orders = graphene.List(OrderType)  # Reverse relation
-
-    def resolve_orders(self, info):
-        return self.order_set.all()
-```
-
-### Excluding Reverse Relations
-
-```python
-class Customer(models.Model):
-    class GraphQLMeta:
-        fields = GraphQLMetaConfig.Fields(
-            exclude=["order_set"]  # Exclude reverse relation
-        )
-```
-
-## DataLoader Integration
-
-For performance, DataLoaders batch relation queries:
-
-```python
-# Automatically used for reverse relations
-def resolve_orders(self, info):
-    loader = type_gen._get_relation_dataloader(
-        info.context,
-        Order,
-        self._meta.model._meta.get_field("customer"),
-        self._state
-    )
-    if loader:
-        return loader.load(self.id)
-    return self.order_set.all()
-```
-
-## Multitenancy Support
-
-Tenant scoping is applied to relations:
-
-```python
-def resolve_orders(self, info):
-    qs = self.order_set.all()
-    # Apply tenant filter
-    qs = type_gen._apply_tenant_scope(qs, info, Order)
-    return qs
-```
-
-## Custom Scalars
-
-The generator uses enabled custom scalars:
-
-```python
-# From settings
-"custom_scalars": {
-    "DateTime": {"enabled": True},
-    "Date": {"enabled": True},
-    "JSON": {"enabled": True},
-    "Decimal": {"enabled": True}
-}
-
-# Updates field type map
-type_gen.custom_scalars  # {"DateTime": DateTimeScalar, ...}
-```
-
-## Settings Reference
-
-### TypeGeneratorSettings
-
-```python
-@dataclass
-class TypeGeneratorSettings:
-    # Field exclusions by model
-    exclude_fields: dict[str, list[str]] = field(default_factory=dict)
-    excluded_fields: dict[str, list[str]] = field(default_factory=dict)  # Alias
-
-    # Field inclusions (whitelist)
-    include_fields: Optional[dict[str, list[str]]] = None
-
-    # Custom field type mappings
-    custom_field_mappings: dict = field(default_factory=dict)
-
-    # Enable filter generation
-    generate_filters: bool = True
-    enable_filtering: bool = True  # Alias
-
-    # Auto camelCase field names
-    auto_camelcase: bool = True
-
-    # Use help_text as field descriptions
-    generate_descriptions: bool = True
-```
-
-## Usage Examples
-
-### Basic Type Generation
+`generate_filter_type(model)` builds a `FilterSet` from model fields and then
+intersects it with `GraphQLMeta.filtering.fields` lookups when provided.
+
+Lookup normalization supports these aliases:
+
+- `eq -> exact`
+- `is_null -> isnull`
+- `between -> range`
+- `starts_with -> startswith`
+- `istarts_with -> istartswith`
+- `ends_with -> endswith`
+- `iends_with -> iendswith`
+
+If `django-filter` is not installed or `generate_filters` is disabled, this
+method returns `None`.
+
+## Scalar and custom field mapping
+
+Field-to-GraphQL mapping starts from built-in defaults, then applies:
+
+1. `settings.custom_field_mappings`
+2. enabled custom scalars (`Email`, `URL`, `UUID`, `DateTime`, `Date`, `Time`,
+   `JSON`, `Decimal`, `Binary`)
+
+Unknown custom model fields fall back to `handle_custom_fields(...)`.
+
+## Caching and registries
+
+Generated artifacts are cached to avoid duplicate classes:
+
+- `_type_registry`
+- `_input_type_registry`
+- `_filter_type_registry`
+- `_enum_registry`
+- `_meta_cache`
+
+Treat these as internal caches, not stable public API.
+
+## Settings reference
+
+`TypeGeneratorSettings` fields:
+
+- `exclude_fields`
+- `excluded_fields`
+- `include_fields`
+- `custom_field_mappings`
+- `generate_filters`
+- `enable_filtering`
+- `auto_camelcase`
+- `generate_descriptions`
+
+## Usage example
 
 ```python
 from rail_django.generators.types import TypeGenerator
-from myapp.models import Product, Order
+from myapp.models import Product
 
 type_gen = TypeGenerator(schema_name="default")
 
-# Generate types
 ProductType = type_gen.generate_object_type(Product)
-OrderType = type_gen.generate_object_type(Order)
-
-# Generate inputs
-ProductInput = type_gen.generate_input_type(Product, mutation_type="create")
-ProductUpdateInput = type_gen.generate_input_type(Product, mutation_type="update", partial=True)
-```
-
-### With Custom Settings
-
-```python
-from rail_django.generators.types import TypeGenerator
-from rail_django.core.settings import TypeGeneratorSettings
-
-settings = TypeGeneratorSettings(
-    exclude_fields={
-        "Product": ["internal_notes", "cost_price"],
-        "Order": ["internal_reference"]
-    },
-    custom_field_mappings={
-        MoneyField: Decimal
-    }
+CreateProductInput = type_gen.generate_input_type(Product, mutation_type="create")
+UpdateProductInput = type_gen.generate_input_type(
+    Product, mutation_type="update", partial=True
 )
-
-type_gen = TypeGenerator(settings=settings, schema_name="custom")
+ProductFilter = type_gen.generate_filter_type(Product)
 ```
 
-### Accessing Generated Types
+## Related pages
 
-```python
-# Check if type exists
-if Product in type_gen._type_registry:
-    ProductType = type_gen._type_registry[Product]
-
-# Get or generate
-ProductType = type_gen.generate_object_type(Product)  # Cached on second call
-```
-
-## Internal Methods
-
-### Field Analysis
-
-```python
-# Get excluded fields for a model
-excluded = type_gen._get_excluded_fields(Product)
-
-# Get included fields (whitelist)
-included = type_gen._get_included_fields(Product)
-
-# Check if field should be included
-should_include = type_gen._should_include_field(Product, "name")
-should_include_input = type_gen._should_include_field(Product, "name", for_input=True)
-```
-
-### Meta Access
-
-```python
-# Get GraphQLMeta for a model (cached)
-meta = type_gen._get_model_meta(Product)
-
-# Get maskable fields (hidden/redacted)
-maskable = type_gen._get_maskable_fields(Product)
-```
-
-### Reverse Relations
-
-```python
-# Get reverse relations for a model
-reverse = type_gen._get_reverse_relations(Product)
-# {"order_set": {"model": Order, "relation": ...}}
-```
-
-## Related Modules
-
-- [Schema Builder](../core/schema-builder.md) - Uses TypeGenerator
-- [Query Generator](./query-generator.md) - Uses generated types
-- [Mutation Generator](./mutation-generator.md) - Uses generated inputs
-- [GraphQLMeta](../core/graphql-meta.md) - Field configuration
-- [Custom Scalars](../../reference/api.md) - Scalar type details
+- [GraphQLMeta](../core/graphql-meta.md)
+- [Query generator](./query-generator.md)
+- [Mutation generator](./mutation-generator.md)

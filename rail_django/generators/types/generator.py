@@ -525,6 +525,22 @@ class TypeGenerator:
                 set=clone_op(getattr(base_cfg, "set", None)),
             )
 
+        # Singular non-null relations cannot support disconnect/set semantics.
+        # Keep generated input types and policy metadata aligned with model constraints.
+        try:
+            django_field = model._meta.get_field(field_name)
+            is_singular_relation = isinstance(
+                django_field,
+                (models.ForeignKey, models.OneToOneField),
+            )
+            if is_singular_relation and not bool(getattr(django_field, "null", True)):
+                if cfg is None:
+                    cfg = GeneratorFieldRelationConfig()
+                cfg.disconnect.enabled = False
+                cfg.set.enabled = False
+        except Exception:
+            pass
+
         if not self._should_include_nested_field(model, field_name):
             if cfg is None:
                 cfg = GeneratorFieldRelationConfig()

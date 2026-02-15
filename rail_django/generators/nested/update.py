@@ -136,6 +136,8 @@ class NestedUpdateMixin:
             if "connect" in value:
                 self._assert_relation_operation_allowed(model, field_name, "connect")
                 pk_val = self._coerce_pk(value["connect"])
+                if pk_val in (None, ""):
+                    continue
                 try:
                     related_qs = self._get_tenant_queryset(
                         field.related_model, info, operation="retrieve"
@@ -180,3 +182,25 @@ class NestedUpdateMixin:
                 )
                 # Boolean true? or ID? If boolean true, disconnect current.
                 setattr(instance, field_name, None)
+            elif "set" in value:
+                self._assert_relation_operation_allowed(model, field_name, "set")
+                set_value = self._coerce_pk(value.get("set"))
+                if set_value in (None, ""):
+                    setattr(instance, field_name, None)
+                    continue
+                try:
+                    related_qs = self._get_tenant_queryset(
+                        field.related_model, info, operation="retrieve"
+                    )
+                    related = related_qs.get(pk=set_value)
+                    self._ensure_operation_access(
+                        field.related_model,
+                        "retrieve",
+                        info,
+                        instance=related,
+                    )
+                    setattr(instance, field_name, related)
+                except field.related_model.DoesNotExist:
+                    raise ValidationError({
+                        field_name: f"{field.related_model.__name__} with id '{set_value}' does not exist."
+                    })

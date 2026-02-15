@@ -192,3 +192,31 @@ class NestedCreateMixin:
                     raise ValidationError(
                         {field_name: "Object not found for update."}
                     )
+            elif "disconnect" in value:
+                self._assert_relation_operation_allowed(model, field_name, "disconnect")
+                regular_fields[field_name] = None
+            elif "set" in value:
+                self._assert_relation_operation_allowed(model, field_name, "set")
+                set_value = value.get("set")
+                if set_value in (None, ""):
+                    regular_fields[field_name] = None
+                    continue
+                pk_value = self._coerce_pk(set_value)
+                try:
+                    related_queryset = self._get_tenant_queryset(
+                        field.related_model, info, operation="retrieve"
+                    )
+                    related_instance = related_queryset.get(pk=pk_value)
+                    self._ensure_operation_access(
+                        field.related_model,
+                        "retrieve",
+                        info,
+                        instance=related_instance,
+                    )
+                    regular_fields[field_name] = related_instance
+                except field.related_model.DoesNotExist:
+                    raise ValidationError(
+                        {
+                            field_name: f"{field.related_model.__name__} with id '{pk_value}' does not exist."
+                        }
+                    )

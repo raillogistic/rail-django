@@ -151,11 +151,19 @@ def process_relation_operations(
         ops = set(value.keys())
         
         if not is_list:
-            # FK/OneToOne: Only ONE operation allowed (connect, create, OR update)
-            count = sum(1 for op in ["connect", "create", "update"] if op in value)
+            # FK/OneToOne: only one operation is allowed at a time.
+            # Supports connect/create/update plus singular disconnect/set operations.
+            count = sum(
+                1
+                for op in ["connect", "create", "update", "disconnect", "set"]
+                if op in value
+            )
             if count > 1:
                 raise ValidationError({
-                    field_name: f"For singular relation '{field_name}', provide exactly one of: connect, create, update."
+                    field_name: (
+                        f"For singular relation '{field_name}', provide exactly one of: "
+                        "connect, create, update, disconnect, set."
+                    )
                 })
         else:
             # M2M/Reverse: 'set' cannot combine with others

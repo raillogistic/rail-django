@@ -27,7 +27,7 @@ class TestRelationInputTypeGenerator:
         assert len(generator._registry) == 0
 
     def test_generate_fk_relation_input_type(self):
-        """Should generate relation input type for FK with connect/create/update."""
+        """Should generate relation input type for FK with singular unified operations."""
         from rail_django.generators.types.relations import RelationInputTypeGenerator
 
         mock_type_gen = MagicMock()
@@ -56,14 +56,13 @@ class TestRelationInputTypeGenerator:
 
         # Should return an InputObjectType class
         assert issubclass(result, graphene.InputObjectType)
-        # Should have connect, create, update fields (wrapped in InputField)
+        # Should have connect/create/update fields
         assert "connect" in result._meta.fields
         assert "create" in result._meta.fields
         assert "update" in result._meta.fields
-        # Should NOT have disconnect for singular FK
-        assert "disconnect" not in result._meta.fields
-        # Should NOT have set for singular FK
-        assert "set" not in result._meta.fields
+        # Singular inputs also expose disconnect and set
+        assert "disconnect" in result._meta.fields
+        assert "set" in result._meta.fields
 
     def test_generate_m2m_relation_input_type(self):
         """Should generate relation input type for M2M with list operations."""

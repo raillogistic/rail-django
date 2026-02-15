@@ -156,7 +156,12 @@ class RelationExtractorMixin:
                 return None
 
             operations = self._extract_relation_operations(
-                model, field_key, graphql_meta=graphql_meta
+                model,
+                field_key,
+                field=field,
+                is_to_many=is_to_many,
+                is_reverse=is_reverse,
+                graphql_meta=graphql_meta,
             )
 
             relation_label = self._get_relation_label(
@@ -221,6 +226,9 @@ class RelationExtractorMixin:
         model: type[models.Model],
         field_name: str,
         *,
+        field: Any,
+        is_to_many: bool,
+        is_reverse: bool,
         graphql_meta: Optional[Any] = None,
     ) -> dict[str, Any]:
         cfg = None
@@ -242,12 +250,29 @@ class RelationExtractorMixin:
             op_cfg = getattr(cfg, attr, None)
             return getattr(op_cfg, "require_permission", None)
 
+        singular_nullable = True
+        if not is_to_many:
+            if is_reverse:
+                source_field = getattr(field, "field", None)
+                singular_nullable = bool(getattr(source_field, "null", True))
+            else:
+                singular_nullable = bool(getattr(field, "null", True))
+
+        disconnect_default = True if is_to_many else singular_nullable
+        set_default = True if is_to_many else singular_nullable
+
+        can_disconnect = _enabled("disconnect", disconnect_default)
+        can_set = _enabled("set", set_default)
+        if not is_to_many and not singular_nullable:
+            can_disconnect = False
+            can_set = False
+
         return {
             "can_connect": _enabled("connect"),
             "can_create": _enabled("create"),
             "can_update": _enabled("update"),
-            "can_disconnect": _enabled("disconnect"),
-            "can_set": _enabled("set"),
+            "can_disconnect": can_disconnect,
+            "can_set": can_set,
             "can_delete": _enabled("delete", False),
             "can_clear": _enabled("clear", False),
             "connect_permission": _permission("connect"),
