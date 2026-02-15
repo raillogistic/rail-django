@@ -75,8 +75,18 @@ class FormConfigExtractor(
         )
 
         permissions = self._extract_permissions(
-            model, user, fields=fields, relations=relations
+            model,
+            user,
+            fields=fields,
+            relations=relations,
+            graphql_meta=graphql_meta,
+            instance=instance,
+            mode=mode,
         )
+        operation_permissions = permissions.get("operations", {})
+        create_access = operation_permissions.get("create", {})
+        update_access = operation_permissions.get("update", {})
+        delete_access = operation_permissions.get("delete", {})
 
         conditional_rules = self._extract_conditional_rules(
             model, graphql_meta=graphql_meta
@@ -108,9 +118,10 @@ class FormConfigExtractor(
                 "operation": "CREATE",
                 "description": f"Create {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": permissions.get("can_create", True),
-                "permission": None,
-                "denial_reason": None,
+                "allowed": bool(create_access.get("allowed", permissions.get("can_create", True))),
+                "permission": ", ".join(create_access.get("required_permissions", []))
+                or None,
+                "denial_reason": create_access.get("reason"),
                 "success_message": None,
                 "requires_optimistic_lock": False,
                 "optimistic_lock_field": None,
@@ -120,9 +131,10 @@ class FormConfigExtractor(
                 "operation": "UPDATE",
                 "description": f"Update {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": permissions.get("can_update", True),
-                "permission": None,
-                "denial_reason": None,
+                "allowed": bool(update_access.get("allowed", permissions.get("can_update", True))),
+                "permission": ", ".join(update_access.get("required_permissions", []))
+                or None,
+                "denial_reason": update_access.get("reason"),
                 "success_message": None,
                 "requires_optimistic_lock": True,
                 "optimistic_lock_field": to_camel_case("updated_at")
@@ -134,9 +146,10 @@ class FormConfigExtractor(
                 "operation": "DELETE",
                 "description": f"Delete {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": permissions.get("can_delete", True),
-                "permission": None,
-                "denial_reason": None,
+                "allowed": bool(delete_access.get("allowed", permissions.get("can_delete", True))),
+                "permission": ", ".join(delete_access.get("required_permissions", []))
+                or None,
+                "denial_reason": delete_access.get("reason"),
                 "success_message": None,
                 "requires_optimistic_lock": False,
                 "optimistic_lock_field": None,

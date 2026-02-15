@@ -27,6 +27,8 @@ from .config import (
     _templating_rate_limit,
     _templating_renderer_name,
     _templating_settings,
+    _default_header,
+    _default_footer,
     PYDYF_VERSION,
     Version,
     InvalidVersion,
@@ -40,6 +42,7 @@ from .access import (
     evaluate_template_access,
 )
 from .rendering import render_pdf, render_template_html, get_pdf_renderer
+from .rendering.pdf import render_pdf_from_html
 from .rendering.html import _render_template
 from .jobs import (
     _sanitize_filename,
@@ -145,8 +148,17 @@ class PdfTemplateView(View):
 
         client_data = _extract_client_data(request, template_def)
         setattr(request, "rail_template_client_data", client_data)
+        merge_pks = (
+            self._parse_merge_pks(request, pk) if template_def.model else [str(pk)]
+        )
+        is_multi_render = template_def.model and len(merge_pks) > 1
 
         if self._parse_async_request(request):
+            if is_multi_render:
+                return JsonResponse(
+                    {"error": "Async PDF jobs do not support multi-row merge."},
+                    status=400,
+                )
             async_settings = _templating_async()
             if not async_settings.get("enable", False):
                 return JsonResponse({"error": "Async PDF jobs are disabled"}, status=400)
@@ -170,10 +182,15 @@ class PdfTemplateView(View):
             return JsonResponse(job_payload, status=202)
 
         cache_settings = _cache_settings_for_template(template_def)
-        cache_key = _build_pdf_cache_key(
-            template_def, pk=pk, user=_resolve_request_user(request),
-            client_data=client_data, cache_settings=cache_settings,
-        )
+        cache_key = None
+        if not is_multi_render:
+            cache_key = _build_pdf_cache_key(
+                template_def,
+                pk=pk,
+                user=_resolve_request_user(request),
+                client_data=client_data,
+                cache_settings=cache_settings,
+            )
         if cache_key:
             cached_pdf = cache.get(cache_key)
             if cached_pdf:
@@ -185,14 +202,65 @@ class PdfTemplateView(View):
                 )
                 return response
 
-        context = _build_template_context(request, instance, template_def, client_data, pk=pk)
-
         try:
-            pdf_bytes = self._render_pdf(
-                template_def, context,
-                base_url=self._resolve_base_url(request, template_def),
-                renderer=renderer_name,
-            )
+            if is_multi_render:
+                contexts: list[dict[str, Any]] = []
+                for merge_pk in merge_pks:
+                    try:
+                        merge_instance = template_def.model.objects.get(pk=merge_pk)
+                    except template_def.model.DoesNotExist:
+                        return JsonResponse(
+                            {
+                                "error": "Instance not found",
+                                "model": template_def.model._meta.label,
+                                "pk": merge_pk,
+                            },
+                            status=404,
+                        )
+                    except (ValidationError, ValueError, TypeError):
+                        return JsonResponse(
+                            {"error": "Invalid primary key", "pk": merge_pk},
+                            status=400,
+                        )
+
+                    merge_denial = authorize_template_access(
+                        request,
+                        template_def,
+                        merge_instance,
+                    )
+                    if merge_denial:
+                        return merge_denial
+
+                    contexts.append(
+                        _build_template_context(
+                            request,
+                            merge_instance,
+                            template_def,
+                            client_data,
+                            pk=merge_pk,
+                        )
+                    )
+
+                pdf_bytes = self._render_merged_pdf(
+                    template_def,
+                    contexts,
+                    base_url=self._resolve_base_url(request, template_def),
+                    renderer=renderer_name,
+                )
+            else:
+                context = _build_template_context(
+                    request,
+                    instance,
+                    template_def,
+                    client_data,
+                    pk=pk,
+                )
+                pdf_bytes = self._render_pdf(
+                    template_def,
+                    context,
+                    base_url=self._resolve_base_url(request, template_def),
+                    renderer=renderer_name,
+                )
         except Exception as exc:
             model_name = template_def.model.__name__ if template_def.model else template_def.url_path
             logger.exception("Failed to render PDF for %s pk=%s: %s", model_name, pk, exc)
@@ -213,6 +281,22 @@ class PdfTemplateView(View):
             template_path=template_path, pk=pk,
         )
         return response
+
+    def _parse_merge_pks(self, request: HttpRequest, fallback_pk: str) -> list[str]:
+        raw_values = request.GET.getlist("merge_pks") or request.GET.getlist("mergePks")
+        ordered: list[str] = []
+        for raw_value in raw_values:
+            chunks = str(raw_value or "").split(",")
+            for chunk in chunks:
+                candidate = str(chunk or "").strip()
+                if not candidate or candidate in ordered:
+                    continue
+                ordered.append(candidate)
+        if not ordered:
+            return [str(fallback_pk)]
+        if str(fallback_pk) not in ordered:
+            ordered.insert(0, str(fallback_pk))
+        return ordered
 
     def _parse_async_request(self, request: HttpRequest) -> bool:
         value = request.GET.get("async")
@@ -279,6 +363,57 @@ class PdfTemplateView(View):
             header_template=template_def.header_template,
             footer_template=template_def.footer_template,
             base_url=base_url, renderer=renderer_name,
+        )
+
+    def _render_merged_pdf(
+        self,
+        template_def: TemplateDefinition,
+        contexts: list[dict[str, Any]],
+        *,
+        base_url: Optional[str] = None,
+        renderer: Optional[str] = None,
+    ) -> bytes:
+        if not contexts:
+            raise ValueError("At least one context is required for merged rendering.")
+
+        renderer_name = str(
+            renderer or template_def.config.get("renderer") or _templating_renderer_name()
+        )
+        if renderer_name.lower() == "weasyprint":
+            if PYDYF_VERSION and Version:
+                try:
+                    if Version(PYDYF_VERSION) < Version("0.11.0"):
+                        raise RuntimeError(
+                            f"Incompatible pydyf version {PYDYF_VERSION}; install pydyf>=0.11.0"
+                        )
+                except InvalidVersion:
+                    pass
+            _patch_pydyf_pdf()
+
+        first_context = contexts[0]
+        header_path = template_def.header_template or _default_header()
+        footer_path = template_def.footer_template or _default_footer()
+        header_html = _render_template(header_path, first_context)
+        footer_html = _render_template(footer_path, first_context)
+        rendered_contents: list[str] = []
+        for index, context in enumerate(contexts):
+            rendered_contents.append(
+                _render_template(template_def.content_template, context)
+            )
+            if index < len(contexts) - 1:
+                rendered_contents.append('<div style="page-break-after: always;"></div>')
+
+        html_content = render_template_html(
+            header_html=header_html,
+            content_html="".join(rendered_contents),
+            footer_html=footer_html,
+            config=template_def.config,
+        )
+        return render_pdf_from_html(
+            html_content,
+            config=template_def.config,
+            base_url=base_url,
+            renderer=renderer_name,
         )
 
     def _log_template_event(self, request: HttpRequest, *, success: bool,

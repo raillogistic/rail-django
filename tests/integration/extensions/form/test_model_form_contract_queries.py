@@ -2,6 +2,7 @@ import json
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 
 from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Category, OrderItem, Product
@@ -95,6 +96,62 @@ def test_model_form_contract_and_pages_queries(gql_client):
     assert page["perPage"] == 10
     assert page["total"] >= 1
     assert any(item["modelName"] == "Product" for item in page["results"])
+
+
+def test_model_form_contract_resolves_operation_permissions_for_limited_user(gql_client):
+    User = get_user_model()
+    limited_user = User.objects.create_user(
+        username="form_contract_limited",
+        password="pass12345",
+    )
+    limited_user.user_permissions.add(
+        Permission.objects.get(
+            codename="view_product",
+            content_type__app_label="test_app",
+        ),
+    )
+
+    query = """
+    query {
+      contract: modelFormContract(
+        appLabel: "test_app"
+        modelName: "Product"
+        mode: UPDATE
+      ) {
+        permissions {
+          canView
+          canCreate
+          canUpdate
+          canDelete
+          update {
+            allowed
+            requiredPermissions
+            requiresAuthentication
+            reason
+          }
+          fieldPermissions {
+            field
+            canRead
+            canWrite
+            visibility
+          }
+        }
+      }
+    }
+    """
+    result = gql_client.execute(query, user=limited_user)
+    assert result.get("errors") is None
+
+    permissions = result["data"]["contract"]["permissions"]
+    assert permissions["canView"] is True
+    assert permissions["canCreate"] is False
+    assert permissions["canUpdate"] is False
+    assert permissions["canDelete"] is False
+    assert permissions["update"]["allowed"] is False
+    assert "test_app.change_product" in permissions["update"]["requiredPermissions"]
+    assert permissions["update"]["requiresAuthentication"] is True
+    assert permissions["update"]["reason"]
+    assert permissions["fieldPermissions"], "Expected field-level permissions snapshot."
 
 
 def test_model_form_initial_data_supports_nested_and_runtime_overrides(gql_client):

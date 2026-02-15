@@ -112,6 +112,95 @@ class TestMetadataSecurityHardening(TestCase):
         self.assertFalse(templates[0]["allowed"])
         self.assertEqual(templates[0]["denial_reason"], "Permission manquante")
 
+    @patch("rail_django.extensions.excel.access.evaluate_excel_template_access")
+    @patch("rail_django.extensions.excel.exporter.excel_template_registry")
+    @patch("rail_django.extensions.metadata.extractor.evaluate_template_access")
+    @patch("rail_django.extensions.metadata.extractor.template_registry")
+    def test_template_metadata_includes_pdf_and_excel_endpoints(
+        self,
+        mock_pdf_registry,
+        mock_evaluate_pdf_access,
+        mock_excel_registry,
+        mock_evaluate_excel_access,
+    ):
+        model = _build_model("inventory", "Invoice")
+        pdf_definition = SimpleNamespace(
+            model=model,
+            title="Invoice PDF",
+            url_path="inventory/invoice/invoice_pdf",
+            guard="retrieve",
+            require_authentication=True,
+            roles=("manager",),
+            permissions=("inventory.view_invoice",),
+            allow_client_data=True,
+            client_data_fields=("include_discount",),
+            client_data_schema=({"name": "notes", "type": "string"},),
+        )
+        excel_definition = SimpleNamespace(
+            model=model,
+            title="Invoice Excel",
+            url_path="inventory/invoice/export_excel",
+            guard="retrieve",
+            require_authentication=True,
+            roles=("manager",),
+            permissions=("inventory.view_invoice",),
+            allow_client_data=False,
+            client_data_fields=("timezone",),
+        )
+        mock_pdf_registry.all.return_value = {
+            "inventory/invoice/invoice_pdf": pdf_definition
+        }
+        mock_excel_registry.all.return_value = {
+            "inventory/invoice/export_excel": excel_definition
+        }
+        mock_evaluate_pdf_access.return_value = TemplateAccessDecision(
+            allowed=True,
+            reason=None,
+            status_code=200,
+        )
+        mock_evaluate_excel_access.return_value = SimpleNamespace(
+            allowed=False,
+            reason="Denied",
+            status_code=403,
+        )
+
+        extractor = ModelSchemaExtractor()
+        templates = extractor._extract_templates(model, user=MagicMock(), instance=None)
+
+        self.assertEqual(len(templates), 2)
+        pdf_template = next(item for item in templates if item["template_type"] == "pdf")
+        excel_template = next(
+            item for item in templates if item["template_type"] == "excel"
+        )
+
+        self.assertTrue(pdf_template["endpoint"].startswith("/api/"))
+        self.assertTrue(
+            pdf_template["endpoint"].endswith(
+                "/templates/inventory/invoice/invoice_pdf/<pk>/"
+            )
+        )
+        self.assertTrue(pdf_template["allowed"])
+        self.assertEqual(
+            pdf_template["client_data_schema"],
+            [
+                {"name": "notes", "type": "string"},
+                {"name": "includeDiscount", "type": "string"},
+            ],
+        )
+
+        self.assertTrue(excel_template["endpoint"].startswith("/api/"))
+        self.assertTrue(
+            excel_template["endpoint"].endswith(
+                "/excel/inventory/invoice/export_excel/"
+            )
+        )
+        self.assertFalse(excel_template["allowed"])
+        self.assertEqual(excel_template["denial_reason"], "Denied")
+        self.assertEqual(
+            excel_template["client_data_schema"],
+            [{"name": "timezone", "type": "string"}],
+        )
+
     @patch("rail_django.extensions.metadata.filter_extractor.field_permission_manager")
     @patch("rail_django.extensions.metadata.field_extractor.field_permission_manager")
     def test_hidden_fields_are_excluded_from_metadata_and_filters(

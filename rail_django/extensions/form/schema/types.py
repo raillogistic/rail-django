@@ -165,6 +165,16 @@ class RelationOperationsType(graphene.ObjectType):
     create_permission = graphene.String()
     update_permission = graphene.String()
     delete_permission = graphene.String()
+    disconnect_permission = graphene.String()
+    set_permission = graphene.String()
+    clear_permission = graphene.String()
+    connect_reason = graphene.String()
+    create_reason = graphene.String()
+    update_reason = graphene.String()
+    disconnect_reason = graphene.String()
+    set_reason = graphene.String()
+    delete_reason = graphene.String()
+    clear_reason = graphene.String()
 
 
 class RelationQueryConfigType(graphene.ObjectType):
@@ -546,6 +556,9 @@ class ModelFormFieldType(graphene.ObjectType):
     validators = graphene.List(ModelFormValidatorType, required=True)
     ui = graphene.JSONString()
     metadata = graphene.JSONString()
+    readable = graphene.Boolean(required=True)
+    writable = graphene.Boolean(required=True)
+    visibility = graphene.String(required=True)
 
 
 class ModelFormSectionType(graphene.ObjectType):
@@ -574,7 +587,35 @@ class ModelFormRelationType(graphene.ObjectType):
     related_app_label = graphene.String(required=True)
     related_model_name = graphene.String(required=True)
     policy = graphene.Field(ModelFormRelationActionPolicyType, required=True)
+    readable = graphene.Boolean(required=True)
+    writable = graphene.Boolean(required=True)
     nested_form = graphene.JSONString()
+
+
+class ModelFormOperationPermissionType(graphene.ObjectType):
+    allowed = graphene.Boolean(required=True)
+    required_permissions = graphene.List(graphene.String, required=True)
+    requires_authentication = graphene.Boolean(required=True)
+    reason = graphene.String()
+
+
+class ModelFormFieldPermissionType(graphene.ObjectType):
+    field = graphene.String(required=True)
+    can_read = graphene.Boolean(required=True)
+    can_write = graphene.Boolean(required=True)
+    visibility = graphene.String(required=True)
+
+
+class ModelFormPermissionsType(graphene.ObjectType):
+    can_create = graphene.Boolean(required=True)
+    can_update = graphene.Boolean(required=True)
+    can_delete = graphene.Boolean(required=True)
+    can_view = graphene.Boolean(required=True)
+    create = graphene.Field(ModelFormOperationPermissionType, required=True)
+    update = graphene.Field(ModelFormOperationPermissionType, required=True)
+    delete = graphene.Field(ModelFormOperationPermissionType, required=True)
+    view = graphene.Field(ModelFormOperationPermissionType, required=True)
+    field_permissions = graphene.List(ModelFormFieldPermissionType, required=True)
 
 
 class ModelFormMutationBindingsType(graphene.ObjectType):
@@ -618,6 +659,7 @@ class ModelFormContractType(graphene.ObjectType):
     fields = graphene.List(ModelFormFieldType, required=True)
     sections = graphene.List(ModelFormSectionType, required=True)
     relations = graphene.List(ModelFormRelationType, required=True)
+    permissions = graphene.Field(ModelFormPermissionsType, required=True)
     mutation_bindings = graphene.Field(ModelFormMutationBindingsType, required=True)
     error_policy = graphene.Field(ModelFormErrorPolicyType, required=True)
 

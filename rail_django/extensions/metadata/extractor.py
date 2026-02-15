@@ -136,38 +136,170 @@ class ModelSchemaExtractor(
         user: Any,
         instance: Any = None,
     ) -> list[dict]:
-        """Extract available PDF templates for the model."""
+        """Extract available PDF and Excel templates for the model."""
+        from django.urls import NoReverseMatch, reverse
         from graphene.utils.str_converters import to_camel_case
+        from ..templating.config import _url_prefix as _pdf_url_prefix
 
-        templates = []
-        # Filter templates for this model
+        try:
+            from ..excel.access import evaluate_excel_template_access
+            from ..excel.config import _url_prefix as _excel_url_prefix
+            from ..excel.exporter import excel_template_registry
+        except Exception:
+            evaluate_excel_template_access = None
+            _excel_url_prefix = None
+            excel_template_registry = None
+
+        pdf_prefix = _pdf_url_prefix().strip("/")
+        excel_prefix = (
+            _excel_url_prefix().strip("/") if callable(_excel_url_prefix) else "excel"
+        )
+
+        def _build_endpoint(url_path: str, template_type: str) -> str:
+            normalized = str(url_path or "").strip().strip("/")
+            if not normalized:
+                return ""
+
+            if template_type == "pdf":
+                try:
+                    resolved = reverse(
+                        "schema_api:pdf_template",
+                        kwargs={"template_path": normalized, "pk": "__pk__"},
+                    )
+                    return resolved.replace("__pk__", "<pk>")
+                except NoReverseMatch:
+                    return f"/api/{pdf_prefix}/{normalized}/<pk>/"
+
+            try:
+                return reverse(
+                    "schema_api:excel_template",
+                    kwargs={"template_path": normalized},
+                )
+            except NoReverseMatch:
+                return f"/api/{excel_prefix}/{normalized}/"
+
+        def _build_client_schema(
+            raw_schema: Any, raw_fields: Any
+        ) -> Optional[list[dict[str, str]]]:
+            entries: list[dict[str, str]] = []
+            seen: set[str] = set()
+
+            for entry in raw_schema or ():
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get("name") or "").strip()
+                if not name or name in seen:
+                    continue
+                field_type = str(entry.get("type") or "string").strip().lower()
+                entries.append(
+                    {
+                        "name": to_camel_case(name),
+                        "type": field_type or "string",
+                    }
+                )
+                seen.add(name)
+
+            for field in raw_fields or ():
+                name = str(field or "").strip()
+                if not name or name in seen:
+                    continue
+                entries.append(
+                    {
+                        "name": to_camel_case(name),
+                        "type": "string",
+                    }
+                )
+                seen.add(name)
+
+            return entries or None
+
+        templates: list[dict[str, Any]] = []
+
         for url_path, definition in template_registry.all().items():
-            if definition.model == model:
-                access = evaluate_template_access(
+            if definition.model != model:
+                continue
+
+            access = evaluate_template_access(
+                definition,
+                user=user,
+                instance=instance,
+            )
+            client_schema = _build_client_schema(
+                getattr(definition, "client_data_schema", None),
+                getattr(definition, "client_data_fields", ()),
+            )
+            templates.append(
+                {
+                    "key": url_path,
+                    "template_type": "pdf",
+                    "title": getattr(definition, "title", url_path),
+                    "description": None,
+                    "endpoint": _build_endpoint(url_path, "pdf"),
+                    "url_path": getattr(definition, "url_path", url_path),
+                    "guard": getattr(definition, "guard", None),
+                    "require_authentication": bool(
+                        getattr(definition, "require_authentication", True)
+                    ),
+                    "roles": list(getattr(definition, "roles", ()) or ()),
+                    "permissions": list(
+                        getattr(definition, "permissions", ()) or ()
+                    ),
+                    "allowed": access.allowed,
+                    "denial_reason": access.reason,
+                    "allow_client_data": bool(
+                        getattr(definition, "allow_client_data", False)
+                    ),
+                    "client_data_fields": [
+                        to_camel_case(field)
+                        for field in (getattr(definition, "client_data_fields", ()) or ())
+                    ],
+                    "client_data_schema": client_schema,
+                }
+            )
+
+        if excel_template_registry and evaluate_excel_template_access:
+            for url_path, definition in excel_template_registry.all().items():
+                if definition.model != model:
+                    continue
+
+                access = evaluate_excel_template_access(
                     definition,
                     user=user,
                     instance=instance,
                 )
+                client_schema = _build_client_schema(
+                    None,
+                    getattr(definition, "client_data_fields", ()),
+                )
                 templates.append(
                     {
                         "key": url_path,
-                        "title": definition.title,
+                        "template_type": "excel",
+                        "title": getattr(definition, "title", url_path),
                         "description": None,
-                        "endpoint": f"/api/templating/{url_path}",  # construct actual endpoint
-                        "url_path": definition.url_path,
-                        "guard": definition.guard,
-                        "require_authentication": definition.require_authentication,
-                        "roles": list(definition.roles),
-                        "permissions": list(definition.permissions),
+                        "endpoint": _build_endpoint(url_path, "excel"),
+                        "url_path": getattr(definition, "url_path", url_path),
+                        "guard": getattr(definition, "guard", None),
+                        "require_authentication": bool(
+                            getattr(definition, "require_authentication", True)
+                        ),
+                        "roles": list(getattr(definition, "roles", ()) or ()),
+                        "permissions": list(
+                            getattr(definition, "permissions", ()) or ()
+                        ),
                         "allowed": access.allowed,
                         "denial_reason": access.reason,
-                        "allow_client_data": definition.allow_client_data,
+                        "allow_client_data": bool(
+                            getattr(definition, "allow_client_data", False)
+                        ),
                         "client_data_fields": [
-                            to_camel_case(f) for f in definition.client_data_fields
+                            to_camel_case(field)
+                            for field in (getattr(definition, "client_data_fields", ()) or ())
                         ],
-                        "client_data_schema": None,  # complex to serialize fully
+                        "client_data_schema": client_schema,
                     }
                 )
+
         return templates
 
     def _extract_mutations(

@@ -10,6 +10,7 @@ from typing import Any, Optional
 from django.db import models
 
 from ....security.field_permissions import FieldVisibility, field_permission_manager
+from ....security.rbac import PermissionContext, role_manager
 
 
 class RelationExtractorMixin:
@@ -162,6 +163,7 @@ class RelationExtractorMixin:
                 is_to_many=is_to_many,
                 is_reverse=is_reverse,
                 graphql_meta=graphql_meta,
+                user=user,
             )
 
             relation_label = self._get_relation_label(
@@ -230,6 +232,7 @@ class RelationExtractorMixin:
         is_to_many: bool,
         is_reverse: bool,
         graphql_meta: Optional[Any] = None,
+        user: Any = None,
     ) -> dict[str, Any]:
         cfg = None
         if graphql_meta is not None:
@@ -250,6 +253,53 @@ class RelationExtractorMixin:
             op_cfg = getattr(cfg, attr, None)
             return getattr(op_cfg, "require_permission", None)
 
+        def _is_authenticated(target_user: Any) -> bool:
+            return bool(
+                target_user
+                and getattr(target_user, "is_authenticated", False)
+                and getattr(target_user, "pk", None) is not None
+            )
+
+        def _has_permission(permission: Optional[str], operation: str) -> bool:
+            normalized = str(permission or "").strip()
+            if not normalized:
+                return True
+            if not _is_authenticated(user):
+                return False
+
+            context = PermissionContext(
+                user=user,
+                model_class=model,
+                object_instance=None,
+                object_id=None,
+                operation=operation,
+            )
+            try:
+                return bool(role_manager.has_permission(user, normalized, context))
+            except Exception:
+                has_perm = getattr(user, "has_perm", None)
+                if callable(has_perm):
+                    try:
+                        return bool(has_perm(normalized))
+                    except Exception:
+                        return False
+                return False
+
+        def _resolve_operation(attr: str, default_value: bool = True) -> tuple[bool, Optional[str], Optional[str]]:
+            enabled = _enabled(attr, default_value)
+            required_permission = _permission(attr)
+            if not enabled:
+                return False, required_permission, None
+
+            if _has_permission(required_permission, operation=attr):
+                return True, required_permission, None
+
+            if required_permission:
+                if not _is_authenticated(user):
+                    return False, required_permission, "Authentication required"
+                return False, required_permission, f"Permission required: {required_permission}"
+            return False, required_permission, None
+
         singular_nullable = True
         if not is_to_many:
             if is_reverse:
@@ -261,24 +311,46 @@ class RelationExtractorMixin:
         disconnect_default = True if is_to_many else singular_nullable
         set_default = True if is_to_many else singular_nullable
 
-        can_disconnect = _enabled("disconnect", disconnect_default)
-        can_set = _enabled("set", set_default)
+        can_connect, connect_permission, connect_reason = _resolve_operation("connect")
+        can_create, create_permission, create_reason = _resolve_operation("create")
+        can_update, update_permission, update_reason = _resolve_operation("update")
+        can_disconnect, disconnect_permission, disconnect_reason = _resolve_operation(
+            "disconnect",
+            disconnect_default,
+        )
+        can_set, set_permission, set_reason = _resolve_operation("set", set_default)
+        can_delete, delete_permission, delete_reason = _resolve_operation(
+            "delete",
+            False,
+        )
+        can_clear, clear_permission, clear_reason = _resolve_operation("clear", False)
+
         if not is_to_many and not singular_nullable:
             can_disconnect = False
             can_set = False
 
         return {
-            "can_connect": _enabled("connect"),
-            "can_create": _enabled("create"),
-            "can_update": _enabled("update"),
+            "can_connect": can_connect,
+            "can_create": can_create,
+            "can_update": can_update,
             "can_disconnect": can_disconnect,
             "can_set": can_set,
-            "can_delete": _enabled("delete", False),
-            "can_clear": _enabled("clear", False),
-            "connect_permission": _permission("connect"),
-            "create_permission": _permission("create"),
-            "update_permission": _permission("update"),
-            "delete_permission": _permission("delete"),
+            "can_delete": can_delete,
+            "can_clear": can_clear,
+            "connect_permission": connect_permission,
+            "create_permission": create_permission,
+            "update_permission": update_permission,
+            "delete_permission": delete_permission,
+            "disconnect_permission": disconnect_permission,
+            "set_permission": set_permission,
+            "clear_permission": clear_permission,
+            "connect_reason": connect_reason,
+            "create_reason": create_reason,
+            "update_reason": update_reason,
+            "disconnect_reason": disconnect_reason,
+            "set_reason": set_reason,
+            "delete_reason": delete_reason,
+            "clear_reason": clear_reason,
         }
 
     def _extract_nested_form_config(

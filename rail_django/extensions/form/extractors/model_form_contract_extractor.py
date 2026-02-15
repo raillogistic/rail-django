@@ -56,10 +56,21 @@ class ModelFormContractExtractor(FormConfigExtractor):
             )
 
         config = self.extract(app_name, model_name, user=user, mode=mode)
+        permissions = self._build_contract_permissions(config, mode=mode)
         primary_key_name = getattr(getattr(model, "_meta", None), "pk", None)
         primary_key_name = getattr(primary_key_name, "name", None)
-        fields = self._build_fields(config, primary_key_name=primary_key_name)
-        relations = self._build_relations(config, include_nested=include_nested)
+        fields = self._build_fields(
+            config,
+            primary_key_name=primary_key_name,
+            mode=mode,
+            contract_permissions=permissions,
+        )
+        relations = self._build_relations(
+            config,
+            include_nested=include_nested,
+            mode=mode,
+            contract_permissions=permissions,
+        )
         sections = self._build_sections(
             config,
             fields,
@@ -78,6 +89,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             "fields": fields,
             "sections": sections,
             "relations": relations,
+            "permissions": permissions,
             "mutation_bindings": get_model_form_mutation_bindings(model),
             "error_policy": {
                 "canonical_form_error_key": DEFAULT_FORM_ERROR_KEY,
@@ -169,7 +181,11 @@ class ModelFormContractExtractor(FormConfigExtractor):
         config: dict[str, Any],
         *,
         primary_key_name: str | None = None,
+        mode: str = "CREATE",
+        contract_permissions: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        permission_lookup = self._build_field_permission_lookup(contract_permissions)
+        is_view_mode = str(mode).upper() == "VIEW"
         fields: list[dict[str, Any]] = []
         for field in config.get("fields", []) or []:
             path = normalize_path(field.get("field_name") or field.get("name"))
@@ -186,6 +202,30 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 and str(field_name).lower() == str(primary_key_name).lower()
             )
             kind = FIELD_KIND_MAP.get(str(field.get("input_type") or "").upper(), "CUSTOM")
+            permission_entry = self._resolve_field_permission_entry(
+                permission_lookup,
+                [
+                    path,
+                    str(field_name),
+                    str(contract_name),
+                    to_camel_case(str(field_name)),
+                ],
+            )
+            readable = bool(permission_entry.get("can_read", True))
+            writable = bool(permission_entry.get("can_write", True))
+            visibility = self._normalize_visibility(permission_entry.get("visibility"))
+            hidden = bool(
+                field.get("hidden", False)
+                or is_primary_key
+                or not readable
+                or visibility == "HIDDEN"
+            )
+            read_only = bool(
+                field.get("read_only", False)
+                or is_primary_key
+                or not writable
+                or is_view_mode
+            )
             fields.append(
                 {
                     "name": contract_name,
@@ -197,13 +237,16 @@ class ModelFormContractExtractor(FormConfigExtractor):
                     "python_type": field.get("python_type") or "str",
                     "required": bool(field.get("required", False)),
                     "nullable": bool(field.get("nullable", True)),
-                    "read_only": bool(field.get("read_only", False) or is_primary_key),
-                    "hidden": bool(field.get("hidden", False) or is_primary_key),
+                    "read_only": read_only,
+                    "hidden": hidden,
                     "default_value": field.get("default_value"),
                     "constraints": field.get("constraints") or {},
                     "validators": field.get("validators") or [],
                     "ui": field.get("input_props") or {},
                     "metadata": field.get("metadata"),
+                    "readable": readable,
+                    "writable": writable,
+                    "visibility": visibility,
                 }
             )
         return fields
@@ -307,11 +350,38 @@ class ModelFormContractExtractor(FormConfigExtractor):
         config: dict[str, Any],
         *,
         include_nested: bool,
+        mode: str = "CREATE",
+        contract_permissions: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        permission_lookup = self._build_field_permission_lookup(contract_permissions)
+        is_view_mode = str(mode).upper() == "VIEW"
         relations: list[dict[str, Any]] = []
+        all_actions = ("CONNECT", "CREATE", "UPDATE", "DISCONNECT", "DELETE", "SET", "CLEAR")
         for relation in config.get("relations", []) or []:
             operations = relation.get("operations") or {}
             nested_config = relation.get("nested_form_config") or {}
+            relation_path = normalize_path(
+                relation.get("field_name") or relation.get("name")
+            ) or str(relation.get("field_name") or relation.get("name") or "").strip()
+            if not relation_path:
+                continue
+            relation_name = relation.get("name") or to_camel_case(
+                str(relation.get("field_name") or relation.get("name") or "")
+            )
+            permission_entry = self._resolve_field_permission_entry(
+                permission_lookup,
+                [
+                    relation_path,
+                    str(relation.get("field_name") or ""),
+                    str(relation_name),
+                    to_camel_case(str(relation.get("field_name") or "")),
+                ],
+            )
+            readable = bool(permission_entry.get("can_read", True))
+            writable = bool(permission_entry.get("can_write", True))
+            visibility = self._normalize_visibility(permission_entry.get("visibility"))
+            relation_hidden = not readable or visibility == "HIDDEN"
+
             allowed_actions = [
                 action.upper()
                 for action, enabled in {
@@ -325,18 +395,17 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 }.items()
                 if bool(enabled)
             ]
+            if relation_hidden or not writable or is_view_mode:
+                allowed_actions = []
             blocked_actions = [
                 action.upper()
-                for action in ("CONNECT", "CREATE", "UPDATE", "DISCONNECT", "DELETE", "SET", "CLEAR")
+                for action in all_actions
                 if action not in set(allowed_actions)
             ]
             relations.append(
                 {
-                    "name": relation.get("name")
-                    or to_camel_case(str(relation.get("field_name") or relation.get("name") or "")),
-                    "path": normalize_path(
-                        relation.get("field_name") or relation.get("name")
-                    ),
+                    "name": relation_name,
+                    "path": relation_path,
                     "label": relation.get("label") or relation.get("name"),
                     "relation_type": relation.get("relation_type"),
                     "to_many": bool(relation.get("is_to_many", False)),
@@ -352,12 +421,108 @@ class ModelFormContractExtractor(FormConfigExtractor):
                             nested_config.get("enabled", False)
                         ),
                     },
+                    "readable": readable,
+                    "writable": writable,
                     "nested_form": nested_config
                     if include_nested
                     else None,
                 }
             )
         return relations
+
+    def _build_contract_permissions(
+        self,
+        config: dict[str, Any],
+        *,
+        mode: str,
+    ) -> dict[str, Any]:
+        raw_permissions = config.get("permissions") or {}
+        operation_matrix = raw_permissions.get("operations") or {}
+
+        def _normalize_operation(operation: str, fallback_allowed: bool) -> dict[str, Any]:
+            details = operation_matrix.get(operation) or {}
+            required_permissions = details.get("required_permissions") or []
+            return {
+                "allowed": bool(details.get("allowed", fallback_allowed)),
+                "required_permissions": [str(item) for item in required_permissions if str(item or "").strip()],
+                "requires_authentication": bool(details.get("requires_authentication", False)),
+                "reason": details.get("reason"),
+            }
+
+        create = _normalize_operation("create", bool(raw_permissions.get("can_create", True)))
+        update = _normalize_operation("update", bool(raw_permissions.get("can_update", True)))
+        delete = _normalize_operation("delete", bool(raw_permissions.get("can_delete", True)))
+        view = _normalize_operation("view", bool(raw_permissions.get("can_view", True)))
+
+        field_permissions = []
+        for entry in raw_permissions.get("field_permissions", []) or []:
+            field_name = str(entry.get("field") or "").strip()
+            if not field_name:
+                continue
+            field_permissions.append(
+                {
+                    "field": field_name,
+                    "can_read": bool(entry.get("can_read", True)),
+                    "can_write": bool(entry.get("can_write", True)),
+                    "visibility": self._normalize_visibility(entry.get("visibility")),
+                    "aliases": [
+                        str(alias).strip()
+                        for alias in (entry.get("aliases") or [])
+                        if str(alias or "").strip()
+                    ],
+                }
+            )
+
+        return {
+            "can_create": create["allowed"],
+            "can_update": update["allowed"],
+            "can_delete": delete["allowed"],
+            "can_view": view["allowed"],
+            "create": create,
+            "update": update,
+            "delete": delete,
+            "view": view,
+            "field_permissions": field_permissions,
+            "mode": str(mode).upper(),
+        }
+
+    def _build_field_permission_lookup(
+        self,
+        contract_permissions: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        lookup: dict[str, dict[str, Any]] = {}
+        if not isinstance(contract_permissions, dict):
+            return lookup
+        for entry in contract_permissions.get("field_permissions", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            keys = [entry.get("field"), *(entry.get("aliases") or [])]
+            for key in keys:
+                normalized = normalize_path(key) or str(key or "").strip()
+                if not normalized:
+                    continue
+                lookup[normalized] = entry
+        return lookup
+
+    def _resolve_field_permission_entry(
+        self,
+        permission_lookup: dict[str, dict[str, Any]],
+        candidates: list[str],
+    ) -> dict[str, Any]:
+        for candidate in candidates:
+            normalized = normalize_path(candidate) or str(candidate or "").strip()
+            if not normalized:
+                continue
+            entry = permission_lookup.get(normalized)
+            if entry is not None:
+                return entry
+        return {}
+
+    def _normalize_visibility(self, value: Any) -> str:
+        normalized = str(value or "").strip().upper()
+        if normalized in {"VISIBLE", "HIDDEN", "MASKED", "REDACTED"}:
+            return normalized
+        return "VISIBLE"
 
     def _apply_declared_overrides(
         self,

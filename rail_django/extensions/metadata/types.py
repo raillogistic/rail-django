@@ -334,6 +334,9 @@ class TemplateInfoType(graphene.ObjectType):
     """Available template info."""
 
     key = graphene.String(required=True)
+    template_type = graphene.String(
+        required=True, description="Template kind: pdf or excel"
+    )
     title = graphene.String(required=True)
     description = graphene.String()
     endpoint = graphene.String(required=True)
