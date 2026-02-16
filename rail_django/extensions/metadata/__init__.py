@@ -7,9 +7,25 @@ enabling frontends to build forms, tables, and detail views automatically.
 
 from .queries import ModelSchemaQuery
 from .extractor import ModelSchemaExtractor
+from .detail_extractor import DetailContractExtractor
+from .detail_actions import (
+    bind_action_template,
+    execute_detail_action,
+    emit_action_audit_event,
+    extract_detail_action_definitions,
+    resolve_detail_action_execution,
+)
 from .types import (
     ChoiceType,
     ComputedFilterSchemaType,
+    DetailActionDefinitionType,
+    DetailContractInputType,
+    DetailContractResultType,
+    DetailFieldDescriptorType,
+    DetailLayoutNodeType,
+    DetailPermissionSnapshotType,
+    DetailRelationDataSourceType,
+    DetailViewContractType,
     FieldGroupType,
     FieldSchemaType,
     FilterConfigType,
@@ -42,9 +58,24 @@ __all__ = [
     "ModelSchemaQuery",
     # Extractor
     "ModelSchemaExtractor",
+    "DetailContractExtractor",
+    # Detail actions
+    "extract_detail_action_definitions",
+    "resolve_detail_action_execution",
+    "execute_detail_action",
+    "bind_action_template",
+    "emit_action_audit_event",
     # Types
     "ChoiceType",
     "ComputedFilterSchemaType",
+    "DetailActionDefinitionType",
+    "DetailContractInputType",
+    "DetailContractResultType",
+    "DetailFieldDescriptorType",
+    "DetailLayoutNodeType",
+    "DetailPermissionSnapshotType",
+    "DetailRelationDataSourceType",
+    "DetailViewContractType",
     "FieldGroupType",
     "FieldSchemaType",
     "FilterConfigType",

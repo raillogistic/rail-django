@@ -59,6 +59,46 @@ def test_model_form_contract_extractor_builds_mutation_bindings():
     assert bindings["update_target_policy"] == "PRIMARY_KEY_ONLY"
 
 
+def test_model_form_contract_extractor_includes_field_choices_in_constraints():
+    extractor = ModelFormContractExtractor(schema_name="default")
+    fields = extractor._build_fields(
+        {
+            "fields": [
+                {
+                    "name": "status",
+                    "field_name": "status",
+                    "label": "Status",
+                    "input_type": "SELECT",
+                    "graphql_type": "String",
+                    "python_type": "str",
+                    "required": False,
+                    "nullable": False,
+                    "read_only": False,
+                    "hidden": False,
+                    "default_value": None,
+                    "constraints": {"max_length": 16},
+                    "choices": [
+                        {"value": "placed", "label": "Placed"},
+                        {"value": "paid", "label": "Paid"},
+                    ],
+                    "validators": [],
+                    "input_props": {},
+                    "metadata": None,
+                }
+            ]
+        },
+        mode="CREATE",
+        contract_permissions={"field_permissions": []},
+    )
+
+    assert fields[0]["kind"] == "CHOICE"
+    assert fields[0]["constraints"]["max_length"] == 16
+    assert fields[0]["constraints"]["choices"] == [
+        {"value": "placed", "label": "Placed"},
+        {"value": "paid", "label": "Paid"},
+    ]
+
+
 def test_default_sections_include_forward_relations_in_declared_order():
     extractor = ModelFormContractExtractor(schema_name="default")
     contract = extractor.extract_contract(

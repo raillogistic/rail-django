@@ -356,6 +356,108 @@ class TemplateInfoType(graphene.ObjectType):
     client_data_schema = graphene.JSONString()
 
 
+class DetailPermissionSnapshotType(graphene.ObjectType):
+    """Detail-specific permission snapshot."""
+
+    model_readable = graphene.Boolean(required=True)
+    field_visibility = graphene.JSONString(required=True)
+    relation_visibility = graphene.JSONString(required=True)
+    action_executability = graphene.JSONString(required=True)
+    source_flags = graphene.JSONString(required=True)
+    policy = graphene.String(required=True)
+
+
+class DetailFieldDescriptorType(graphene.ObjectType):
+    """Normalized detail field descriptor."""
+
+    name = graphene.String(required=True)
+    title = graphene.String()
+    type = graphene.String()
+    include = graphene.Boolean()
+    exclude = graphene.Boolean()
+    nested = graphene.JSONString()
+    formatter_key = graphene.String()
+    permission_key = graphene.String()
+
+
+class DetailActionDefinitionType(graphene.ObjectType):
+    """Metadata-defined action available from a detail view."""
+
+    key = graphene.String(required=True)
+    label = graphene.String(required=True)
+    scope = graphene.String(required=True)
+    mutation_name = graphene.String(required=True)
+    input_template = graphene.JSONString()
+    confirmation_template = graphene.String()
+    permission_key = graphene.String()
+    audit_enabled = graphene.Boolean(required=True)
+    allowed = graphene.Boolean(required=True)
+    reason = graphene.String()
+
+
+class DetailLayoutNodeType(graphene.ObjectType):
+    """Renderable detail layout node."""
+
+    id = graphene.String(required=True)
+    type = graphene.String(required=True)
+    title = graphene.String()
+    order = graphene.Int(required=True)
+    fields = graphene.List(DetailFieldDescriptorType, required=True)
+    children = graphene.List(lambda: DetailLayoutNodeType, required=True)
+    relation_source_id = graphene.String()
+    visibility_rule = graphene.JSONString()
+    actions = graphene.List(DetailActionDefinitionType, required=True)
+
+
+class DetailRelationDataSourceType(graphene.ObjectType):
+    """Forward/reverse relation source metadata for detail rendering."""
+
+    id = graphene.String(required=True)
+    relation_name = graphene.String(required=True)
+    related_app = graphene.String(required=True)
+    related_model = graphene.String(required=True)
+    direction = graphene.String(required=True)
+    mode = graphene.String(required=True)
+    load_strategy = graphene.String(required=True)
+    query_name = graphene.String(required=True)
+    lookup_field = graphene.String()
+    pagination = graphene.JSONString()
+    cache_key = graphene.String(required=True)
+
+
+class DetailViewContractType(graphene.ObjectType):
+    """Resolved detail contract payload."""
+
+    app_label = graphene.String(required=True)
+    model_name = graphene.String(required=True)
+    query_root = graphene.String(required=True)
+    identifier_arg = graphene.String(required=True)
+    layout_version = graphene.String(required=True)
+    default_include_fields = graphene.List(graphene.String, required=True)
+    default_exclude_fields = graphene.List(graphene.String, required=True)
+    permissions = graphene.Field(DetailPermissionSnapshotType, required=True)
+    layout_nodes = graphene.List(DetailLayoutNodeType, required=True)
+    relation_data_sources = graphene.List(DetailRelationDataSourceType, required=True)
+    actions = graphene.List(DetailActionDefinitionType, required=True)
+    metadata_version = graphene.String()
+
+
+class DetailContractInputType(graphene.InputObjectType):
+    """Input for resolving a detail contract."""
+
+    app = graphene.String(required=True)
+    model = graphene.String(required=True)
+    object_id = graphene.ID()
+
+
+class DetailContractResultType(graphene.ObjectType):
+    """Envelope for detail contract resolution."""
+
+    ok = graphene.Boolean(required=True)
+    reason = graphene.String()
+    contract = graphene.Field(DetailViewContractType)
+
+
 class ModelInfoType(graphene.ObjectType):
     """Basic model info."""
 

@@ -240,6 +240,15 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 or not writable
                 or is_view_mode
             )
+            raw_constraints = field.get("constraints") or {}
+            constraints = (
+                dict(raw_constraints)
+                if isinstance(raw_constraints, dict)
+                else {}
+            )
+            raw_choices = field.get("choices")
+            if isinstance(raw_choices, (list, tuple)) and raw_choices:
+                constraints["choices"] = list(raw_choices)
             fields.append(
                 {
                     "name": contract_name,
@@ -254,7 +263,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
                     "read_only": read_only,
                     "hidden": hidden,
                     "default_value": field.get("default_value"),
-                    "constraints": field.get("constraints") or {},
+                    "constraints": constraints,
                     "validators": field.get("validators") or [],
                     "ui": field.get("input_props") or {},
                     "metadata": field.get("metadata"),

@@ -320,9 +320,8 @@ class FormConfigExtractor(
             return payload
 
         graphql_meta = get_graphql_meta(instance.__class__)
+        relation_limit = int(get_form_settings().initial_data_relation_limit)
         for field in instance._meta.get_fields():
-            if field.is_relation:
-                continue
             if not hasattr(field, "name"):
                 continue
             try:
@@ -334,6 +333,44 @@ class FormConfigExtractor(
                     instance.__class__._meta.label,
                     field.name,
                 )
+            if field.is_relation:
+                try:
+                    if (
+                        field.many_to_many
+                        or field.one_to_many
+                    ):
+                        related_manager = getattr(instance, field.name, None)
+                        if related_manager is None:
+                            payload[to_camel_case(field.name)] = []
+                            continue
+                        relation_qs = related_manager.all()
+                        if relation_limit > 0:
+                            relation_qs = relation_qs[:relation_limit]
+                        try:
+                            payload[to_camel_case(field.name)] = list(
+                                relation_qs.values_list("pk", flat=True)
+                            )
+                        except Exception:
+                            payload[to_camel_case(field.name)] = [
+                                obj.pk for obj in relation_qs
+                            ]
+                    else:
+                        related_obj = getattr(instance, field.name, None)
+                        payload[to_camel_case(field.name)] = (
+                            related_obj.pk if related_obj else None
+                        )
+                except Exception:
+                    logger.debug(
+                        "Failed to serialize nested relation field %s.%s.",
+                        instance.__class__._meta.label,
+                        field.name,
+                        exc_info=True,
+                    )
+                    if field.many_to_many or field.one_to_many:
+                        payload[to_camel_case(field.name)] = []
+                    else:
+                        payload[to_camel_case(field.name)] = None
+                continue
             try:
                 value = getattr(instance, field.name)
                 payload[to_camel_case(field.name)] = self._to_json_value(value)

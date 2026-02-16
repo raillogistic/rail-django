@@ -10,9 +10,11 @@ from django.apps import apps
 from graphql import GraphQLError
 
 from .extractor import ModelSchemaExtractor
+from .detail_extractor import DetailContractExtractor
 from ...utils.graphql_meta import get_model_graphql_meta
 from .types import (
-    FilterConfigType,
+    DetailContractInputType,
+    DetailContractResultType,
     FilterSchemaType,
     ModelInfoType,
     ModelSchemaType,
@@ -87,6 +89,15 @@ class ModelSchemaQuery(graphene.ObjectType):
         description="Get complete schema information for a model.",
     )
 
+    modelDetailContract = graphene.Field(
+        DetailContractResultType,
+        input=DetailContractInputType(required=True),
+        description=(
+            "Resolve metadata-driven detail contract for one model and optional "
+            "record scope."
+        ),
+    )
+
     availableModels = graphene.List(
         ModelInfoType,
         app=graphene.String(description="Filter by app"),
@@ -143,6 +154,40 @@ class ModelSchemaQuery(graphene.ObjectType):
             schema_name=getattr(info.context, "schema_name", "default")
         )
         return extractor.extract(app, model, user=user, object_id=objectId)
+
+    def resolve_modelDetailContract(self, info, input: dict) -> dict:
+        user = getattr(info.context, "user", None)
+        app = str(input.get("app") or "")
+        model = str(input.get("model") or "")
+        object_id = input.get("object_id")
+
+        extractor = DetailContractExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        try:
+            contract = extractor.extract(
+                app,
+                model,
+                user=user,
+                object_id=object_id,
+            )
+        except GraphQLError as exc:
+            return {"ok": False, "reason": str(exc), "contract": None}
+
+        model_readable = bool(
+            (
+                contract.get("permissions", {})
+                if isinstance(contract, dict)
+                else {}
+            ).get("model_readable", False)
+        )
+        if not model_readable:
+            return {
+                "ok": False,
+                "reason": "Access denied",
+                "contract": contract,
+            }
+        return {"ok": True, "reason": None, "contract": contract}
 
     def resolve_filterSchema(
         self, info, app: str, model: str

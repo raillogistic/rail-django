@@ -264,6 +264,48 @@ def test_model_form_initial_data_supports_nested_fields_filter(gql_client):
     assert values["orderItems"][0] == order_item.pk
 
 
+def test_model_form_initial_data_nested_rows_include_relation_ids(gql_client):
+    category = Category.objects.create(name="Hardware", description="Devices")
+    product = Product.objects.create(
+        name="Starter",
+        price=10,
+        inventory_count=2,
+        category=category,
+    )
+    order_item = OrderItem.objects.create(product=product, quantity=3, unit_price=10)
+
+    query = """
+    query($id: ID!, $nestedFields: [String!]) {
+      payload: modelFormInitialData(
+        appLabel: "test_app"
+        modelName: "Product"
+        objectId: $id
+        includeNested: true
+        nestedFields: $nestedFields
+      ) {
+        values
+      }
+    }
+    """
+    result = gql_client.execute(
+        query,
+        variables={
+            "id": str(product.pk),
+            "nestedFields": ["orderItems"],
+        },
+    )
+    assert result.get("errors") is None
+
+    values = _decode_json(result["data"]["payload"]["values"])
+    assert isinstance(values["orderItems"], list)
+    assert len(values["orderItems"]) == 1
+
+    first_item = values["orderItems"][0]
+    assert isinstance(first_item, dict)
+    assert str(first_item["id"]) == str(order_item.pk)
+    assert str(first_item["product"]) == str(product.pk)
+
+
 def test_model_form_initial_data_requires_view_access(gql_client):
     User = get_user_model()
     limited_user = User.objects.create_user(

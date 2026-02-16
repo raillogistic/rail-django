@@ -4,7 +4,6 @@ Helper functions for Metadata V2.
 
 import hashlib
 import time
-import uuid
 from typing import Any, Optional
 
 from django.core.cache import cache
@@ -200,8 +199,6 @@ def _get_fsm_transitions(
     If instance is provided, returns only transitions available for that instance.
     """
     try:
-        from django_fsm import get_available_FIELD_transitions
-
         # If instance is provided, get available transitions for it
         available_transitions = set()
         if instance:

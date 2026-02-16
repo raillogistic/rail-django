@@ -2,7 +2,7 @@
 Permission and other extraction logic for ModelSchemaExtractor.
 """
 
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -68,5 +68,58 @@ class PermissionExtractorMixin:
                         "description": getattr(tmpl, "description", None),
                         "endpoint": f"/api/templates/{model._meta.app_label}/{model.__name__}/{key}/",
                     })
-        except Exception: pass
+        except Exception:
+            pass
         return templates
+
+    def _extract_detail_permission_snapshot(
+        self,
+        model: type[models.Model],
+        user: Any,
+        *,
+        schema_payload: Optional[Mapping[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """
+        Build a detail-focused permission snapshot used by ModelDetailV2.
+        """
+        payload = schema_payload or {}
+        permissions = self._extract_permissions(model, user)
+
+        field_visibility = {
+            str(field.get("name")): bool(field.get("readable", False))
+            for field in (payload.get("fields") or [])
+            if isinstance(field, Mapping) and field.get("name")
+        }
+        relation_visibility = {
+            str(relation.get("name")): bool(relation.get("readable", False))
+            for relation in (payload.get("relationships") or [])
+            if isinstance(relation, Mapping) and relation.get("name")
+        }
+        action_executability = {
+            str(mutation.get("name")): bool(mutation.get("allowed", False))
+            for mutation in (payload.get("mutations") or [])
+            if isinstance(mutation, Mapping) and mutation.get("name")
+        }
+
+        return {
+            "model_readable": bool(
+                permissions.get("can_retrieve", False) and permissions.get("can_list", False)
+            ),
+            "field_visibility": field_visibility,
+            "relation_visibility": relation_visibility,
+            "action_executability": action_executability,
+            "source_flags": {
+                "metadata": {
+                    "fields": sorted(field_visibility.keys()),
+                    "relations": sorted(relation_visibility.keys()),
+                    "actions": sorted(action_executability.keys()),
+                },
+                "backend": {
+                    "can_list": bool(permissions.get("can_list", False)),
+                    "can_retrieve": bool(permissions.get("can_retrieve", False)),
+                    "can_update": bool(permissions.get("can_update", False)),
+                    "can_delete": bool(permissions.get("can_delete", False)),
+                },
+            },
+            "policy": "FAIL_CLOSED",
+        }

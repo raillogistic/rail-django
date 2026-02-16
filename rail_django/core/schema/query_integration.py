@@ -6,7 +6,7 @@ integrating security, health, task, and metadata queries into the schema.
 """
 
 import logging
-from typing import Any, Dict, List, Type
+from typing import Any
 
 import graphene
 
@@ -179,7 +179,7 @@ class QueryIntegrationMixin:
             )
 
     def _integrate_metadata_queries(self, query_attrs: dict[str, Any]) -> None:
-        """Integrate Model Schema V2 queries (Metadata) into query attributes."""
+        """Integrate metadata schema and detail contract queries into Query."""
         if not self.settings.show_metadata:
             return
 
@@ -231,7 +231,8 @@ class QueryIntegrationMixin:
                     existing_field_names.add(to_camel_case(field_name))
 
             logger.info(
-                f"Model schema queries integrated into schema '{self.schema_name}'"
+                f"Model schema/detail contract queries integrated into "
+                f"schema '{self.schema_name}'"
             )
         except ImportError as e:
             logger.warning(
