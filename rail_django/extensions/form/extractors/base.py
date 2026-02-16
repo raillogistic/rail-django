@@ -252,11 +252,22 @@ class FormConfigExtractor(
                                 if relation_limit > 0:
                                     relation_qs = relation_qs[:relation_limit]
                                 if include_this_relation_nested:
+                                    exclude_relations: set[str] = set()
+                                    if field.one_to_many:
+                                        remote_field = getattr(field, "field", None)
+                                        remote_field_name = getattr(
+                                            remote_field, "name", None
+                                        )
+                                        if remote_field_name:
+                                            exclude_relations.add(
+                                                str(remote_field_name)
+                                            )
                                     data[field.name] = [
                                         self._serialize_related_instance(
                                             obj,
                                             depth=1,
                                             max_depth=max_nested_depth,
+                                            exclude_relation_fields=exclude_relations,
                                         )
                                         for obj in relation_qs
                                     ]
@@ -312,6 +323,7 @@ class FormConfigExtractor(
         *,
         depth: int,
         max_depth: int,
+        exclude_relation_fields: Optional[set[str]] = None,
     ) -> dict[str, Any]:
         from graphene.utils.str_converters import to_camel_case
 
@@ -321,8 +333,11 @@ class FormConfigExtractor(
 
         graphql_meta = get_graphql_meta(instance.__class__)
         relation_limit = int(get_form_settings().initial_data_relation_limit)
+        excluded_relations = {str(name) for name in (exclude_relation_fields or set())}
         for field in instance._meta.get_fields():
             if not hasattr(field, "name"):
+                continue
+            if field.is_relation and field.name in excluded_relations:
                 continue
             try:
                 if not graphql_meta.should_expose_field(field.name, for_input=True):

@@ -264,7 +264,7 @@ def test_model_form_initial_data_supports_nested_fields_filter(gql_client):
     assert values["orderItems"][0] == order_item.pk
 
 
-def test_model_form_initial_data_nested_rows_include_relation_ids(gql_client):
+def test_model_form_initial_data_nested_rows_omit_parent_back_reference(gql_client):
     category = Category.objects.create(name="Hardware", description="Devices")
     product = Product.objects.create(
         name="Starter",
@@ -303,7 +303,8 @@ def test_model_form_initial_data_nested_rows_include_relation_ids(gql_client):
     first_item = values["orderItems"][0]
     assert isinstance(first_item, dict)
     assert str(first_item["id"]) == str(order_item.pk)
-    assert str(first_item["product"]) == str(product.pk)
+    assert "product" not in first_item
+    assert first_item["quantity"] == order_item.quantity
 
 
 def test_model_form_initial_data_requires_view_access(gql_client):
