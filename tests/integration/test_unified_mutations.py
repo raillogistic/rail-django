@@ -279,6 +279,47 @@ class TestUnifiedMutations(TestCase):
         post.refresh_from_db()
         self.assertEqual(post.category.id, cat.id)
 
+    def test_update_reverse_relation_set_keeps_existing_non_nullable_fk(self):
+        """Reverse set should not null retained rows on non-nullable FKs."""
+        cat = Category.objects.create(name="Cat")
+        post = Post.objects.create(title="Post", category=cat)
+
+        mutation = self.mut_gen.generate_update_mutation(Category)
+        input_data = {"posts": {"set": [str(post.id)]}}
+
+        info = create_info(self.user)
+        res = mutation.mutate(None, info, id=str(cat.id), input=input_data)
+
+        self.assertTrue(res.ok)
+        post.refresh_from_db()
+        self.assertEqual(post.category.id, cat.id)
+
+    def test_update_reverse_relation_set_rejects_detach_on_non_nullable_fk(self):
+        """Reverse set should fail early when it needs to detach non-nullable children."""
+        cat = Category.objects.create(name="Cat")
+        kept_post = Post.objects.create(title="Kept", category=cat)
+        removed_post = Post.objects.create(title="Removed", category=cat)
+
+        mutation = self.mut_gen.generate_update_mutation(Category)
+        input_data = {"posts": {"set": [str(kept_post.id)]}}
+
+        info = create_info(self.user)
+        res = mutation.mutate(None, info, id=str(cat.id), input=input_data)
+
+        self.assertFalse(res.ok)
+        self.assertIsNotNone(res.errors)
+        self.assertTrue(
+            any(
+                getattr(error, "field", None) == "posts"
+                and "non-nullable" in str(getattr(error, "message", "")).lower()
+                for error in res.errors
+            )
+        )
+        kept_post.refresh_from_db()
+        removed_post.refresh_from_db()
+        self.assertEqual(kept_post.category.id, cat.id)
+        self.assertEqual(removed_post.category.id, cat.id)
+
     def test_fk_connect_invalid_id_returns_error(self):
         """Test that connecting to non-existent ID returns validation error."""
         mutation = self.mut_gen.generate_create_mutation(Product)
@@ -360,4 +401,3 @@ class TestUnifiedMutationValidation(TestCase):
             process_relation_operations(input_data, Post)
 
         self.assertIn("tags", str(ctx.exception))
-

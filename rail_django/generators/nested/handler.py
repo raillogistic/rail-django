@@ -359,23 +359,42 @@ class NestedOperationHandlerBase:
                  objs.append(obj)
             manager.set(objs)
         elif is_reverse:
-             # For reverse, "set" implies:
-             # 1. Disconnect all existing
-             # 2. Connect new ones
-             # OR if relation is non-nullable, delete existing? (Prisma deletes)
-             # Here we try to nullify first.
              rel = self._get_reverse_relations(model).get(field_name)
              if not rel: return
              related_model = rel.related_model
              remote_field_name = rel.field.name
-
-             # clear existing
-             getattr(instance, field_name).all().update(**{remote_field_name: None})
-
+             manager = getattr(instance, field_name)
              ids = data if isinstance(data, list) else [data]
+             target_ids = {
+                 self._coerce_pk(item)
+                 for item in ids
+                 if self._coerce_pk(item) not in (None, "")
+             }
+             existing_ids = set(manager.all().values_list("pk", flat=True))
+             to_disconnect_ids = existing_ids - target_ids
+
+             # Reverse FK "set" can only detach rows by nulling the FK.
+             # For non-nullable FKs, fail early with an explicit relation error.
+             if to_disconnect_ids and not rel.field.null:
+                 raise ValidationError({
+                     field_name: (
+                         f"Cannot apply 'set' on reverse relation '{field_name}' "
+                         f"because '{related_model.__name__}.{remote_field_name}' is non-nullable."
+                     )
+                 })
+
+             if to_disconnect_ids:
+                 manager.filter(pk__in=to_disconnect_ids).update(
+                     **{remote_field_name: None}
+                 )
+
              for item in ids:
                  pk = self._coerce_pk(item)
-                 obj = self._get_tenant_queryset(related_model, info, operation="update").get(pk=pk)
+                 if pk in (None, ""):
+                     continue
+                 obj = self._get_tenant_queryset(
+                     related_model, info, operation="update"
+                 ).get(pk=pk)
                  setattr(obj, remote_field_name, instance)
                  self._save_instance(obj)
         else:
