@@ -160,6 +160,9 @@ class ModelSchemaQuery(graphene.ObjectType):
         app = str(input.get("app") or "")
         model = str(input.get("model") or "")
         object_id = input.get("object_id")
+        nested = input.get("nested") or []
+        if not isinstance(nested, list):
+            nested = []
 
         extractor = DetailContractExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
@@ -170,6 +173,7 @@ class ModelSchemaQuery(graphene.ObjectType):
                 model,
                 user=user,
                 object_id=object_id,
+                nested=nested,
             )
         except GraphQLError as exc:
             return {"ok": False, "reason": str(exc), "contract": None}

@@ -22,7 +22,9 @@ class InstanceLookupStep(OperationFilteredStep):
     - Tenant scoping if a tenant applicator is configured
     """
 
-    order = 35  # After auth, before input processing
+    # Must run before OperationGuardStep (order=25) so instance-level guards
+    # receive the resolved object for update/delete operations.
+    order = 24
     name = "instance_lookup"
     allowed_operations = ("update", "delete")
 

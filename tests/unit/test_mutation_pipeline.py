@@ -496,6 +496,18 @@ class TestPipelineBuilder:
         assert "instance_lookup" in step_names
         assert "update_execution" in step_names
 
+    def test_update_pipeline_looks_up_instance_before_operation_guard(self):
+        """Update pipeline must resolve instance before running operation guards."""
+        builder = PipelineBuilder()
+        mock_model = Mock()
+
+        pipeline = builder.build_update_pipeline(mock_model)
+        step_names = pipeline.get_step_names()
+
+        assert step_names.index("instance_lookup") < step_names.index(
+            "operation_guard"
+        )
+
     def test_builder_creates_delete_pipeline(self):
         """Test that builder creates a delete pipeline."""
         builder = PipelineBuilder()

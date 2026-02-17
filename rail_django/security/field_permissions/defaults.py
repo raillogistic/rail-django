@@ -26,23 +26,6 @@ DEFAULT_SENSITIVE_FIELDS: Set[str] = {
 
 # Default classification patterns by category
 DEFAULT_CLASSIFICATION_PATTERNS: dict[str, Set[str]] = {
-    "pii": {
-        "email",
-        "phone",
-        "ssn",
-        "social_security",
-        "address",
-    },
-    "financial": {
-        "salary",
-        "wage",
-        "income",
-        "revenue",
-        "cost",
-        "price",
-        "credit_card",
-        "bank_account",
-    },
     "credential": {
         "password",
         "token",
@@ -53,14 +36,7 @@ DEFAULT_CLASSIFICATION_PATTERNS: dict[str, Set[str]] = {
 }
 
 # Financial field names that require restricted access
-FINANCIAL_FIELDS: list[str] = [
-    "salary",
-    "wage",
-    "income",
-    "revenue",
-    "cost",
-    "price",
-]
+FINANCIAL_FIELDS: list[str] = []
 
 
 def setup_default_rules(manager: "FieldPermissionManager") -> None:

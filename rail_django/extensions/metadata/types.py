@@ -448,6 +448,10 @@ class DetailContractInputType(graphene.InputObjectType):
     app = graphene.String(required=True)
     model = graphene.String(required=True)
     object_id = graphene.ID()
+    nested = graphene.List(
+        graphene.String,
+        description="Optional relation names to materialize as explicit nested sections/tables.",
+    )
 
 
 class DetailContractResultType(graphene.ObjectType):
