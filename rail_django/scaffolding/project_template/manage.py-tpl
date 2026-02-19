@@ -15,29 +15,12 @@ def main():
         
         # If we have exactly one positional argument (the app name) and no destination
         if len(args) == 1:
-            app_name = args[0]
             base_dir = os.path.dirname(os.path.abspath(__file__))
             apps_dir = os.path.join(base_dir, 'apps')
-            target_dir = os.path.join(apps_dir, app_name)
-            
-            # Create apps/ directory if it doesn't exist
-            if not os.path.exists(apps_dir):
-                os.makedirs(apps_dir)
-            
-            # Create the app specific directory if it doesn't exist
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
-                
-            # Signal to settings.py that we are in startapp mode to avoid import conflicts
-            os.environ['RAIL_STARTAPP'] = 'true'
+            os.makedirs(apps_dir, exist_ok=True)
 
-            # Insert the target directory after the app name argument
-            try:
-                # Find the index of app_name starting from index 2
-                idx = sys.argv.index(app_name, 2)
-                sys.argv.insert(idx + 1, target_dir)
-            except ValueError:
-                sys.argv.append(target_dir)
+            # Run the command from apps/ so Django creates apps/<app_name>.
+            os.chdir(apps_dir)
 
     try:
         from django.core.management import execute_from_command_line

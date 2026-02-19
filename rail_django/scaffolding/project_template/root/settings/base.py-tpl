@@ -20,9 +20,10 @@ from root.webhooks import RAIL_DJANGO_WEBHOOKS
 
 AUTH_USER_MODEL = "users.User"
 
-# Add the 'apps' directory to the Python path if not in startapp mode
-if os.environ.get('RAIL_STARTAPP') != 'true':
-    sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
+# Add the 'apps' directory to the Python path so local apps are always importable.
+apps_path = os.path.join(BASE_DIR, 'apps')
+if apps_path not in sys.path:
+    sys.path.insert(0, apps_path)
 
 # Application definition
 INSTALLED_APPS = [
