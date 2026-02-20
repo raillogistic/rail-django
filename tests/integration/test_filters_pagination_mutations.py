@@ -135,6 +135,37 @@ def test_paginated_query_returns_page_info(gql_client):
     assert page["pageInfo"]["hasNextPage"] is True
 
 
+def test_paginated_query_accepts_count_mode_and_count_estimate_flag(gql_client):
+    category = _create_category()
+    for i in range(3):
+        Post.objects.create(title=f"Mode Post {i}", category=category)
+
+    query = """
+    query($countMode: String) {
+        postPage(page: 1, perPage: 2, orderBy: ["title"], countMode: $countMode) {
+            pageInfo {
+                totalCount
+                countIsEstimated
+                currentPage
+                perPage
+            }
+            items {
+                title
+            }
+        }
+    }
+    """
+    result = gql_client.execute(query, variables={"countMode": "auto"})
+    assert result.get("errors") is None
+
+    page = result["data"]["postPage"]
+    assert page["pageInfo"]["totalCount"] == 3
+    assert page["pageInfo"]["countIsEstimated"] is False
+    assert page["pageInfo"]["currentPage"] == 1
+    assert page["pageInfo"]["perPage"] == 2
+    assert len(page["items"]) == 2
+
+
 def test_offset_limit_pagination(gql_client):
     category = _create_category()
     Post.objects.create(title="A", category=category)

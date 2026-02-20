@@ -68,7 +68,7 @@ class TestReservedQueryArgs:
         """Should contain all expected reserved argument names."""
         expected = {
             "where", "order_by", "offset", "limit", "page", "per_page",
-            "include", "presets", "savedFilter", "distinct_on", "quick",
+            "skip_count", "count_mode", "include", "presets", "savedFilter", "distinct_on", "quick",
             "search", "group_by"
         }
         assert expected.issubset(RESERVED_QUERY_ARGS)

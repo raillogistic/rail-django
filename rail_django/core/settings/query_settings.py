@@ -21,6 +21,9 @@ class QueryGeneratorSettings:
     max_grouping_buckets: int = 200
     max_property_ordering_results: int = 2000
     property_ordering_warn_on_cap: bool = True
+    enable_estimated_counts: bool = True
+    estimated_count_min_rows: int = 50000
+    default_count_mode: str = "auto"
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)
     require_model_permissions: bool = True
     model_permission_codename: str = "view"

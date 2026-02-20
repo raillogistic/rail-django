@@ -10,7 +10,7 @@ from typing import Any, List, Optional, Type
 
 import graphene
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
-from django.db import models
+from django.db import connections, models
 
 from ...core.meta import get_model_graphql_meta
 from ...extensions.optimization import optimize_query
@@ -25,6 +25,174 @@ from .base import (
 from .ordering import get_default_ordering
 
 logger = logging.getLogger(__name__)
+
+COUNT_MODE_EXACT = "exact"
+COUNT_MODE_AUTO = "auto"
+SUPPORTED_COUNT_MODES = frozenset({COUNT_MODE_EXACT, COUNT_MODE_AUTO})
+
+
+def _normalize_count_mode(raw_value: Any) -> str:
+    """Normalize count mode values to supported internal tokens."""
+    value = raw_value
+    if hasattr(raw_value, "value"):
+        value = getattr(raw_value, "value")
+    normalized = str(value or "").strip().lower()
+    if normalized in SUPPORTED_COUNT_MODES:
+        return normalized
+    return COUNT_MODE_EXACT
+
+
+def _query_has_manual_filters(kwargs: dict[str, Any]) -> bool:
+    """Return true when resolver args include user-driven filtering clauses."""
+    if kwargs.get("where"):
+        return True
+    if kwargs.get("quick"):
+        return True
+    if kwargs.get("presets"):
+        return True
+    if kwargs.get("savedFilter"):
+        return True
+    if kwargs.get("include"):
+        return True
+
+    for key, value in kwargs.items():
+        if value is None or key in RESERVED_QUERY_ARGS:
+            continue
+        return True
+    return False
+
+
+def _can_use_estimated_count(
+    queryset: models.QuerySet,
+    kwargs: dict[str, Any],
+    *,
+    has_property_ordering: bool,
+) -> bool:
+    """
+    Determine whether estimator-based counting is safe enough to use.
+
+    Estimated counts are only used for simple unfiltered query shapes where
+    PostgreSQL planner statistics correlate with user-visible row counts.
+    """
+    if has_property_ordering:
+        return False
+    if kwargs.get("distinct_on"):
+        return False
+    if _query_has_manual_filters(kwargs):
+        return False
+
+    query = getattr(queryset, "query", None)
+    if query is None:
+        return False
+
+    has_filters = getattr(query, "has_filters", None)
+    if callable(has_filters):
+        try:
+            if has_filters():
+                return False
+        except Exception:
+            return False
+    else:
+        where = getattr(query, "where", None)
+        if where is not None and getattr(where, "children", None):
+            return False
+
+    if getattr(query, "distinct", False):
+        return False
+    if getattr(query, "group_by", None):
+        return False
+    if getattr(query, "combinator", None):
+        return False
+
+    alias_map = getattr(query, "alias_map", None)
+    if isinstance(alias_map, dict) and len(alias_map) > 1:
+        return False
+
+    return True
+
+
+def _estimate_queryset_count(queryset: models.QuerySet) -> Optional[int]:
+    """
+    Estimate queryset row count using PostgreSQL reltuples statistics.
+
+    Returns None when the estimate is unavailable or backend is unsupported.
+    """
+    db_alias = getattr(queryset, "db", "default")
+    connection = connections[db_alias]
+    if connection.vendor != "postgresql":
+        return None
+
+    model = getattr(queryset, "model", None)
+    table_name = getattr(getattr(model, "_meta", None), "db_table", None)
+    if not table_name:
+        return None
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT reltuples::bigint FROM pg_class WHERE oid = to_regclass(%s)",
+                [table_name],
+            )
+            row = cursor.fetchone()
+    except Exception as exc:
+        logger.debug(
+            "Estimated count lookup failed for table %s: %s",
+            table_name,
+            exc,
+        )
+        return None
+
+    if not row or row[0] is None:
+        return None
+
+    try:
+        estimate = int(row[0])
+    except (TypeError, ValueError):
+        return None
+
+    if estimate < 0:
+        return None
+
+    return estimate
+
+
+def _resolve_total_count(
+    queryset: models.QuerySet,
+    kwargs: dict[str, Any],
+    *,
+    count_mode: str,
+    has_property_ordering: bool,
+    settings: Any,
+) -> tuple[int, bool]:
+    """
+    Resolve total count with optional smart estimator fast path.
+
+    Returns:
+        Tuple of (total_count, count_is_estimated)
+    """
+    if count_mode != COUNT_MODE_AUTO:
+        return queryset.count(), False
+
+    if not bool(getattr(settings, "enable_estimated_counts", True)):
+        return queryset.count(), False
+
+    if not _can_use_estimated_count(
+        queryset, kwargs, has_property_ordering=has_property_ordering
+    ):
+        return queryset.count(), False
+
+    estimate = _estimate_queryset_count(queryset)
+    if estimate is None:
+        return queryset.count(), False
+
+    min_rows_for_estimate = int(
+        getattr(settings, "estimated_count_min_rows", 50000)
+    )
+    min_rows_for_estimate = max(0, min_rows_for_estimate)
+    if estimate < min_rows_for_estimate:
+        return queryset.count(), False
+
+    return estimate, True
 
 
 def _get_nested_filter_generator(schema_name: str):
@@ -50,6 +218,9 @@ class PaginationInfo(graphene.ObjectType):
     per_page = graphene.Int(description="Number of records per page")
     has_next_page = graphene.Boolean(description="Whether there is a next page")
     has_previous_page = graphene.Boolean(description="Whether there is a previous page")
+    count_is_estimated = graphene.Boolean(
+        description="Whether pagination count values are estimated."
+    )
 
 
 class PaginatedResult:
@@ -196,6 +367,12 @@ def generate_paginated_query(
             per_page = self.settings.default_page_size
         per_page = max(1, min(per_page, self.settings.max_page_size))
         skip_count = bool(kwargs.get("skip_count"))
+        count_mode = _normalize_count_mode(
+            kwargs.get(
+                "count_mode",
+                getattr(self.settings, "default_count_mode", COUNT_MODE_AUTO),
+            )
+        )
 
         # Apply query optimization
         queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -251,18 +428,28 @@ def generate_paginated_query(
                 per_page=per_page,
                 has_next_page=has_next_page,
                 has_previous_page=page > 1,
+                count_is_estimated=None,
             )
 
             items = self._apply_field_masks(items, info, model)
             return PaginatedResult(items=items, page_info=page_info)
 
         # Calculate pagination values (with total count)
+        count_is_estimated = False
         if uncapped_total is not None:
             total_count = uncapped_total
+            count_is_estimated = False
         elif items is not None:
             total_count = len(items)
+            count_is_estimated = False
         else:
-            total_count = queryset.count()
+            total_count, count_is_estimated = _resolve_total_count(
+                queryset,
+                kwargs,
+                count_mode=count_mode,
+                has_property_ordering=has_prop_ordering,
+                settings=self.settings,
+            )
 
         # Calculate page count, handling empty results
         if total_count > 0:
@@ -293,6 +480,7 @@ def generate_paginated_query(
             per_page=per_page,
             has_next_page=page < page_count,
             has_previous_page=page > 1,
+            count_is_estimated=count_is_estimated,
         )
 
         items = self._apply_field_masks(items, info, model)
@@ -310,6 +498,13 @@ def generate_paginated_query(
     arguments["skip_count"] = graphene.Argument(
         graphene.Boolean,
         description="Skip total count calculation for faster pagination.",
+    )
+    arguments["count_mode"] = graphene.Argument(
+        graphene.String,
+        description=(
+            "Count strategy: 'exact' (default) or 'auto' "
+            "(estimated counts on large simple PostgreSQL queries)."
+        ),
     )
 
     # Add quick filter if available

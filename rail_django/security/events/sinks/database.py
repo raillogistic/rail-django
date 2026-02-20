@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 from typing import TYPE_CHECKING
 from .base import EventSink
@@ -6,6 +7,40 @@ if TYPE_CHECKING:
     from ..types import SecurityEvent
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_client_ip(raw_ip: str | None) -> str | None:
+    """Normalize a client IP value for GenericIPAddressField compatibility."""
+    if raw_ip is None:
+        return None
+
+    candidate = str(raw_ip).strip()
+    if not candidate:
+        return None
+
+    lowered = candidate.lower()
+    if lowered in {"unknown", "none", "null", "-", "n/a"}:
+        return None
+
+    # X-Forwarded-For values can carry a list; keep the first hop.
+    if "," in candidate:
+        candidate = candidate.split(",", 1)[0].strip()
+
+    # Handle common forms like "1.2.3.4:12345" or "[2001:db8::1]:443".
+    if candidate.startswith("[") and "]" in candidate:
+        candidate = candidate[1:candidate.index("]")].strip()
+    elif candidate.count(":") == 1 and "." in candidate:
+        host, _sep, _port = candidate.partition(":")
+        candidate = host.strip()
+
+    # Drop IPv6 zone id if present (e.g. "fe80::1%lo0").
+    if "%" in candidate:
+        candidate = candidate.split("%", 1)[0].strip()
+
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return None
 
 
 class DatabaseSink(EventSink):
@@ -25,7 +60,7 @@ class DatabaseSink(EventSink):
                 severity=event.severity.value,
                 user_id=event.user_id,
                 username=event.username,
-                client_ip=event.client_ip,
+                client_ip=_normalize_client_ip(event.client_ip),
                 user_agent=event.user_agent[:500] if event.user_agent else None,
                 timestamp=event.timestamp,
                 request_path=event.request_path,
