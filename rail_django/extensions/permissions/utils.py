@@ -13,7 +13,7 @@ from ...security.field_permissions import field_permission_manager
 from ...security.rbac import PermissionContext, role_manager
 from .base import OperationType
 from .manager import permission_manager
-from .checkers import DjangoPermissionChecker, GraphQLOperationGuardChecker
+from .checkers import GraphQLOperationGuardChecker, HybridPermissionChecker
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,15 @@ def _get_graphql_meta(model: type[models.Model]):
 def _register_model_permissions(model: type[models.Model], graphql_meta=None) -> None:
     model_label = model._meta.label_lower
     for operation, codename in _OPERATION_PERMISSION_MAP.items():
-        permission_manager.register_operation_permission(model_label, operation, DjangoPermissionChecker(codename, model))
+        permission_manager.register_operation_permission(
+            model_label,
+            operation,
+            HybridPermissionChecker(codename, model),
+        )
         if graphql_meta:
             guard_name = _GRAPHQL_GUARD_MAP.get(operation)
-            permission_manager.register_operation_permission(model_label, operation, GraphQLOperationGuardChecker(graphql_meta, guard_name, operation))
+            permission_manager.register_operation_permission(
+                model_label,
+                operation,
+                GraphQLOperationGuardChecker(graphql_meta, guard_name, operation),
+            )

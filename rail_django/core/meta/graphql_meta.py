@@ -17,6 +17,7 @@ from django.db import models
 
 from .api import GraphQLMetaAPIMixin
 from .builders import (
+    build_abac_policies_config,
     build_access_control_config,
     build_classification_config,
     build_field_config,
@@ -33,6 +34,7 @@ from .coercion import (
     resolve_condition_callable,
 )
 from .config import (
+    ABACPolicyConfig,
     AccessControlConfig,
     ClassificationConfig,
     FieldExposureConfig,
@@ -130,6 +132,9 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
             self._meta_config
         )
         self.pipeline_config: PipelineConfig = build_pipeline_config(self._meta_config)
+        self.abac_policies: list[ABACPolicyConfig] = build_abac_policies_config(
+            self._meta_config
+        )
 
         self.relations_config: dict[str, FieldRelationConfig] = getattr(
             self._meta_config, "relations", {}
@@ -169,6 +174,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         self._register_roles()
         self._register_field_permissions()
         self._register_classifications()
+        self._register_abac_policies()
 
         self._validate_configuration()
 
@@ -290,6 +296,38 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         except Exception as exc:
             logger.warning(
                 "Could not register classification tags for %s: %s",
+                self.model_class.__name__,
+                exc,
+            )
+
+    def _register_abac_policies(self) -> None:
+        if not self.abac_policies:
+            return
+        components = load_security_components()
+        abac_mgr = components.get("abac_manager")
+        if abac_mgr is None:
+            return
+        try:
+            payload = [
+                {
+                    "name": policy.name,
+                    "description": policy.description,
+                    "effect": policy.effect,
+                    "priority": policy.priority,
+                    "subject_conditions": policy.subject_conditions,
+                    "resource_conditions": policy.resource_conditions,
+                    "environment_conditions": policy.environment_conditions,
+                    "action_conditions": policy.action_conditions,
+                    "combine_conditions": policy.combine_conditions,
+                    "enabled": policy.enabled,
+                    "tags": policy.tags,
+                }
+                for policy in self.abac_policies
+            ]
+            abac_mgr.register_graphql_meta_policies(self.model_label, payload)
+        except Exception as exc:
+            logger.warning(
+                "Could not register ABAC policies for %s: %s",
                 self.model_class.__name__,
                 exc,
             )

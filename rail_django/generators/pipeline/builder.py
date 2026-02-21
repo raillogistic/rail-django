@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Type
 
 from .base import MutationStep, MutationPipeline
 from .steps.authentication import AuthenticationStep
-from .steps.permissions import ModelPermissionStep, OperationGuardStep
+from .steps.permissions import ABACPermissionStep, ModelPermissionStep, OperationGuardStep
 from .steps.sanitization import InputSanitizationStep
 from .steps.normalization import (
     EnumNormalizationStep,
@@ -155,6 +155,7 @@ class PipelineBuilder:
             AuthenticationStep(self._require_authentication),
             ModelPermissionStep(self._require_model_permissions),
             OperationGuardStep(),
+            ABACPermissionStep(),
             InputSanitizationStep(),
             EnumNormalizationStep(),
             RelationOperationProcessingStep(),
@@ -194,6 +195,7 @@ class PipelineBuilder:
             ModelPermissionStep(self._require_model_permissions),
             InstanceLookupStep(tenant_applicator),  # Lookup before guard
             OperationGuardStep(),  # Guard can check instance
+            ABACPermissionStep(),
             InputSanitizationStep(),
             EnumNormalizationStep(),
             RelationOperationProcessingStep(),
@@ -228,6 +230,7 @@ class PipelineBuilder:
             ModelPermissionStep(self._require_model_permissions),
             InstanceLookupStep(tenant_applicator),
             OperationGuardStep(),
+            ABACPermissionStep(),
             DeleteExecutionStep(),
             AuditStep(),
             *self._custom_steps,

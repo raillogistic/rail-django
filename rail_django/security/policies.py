@@ -70,6 +70,59 @@ class PolicyExplanation:
     matches: list[AccessPolicy] = field(default_factory=list)
 
 
+@dataclass
+class AttributeCondition:
+    """
+    Helper callable for attribute-style checks in AccessPolicy.condition.
+
+    Example:
+        AccessPolicy(
+            ...,
+            condition=AttributeCondition(
+                path="additional_context.request.method",
+                operator="eq",
+                value="POST",
+            ),
+        )
+    """
+
+    path: str
+    operator: str = "eq"
+    value: Any = None
+
+    def __call__(self, context: PolicyContext) -> bool:
+        actual = self._resolve_path(context, self.path)
+        op = (self.operator or "eq").lower()
+
+        if op == "eq":
+            return actual == self.value
+        if op == "neq":
+            return actual != self.value
+        if op == "in":
+            return actual in (self.value or [])
+        if op == "contains":
+            return self.value in actual if actual is not None else False
+        if op == "starts_with":
+            return str(actual or "").startswith(str(self.value or ""))
+        if op == "exists":
+            return actual is not None
+        return False
+
+    @staticmethod
+    def _resolve_path(context: PolicyContext, path: str) -> Any:
+        current: Any = context
+        for part in (path or "").split("."):
+            if not part:
+                continue
+            if current is None:
+                return None
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = getattr(current, part, None)
+        return current
+
+
 class PolicyManager:
     def __init__(self) -> None:
         self._policies: list[AccessPolicy] = []

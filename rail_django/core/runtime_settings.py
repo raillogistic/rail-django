@@ -30,6 +30,11 @@ class RuntimeSettings:
     enable_input_validation: bool = True
     enable_sql_injection_protection: bool = True
     enable_xss_protection: bool = True
+    enable_abac: bool = False
+    hybrid_strategy: str = "rbac_then_abac"
+    abac_default_effect: str = "deny"
+    abac_cache_ttl_seconds: int = 60
+    abac_audit_decisions: bool = False
     input_allow_html: bool = False
     input_allowed_html_tags: list[str] = field(
         default_factory=lambda: [

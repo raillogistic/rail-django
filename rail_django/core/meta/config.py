@@ -194,6 +194,25 @@ class PipelineConfig:
 
 
 @dataclass
+class ABACPolicyConfig:
+    """
+    Declarative ABAC policy configuration attached to GraphQLMeta.
+    """
+
+    name: str
+    description: str = ""
+    effect: str = "allow"
+    priority: int = 0
+    subject_conditions: dict[str, Any] = field(default_factory=dict)
+    resource_conditions: dict[str, Any] = field(default_factory=dict)
+    environment_conditions: dict[str, Any] = field(default_factory=dict)
+    action_conditions: dict[str, Any] = field(default_factory=dict)
+    combine_conditions: str = "all"
+    enabled: bool = True
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass
 class RelationOperationConfig:
     """Configuration for a specific relation operation (e.g. connect, create)."""
     enabled: bool = True

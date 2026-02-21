@@ -15,6 +15,7 @@ from .checkers import (
     CustomPermissionChecker,
     DjangoPermissionChecker,
     GraphQLOperationGuardChecker,
+    HybridPermissionChecker,
     OwnershipPermissionChecker,
 )
 from .decorators import (
@@ -43,6 +44,7 @@ __all__ = [
     "OwnershipPermissionChecker",
     "CustomPermissionChecker",
     "GraphQLOperationGuardChecker",
+    "HybridPermissionChecker",
     # Manager
     "PermissionManager",
     "permission_manager",

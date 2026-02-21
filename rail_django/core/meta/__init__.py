@@ -19,6 +19,7 @@ Usage:
 """
 
 from .config import (
+    ABACPolicyConfig,
     AccessControlConfig,
     ClassificationConfig,
     FieldExposureConfig,
@@ -38,6 +39,7 @@ __all__ = [
     "GraphQLMeta",
     "get_model_graphql_meta",
     # Configuration dataclasses
+    "ABACPolicyConfig",
     "FilterFieldConfig",
     "FilteringConfig",
     "FieldExposureConfig",

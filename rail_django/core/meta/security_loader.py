@@ -29,11 +29,13 @@ def load_security_components() -> dict[str, Any]:
     global _SECURITY_COMPONENTS
     if _SECURITY_COMPONENTS is None:
         from rail_django.security import (
+            ABACPolicy,
             FieldAccessLevel,
             FieldPermissionRule,
             FieldVisibility,
             RoleDefinition,
             RoleType,
+            abac_manager,
             field_permission_manager,
             role_manager,
         )
@@ -44,6 +46,8 @@ def load_security_components() -> dict[str, Any]:
             "FieldVisibility": FieldVisibility,
             "RoleDefinition": RoleDefinition,
             "RoleType": RoleType,
+            "ABACPolicy": ABACPolicy,
+            "abac_manager": abac_manager,
             "field_permission_manager": field_permission_manager,
             "role_manager": role_manager,
         }

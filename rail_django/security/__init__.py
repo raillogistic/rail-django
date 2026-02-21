@@ -55,6 +55,7 @@ from .validation import (
 )
 from .policies import (
     AccessPolicy,
+    AttributeCondition,
     PolicyContext,
     PolicyEffect,
     PolicyManager,
@@ -72,6 +73,25 @@ from .rbac import (
     require_role,
     role_manager,
 )
+from .abac import (
+    ABACContext,
+    ABACDecision,
+    ABACEngine,
+    ABACManager,
+    ABACPolicy,
+    ActionAttributeProvider,
+    AttributeSet,
+    BaseAttributeProvider,
+    ConditionOperator,
+    EnvironmentAttributeProvider,
+    MatchCondition,
+    ResourceAttributeProvider,
+    SubjectAttributeProvider,
+    abac_engine,
+    abac_manager,
+    require_attributes,
+)
+from .hybrid import CombinationStrategy, HybridDecision, HybridPermissionEngine, hybrid_engine
 
 __all__ = [
     # New Security API & Events
@@ -125,8 +145,33 @@ __all__ = [
     'PolicyEffect',
     'PolicyContext',
     'AccessPolicy',
+    'AttributeCondition',
     'PolicyManager',
     'policy_manager',
+
+    # ABAC
+    "ABACPolicy",
+    "ABACDecision",
+    "ABACContext",
+    "AttributeSet",
+    "MatchCondition",
+    "ConditionOperator",
+    "ABACEngine",
+    "abac_engine",
+    "BaseAttributeProvider",
+    "SubjectAttributeProvider",
+    "ResourceAttributeProvider",
+    "EnvironmentAttributeProvider",
+    "ActionAttributeProvider",
+    "require_attributes",
+    "ABACManager",
+    "abac_manager",
+
+    # Hybrid
+    "CombinationStrategy",
+    "HybridDecision",
+    "HybridPermissionEngine",
+    "hybrid_engine",
 
     # GraphQL Security
     'SecurityThreatLevel',

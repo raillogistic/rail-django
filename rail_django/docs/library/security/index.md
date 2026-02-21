@@ -8,6 +8,8 @@ This reference maps the internal security modules to their runtime purpose in
 - `rail_django.security.api`: Unified `security` event API.
 - `rail_django.security.events`: Event types, builders, and event bus.
 - `rail_django.security.rbac`: Role definitions and permission evaluation.
+- `rail_django.security.abac`: Attribute-based policy evaluation.
+- `rail_django.security.hybrid`: RBAC + ABAC decision composition.
 - `rail_django.security.policies`: Allow and deny policy engine.
 - `rail_django.security.field_permissions`: Field visibility and masking rules.
 - `rail_django.security.validation`: Input validation and sanitization.
@@ -73,6 +75,8 @@ These queries are useful for integration tests and permission troubleshooting.
 ## Next steps
 
 - [RBAC internals](./rbac.md)
+- [ABAC system](./abac.md)
+- [Hybrid RBAC + ABAC](./hybrid.md)
 - [Permissions guide](../../security/permissions.md)
 - [Validation guide](../../security/validation.md)
 - [Security reference](../../reference/security.md)

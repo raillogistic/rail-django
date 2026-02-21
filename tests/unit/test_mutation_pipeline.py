@@ -482,6 +482,7 @@ class TestPipelineBuilder:
         assert pipeline is not None
         step_names = pipeline.get_step_names()
         assert "authentication" in step_names
+        assert "abac_permission" in step_names
         assert "create_execution" in step_names
 
     def test_builder_creates_update_pipeline(self):

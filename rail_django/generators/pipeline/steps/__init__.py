@@ -12,7 +12,7 @@ Each step handles a specific aspect of mutation processing:
 """
 
 from .authentication import AuthenticationStep
-from .permissions import ModelPermissionStep, OperationGuardStep
+from .permissions import ABACPermissionStep, ModelPermissionStep, OperationGuardStep
 from .sanitization import InputSanitizationStep
 from .normalization import (
     EnumNormalizationStep,
@@ -35,6 +35,7 @@ __all__ = [
     "AuthenticationStep",
     "ModelPermissionStep",
     "OperationGuardStep",
+    "ABACPermissionStep",
     # Input Processing
     "InputSanitizationStep",
     "EnumNormalizationStep",

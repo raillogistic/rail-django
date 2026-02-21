@@ -356,10 +356,49 @@ class RoleManager(PermissionEvaluationMixin):
         if not self._permission_cache_enabled or not user_id:
             return None
         from ..policies import policy_manager
+        from rail_django.config_proxy import get_setting
+
+        schema_name = None
+        if context is not None and isinstance(context.additional_context, dict):
+            request = context.additional_context.get(
+                "request"
+            ) or context.additional_context.get("context")
+            schema_name = getattr(request, "schema_name", None)
+            if schema_name:
+                schema_name = str(schema_name)
 
         version = self._get_cache_version(user_id)
         policy_version = policy_manager.get_version()
         resolver_version = self._context_resolver_version
+        hybrid_enabled = bool(
+            get_setting(
+                "security_settings.enable_abac",
+                False,
+                schema_name=schema_name,
+            )
+        )
+        hybrid_strategy = str(
+            get_setting(
+                "security_settings.hybrid_strategy",
+                "rbac_then_abac",
+                schema_name=schema_name,
+            )
+        )
+        abac_default_effect = str(
+            get_setting(
+                "security_settings.abac_default_effect",
+                "deny",
+                schema_name=schema_name,
+            )
+        )
+        abac_version = 0
+        if hybrid_enabled:
+            try:
+                from ..abac import abac_engine
+
+                abac_version = int(abac_engine.get_version())
+            except Exception:
+                abac_version = 0
 
         model_label = ""
         object_id = ""
@@ -378,7 +417,8 @@ class RoleManager(PermissionEvaluationMixin):
 
         return (
             f"{self._permission_cache_prefix}:{user_id}:{version}:{policy_version}:"
-            f"{permission}:{model_label}:{object_id}:{operation}:{resolver_version}"
+            f"{permission}:{model_label}:{object_id}:{operation}:{resolver_version}:"
+            f"{int(hybrid_enabled)}:{hybrid_strategy}:{abac_default_effect}:{abac_version}"
         )
 
     def _get_cached_permission(self, cache_key: Optional[str]) -> Optional[bool]:

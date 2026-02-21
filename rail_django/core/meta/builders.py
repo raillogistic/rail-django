@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from .config import (
+    ABACPolicyConfig,
     AccessControlConfig,
     ClassificationConfig,
     FieldExposureConfig,
@@ -384,3 +385,69 @@ def build_pipeline_config(meta_config: Any) -> PipelineConfig:
         )
 
     return PipelineConfig()
+
+
+def build_abac_policies_config(meta_config: Any) -> list[ABACPolicyConfig]:
+    """
+    Construct ABAC policy configuration list.
+
+    Args:
+        meta_config: The model's GraphQLMeta configuration class
+
+    Returns:
+        Normalized list of ABACPolicyConfig
+    """
+    if not meta_config:
+        return []
+
+    raw = getattr(meta_config, "abac_policies", None)
+    if not raw:
+        return []
+
+    policies: list[ABACPolicyConfig] = []
+    if not isinstance(raw, (list, tuple)):
+        return policies
+
+    for entry in raw:
+        if isinstance(entry, ABACPolicyConfig):
+            policies.append(
+                ABACPolicyConfig(
+                    name=entry.name,
+                    description=entry.description,
+                    effect=entry.effect,
+                    priority=int(entry.priority),
+                    subject_conditions=dict(entry.subject_conditions),
+                    resource_conditions=dict(entry.resource_conditions),
+                    environment_conditions=dict(entry.environment_conditions),
+                    action_conditions=dict(entry.action_conditions),
+                    combine_conditions=entry.combine_conditions,
+                    enabled=bool(entry.enabled),
+                    tags=list(entry.tags),
+                )
+            )
+            continue
+
+        if not isinstance(entry, dict):
+            continue
+
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
+
+        policies.append(
+            ABACPolicyConfig(
+                name=name,
+                description=str(entry.get("description") or ""),
+                effect=str(entry.get("effect") or "allow"),
+                priority=int(entry.get("priority") or 0),
+                subject_conditions=dict(entry.get("subject_conditions") or {}),
+                resource_conditions=dict(entry.get("resource_conditions") or {}),
+                environment_conditions=dict(entry.get("environment_conditions") or {}),
+                action_conditions=dict(entry.get("action_conditions") or {}),
+                combine_conditions=str(entry.get("combine_conditions") or "all"),
+                enabled=bool(entry.get("enabled", True)),
+                tags=[str(tag) for tag in entry.get("tags", []) if tag is not None],
+            )
+        )
+
+    return policies

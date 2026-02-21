@@ -280,6 +280,45 @@ class Order(models.Model):
                 ),
             }
         )
+        abac_policies = [
+            {
+                "name": "order_staff_override",
+                "description": "Staff users can access all order operations.",
+                "effect": "allow",
+                "priority": 100,
+                "subject_conditions": {
+                    "is_staff": {"operator": "eq", "value": True},
+                },
+            },
+            {
+                "name": "order_high_risk_update_restriction",
+                "description": "Block non-staff updates on high-risk orders.",
+                "effect": "deny",
+                "priority": 90,
+                "action_conditions": {
+                    "type": {"operator": "in", "value": ["update", "delete"]},
+                },
+                "resource_conditions": {
+                    "risk_score": {"operator": "gte", "value": 80},
+                },
+                "subject_conditions": {
+                    "is_staff": {"operator": "eq", "value": False},
+                },
+                "combine_conditions": "all",
+            },
+            {
+                "name": "order_assignee_can_modify",
+                "description": "Assigned users can update and delete their orders.",
+                "effect": "allow",
+                "priority": 80,
+                "action_conditions": {
+                    "type": {"operator": "in", "value": ["update", "delete"]},
+                },
+                "subject_conditions": {
+                    "user_id": {"operator": "eq", "target": "resource.assigned_to_id"},
+                },
+            },
+        ]
 
     def __str__(self) -> str:
         return str(self.order_number)

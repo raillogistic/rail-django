@@ -286,6 +286,7 @@ def _normalize_meta_config(
 
     _resolve_callable_map(normalized.get("custom_filters"), meta_path)
     _resolve_callable_map(normalized.get("custom_resolvers"), meta_path)
+    _resolve_abac_policies(normalized.get("abac_policies"), meta_path)
 
     return normalized
 
@@ -303,6 +304,31 @@ def _resolve_condition(candidate: object, meta_path: Path) -> None:
     if "condition" not in candidate:
         return
     candidate["condition"] = _resolve_callable(candidate.get("condition"), meta_path)
+
+
+def _resolve_abac_policies(candidate: object, meta_path: Path) -> None:
+    if not isinstance(candidate, list):
+        return
+    sections = (
+        "subject_conditions",
+        "resource_conditions",
+        "environment_conditions",
+        "action_conditions",
+    )
+    for policy in candidate:
+        if not isinstance(policy, dict):
+            continue
+        for section in sections:
+            conditions = policy.get(section)
+            if not isinstance(conditions, dict):
+                continue
+            for value in conditions.values():
+                if not isinstance(value, dict):
+                    continue
+                if "custom_func" in value:
+                    value["custom_func"] = _resolve_callable(
+                        value.get("custom_func"), meta_path
+                    )
 
 
 def _resolve_callable(value: object, meta_path: Path) -> object:

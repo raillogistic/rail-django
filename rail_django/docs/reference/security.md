@@ -53,6 +53,34 @@ GraphQLMeta access guards per model.
 Use GraphQLMeta to guard operations per model and to hide fields. See the
 [GraphQLMeta guide](meta.md) for configuration examples and field-level rules.
 
+### ABAC and hybrid authorization
+
+RBAC can be combined with ABAC through the hybrid permission engine.
+Enable and tune this behavior with `security_settings`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_abac": True,
+        "hybrid_strategy": "rbac_then_abac",
+        "abac_default_effect": "deny",
+        "abac_cache_ttl_seconds": 60,
+        "abac_audit_decisions": False,
+    }
+}
+```
+
+Available `hybrid_strategy` values:
+
+- `rbac_and_abac`
+- `rbac_or_abac`
+- `abac_override`
+- `rbac_then_abac`
+- `most_restrictive`
+
+You can define model-scoped ABAC policies in `GraphQLMeta.abac_policies`.
+See [ABAC system](../library/security/abac.md) for full examples.
+
 ### Role definitions in `meta.yaml`
 
 Place a `meta.yaml` file in the root of a Django app and define roles under

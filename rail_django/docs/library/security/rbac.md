@@ -400,6 +400,30 @@ Audit events include:
 - Result (allow/deny)
 - Context (model, instance, operation)
 
+## ABAC integration
+
+RBAC can run with ABAC as a hybrid system. When ABAC is enabled, RBAC results
+are combined with ABAC policy results by strategy.
+
+Configure hybrid behavior in `security_settings`:
+
+```python
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        "enable_abac": True,
+        "hybrid_strategy": "rbac_then_abac",
+    }
+}
+```
+
+When ABAC is enabled, permission explanations include hybrid metadata:
+
+- `rbac_allowed`
+- `abac_allowed`
+- `abac_reason`
+- `abac_policy`
+- `hybrid_strategy`
+
 ## API Reference
 
 ### RoleDefinition

@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from django.db import models
 
+from rail_django.config_proxy import get_setting
+
 from .types import PermissionContext, PermissionExplanation, PolicyDecisionDetail
 
 if TYPE_CHECKING:
@@ -412,6 +414,14 @@ class PermissionEvaluationMixin:
                 "priority": explanation.policy_decision.priority,
                 "reason": explanation.policy_decision.reason,
             }
+        if explanation.hybrid_strategy:
+            additional_data["hybrid"] = {
+                "strategy": explanation.hybrid_strategy,
+                "rbac_allowed": explanation.rbac_allowed,
+                "abac_allowed": explanation.abac_allowed,
+                "abac_reason": explanation.abac_reason,
+                "abac_policy": explanation.abac_policy,
+            }
 
         event_type = (
             EventType.AUTHZ_PERMISSION_GRANTED
@@ -433,6 +443,93 @@ class PermissionEvaluationMixin:
 
     # --- Public API ---
 
+    def _get_schema_name_from_context(
+        self, context: Optional[PermissionContext]
+    ) -> Optional[str]:
+        if context is None or not isinstance(context.additional_context, dict):
+            return None
+        request = context.additional_context.get("request") or context.additional_context.get(
+            "context"
+        )
+        if request is None:
+            return None
+        schema_name = getattr(request, "schema_name", None)
+        return str(schema_name) if schema_name else None
+
+    def _is_hybrid_enabled(self, context: Optional[PermissionContext] = None) -> bool:
+        schema_name = self._get_schema_name_from_context(context)
+        return bool(
+            get_setting("security_settings.enable_abac", False, schema_name=schema_name)
+        )
+
+    def has_permission_rbac_only(
+        self,
+        user: "AbstractUser",
+        permission: str,
+        context: PermissionContext = None,
+    ) -> bool:
+        """Evaluate permission using RBAC+policy only (no ABAC combination)."""
+        allowed, _ = self._evaluate_permission(
+            user, permission, context, include_explanation=False
+        )
+        return allowed
+
+    def _apply_hybrid_decision(
+        self,
+        *,
+        user: "AbstractUser",
+        permission: str,
+        context: Optional[PermissionContext],
+        rbac_allowed: bool,
+        explanation: Optional[PermissionExplanation],
+    ) -> tuple[bool, Optional[PermissionExplanation]]:
+        if explanation is not None and explanation.policy_decision is not None:
+            explanation.rbac_allowed = rbac_allowed
+            explanation.abac_allowed = None
+            explanation.hybrid_strategy = "policy_override"
+            return rbac_allowed, explanation
+
+        try:
+            from ..hybrid import hybrid_engine
+        except Exception:
+            return rbac_allowed, explanation
+
+        request = None
+        if context and isinstance(context.additional_context, dict):
+            request = context.additional_context.get(
+                "request"
+            ) or context.additional_context.get("context")
+
+        decision = hybrid_engine.has_permission(
+            user,
+            permission,
+            context=context,
+            request=request,
+            rbac_decision=rbac_allowed,
+            schema_name=self._get_schema_name_from_context(context),
+        )
+        allowed = decision.allowed
+
+        if explanation is not None:
+            explanation.allowed = allowed
+            explanation.rbac_allowed = decision.rbac_allowed
+            explanation.abac_allowed = decision.abac_allowed
+            explanation.hybrid_strategy = (
+                decision.strategy.value if decision.strategy is not None else None
+            )
+            if decision.abac_decision is not None:
+                explanation.abac_reason = decision.abac_decision.reason
+                if decision.abac_decision.matched_policy is not None:
+                    explanation.abac_policy = decision.abac_decision.matched_policy.name
+            if explanation.reason is None or explanation.reason in {
+                "permission_granted",
+                "permission_missing",
+                "context_allowed",
+            }:
+                explanation.reason = decision.reason
+
+        return allowed, explanation
+
     def has_permission(
         self,
         user: "AbstractUser",
@@ -451,9 +548,21 @@ class PermissionEvaluationMixin:
             if cached is not None:
                 return cached
 
+        hybrid_enabled = self._is_hybrid_enabled(context)
         allowed, explanation = self._evaluate_permission(
-            user, permission, context, include_explanation=audit_enabled
+            user,
+            permission,
+            context,
+            include_explanation=(audit_enabled or hybrid_enabled),
         )
+        if hybrid_enabled:
+            allowed, explanation = self._apply_hybrid_decision(
+                user=user,
+                permission=permission,
+                context=context,
+                rbac_allowed=allowed,
+                explanation=explanation,
+            )
 
         if cache_key:
             self._set_cached_permission(cache_key, allowed)
@@ -473,6 +582,14 @@ class PermissionEvaluationMixin:
         allowed, explanation = self._evaluate_permission(
             user, permission, context, include_explanation=True
         )
+        if self._is_hybrid_enabled(context):
+            allowed, explanation = self._apply_hybrid_decision(
+                user=user,
+                permission=permission,
+                context=context,
+                rbac_allowed=allowed,
+                explanation=explanation,
+            )
         if explanation is None:
             explanation = PermissionExplanation(permission=permission, allowed=allowed)
         return explanation

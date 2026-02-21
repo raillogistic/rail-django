@@ -109,3 +109,55 @@ class OperationGuardStep(MutationStep):
             ctx.add_error(str(e))
 
         return ctx
+
+
+class ABACPermissionStep(MutationStep):
+    """
+    Hybrid RBAC+ABAC permission check in the mutation pipeline.
+
+    This step is a no-op when ABAC is disabled in security settings.
+    """
+
+    order = 27
+    name = "abac_permission"
+
+    def execute(self, ctx: MutationContext) -> MutationContext:
+        from rail_django.config_proxy import get_setting
+
+        if not bool(get_setting("security_settings.enable_abac", False)):
+            return ctx
+
+        user = ctx.user
+        if user is None:
+            return ctx
+
+        try:
+            from rail_django.security.hybrid import hybrid_engine
+            from rail_django.security.rbac import PermissionContext
+        except Exception:
+            return ctx
+
+        permission = ctx.get_permission_codename()
+        perm_context = PermissionContext(
+            user=user,
+            object_instance=ctx.instance,
+            model_class=ctx.model,
+            operation=ctx.operation,
+            additional_context={"request": ctx.request},
+        )
+
+        decision = hybrid_engine.has_permission(
+            user,
+            permission,
+            context=perm_context,
+            instance=ctx.instance,
+            request=ctx.request,
+            info=ctx.info,
+        )
+        if not decision.allowed:
+            ctx.add_error(
+                f"Access denied by hybrid RBAC+ABAC policy: {decision.reason}",
+                code="PERMISSION_DENIED",
+            )
+
+        return ctx

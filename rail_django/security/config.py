@@ -12,6 +12,8 @@ from typing import Any, Dict, List
 
 from django.conf import settings
 
+from rail_django.config_proxy import get_setting
+
 
 class SecurityConfig:
     """
@@ -126,6 +128,48 @@ class SecurityConfig:
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
             "Content-Security-Policy": "default-src 'self'",
             "Referrer-Policy": "strict-origin-when-cross-origin",
+        }
+
+    @staticmethod
+    def get_abac_config() -> dict[str, Any]:
+        """
+        Retourne la configuration ABAC/hybride.
+
+        Priorite:
+        1. RAIL_DJANGO_GRAPHQL.security_settings via get_setting
+        2. Variables Django historiques ABAC_*
+        """
+        return {
+            "enabled": bool(
+                get_setting(
+                    "security_settings.enable_abac",
+                    getattr(settings, "ABAC_ENABLED", False),
+                )
+            ),
+            "hybrid_strategy": str(
+                get_setting(
+                    "security_settings.hybrid_strategy",
+                    getattr(settings, "ABAC_HYBRID_STRATEGY", "rbac_then_abac"),
+                )
+            ),
+            "cache_ttl_seconds": int(
+                get_setting(
+                    "security_settings.abac_cache_ttl_seconds",
+                    getattr(settings, "ABAC_CACHE_TTL", 60),
+                )
+            ),
+            "audit_decisions": bool(
+                get_setting(
+                    "security_settings.abac_audit_decisions",
+                    getattr(settings, "ABAC_AUDIT_DECISIONS", False),
+                )
+            ),
+            "default_effect": str(
+                get_setting(
+                    "security_settings.abac_default_effect",
+                    getattr(settings, "ABAC_DEFAULT_EFFECT", "deny"),
+                )
+            ),
         }
 
     @staticmethod

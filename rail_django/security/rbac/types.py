@@ -90,6 +90,11 @@ class PermissionExplanation:
     context_required: bool = False
     context_allowed: Optional[bool] = None
     context_reason: Optional[str] = None
+    rbac_allowed: Optional[bool] = None
+    abac_allowed: Optional[bool] = None
+    abac_reason: Optional[str] = None
+    abac_policy: Optional[str] = None
+    hybrid_strategy: Optional[str] = None
 
 
 __all__ = [
