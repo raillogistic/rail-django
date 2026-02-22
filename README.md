@@ -9,7 +9,7 @@ security, performance, and operations tooling for production APIs.
 Install from PyPI:
 
 ```bash
-pip install rail-django
+pip install git+https://github.com/raillogistic/rail-django.git
 ```
 
 ## Quickstart
