@@ -1,6 +1,7 @@
 name: Tag and Release
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -58,13 +59,11 @@ jobs:
           git push origin "$TAG"
 
       - name: Build release artifacts
-        if: steps.tag_exists.outputs.exists == 'false'
         run: |
           python -m pip install --upgrade pip build
           python -m build
 
-      - name: Create GitHub Release
-        if: steps.tag_exists.outputs.exists == 'false'
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.value }}
