@@ -24,16 +24,25 @@ nano .env
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
+- `RAIL_ENABLE_PROD_GRAPHIQL=False`: Keep GraphiQL disabled by default in production.
+- `RAIL_ENABLE_PROD_INTROSPECTION=False`: Keep introspection disabled by default in production.
 
 **Optional runtime toggles:**
-- `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Disable if you prefer to run these manually.
+- `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Default to `False` in the scaffold because `deploy.sh` runs these steps. Set to `True` only if you explicitly want startup-time execution.
 - `DJANGO_CHECK_DEPLOY`: Run `python manage.py check --deploy` on container start.
 - `MEDIA_PATH`: Host path for uploads (absolute or relative to `deploy/docker/`).
 
 **Optional deploy controls:**
 - `DEPLOY_REFRESH_DEPS`: Force base dependency rebuild during deploy (useful when `requirements/base.txt` changes).
 
-**Optional Gunicorn tuning:**
+**Runtime server defaults (ASGI):**
+- `DJANGO_SERVER_MODE=asgi`
+- `DJANGO_ASGI_MODULE=root.asgi:application`
+- `ASGI_BIND=0.0.0.0`
+- `ASGI_PORT=8000`
+
+**Optional WSGI fallback (Gunicorn):**
+- Set `DJANGO_SERVER_MODE=wsgi`
 - `GUNICORN_WORKERS`, `GUNICORN_THREADS`
 - `GUNICORN_TIMEOUT`, `GUNICORN_GRACEFUL_TIMEOUT`, `GUNICORN_KEEPALIVE`
 - `GUNICORN_MAX_REQUESTS`, `GUNICORN_MAX_REQUESTS_JITTER`
@@ -49,6 +58,7 @@ bash deploy/deploy.sh
 
 The script validates `.env` (creates it from `.env.example` if missing), ensures TLS
 certs exist, builds/starts containers, and runs migrations + collectstatic.
+This is the default owner for migration/static orchestration in the scaffold.
 
 ### Optional Flags
 ```bash
@@ -95,6 +105,8 @@ This will build the Python image and start the Web, Nginx, and Backup containers
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
+The default web runtime is ASGI, so GraphQL subscriptions are available without
+extra runtime changes.
 
 ### B. Run Migrations
 Apply database schema changes to your external database:
@@ -150,6 +162,17 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
 need to rebuild base dependencies. The `rail-django` Git install is refreshed
 on every build.
+
+### Production GraphiQL policy
+GraphiQL and introspection are disabled by default in production templates.
+If you need temporary internal access, set:
+
+```bash
+RAIL_ENABLE_PROD_GRAPHIQL=True
+RAIL_ENABLE_PROD_INTROSPECTION=True
+```
+
+GraphiQL remains restricted to superusers from loopback hosts.
 
 ## 6. Security Recommendations
 

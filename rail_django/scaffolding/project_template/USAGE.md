@@ -115,8 +115,9 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     python manage.py runserver
     ```
     Access GraphiQL at: `http://localhost:8000/graphql/`. In production,
-    GraphiQL is superuser-only; log in and use the auth cookies set by the
-    `login` mutation for requests.
+    GraphiQL and introspection are disabled by default. Enable them explicitly
+    with `RAIL_ENABLE_PROD_GRAPHIQL=True` and
+    `RAIL_ENABLE_PROD_INTROSPECTION=True` when needed for internal debugging.
 
 ### Dependency Management
 
@@ -1751,6 +1752,8 @@ Ensure these are set in production (see `.env.example`):
 - `DATABASE_URL`: Connection string for PostgreSQL.
 - `CACHE_PATH`: Path for the shared cache backend (file-based).
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
+- `RAIL_ENABLE_PROD_GRAPHIQL=False`: Keep GraphiQL disabled by default.
+- `RAIL_ENABLE_PROD_INTROSPECTION=False`: Keep introspection disabled by default.
 - Optional: `JWT_ALLOW_COOKIE_AUTH`, `JWT_ENFORCE_CSRF` (if using cookie auth).
 - Optional: `GRAPHQL_PERFORMANCE_ENABLED` (enable request metrics).
 - Optional: `EXPORT_MAX_ROWS`, `EXPORT_STREAM_CSV` (if wiring export guardrails).
@@ -1811,6 +1814,8 @@ nano .env
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
+- `RAIL_ENABLE_PROD_GRAPHIQL=False`
+- `RAIL_ENABLE_PROD_INTROSPECTION=False`
 - Optional: `DEPLOY_REFRESH_DEPS` (force dependency rebuild on deploy).
 
 ### 2. Deployment Steps
@@ -1824,6 +1829,8 @@ This will build the Python image and start the Web, Nginx, and Backup containers
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
+The default web runtime is ASGI, so GraphQL subscriptions are available
+without switching servers.
 
 #### B. Run Migrations
 
@@ -1881,6 +1888,18 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
 need to rebuild base dependencies. The `rail-django` Git install is refreshed
 on every build.
+
+### Production GraphiQL policy
+
+In scaffolded production settings, GraphiQL and introspection stay disabled
+unless you explicitly enable both:
+
+```bash
+RAIL_ENABLE_PROD_GRAPHIQL=True
+RAIL_ENABLE_PROD_INTROSPECTION=True
+```
+
+GraphiQL remains restricted to superusers from loopback hosts.
 
 ### 5. Security Recommendations
 

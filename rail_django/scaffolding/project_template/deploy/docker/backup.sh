@@ -12,17 +12,24 @@ fi
 
 while true; do
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    FILENAME="/backups/backup_${TIMESTAMP}.sql.gz"
+    RAW_FILE="/backups/backup_${TIMESTAMP}.sql"
+    FILENAME="${RAW_FILE}.gz"
 
     echo "[$TIMESTAMP] Starting backup..."
 
-    if pg_dump --dbname="$DATABASE_URL" | gzip > "$FILENAME"; then
-        echo "[$TIMESTAMP] Backup successful: $FILENAME"
-        
-        # Optional: Delete backups older than 30 days
-        find /backups -name "backup_*.sql.gz" -mtime +30 -delete
+    if pg_dump --dbname="$DATABASE_URL" > "$RAW_FILE"; then
+        if gzip -f "$RAW_FILE"; then
+            echo "[$TIMESTAMP] Backup successful: $FILENAME"
+
+            # Optional: Delete backups older than 30 days
+            find /backups -name "backup_*.sql.gz" -mtime +30 -delete
+        else
+            echo "[$TIMESTAMP] Backup FAILED during compression."
+            rm -f "$RAW_FILE" "$FILENAME"
+        fi
     else
-        echo "[$TIMESTAMP] Backup FAILED!"
+        echo "[$TIMESTAMP] Backup FAILED during pg_dump."
+        rm -f "$RAW_FILE" "$FILENAME"
     fi
 
     # Wait for the next interval (convert hours to seconds)

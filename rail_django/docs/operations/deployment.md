@@ -21,6 +21,9 @@ Override the default settings for your production environment:
 ```python
 # settings/production.py
 
+ENABLE_PROD_GRAPHIQL = env.bool("RAIL_ENABLE_PROD_GRAPHIQL", default=False)
+ENABLE_PROD_INTROSPECTION = env.bool("RAIL_ENABLE_PROD_INTROSPECTION", default=False)
+
 RAIL_DJANGO_GRAPHQL = {
     "schema_settings": {
         "enable_introspection": False, # Prevent schema discovery
@@ -36,17 +39,22 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
+Use `RAIL_ENABLE_PROD_GRAPHIQL=True` and
+`RAIL_ENABLE_PROD_INTROSPECTION=True` only for temporary internal debugging.
+Keep both values `False` for normal production operation.
+
 ## Infrastructure Components
 
-### Web Server (Gunicorn/Uvicorn)
-For standard GraphQL (WSGI), use Gunicorn with multiple workers:
-```bash
-gunicorn my_project.wsgi:application --workers 4 --threads 2 --bind 0.0.0.0:8000
-```
-
-If using **Subscriptions** (ASGI), use Uvicorn or Daphne:
+### Web server (ASGI default)
+Use an ASGI server by default so GraphQL subscriptions and websockets work in
+the same runtime:
 ```bash
 uvicorn my_project.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+```
+
+If you only need WSGI behavior, you can still run Gunicorn:
+```bash
+gunicorn my_project.wsgi:application --workers 4 --threads 2 --bind 0.0.0.0:8000
 ```
 
 ### Reverse Proxy (Nginx)

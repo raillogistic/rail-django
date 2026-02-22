@@ -14,30 +14,37 @@ ALLOWED_HOSTS = env.list(
     default=env.list('ALLOWED_HOSTS', default=[]),
 )
 
+ENABLE_PROD_GRAPHIQL = env.bool('RAIL_ENABLE_PROD_GRAPHIQL', default=False)
+ENABLE_PROD_INTROSPECTION = env.bool('RAIL_ENABLE_PROD_INTROSPECTION', default=False)
+
 # Prebuild schemas on startup in production to avoid first-request latency.
 if "RAIL_DJANGO_GRAPHQL" in globals():
     RAIL_DJANGO_GRAPHQL.setdefault("schema_settings", {})
     RAIL_DJANGO_GRAPHQL["schema_settings"]["prebuild_on_startup"] = True
+    RAIL_DJANGO_GRAPHQL["schema_settings"]["enable_graphiql"] = False
+    RAIL_DJANGO_GRAPHQL["schema_settings"]["enable_introspection"] = False
 
 if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
     for schema_config in RAIL_DJANGO_GRAPHQL_SCHEMAS.values():
         schema_config.setdefault("schema_settings", {})
         schema_config["schema_settings"]["prebuild_on_startup"] = True
+        schema_config["schema_settings"]["enable_graphiql"] = False
+        schema_config["schema_settings"]["enable_introspection"] = False
 
-# Allow GraphiQL for superusers from loopback hosts only in production.
-if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
-    RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
-        "schema_settings", {}
-    )
-    RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
-        {
-            "enable_graphiql": True,
-            "enable_introspection": True,
-            "authentication_required": True,
-            "graphiql_superuser_only": True,
-            "graphiql_allowed_hosts": ["localhost", "127.0.0.1", "::1"],
-        }
-    )
+    # Optional production GraphiQL: superusers from loopback hosts only.
+    if ENABLE_PROD_GRAPHIQL or ENABLE_PROD_INTROSPECTION:
+        RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
+            "schema_settings", {}
+        )
+        RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
+            {
+                "enable_graphiql": ENABLE_PROD_GRAPHIQL,
+                "enable_introspection": ENABLE_PROD_INTROSPECTION,
+                "authentication_required": True,
+                "graphiql_superuser_only": True,
+                "graphiql_allowed_hosts": ["localhost", "127.0.0.1", "::1"],
+            }
+        )
 
 # Database performance: Keep connections alive for 10 minutes
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)
@@ -76,22 +83,21 @@ CSRF_COOKIE_SAMESITE = 'Strict'
 
 # Ajouter ces middlewares à votre MIDDLEWARE existant
 SECURITY_MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'rail_django.middleware.GraphQLAuthenticationMiddleware',
-    'rail_django.middleware.GraphQLRateLimitMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "rail_django.middleware.auth.GraphQLAuthenticationMiddleware",
+    "rail_django.middleware.auth.GraphQLRateLimitMiddleware",
 ]
 
-# Fusionner avec les middlewares existants s'ils ne sont pas déjà présents
-# Note: Ceci est une approximation, vous devrez peut-être ajuster l'ordre manuellement
-for mw in reversed(SECURITY_MIDDLEWARE):
-    if mw not in MIDDLEWARE:
-        MIDDLEWARE.insert(0, mw)
+_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"
+if _auth_middleware in MIDDLEWARE:
+    _insert_at = MIDDLEWARE.index(_auth_middleware) + 1
+else:
+    _insert_at = len(MIDDLEWARE)
+
+for mw in SECURITY_MIDDLEWARE:
+    if mw in MIDDLEWARE:
+        continue
+    MIDDLEWARE.insert(_insert_at, mw)
+    _insert_at += 1
 
 # =============================================================================
 # CONFIGURATION GRAPHQL SÉCURISÉE

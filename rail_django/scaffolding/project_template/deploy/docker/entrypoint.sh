@@ -99,34 +99,48 @@ if is_truthy "${DJANGO_CHECK_DEPLOY:-false}"; then
 fi
 
 echo "Starting server..."
-# Optimization:
-# - workers: Automatic based on CPU (usually 2*cores + 1) or configurable
-# - threads: 4 threads per worker handles I/O waiting better than sync workers
-# - preload: Loads code once before forking, saving RAM and starting faster
-# - worker-class: gthread enables threading
-WORKERS=${GUNICORN_WORKERS:-3}
-THREADS=${GUNICORN_THREADS:-4}
-TIMEOUT=${GUNICORN_TIMEOUT:-30}
-GRACEFUL_TIMEOUT=${GUNICORN_GRACEFUL_TIMEOUT:-30}
-KEEPALIVE=${GUNICORN_KEEPALIVE:-2}
-MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
-MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-100}
-ACCESS_LOG=${GUNICORN_ACCESS_LOG:--}
-ERROR_LOG=${GUNICORN_ERROR_LOG:--}
-LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
-WSGI_MODULE=${DJANGO_WSGI_MODULE:-root.wsgi:application}
+SERVER_MODE=${DJANGO_SERVER_MODE:-asgi}
 
-exec gunicorn "$WSGI_MODULE" \
-    --bind 0.0.0.0:8000 \
-    --workers $WORKERS \
-    --threads $THREADS \
-    --worker-class gthread \
-    --timeout $TIMEOUT \
-    --graceful-timeout $GRACEFUL_TIMEOUT \
-    --keep-alive $KEEPALIVE \
-    --max-requests $MAX_REQUESTS \
-    --max-requests-jitter $MAX_REQUESTS_JITTER \
-    --access-logfile "$ACCESS_LOG" \
-    --error-logfile "$ERROR_LOG" \
-    --log-level "$LOG_LEVEL" \
-    --preload
+if [ "$SERVER_MODE" = "wsgi" ]; then
+    echo "Starting WSGI server (gunicorn)..."
+    WORKERS=${GUNICORN_WORKERS:-3}
+    THREADS=${GUNICORN_THREADS:-4}
+    TIMEOUT=${GUNICORN_TIMEOUT:-30}
+    GRACEFUL_TIMEOUT=${GUNICORN_GRACEFUL_TIMEOUT:-30}
+    KEEPALIVE=${GUNICORN_KEEPALIVE:-2}
+    MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
+    MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-100}
+    ACCESS_LOG=${GUNICORN_ACCESS_LOG:--}
+    ERROR_LOG=${GUNICORN_ERROR_LOG:--}
+    LOG_LEVEL=${GUNICORN_LOG_LEVEL:-info}
+    BIND_HOST=${ASGI_BIND:-0.0.0.0}
+    BIND_PORT=${ASGI_PORT:-8000}
+    WSGI_MODULE=${DJANGO_WSGI_MODULE:-root.wsgi:application}
+
+    exec gunicorn "$WSGI_MODULE" \
+        --bind "${BIND_HOST}:${BIND_PORT}" \
+        --workers $WORKERS \
+        --threads $THREADS \
+        --worker-class gthread \
+        --timeout $TIMEOUT \
+        --graceful-timeout $GRACEFUL_TIMEOUT \
+        --keep-alive $KEEPALIVE \
+        --max-requests $MAX_REQUESTS \
+        --max-requests-jitter $MAX_REQUESTS_JITTER \
+        --access-logfile "$ACCESS_LOG" \
+        --error-logfile "$ERROR_LOG" \
+        --log-level "$LOG_LEVEL" \
+        --preload
+fi
+
+echo "Starting ASGI server (daphne)..."
+ASGI_BIND=${ASGI_BIND:-0.0.0.0}
+ASGI_PORT=${ASGI_PORT:-8000}
+ASGI_MODULE=${DJANGO_ASGI_MODULE:-root.asgi:application}
+ASGI_VERBOSITY=${ASGI_VERBOSITY:-1}
+
+exec daphne \
+    -b "$ASGI_BIND" \
+    -p "$ASGI_PORT" \
+    -v "$ASGI_VERBOSITY" \
+    "$ASGI_MODULE"

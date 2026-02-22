@@ -2,9 +2,8 @@
 Unit tests for rail_admin CLI tool.
 """
 
-import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from rail_django.bin.rail_admin import main
 
@@ -23,7 +22,6 @@ class TestRailAdmin:
             assert "startproject" in argv
             assert "myproject" in argv
             assert any(arg.startswith("--template=") for arg in argv)
-            assert any(arg.startswith("--extension=") for arg in argv)
             
             # Verify template path points to rail_django/scaffolding/project_template
             template_arg = next(arg for arg in argv if arg.startswith("--template="))
@@ -60,7 +58,8 @@ class TestRailAdmin:
     @patch("os.path.exists")
     @patch("os.rename")
     @patch("os.remove")
-    def test_post_processing_renames_templates(self, mock_remove, mock_rename, mock_exists, mock_walk, mock_execute):
+    @patch("rail_django.bin.rail_admin._is_scaffold_destination", return_value=True)
+    def test_post_processing_renames_templates(self, mock_scaffold_check, mock_remove, mock_rename, mock_exists, mock_walk, mock_execute):
         """Test that post-processing renames .tpl files."""
         # Setup mocks
         mock_exists.return_value = True
@@ -70,9 +69,18 @@ class TestRailAdmin:
         
         # Scenario: Clean target files don't exist yet
         def exists_side_effect(path):
-            if path.endswith("-tpl"): return True # Tpl exists
-            if path == "/path/to/project": return True # Project dir exists
-            return False # Target file doesn't exist
+            if path.endswith("-tpl"):
+                return True
+            if path == "/path/to/project":
+                return True
+            if path in {
+                "/path/to/project/manage.py",
+                "/path/to/project/root",
+                "/path/to/project/apps",
+                "/path/to/project/deploy",
+            }:
+                return True
+            return False
         
         mock_exists.side_effect = exists_side_effect
 
@@ -98,7 +106,8 @@ class TestRailAdmin:
     @patch("os.walk")
     @patch("os.path.exists")
     @patch("os.remove")
-    def test_post_processing_cleans_duplicates(self, mock_remove, mock_exists, mock_walk, mock_execute):
+    @patch("rail_django.bin.rail_admin._is_scaffold_destination", return_value=True)
+    def test_post_processing_cleans_duplicates(self, mock_scaffold_check, mock_remove, mock_exists, mock_walk, mock_execute):
         """Test that .tpl files are removed if target already exists."""
         # Setup mocks
         mock_exists.return_value = True
@@ -107,7 +116,7 @@ class TestRailAdmin:
         ]
         
         # Scenario: Both files exist
-        mock_exists.side_effect = lambda path: True 
+        mock_exists.side_effect = lambda path: True
 
         with patch.object(sys, "argv", ["rail-admin", "startproject", "myproject"]):
             main()
