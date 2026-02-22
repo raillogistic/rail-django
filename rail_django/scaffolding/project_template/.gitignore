@@ -1,0 +1,10 @@
+# Environment secrets
+.env
+
+# Runtime logs
+logs/
+*.log
+
+# Generated TLS certs/keys for nginx (created by deploy.sh when missing)
+deploy/nginx/certs/*.crt
+deploy/nginx/certs/*.key

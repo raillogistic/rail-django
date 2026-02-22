@@ -128,6 +128,13 @@ docker-compose -f deploy/docker/docker-compose.yml logs -f
 Log files are also written to `/home/app/web/logs` inside the container. If you
 set `LOG_PATH`, read them directly on the host.
 
+### Health Endpoints
+Use these endpoints for orchestrator probes and diagnostics:
+- Liveness: `/health/live/` (alias of `/health/check/`)
+- Readiness: `/health/ready/` (alias of `/health/check/`)
+- Metrics: `/health/metrics/`
+- Components: `/health/components/`
+
 ### Stopping the Application
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml down
@@ -153,7 +160,7 @@ on every build.
     ufw allow ssh
     ufw enable
     ```
-3.  **Secrets**: Never commit your `.env` file to version control.
+3.  **Secrets**: Never commit your `.env` file, TLS private keys, or TLS certificates to version control.
 4.  **Updates**: Keep the VM OS updated (`apt update && apt upgrade`).
 
 ## 7. Setup HTTPS (Internal Network / Enterprise)
@@ -167,6 +174,8 @@ You have two options:
 Ask your IT/Security team for the SSL certificate for your internal domain (e.g., `app.corp.local`). Place the files here:
 - `deploy/nginx/certs/server.crt`
 - `deploy/nginx/certs/server.key`
+If any previous key material was committed or shared, rotate it immediately and
+treat prior copies as compromised.
 
 **Option B: Self-Signed Certificate (For Testing)**
 If you don't have an official cert, generate a self-signed one:

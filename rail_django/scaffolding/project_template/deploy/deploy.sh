@@ -68,6 +68,23 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+ensure_tls_not_tracked() {
+  if ! command -v git >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local rel_cert="${CERT_CRT#$PROJECT_ROOT/}"
+  local rel_key="${CERT_KEY#$PROJECT_ROOT/}"
+
+  if git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$rel_cert" >/dev/null 2>&1 \
+    || git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$rel_key" >/dev/null 2>&1; then
+    die "TLS cert/key must not be tracked by git. Remove deploy/nginx/certs/server.{crt,key} from version control."
+  fi
+}
+
 ensure_dir() {
   local path="$1"
   if [ -d "$path" ]; then
@@ -120,6 +137,8 @@ if [ ! -f "$ENV_FILE" ]; then
   fi
   die ".env not found and .env.example missing."
 fi
+
+ensure_tls_not_tracked
 
 missing=()
 for key in DJANGO_SECRET_KEY DATABASE_URL DJANGO_ALLOWED_HOSTS; do

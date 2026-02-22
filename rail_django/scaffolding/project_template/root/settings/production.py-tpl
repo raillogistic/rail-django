@@ -24,7 +24,7 @@ if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
         schema_config.setdefault("schema_settings", {})
         schema_config["schema_settings"]["prebuild_on_startup"] = True
 
-# Allow GraphiQL on localhost only for superusers in production.
+# Allow GraphiQL for superusers from loopback hosts only in production.
 if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
     RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
         "schema_settings", {}
@@ -35,7 +35,7 @@ if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
             "enable_introspection": True,
             "authentication_required": True,
             "graphiql_superuser_only": True,
-            "graphiql_allowed_hosts": [],
+            "graphiql_allowed_hosts": ["localhost", "127.0.0.1", "::1"],
         }
     )
 

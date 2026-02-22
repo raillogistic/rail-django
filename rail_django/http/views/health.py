@@ -425,6 +425,8 @@ def get_health_urls():
         path("health/", HealthDashboardView.as_view(), name="health_dashboard"),
         path("health/api/", HealthAPIView.as_view(), name="health_api"),
         path("health/check/", health_check_endpoint, name="health_check"),
+        path("health/live/", health_check_endpoint, name="health_live"),
+        path("health/ready/", health_check_endpoint, name="health_ready"),
         path("health/metrics/", health_metrics_endpoint, name="health_metrics"),
         path(
             "health/components/", health_components_endpoint, name="health_components"
