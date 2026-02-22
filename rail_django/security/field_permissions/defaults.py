@@ -36,7 +36,14 @@ DEFAULT_CLASSIFICATION_PATTERNS: dict[str, Set[str]] = {
 }
 
 # Financial field names that require restricted access
-FINANCIAL_FIELDS: list[str] = []
+FINANCIAL_FIELDS: list[str] = [
+    "salary",
+    "wage",
+    "income",
+    "revenue",
+    "cost",
+    "price",
+]
 
 
 def setup_default_rules(manager: "FieldPermissionManager") -> None:
