@@ -1,6 +1,7 @@
 
 from django.db import models
 from django.test import TestCase
+from django.core.cache import cache
 import unittest.mock
 from unittest.mock import MagicMock
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
@@ -15,6 +16,7 @@ class FieldNameTestModel(models.Model):
 
 class TestMetadataFieldNames(TestCase):
     def setUp(self):
+        cache.clear()
         self.extractor = ModelSchemaExtractor()
         self.user = MagicMock()
 
