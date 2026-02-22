@@ -102,6 +102,27 @@ def test_deploy_script_runs_schema_tasks_before_up() -> None:
     assert text.index(collectstatic_cmd) < text.index(up_cmd)
 
 
+def test_deploy_script_validates_runtime_storage_before_schema_tasks() -> None:
+    text = _project_template_file("deploy", "deploy.sh")
+
+    validation_step = 'note "Validating runtime storage permissions..."'
+    migrate_cmd = 'run --rm --entrypoint python web manage.py migrate'
+
+    assert "ensure_runtime_mount_writable" in text
+    assert "/home/app/web/mediafiles" in text
+    assert "/home/app/web/logs" in text
+    assert "/home/app/web/cache" in text
+    assert validation_step in text
+    assert text.index(validation_step) < text.index(migrate_cmd)
+
+
+def test_deploy_script_waits_for_http_readiness_probe() -> None:
+    text = _project_template_file("deploy", "deploy.sh")
+
+    assert "http://127.0.0.1:8000/health/ready/" in text
+    assert "print('ready')" not in text
+
+
 def test_deploy_script_non_interactive_superuser_is_idempotent() -> None:
     text = _project_template_file("deploy", "deploy.sh")
 

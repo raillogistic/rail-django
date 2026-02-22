@@ -96,6 +96,22 @@ ensure_dir() {
   mkdir -p "$path"
 }
 
+ensure_runtime_mount_writable() {
+  local check_cmd='set -e; for dir in /home/app/web/mediafiles /home/app/web/logs /home/app/web/cache; do mkdir -p "$dir"; probe="$dir/.rail_write_probe"; : > "$probe"; rm -f "$probe"; done'
+  local repair_cmd='set -e; APP_UID=$(id -u app 2>/dev/null || echo 1000); APP_GID=$(id -g app 2>/dev/null || echo 1000); for dir in /home/app/web/mediafiles /home/app/web/logs /home/app/web/cache; do mkdir -p "$dir"; chown -R "$APP_UID:$APP_GID" "$dir" || true; chmod -R u+rwX,g+rwX "$dir" || true; done'
+
+  if "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint sh web -c "$check_cmd" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  warn "Runtime storage is not writable by the container user; attempting permission repair."
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint sh --user root web -c "$repair_cmd" >/dev/null 2>&1 || true
+
+  if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint sh web -c "$check_cmd" >/dev/null 2>&1; then
+    die "Runtime storage is not writable by the app user. Verify MEDIA_PATH/LOG_PATH/CACHE_PATH permissions on the host."
+  fi
+}
+
 is_truthy() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     1|true|yes|y|on) return 0 ;;
@@ -247,6 +263,9 @@ fi
 
 "${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web
 
+note "Validating runtime storage permissions..."
+ensure_runtime_mount_writable
+
 if [ "$SKIP_MIGRATE" -eq 0 ]; then
   note "Running migrations..."
   "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py migrate
@@ -260,12 +279,13 @@ fi
 note "Starting containers..."
 "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
 
-note "Waiting for web container..."
+note "Waiting for web readiness endpoint..."
 attempts=30
-until "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python -c "print('ready')" >/dev/null 2>&1; do
+readiness_cmd="import sys, urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/health/ready/', timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)"
+until "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python -c "$readiness_cmd" >/dev/null 2>&1; do
   attempts=$((attempts - 1))
   if [ "$attempts" -le 0 ]; then
-    die "Web container did not become ready."
+    die "Web readiness probe did not pass."
   fi
   sleep 1
 done

@@ -2,6 +2,7 @@
 import os
 import sys
 import shutil
+import time
 from importlib import resources
 from django.core.management import execute_from_command_line
 
@@ -42,6 +43,69 @@ def _is_scaffold_destination(path):
     return has_manage and has_layout_dir
 
 
+def _copy_docs_if_missing(destination):
+    """Copy bundled docs into the scaffolded project when absent."""
+    try:
+        docs_src = resources.files("rail_django").joinpath("docs")
+        if os.path.exists(os.fspath(docs_src)):
+            docs_dest = os.path.join(destination, "docs")
+            if not os.path.exists(docs_dest):
+                shutil.copytree(os.fspath(docs_src), docs_dest)
+    except Exception as doc_err:
+        print(f"Warning: Could not copy documentation: {doc_err}")
+
+
+def _rename_template_file(old_path, new_path, retries=5):
+    """Rename rendered template files with retries for transient file locks."""
+    for attempt in range(retries):
+        try:
+            os.rename(old_path, new_path)
+            return
+        except PermissionError:
+            if attempt >= retries - 1:
+                raise
+            time.sleep(0.1 * (attempt + 1))
+
+
+def _post_process_scaffold(destination):
+    """
+    Finalize scaffold output:
+    1) copy framework docs if missing
+    2) rename/remove template suffix files
+    """
+    _copy_docs_if_missing(destination)
+
+    failures = []
+    for root, _, files in os.walk(destination):
+        for filename in files:
+            if filename.endswith("-tpl"):
+                old_path = os.path.join(root, filename)
+                new_path = os.path.join(root, filename[:-4])  # Remove -tpl
+            elif filename.endswith(".tpl"):
+                old_path = os.path.join(root, filename)
+                new_path = os.path.join(root, filename[:-4])  # Remove .tpl
+            else:
+                continue
+
+            try:
+                if not os.path.exists(new_path):
+                    _rename_template_file(old_path, new_path)
+                else:
+                    os.remove(old_path)
+            except Exception as exc:
+                failures.append((old_path, new_path, exc))
+
+    if failures:
+        previews = [
+            f"{old} -> {new}: {err}" for old, new, err in failures[:3]
+        ]
+        remainder = len(failures) - len(previews)
+        details = "; ".join(previews)
+        if remainder > 0:
+            details = f"{details}; ... ({remainder} more)"
+        raise RuntimeError(f"Failed to finalize scaffold template files: {details}")
+
+
 def main():
     """Run administrative tasks."""
     # This entry point is for the 'rail-admin' command.
@@ -61,7 +125,11 @@ def main():
 
             # Ensure our custom template extensions are processed and renamed
             # .py-tpl -> .py and .txt-tpl -> .txt
-            if not getattr(parsed_startproject, "extensions", None):
+            user_supplied_extensions = any(
+                arg == "-e" or arg.startswith("--extension")
+                for arg in argv[2:]
+            )
+            if not user_supplied_extensions:
                 argv.append("--extension=py-tpl,txt-tpl")
 
     execute_from_command_line(argv)
@@ -85,38 +153,9 @@ def main():
                 return
 
             if os.path.exists(destination):
-                # 1. Copy documentation
-                try:
-                    docs_src = resources.files("rail_django").joinpath("docs")
-                    if os.path.exists(os.fspath(docs_src)):
-                        docs_dest = os.path.join(destination, "docs")
-                        if not os.path.exists(docs_dest):
-                            shutil.copytree(os.fspath(docs_src), docs_dest)
-                except Exception as doc_err:
-                    print(f"Warning: Could not copy documentation: {doc_err}")
-
-                # 2. Rename template files
-                for root, _, files in os.walk(destination):
-                    for filename in files:
-                        if filename.endswith("-tpl"):
-                            old_path = os.path.join(root, filename)
-                            new_path = os.path.join(root, filename[:-4])  # Remove -tpl
-
-                            if not os.path.exists(new_path):
-                                os.rename(old_path, new_path)
-                            else:
-                                os.remove(old_path)
-                        elif filename.endswith(".tpl"):
-                            # Also handle .tpl if any exist (like .py-tpl, just in case)
-                            old_path = os.path.join(root, filename)
-                            new_path = os.path.join(root, filename[:-4])  # Remove .tpl
-                            if not os.path.exists(new_path):
-                                os.rename(old_path, new_path)
-                            else:
-                                os.remove(old_path)
+                _post_process_scaffold(destination)
         except Exception as e:
-            # Don't crash the tool if cleanup fails, just warn or ignore
-            print(f"Warning: Post-processing failed: {e}")
+            raise SystemExit(f"Post-processing failed: {e}") from e
 
 
 if __name__ == "__main__":

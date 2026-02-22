@@ -5,7 +5,7 @@ Unit tests for rail_admin CLI tool.
 import sys
 from unittest.mock import patch
 import pytest
-from rail_django.bin.rail_admin import main
+from rail_django.bin.rail_admin import main, _post_process_scaffold
 
 pytestmark = pytest.mark.unit
 
@@ -22,6 +22,7 @@ class TestRailAdmin:
             assert "startproject" in argv
             assert "myproject" in argv
             assert any(arg.startswith("--template=") for arg in argv)
+            assert "--extension=py-tpl,txt-tpl" in argv
             
             # Verify template path points to rail_django/scaffolding/project_template
             template_arg = next(arg for arg in argv if arg.startswith("--template="))
@@ -40,6 +41,23 @@ class TestRailAdmin:
             template_args = [arg for arg in argv if arg.startswith("--template=")]
             assert len(template_args) == 1
             assert template_args[0] == f"--template={custom_template}"
+
+    @patch("rail_django.bin.rail_admin.execute_from_command_line")
+    def test_main_startproject_preserves_existing_extensions(self, mock_execute):
+        """Test that user-provided template extensions are not overridden."""
+        extension_arg = "--extension=jinja,py"
+        with patch.object(
+            sys,
+            "argv",
+            ["rail-admin", "startproject", "myproject", extension_arg],
+        ):
+            main()
+
+            args, _ = mock_execute.call_args
+            argv = args[0]
+
+            assert extension_arg in argv
+            assert "--extension=py-tpl,txt-tpl" not in argv
 
     @patch("rail_django.bin.rail_admin.execute_from_command_line")
     def test_main_other_commands_untouched(self, mock_execute):
@@ -125,3 +143,34 @@ class TestRailAdmin:
             mock_remove.assert_called_once()
             args, _ = mock_remove.call_args
             assert "file.py-tpl" in args[0]
+
+    @patch("rail_django.bin.rail_admin._copy_docs_if_missing")
+    def test_post_process_scaffold_renames_templates_on_real_filesystem(self, _mock_docs, tmp_path):
+        """Test that post-processing renames template files on a real filesystem."""
+        destination = tmp_path / "demo_project"
+        destination.mkdir()
+        template_file = destination / "requirements.txt-tpl"
+        template_file.write_text("demo", encoding="utf-8")
+
+        _post_process_scaffold(str(destination))
+
+        assert not template_file.exists()
+        assert (destination / "requirements.txt").read_text(encoding="utf-8") == "demo"
+
+    @patch("rail_django.bin.rail_admin.execute_from_command_line")
+    @patch("rail_django.bin.rail_admin._post_process_scaffold", side_effect=RuntimeError("boom"))
+    @patch("rail_django.bin.rail_admin._is_scaffold_destination", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    @patch("os.path.abspath", return_value="/path/to/project")
+    def test_post_processing_failure_exits_non_zero(
+        self,
+        _mock_abspath,
+        _mock_exists,
+        _mock_scaffold_check,
+        _mock_post_process,
+        _mock_execute,
+    ):
+        """Test that post-processing failures stop the command with a non-zero exit."""
+        with patch.object(sys, "argv", ["rail-admin", "startproject", "myproject"]):
+            with pytest.raises(SystemExit, match="Post-processing failed: boom"):
+                main()
