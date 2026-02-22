@@ -37,7 +37,7 @@ services:
       - web
 
   backup:
-    image: postgres:15-alpine
+    image: ${BACKUP_POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
     volumes:
       - ${BACKUP_PATH:-../../backups}:/backups

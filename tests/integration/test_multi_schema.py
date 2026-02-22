@@ -184,6 +184,20 @@ class TestGraphiQLAccess(TestCase):
             }
         )
 
+    def _graphiql_ip_allowlist_schema_info(self):
+        return SchemaInfo(
+            name="graphiql",
+            enabled=True,
+            settings={
+                "graphiql_allowed_hosts": ["127.0.0.1"],
+                "graphiql_superuser_only": True,
+                "schema_settings": {
+                    "graphiql_allowed_hosts": ["127.0.0.1"],
+                    "graphiql_superuser_only": True,
+                },
+            },
+        )
+
     @patch("rail_django.core.registry.schema_registry")
     def test_graphiql_denied_for_non_localhost(self, mock_registry):
         schema_info = self._graphiql_schema_info()
@@ -255,6 +269,45 @@ class TestGraphiQLAccess(TestCase):
         schema_names = [schema["name"] for schema in content["schemas"]]
         self.assertIn("gql", schema_names)
         self.assertIn("graphiql", schema_names)
+
+    @override_settings(RAIL_DJANGO_TRUSTED_PROXIES=[])
+    def test_graphiql_denies_spoofed_x_forwarded_for_from_untrusted_proxy(self):
+        schema_info = self._graphiql_ip_allowlist_schema_info()
+        view = MultiSchemaGraphQLView()
+
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {
+            "HTTP_HOST": "example.com",
+            "REMOTE_ADDR": "203.0.113.10",
+            "HTTP_X_FORWARDED_FOR": "127.0.0.1",
+        }
+        request.user = Mock(is_authenticated=True, is_superuser=True)
+
+        response = view._check_graphiql_access(request, "graphiql", schema_info)
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(RAIL_DJANGO_TRUSTED_PROXIES=["203.0.113.10"])
+    def test_graphiql_allows_x_forwarded_for_from_trusted_proxy(self):
+        schema_info = self._graphiql_ip_allowlist_schema_info()
+        view = MultiSchemaGraphQLView()
+
+        request = Mock()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {
+            "HTTP_HOST": "example.com",
+            "REMOTE_ADDR": "203.0.113.10",
+            "HTTP_X_FORWARDED_FOR": "127.0.0.1",
+        }
+        request.user = Mock(is_authenticated=True, is_superuser=True)
+
+        response = view._check_graphiql_access(request, "graphiql", schema_info)
+
+        self.assertIsNone(response)
 
 class TestMultiSchemaURLIntegration(TestCase):
     """Tests d'intégration pour les URLs multi-schémas."""

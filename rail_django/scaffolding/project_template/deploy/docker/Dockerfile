@@ -82,8 +82,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
-    libffi-dev \
-    vim nano \
+    libffi8 \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -94,7 +93,7 @@ RUN pip install --no-cache-dir --no-index /wheels/*
 COPY requirements/ requirements/
 ARG RAIL_GIT_CACHE_BUST=0
 RUN echo "Rail git cache bust: ${RAIL_GIT_CACHE_BUST}" > $APP_HOME/.rail_git_cache_bust
-RUN pip install --no-cache-dir --upgrade --no-deps -r requirements/rail-django.txt
+RUN pip install --no-cache-dir --upgrade -r requirements/rail-django.txt
 
 # copy entrypoint.sh
 COPY deploy/docker/entrypoint.sh $APP_HOME/entrypoint.sh

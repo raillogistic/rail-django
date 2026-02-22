@@ -103,6 +103,23 @@ is_truthy() {
   esac
 }
 
+is_insecure_secret() {
+  local value
+  value="$(echo "$1" | tr '[:upper:]' '[:lower:]' | xargs)"
+  case "$value" in
+    ""|change_me|changeme|replace_me|replace-with-secure-value|default|password|secret)
+      return 0
+      ;;
+    change_me_in_production_with_a_long_random_string|replace_with_long_random_secret_key|replace_with_strong_password)
+      return 0
+      ;;
+  esac
+  if [[ "$value" == *"change_me"* ]] || [[ "$value" == *"replace_with_"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
 read_env() {
   local key="$1"
   local line
@@ -149,6 +166,11 @@ done
 
 if [ ${#missing[@]} -gt 0 ]; then
   die "Missing required .env values: ${missing[*]}"
+fi
+
+secret_key="$(read_env DJANGO_SECRET_KEY)"
+if is_insecure_secret "$secret_key"; then
+  die "DJANGO_SECRET_KEY appears to use a placeholder or weak default value."
 fi
 
 if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then
@@ -259,6 +281,9 @@ elif is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
 
   if [ -z "$su_username" ] || [ -z "$su_password" ]; then
     die "DEPLOY_CREATE_SUPERUSER=1 requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD."
+  fi
+  if is_insecure_secret "$su_password"; then
+    die "DJANGO_SUPERUSER_PASSWORD appears to use a placeholder or weak default value."
   fi
 
   "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python manage.py shell <<'PY'

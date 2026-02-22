@@ -49,10 +49,14 @@ class BaseAPIView(View):
             if allow_all and not getattr(settings, "DEBUG", False): allow_all = False
             allowed_origins = getattr(settings, "GRAPHQL_SCHEMA_API_CORS_ALLOWED_ORIGINS", None)
             if allowed_origins is None: allowed_origins = getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+            if not isinstance(allowed_origins, (list, tuple, set)):
+                allowed_origins = [str(allowed_origins)]
             origin = request.META.get("HTTP_ORIGIN")
-            if allow_all: response["Access-Control-Allow-Origin"] = "*"
-            elif origin and origin in allowed_origins: response["Access-Control-Allow-Origin"] = origin; response["Vary"] = "Origin"
-            elif not allowed_origins: response["Access-Control-Allow-Origin"] = "*"
+            if allow_all:
+                response["Access-Control-Allow-Origin"] = "*"
+            elif origin and origin in allowed_origins:
+                response["Access-Control-Allow-Origin"] = origin
+                response["Vary"] = "Origin"
             response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
 

@@ -7,7 +7,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from rail_django.core.registry import SchemaInfo, schema_registry
@@ -419,8 +419,24 @@ class SchemaDiscoveryAPIViewTest(SchemaAPITestCase):
 class SchemaHealthAPIViewTest(SchemaAPITestCase):
     """Tests for SchemaHealthAPIView."""
 
+    def _login_admin(self):
+        """Authenticate as a staff user for protected schema health endpoints."""
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.client.force_login(self.user)
+
+    def test_health_check_requires_admin(self):
+        """Test health check blocks unauthenticated requests."""
+        response = self.client.get("/api/v1/health/")
+
+        self.assertEqual(response.status_code, 401)
+        data = response.json()
+        self.assertEqual(data["status"], "error")
+        self.assertIn("Authentication required", data["data"]["message"])
+
     def test_health_check_healthy(self):
         """Test health check with healthy status."""
+        self._login_admin()
         self.create_test_schema("schema1", enabled=True)
         self.create_test_schema("schema2", enabled=True)
 
@@ -439,6 +455,7 @@ class SchemaHealthAPIViewTest(SchemaAPITestCase):
 
     def test_health_check_warning_no_enabled_schemas(self):
         """Test health check with warning when no enabled schemas."""
+        self._login_admin()
         self.create_test_schema("schema1", enabled=False)
 
         response = self.client.get("/api/v1/health/")
@@ -507,10 +524,10 @@ class CORSTest(SchemaAPITestCase):
     """Tests for CORS functionality."""
 
     def test_cors_headers(self):
-        """Test CORS headers are included in responses."""
+        """Test CORS doesn't default to wildcard origins when allowlist is empty."""
         response = self.client.get("/api/v1/schemas/")
 
-        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn("Access-Control-Allow-Origin", response)
         self.assertEqual(
             response["Access-Control-Allow-Methods"], "GET, POST, PUT, DELETE, OPTIONS"
         )
@@ -523,7 +540,20 @@ class CORSTest(SchemaAPITestCase):
         response = self.client.options("/api/v1/schemas/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    @override_settings(CORS_ALLOWED_ORIGINS=["https://allowed.example"])
+    def test_cors_headers_for_allowed_origin(self):
+        """Test CORS includes origin when request origin is explicitly allowlisted."""
+        response = self.client.get(
+            "/api/v1/schemas/",
+            HTTP_ORIGIN="https://allowed.example",
+        )
+
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"], "https://allowed.example"
+        )
+        self.assertIn("Origin", response["Vary"])
 
 
 class ErrorHandlingTest(SchemaAPITestCase):

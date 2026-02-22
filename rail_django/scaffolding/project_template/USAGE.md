@@ -1822,12 +1822,12 @@ nano .env
 
 Run these commands from your project root:
 
-#### A. Build and Start Services
+#### A. Build web image
 
-This will build the Python image and start the Web, Nginx, and Backup containers.
+Build the Python image before running schema tasks.
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
+docker-compose -f deploy/docker/docker-compose.yml build web
 ```
 The default web runtime is ASGI, so GraphQL subscriptions are available
 without switching servers.
@@ -1837,7 +1837,7 @@ without switching servers.
 Apply database schema changes to your external database:
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
 ```
 
 #### C. Collect Static Files
@@ -1845,10 +1845,18 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py mig
 Prepare CSS, JS, and images for Nginx to serve:
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py collectstatic --no-input
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
 ```
 
-#### D. Create Superuser (Optional)
+#### D. Start Services
+
+Start the Web, Nginx, and Backup containers.
+
+```bash
+docker-compose -f deploy/docker/docker-compose.yml up -d
+```
+
+#### E. Create Superuser (Optional)
 
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
@@ -1879,11 +1887,13 @@ docker-compose -f deploy/docker/docker-compose.yml down
 #### Updating the Application
 
 1. Pull your latest code changes.
-2. Re-run the build and migration steps:
+2. Re-run build, schema tasks, and startup:
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml build web
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
+docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
 Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
 need to rebuild base dependencies. The `rail-django` Git install is refreshed

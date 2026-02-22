@@ -69,7 +69,24 @@ class SchemaDiscoveryAPIView(BaseAPIView):
 
 class SchemaHealthAPIView(BaseAPIView):
     """API view for schema health checks."""
+
+    auth_required = True
+    rate_limit_enabled = True
+
     def get(self, request: HttpRequest) -> JsonResponse:
+        if getattr(request, "user", None) is None or not getattr(
+            request.user, "is_authenticated", False
+        ):
+            auth_response = self._authenticate_request(request)
+            if auth_response is not None:
+                return auth_response
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return self.error_response("Authentication required", status=401)
+        if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+            return self.error_response("Admin permissions required", status=403)
+
         try:
             schemas = schema_registry.list_schemas()
             enabled = [s for s in schemas if s.enabled]

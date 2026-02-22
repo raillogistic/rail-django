@@ -12,6 +12,7 @@ from django.conf import settings
 from django.http import HttpRequest
 
 from rail_django.core.settings import get_test_graphql_endpoint_path
+from rail_django.utils.network import is_trusted_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -100,17 +101,31 @@ def _get_request_host(request: HttpRequest) -> str:
     Returns:
         Normalized host string, or empty string if not available
     """
+    getter = getattr(request, "get_host", None)
+    if callable(getter):
+        try:
+            resolved = getter()
+            if resolved:
+                return _normalize_host(resolved)
+        except Exception:
+            # Invalid/blocked host header: do not trust raw HTTP_HOST fallback.
+            return ""
     meta = getattr(request, "META", {}) or {}
     host = meta.get("HTTP_HOST") or meta.get("SERVER_NAME") or ""
     if host:
         return _normalize_host(host)
-    getter = getattr(request, "get_host", None)
-    if callable(getter):
-        try:
-            return _normalize_host(getter())
-        except Exception:
-            pass
     return ""
+
+
+def _get_trusted_proxy_addresses() -> list[str]:
+    """Return trusted proxy addresses/CIDRs for forwarded-header trust."""
+    raw = getattr(settings, "RAIL_DJANGO_TRUSTED_PROXIES", [])
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        return [str(proxy).strip() for proxy in raw if str(proxy).strip()]
+    value = str(raw).strip()
+    return [value] if value else []
 
 
 def _get_request_ip(request: HttpRequest) -> str:
@@ -126,10 +141,19 @@ def _get_request_ip(request: HttpRequest) -> str:
         Client IP address string, or empty string if not available
     """
     meta = getattr(request, "META", {}) or {}
-    forwarded_for = meta.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return meta.get("REMOTE_ADDR", "") or ""
+    remote_addr = (meta.get("REMOTE_ADDR", "") or "").strip()
+    forwarded_for = (meta.get("HTTP_X_FORWARDED_FOR", "") or "").strip()
+    trusted_proxies = _get_trusted_proxy_addresses()
+    if (
+        remote_addr
+        and forwarded_for
+        and trusted_proxies
+        and is_trusted_proxy(remote_addr, trusted_proxies)
+    ):
+        client_ip = forwarded_for.split(",", 1)[0].strip()
+        if client_ip:
+            return client_ip
+    return remote_addr
 
 
 def _host_allowed(request: HttpRequest, allowed_hosts: list[str]) -> bool:

@@ -26,6 +26,8 @@ nano .env
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
 - `RAIL_ENABLE_PROD_GRAPHIQL=False`: Keep GraphiQL disabled by default in production.
 - `RAIL_ENABLE_PROD_INTROSPECTION=False`: Keep introspection disabled by default in production.
+The deploy script rejects placeholder values for `DJANGO_SECRET_KEY` and
+`DJANGO_SUPERUSER_PASSWORD`.
 
 **Optional runtime toggles:**
 - `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Default to `False` in the scaffold because `deploy.sh` runs these steps. Set to `True` only if you explicitly want startup-time execution.
@@ -73,7 +75,7 @@ Set these in your `.env` and re-run the script:
 DEPLOY_CREATE_SUPERUSER=1
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_EMAIL=admin@example.com
-DJANGO_SUPERUSER_PASSWORD=change_me
+DJANGO_SUPERUSER_PASSWORD=<strong-random-password>
 ```
 
 ### CI Example (Non-Interactive)
@@ -100,10 +102,10 @@ Add `DEPLOY_REFRESH_DEPS=1` if you need to rebuild base dependencies.
 
 Run these commands from your project root:
 
-### A. Build and Start Services
-This will build the Python image and start the Web, Nginx, and Backup containers.
+### A. Build web image
+Build the Python image before running schema tasks:
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
+docker-compose -f deploy/docker/docker-compose.yml build web
 ```
 The default web runtime is ASGI, so GraphQL subscriptions are available without
 extra runtime changes.
@@ -111,16 +113,22 @@ extra runtime changes.
 ### B. Run Migrations
 Apply database schema changes to your external database:
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
 ```
 
 ### C. Collect Static Files
 Prepare CSS, JS, and images for Nginx to serve:
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py collectstatic --no-input
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
 ```
 
-### D. Create Superuser (Optional)
+### D. Start Services
+Start the Web, Nginx, and Backup containers:
+```bash
+docker-compose -f deploy/docker/docker-compose.yml up -d
+```
+
+### E. Create Superuser (Optional)
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
 ```
@@ -144,8 +152,9 @@ set `LOG_PATH`, read them directly on the host.
 Use these endpoints for orchestrator probes and diagnostics:
 - Liveness: `/health/live/` (alias of `/health/check/`)
 - Readiness: `/health/ready/` (alias of `/health/check/`)
-- Metrics: `/health/metrics/`
-- Components: `/health/components/`
+- Detailed diagnostics (`/health/api/`, `/health/metrics/`,
+  `/health/components/`, `/health/history/`) are restricted to loopback callers
+  by the scaffolded Nginx config.
 
 ### Stopping the Application
 ```bash
@@ -154,10 +163,12 @@ docker-compose -f deploy/docker/docker-compose.yml down
 
 ### Updating the Application
 1. Pull your latest code changes.
-2. Re-run the build and migration steps:
+2. Re-run build, schema tasks, and startup:
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml build web
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
+docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
 Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
 need to rebuild base dependencies. The `rail-django` Git install is refreshed
