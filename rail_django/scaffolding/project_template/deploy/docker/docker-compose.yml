@@ -10,6 +10,7 @@ services:
       - static_volume:/home/app/web/staticfiles
       - ${MEDIA_PATH:-../../media}:/home/app/web/mediafiles
       - ${LOG_PATH:-../../logs}:/home/app/web/logs
+      - ${CACHE_PATH:-../../cache}:/home/app/web/cache
     expose:
       - 8000
     env_file:

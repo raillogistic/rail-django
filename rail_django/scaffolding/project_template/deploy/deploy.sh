@@ -206,19 +206,37 @@ else
   ensure_dir "$SCRIPT_DIR/docker/$log_path"
 fi
 
-note "Building and starting containers..."
+cache_path="$(read_env CACHE_PATH)"
+if [ -z "$cache_path" ]; then
+  cache_path="../../cache"
+fi
+if [[ "$cache_path" = /* ]]; then
+  ensure_dir "$cache_path"
+else
+  ensure_dir "$SCRIPT_DIR/docker/$cache_path"
+fi
+
+note "Building web image..."
 build_args=()
 build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
 if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
   build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
 fi
 
-if [ ${#build_args[@]} -gt 0 ]; then
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
-else
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d --build
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web
+
+if [ "$SKIP_MIGRATE" -eq 0 ]; then
+  note "Running migrations..."
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py migrate
 fi
+
+if [ "$SKIP_COLLECTSTATIC" -eq 0 ]; then
+  note "Collecting static files..."
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py collectstatic --noinput
+fi
+
+note "Starting containers..."
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
 
 note "Waiting for web container..."
 attempts=30
@@ -230,21 +248,11 @@ until "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python -c "print('ready')" 
   sleep 1
 done
 
-if [ "$SKIP_MIGRATE" -eq 0 ]; then
-  note "Running migrations..."
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python manage.py migrate
-fi
-
-if [ "$SKIP_COLLECTSTATIC" -eq 0 ]; then
-  note "Collecting static files..."
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python manage.py collectstatic --noinput
-fi
-
 if [ "$CREATE_SUPERUSER" -eq 1 ]; then
   note "Creating superuser (interactive)..."
   "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec web python manage.py createsuperuser
 elif is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
-  note "Creating superuser (non-interactive)..."
+  note "Ensuring superuser exists (non-interactive)..."
   su_username="$(read_env DJANGO_SUPERUSER_USERNAME)"
   su_email="$(read_env DJANGO_SUPERUSER_EMAIL)"
   su_password="$(read_env DJANGO_SUPERUSER_PASSWORD)"
@@ -253,14 +261,61 @@ elif is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
     die "DEPLOY_CREATE_SUPERUSER=1 requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD."
   fi
 
-  if [ -n "$su_email" ]; then
-    "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web \
-      python manage.py createsuperuser --noinput --username "$su_username" --email "$su_email"
-  else
-    warn "DJANGO_SUPERUSER_EMAIL not set; createsuperuser may fail if email is required."
-    "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web \
-      python manage.py createsuperuser --noinput --username "$su_username"
-  fi
+  "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python manage.py shell <<'PY'
+import os
+
+from django.contrib.auth import get_user_model
+
+username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "").strip()
+email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "").strip()
+password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "")
+
+if not username or not password:
+    raise SystemExit(
+        "DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD are required."
+    )
+
+User = get_user_model()
+lookup = {User.USERNAME_FIELD: username}
+defaults = {
+    "is_staff": True,
+    "is_superuser": True,
+    "is_active": True,
+}
+if hasattr(User, "email") and User.USERNAME_FIELD != "email" and email:
+    defaults["email"] = email
+
+user, created = User.objects.get_or_create(defaults=defaults, **lookup)
+changed = created
+
+if not getattr(user, "is_staff", False):
+    user.is_staff = True
+    changed = True
+if not getattr(user, "is_superuser", False):
+    user.is_superuser = True
+    changed = True
+if not getattr(user, "is_active", True):
+    user.is_active = True
+    changed = True
+
+if hasattr(user, "email") and email and getattr(user, "email", "") != email:
+    user.email = email
+    changed = True
+
+if not user.check_password(password):
+    user.set_password(password)
+    changed = True
+
+if changed:
+    user.save()
+
+if created:
+    print("Superuser created.")
+elif changed:
+    print("Superuser updated.")
+else:
+    print("Superuser already up to date.")
+PY
 fi
 
 note "Deployment complete."

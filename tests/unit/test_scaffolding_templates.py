@@ -51,6 +51,51 @@ def test_compose_healthcheck_uses_http_readiness_probe() -> None:
     assert "socket.socket()" not in text
 
 
+def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
+    text = _project_template_file("deploy", "docker", "docker-compose.yml")
+
+    assert "${CACHE_PATH:-../../cache}:/home/app/web/cache" in text
+
+
+def test_deploy_script_runs_schema_tasks_before_up() -> None:
+    text = _project_template_file("deploy", "deploy.sh")
+
+    migrate_cmd = 'run --rm --entrypoint python web manage.py migrate'
+    up_cmd = '"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d'
+    collectstatic_cmd = (
+        'run --rm --entrypoint python web manage.py collectstatic --noinput'
+    )
+
+    assert migrate_cmd in text
+    assert collectstatic_cmd in text
+    assert up_cmd in text
+    assert text.index(migrate_cmd) < text.index(up_cmd)
+    assert text.index(collectstatic_cmd) < text.index(up_cmd)
+
+
+def test_deploy_script_non_interactive_superuser_is_idempotent() -> None:
+    text = _project_template_file("deploy", "deploy.sh")
+
+    assert "Ensuring superuser exists (non-interactive)" in text
+    assert "get_or_create" in text
+    assert "check_password" in text
+
+
+def test_deploy_script_ensures_cache_directory_exists() -> None:
+    text = _project_template_file("deploy", "deploy.sh")
+
+    assert 'cache_path="$(read_env CACHE_PATH)"' in text
+    assert 'ensure_dir "$SCRIPT_DIR/docker/$cache_path"' in text
+
+
+def test_project_template_gitignore_covers_runtime_artifacts() -> None:
+    text = _project_template_file(".gitignore")
+
+    assert "media/" in text
+    assert "backups/" in text
+    assert "cache/" in text
+
+
 def test_production_template_disables_graphiql_and_introspection_by_default() -> None:
     text = _project_template_file("root", "settings", "production.py-tpl")
 
@@ -64,3 +109,12 @@ def test_production_template_disables_graphiql_and_introspection_by_default() ->
     )
     assert 'schema_config["schema_settings"]["enable_graphiql"] = False' in text
     assert 'schema_config["schema_settings"]["enable_introspection"] = False' in text
+
+
+def test_production_template_adds_graphql_security_middleware_after_auth() -> None:
+    text = _project_template_file("root", "settings", "production.py-tpl")
+
+    assert "rail_django.middleware.auth.GraphQLAuthenticationMiddleware" in text
+    assert "rail_django.middleware.auth.GraphQLRateLimitMiddleware" in text
+    assert '_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"' in text
+    assert "MIDDLEWARE.insert(_insert_at, mw)" in text

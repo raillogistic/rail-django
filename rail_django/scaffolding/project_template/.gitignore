@@ -4,6 +4,13 @@
 # Runtime logs
 logs/
 *.log
+media/
+backups/
+cache/
+deploy/docker/logs/
+deploy/docker/media/
+deploy/docker/backups/
+deploy/docker/cache/
 
 # Generated TLS certs/keys for nginx (created by deploy.sh when missing)
 deploy/nginx/certs/*.crt
