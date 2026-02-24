@@ -3,11 +3,10 @@ Unit tests for GraphQLAuthenticationMiddleware.
 """
 
 import json
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpResponse
 from django.test import RequestFactory
 
 from rail_django.middleware.auth.authentication import GraphQLAuthenticationMiddleware
@@ -95,6 +94,11 @@ class TestAuthMiddleware:
         req.COOKIES["jwt"] = "cookie_token"
         assert middleware._extract_jwt_token(req) == "cookie_token"
         assert req._jwt_token_source == "cookie"
+
+    def test_extract_jwt_token_rejects_query_param(self, middleware, rf):
+        req = rf.get("/graphql/", {"token": "query_token"})
+        assert middleware._extract_jwt_token(req) is None
+        assert not hasattr(req, "_jwt_token_source")
 
     def test_process_response_adds_headers(self, middleware, rf):
         req = rf.post("/graphql/")

@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional
 from uuid import uuid4
+from django.conf import settings
 from django.http import HttpRequest
+from ..utils.network import is_trusted_proxy
 
 
 @dataclass
@@ -59,10 +61,33 @@ class SecurityContext:
 
 def get_client_ip(request: HttpRequest) -> str:
     """Extract client IP from request headers."""
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.META.get("HTTP_X_REAL_IP")
+    raw = getattr(settings, "RAIL_DJANGO_TRUSTED_PROXIES", [])
+    if raw is None:
+        trusted_proxies: list[str] = []
+    elif isinstance(raw, (list, tuple, set)):
+        trusted_proxies = [str(proxy).strip() for proxy in raw if str(proxy).strip()]
+    else:
+        value = str(raw).strip()
+        trusted_proxies = [value] if value else []
+
+    remote_addr = (request.META.get("REMOTE_ADDR", "") or "").strip()
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR", "") or "").strip()
+    real_ip = (request.META.get("HTTP_X_REAL_IP", "") or "").strip()
+
+    if (
+        remote_addr
+        and trusted_proxies
+        and is_trusted_proxy(remote_addr, trusted_proxies)
+    ):
+        if forwarded:
+            candidate = forwarded.split(",", 1)[0].strip()
+            if candidate:
+                return candidate
+        if real_ip:
+            return real_ip
+
+    if remote_addr:
+        return remote_addr
     if real_ip:
         return real_ip
-    return request.META.get("REMOTE_ADDR", "unknown")
+    return "unknown"

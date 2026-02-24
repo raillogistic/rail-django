@@ -3,17 +3,15 @@ Integration tests for GraphQL schema management REST API.
 """
 
 import json
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import Client, TestCase, override_settings
-from django.urls import reverse
 
-from rail_django.core.registry import SchemaInfo, schema_registry
-from rail_django.plugins.base import plugin_manager
+from rail_django.core.registry import schema_registry
 
 
+@override_settings(GRAPHQL_SCHEMA_API_AUTH_REQUIRED=False)
 class SchemaAPITestCase(TestCase):
     """Base test case for schema API tests."""
 
@@ -312,7 +310,7 @@ class SchemaManagementAPIViewTest(SchemaAPITestCase):
 
     def test_enable_schema(self):
         """Test enabling a schema."""
-        schema_info = self.create_test_schema("test_schema", enabled=False)
+        self.create_test_schema("test_schema", enabled=False)
 
         response = self.client.post(
             "/api/v1/management/",

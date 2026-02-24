@@ -7,14 +7,16 @@ including authentication, authorization, rate limiting, and input validation.
 
 import logging
 from functools import wraps
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 
 from .services import get_rate_limiter as get_unified_rate_limiter
 from ..security.validation import InputValidator as UnifiedInputValidator
 from ..config_proxy import get_setting
 from ..security.rbac import role_manager
+from ..utils.network import is_trusted_proxy
 from .runtime_settings import RuntimeSettings
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,42 @@ logger = logging.getLogger(__name__)
 SecuritySettings = RuntimeSettings
 
 DEFAULT_INTROSPECTION_ROLES = ["admin", "developer"]
+
+
+def _get_trusted_proxy_addresses() -> list[str]:
+    raw = getattr(settings, "RAIL_DJANGO_TRUSTED_PROXIES", [])
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        return [str(proxy).strip() for proxy in raw if str(proxy).strip()]
+    value = str(raw).strip()
+    return [value] if value else []
+
+
+def _extract_client_ip_from_request(request: Any) -> str:
+    meta = getattr(request, "META", {}) or {}
+    remote_addr = (meta.get("REMOTE_ADDR", "") or "").strip()
+    forwarded = (meta.get("HTTP_X_FORWARDED_FOR", "") or "").strip()
+    real_ip = (meta.get("HTTP_X_REAL_IP", "") or "").strip()
+
+    trusted_proxies = _get_trusted_proxy_addresses()
+    if (
+        remote_addr
+        and trusted_proxies
+        and is_trusted_proxy(remote_addr, trusted_proxies)
+    ):
+        if forwarded:
+            candidate = forwarded.split(",", 1)[0].strip()
+            if candidate:
+                return candidate
+        if real_ip:
+            return real_ip
+
+    if remote_addr:
+        return remote_addr
+    if real_ip:
+        return real_ip
+    return "unknown"
 
 
 class AuthenticationManager:
@@ -193,11 +231,7 @@ class RateLimiter:
     def get_client_identifier(self, request: Any) -> str:
         if hasattr(request, "user") and request.user.is_authenticated:
             return f"user:{request.user.id}"
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        if forwarded:
-            ip = forwarded.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR", "unknown")
+        ip = _extract_client_ip_from_request(request)
         return f"ip:{ip}"
 
     def rate_limit(self, func):
@@ -249,8 +283,41 @@ def is_introspection_allowed(
         return True
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    # Backward-compatible default for authenticated API clients.
-    return True
+
+    if getattr(user, "is_superuser", False):
+        return True
+
+    allowed_roles = {
+        str(role).strip().lower()
+        for role in get_introspection_roles(schema_name)
+        if str(role).strip()
+    }
+    if not allowed_roles:
+        return False
+    if "authenticated" in allowed_roles:
+        return True
+
+    user_roles: set[str] = set()
+    if getattr(user, "is_staff", False):
+        user_roles.update({"admin", "staff"})
+    try:
+        user_roles.update(
+            str(role).strip().lower()
+            for role in role_manager.get_user_roles(user)
+            if str(role).strip()
+        )
+    except Exception:
+        pass
+    try:
+        user_roles.update(
+            str(group_name).strip().lower()
+            for group_name in user.groups.values_list("name", flat=True)
+            if str(group_name).strip()
+        )
+    except Exception:
+        pass
+
+    return bool(user_roles.intersection(allowed_roles))
 
 
 # Global instances

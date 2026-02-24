@@ -1,7 +1,6 @@
 import pytest
-from django.test import RequestFactory
-from rail_django.security.context import SecurityContext, Actor, get_client_ip
-from rail_django.security.middleware.context import SecurityContextMiddleware, get_security_context
+from django.test import RequestFactory, override_settings
+from rail_django.security.context import SecurityContext, get_client_ip
 
 
 @pytest.mark.unit
@@ -47,14 +46,24 @@ class TestSecurityContext:
 
 @pytest.mark.unit
 class TestGetClientIp:
+    @override_settings(RAIL_DJANGO_TRUSTED_PROXIES=["203.0.113.10"])
     def test_x_forwarded_for(self):
         factory = RequestFactory()
-        request = factory.get("/", HTTP_X_FORWARDED_FOR="1.2.3.4, 5.6.7.8")
+        request = factory.get(
+            "/",
+            REMOTE_ADDR="203.0.113.10",
+            HTTP_X_FORWARDED_FOR="1.2.3.4, 5.6.7.8",
+        )
         assert get_client_ip(request) == "1.2.3.4"
 
+    @override_settings(RAIL_DJANGO_TRUSTED_PROXIES=["203.0.113.10"])
     def test_x_real_ip(self):
         factory = RequestFactory()
-        request = factory.get("/", HTTP_X_REAL_IP="9.8.7.6")
+        request = factory.get(
+            "/",
+            REMOTE_ADDR="203.0.113.10",
+            HTTP_X_REAL_IP="9.8.7.6",
+        )
         assert get_client_ip(request) == "9.8.7.6"
 
     def test_remote_addr_fallback(self):
@@ -62,3 +71,13 @@ class TestGetClientIp:
         request = factory.get("/")
         request.META["REMOTE_ADDR"] = "127.0.0.1"
         assert get_client_ip(request) == "127.0.0.1"
+
+    @override_settings(RAIL_DJANGO_TRUSTED_PROXIES=["203.0.113.10"])
+    def test_untrusted_proxy_ignores_forwarded_headers(self):
+        factory = RequestFactory()
+        request = factory.get(
+            "/",
+            REMOTE_ADDR="198.51.100.77",
+            HTTP_X_FORWARDED_FOR="1.2.3.4, 5.6.7.8",
+        )
+        assert get_client_ip(request) == "198.51.100.77"

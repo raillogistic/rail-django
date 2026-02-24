@@ -183,7 +183,7 @@ if DEBUG:
     GRAPHENE["MIDDLEWARE"].append("graphene_django.debug.DjangoDebugMiddleware")
 
 # Schema management API defaults (can be overridden per project)
-GRAPHQL_SCHEMA_API_AUTH_REQUIRED = False
+GRAPHQL_SCHEMA_API_AUTH_REQUIRED = True
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = (

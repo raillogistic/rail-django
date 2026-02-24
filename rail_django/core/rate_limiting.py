@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Iterable, Optional
 
 from django.conf import settings
 from django.core.cache import cache
+
+from ..utils.network import is_trusted_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -239,13 +241,38 @@ def _resolve_user(user: Any, request: Any) -> Optional[Any]:
     return None
 
 
+def _get_trusted_proxy_addresses() -> list[str]:
+    raw = getattr(settings, "RAIL_DJANGO_TRUSTED_PROXIES", [])
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        return [str(proxy).strip() for proxy in raw if str(proxy).strip()]
+    value = str(raw).strip()
+    return [value] if value else []
+
+
 def _get_client_ip(request: Any) -> Optional[str]:
     if request is None or not hasattr(request, "META"):
         return None
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+    remote_addr = (request.META.get("REMOTE_ADDR", "") or "").strip()
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR", "") or "").strip()
+    real_ip = (request.META.get("HTTP_X_REAL_IP", "") or "").strip()
+    trusted_proxies = _get_trusted_proxy_addresses()
+
+    if (
+        remote_addr
+        and forwarded
+        and trusted_proxies
+        and is_trusted_proxy(remote_addr, trusted_proxies)
+    ):
+        client_ip = forwarded.split(",", 1)[0].strip()
+        if client_ip:
+            return client_ip
+    if remote_addr:
+        return remote_addr
+    if real_ip:
+        return real_ip
+    return None
 
 
 def _build_identifier(scope: str, user: Optional[Any], ip: Optional[str]) -> Optional[str]:

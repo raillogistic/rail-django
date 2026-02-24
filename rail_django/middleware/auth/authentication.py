@@ -6,14 +6,14 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
-from .utils import _get_anonymous_user, get_client_ip
+from .utils import _get_anonymous_user
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +92,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         if cookie_name and self.allow_cookie_auth:
             token = request.COOKIES.get(cookie_name)
             if token: request._jwt_token_source = "cookie"; return token
-        token = request.GET.get("token")
-        if token: request._jwt_token_source = "query"
-        return token
+        return None
 
     def _authenticate_jwt_token(self, token: str, request: HttpRequest) -> Optional[Any]:
         try:

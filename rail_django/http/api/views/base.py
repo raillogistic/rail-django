@@ -30,7 +30,7 @@ class BaseAPIView(View):
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         """Handle CORS and common headers."""
         auth_required = self.auth_required and getattr(settings, "GRAPHQL_SCHEMA_API_AUTH_REQUIRED", True)
-        if auth_required:
+        if auth_required and request.method != "OPTIONS":
             auth_response = self._authenticate_request(request)
             if auth_response is not None:
                 self._audit_request(request, auth_response, path_params=kwargs, extra_data={"auth_failed": True})
@@ -73,6 +73,9 @@ class BaseAPIView(View):
 
     def _authenticate_request(self, request: HttpRequest) -> Optional[JsonResponse]:
         """Authenticate request using JWT access tokens."""
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            return None
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if not auth_header: return self.error_response("Authentication required", status=401)
         if not (auth_header.startswith("Bearer ") or auth_header.startswith("Token ")): return self.error_response("Invalid authorization header", status=401)

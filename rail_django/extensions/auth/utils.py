@@ -40,6 +40,23 @@ def _get_effective_permissions(user: "AbstractUser") -> list[str]:
     """
     if not user:
         return []
+    if not getattr(user, "is_authenticated", False):
+        return []
+    if getattr(user, "pk", None) is None:
+        return []
+
+    permissions: set[str] = set()
+    try:
+        permissions.update(role_manager.get_effective_permissions(user) or [])
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Impossible de recuperer les permissions de %s: %s", user, exc)
+
+    try:
+        permissions.update(user.get_all_permissions() or [])
+    except Exception:
+        pass
+
+    return sorted(str(permission) for permission in permissions if permission)
 
 
 def _get_user_roles(user: "AbstractUser") -> list[str]:
@@ -154,13 +171,6 @@ def _get_user_roles_detail(user: "AbstractUser") -> list[dict[str, Any]]:
         role["permissions"] = unique_permissions
 
     return list(roles.values())
-
-    try:
-        permissions = role_manager.get_effective_permissions(user)
-        return sorted(permissions)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Impossible de recuperer les permissions de %s: %s", user, exc)
-        return []
 
 
 def _build_model_permission_snapshot(user: "AbstractUser") -> list[PermissionInfo]:
