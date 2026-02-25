@@ -150,6 +150,13 @@ class ModelSchemaQuery(graphene.ObjectType):
             Complete model schema.
         """
         user = getattr(info.context, "user", None)
+        try:
+            model_cls = apps.get_model(app, model)
+        except LookupError:
+            raise GraphQLError(f"Model '{app}.{model}' not found.")
+        if not _user_can_discover_model(model_cls, user):
+            raise GraphQLError("Access denied")
+
         extractor = ModelSchemaExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
@@ -197,12 +204,15 @@ class ModelSchemaQuery(graphene.ObjectType):
         self, info, app: str, model: str
     ) -> list[dict]:
         """Resolve available filters for a model."""
+        user = getattr(info.context, "user", None)
         extractor = ModelSchemaExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
         try:
             model_cls = apps.get_model(app, model)
-            return extractor.extract_model_filters(model_cls)
+            if not _user_can_discover_model(model_cls, user):
+                return []
+            return extractor.extract_model_filters(model_cls, user=user)
         except LookupError:
             return []
 
@@ -210,12 +220,15 @@ class ModelSchemaQuery(graphene.ObjectType):
         self, info, app: str, model: str, field: str
     ) -> Optional[dict]:
         """Resolve metadata for a specific filter field."""
+        user = getattr(info.context, "user", None)
         extractor = ModelSchemaExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
         try:
             model_cls = apps.get_model(app, model)
-            return extractor.extract_filter_field(model_cls, field)
+            if not _user_can_discover_model(model_cls, user):
+                return None
+            return extractor.extract_filter_field(model_cls, field, user=user)
         except LookupError:
             return None
 
@@ -270,6 +283,8 @@ class ModelSchemaQuery(graphene.ObjectType):
         )
         schemas = []
         for model in apps.get_app_config(app).get_models():
+            if not _user_can_discover_model(model, user):
+                continue
             try:
                 schemas.append(extractor.extract(app, model.__name__, user=user))
             except Exception as e:

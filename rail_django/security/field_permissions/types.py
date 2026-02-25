@@ -134,6 +134,26 @@ class FieldContext:
     classifications: Optional[Set[str]] = None
 
 
+@dataclass
+class FieldPermissionResult:
+    """
+    Resolved field permission decision for compatibility and extraction flows.
+
+    Attributes:
+        access_level: Effective access level for the field.
+        visibility: Effective visibility for the field.
+        can_read: Whether the field is readable by the caller.
+        can_write: Whether the field is writable by the caller.
+        mask_value: Optional value used when visibility is masked.
+    """
+
+    access_level: FieldAccessLevel
+    visibility: FieldVisibility
+    can_read: bool
+    can_write: bool
+    mask_value: Any = None
+
+
 # Access level hierarchy for comparison operations
 ACCESS_LEVEL_HIERARCHY: dict[FieldAccessLevel, int] = {
     FieldAccessLevel.NONE: 0,

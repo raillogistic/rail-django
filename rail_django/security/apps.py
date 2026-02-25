@@ -9,6 +9,11 @@ class SecurityConfig(AppConfig):
     def ready(self):
         # Import to register signal handlers
         from . import signals  # noqa
+        try:
+            signals.connect_permission_cache_signals()
+        except Exception:
+            # Keep startup resilient when auth models aren't fully ready.
+            pass
         post_migrate.connect(
             _sync_roles_to_groups,
             sender=self,

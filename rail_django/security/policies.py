@@ -7,9 +7,10 @@ Policies are evaluated by priority (higher wins). When priorities tie, deny wins
 from __future__ import annotations
 
 import logging
+from fnmatch import fnmatchcase
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Set, Type
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 
 from django.db import models
 
@@ -256,12 +257,13 @@ class PolicyManager:
 
     @staticmethod
     def _match_pattern(value: str, pattern: str) -> bool:
+        if not pattern:
+            return False
         if pattern == "*" or pattern == value:
             return True
-        if "*" in pattern:
-            fragment = pattern.replace("*", "")
-            return fragment in value
-        return False
+        if not value:
+            return False
+        return fnmatchcase(value, pattern)
 
 
 policy_manager = PolicyManager()

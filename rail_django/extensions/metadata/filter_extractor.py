@@ -207,7 +207,7 @@ class FilterExtractorMixin:
                     if perm.visibility == FieldVisibility.HIDDEN:
                         return None
                 except Exception:
-                    pass
+                    return None
 
             if model_field:
                 field_label = str(getattr(model_field, "verbose_name", model_field.name))
@@ -480,7 +480,7 @@ class FilterExtractorMixin:
                     if perm.visibility == FieldVisibility.HIDDEN:
                         continue
                 except Exception:
-                    pass
+                    continue
 
             related_model = getattr(field, "related_model", None)
             if not related_model:
@@ -563,7 +563,7 @@ class FilterExtractorMixin:
                     if perm.visibility == FieldVisibility.HIDDEN:
                         continue
                 except Exception:
-                    pass
+                    continue
 
             # Determine base type
             base_type = "String"

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from graphql import GraphQLError
 
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
 from rail_django.extensions.metadata.queries import ModelSchemaQuery
@@ -78,6 +79,126 @@ class TestMetadataSecurityHardening(TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["model"], "PublicItem")
+
+    @patch("rail_django.extensions.metadata.queries.apps.get_model")
+    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    def test_model_schema_denies_undiscoverable_model(self, mock_get_meta, mock_get_model):
+        model = _build_model("inventory", "Product")
+        mock_get_model.return_value = model
+        mock_meta = MagicMock()
+        mock_meta.describe_operation_guard.return_value = {
+            "guarded": False,
+            "allowed": True,
+            "reason": None,
+        }
+        mock_get_meta.return_value = mock_meta
+
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.has_perm.return_value = False
+
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+        with self.assertRaises(GraphQLError):
+            ModelSchemaQuery().resolve_modelSchema(info, app="inventory", model="Product")
+
+    @patch("rail_django.extensions.metadata.queries.apps.get_model")
+    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    def test_filter_schema_returns_empty_for_undiscoverable_model(self, mock_get_meta, mock_get_model):
+        model = _build_model("inventory", "Product")
+        mock_get_model.return_value = model
+        mock_meta = MagicMock()
+        mock_meta.describe_operation_guard.return_value = {
+            "guarded": False,
+            "allowed": True,
+            "reason": None,
+        }
+        mock_get_meta.return_value = mock_meta
+
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.has_perm.return_value = False
+        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+
+        self.assertEqual(
+            ModelSchemaQuery().resolve_filterSchema(info, app="inventory", model="Product"),
+            [],
+        )
+
+    @patch("rail_django.extensions.metadata.queries.apps.get_model")
+    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    def test_field_filter_schema_returns_none_for_undiscoverable_model(self, mock_get_meta, mock_get_model):
+        model = _build_model("inventory", "Product")
+        mock_get_model.return_value = model
+        mock_meta = MagicMock()
+        mock_meta.describe_operation_guard.return_value = {
+            "guarded": False,
+            "allowed": True,
+            "reason": None,
+        }
+        mock_get_meta.return_value = mock_meta
+
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.has_perm.return_value = False
+        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+
+        self.assertIsNone(
+            ModelSchemaQuery().resolve_fieldFilterSchema(
+                info, app="inventory", model="Product", field="name"
+            )
+        )
+
+    def test_permissions_extractor_defaults_to_fail_closed(self):
+        extractor = ModelSchemaExtractor()
+        perms = extractor._extract_permissions(Product, user=None)
+
+        self.assertFalse(perms["can_list"])
+        self.assertFalse(perms["can_retrieve"])
+        self.assertFalse(perms["can_create"])
+        self.assertFalse(perms["can_update"])
+        self.assertFalse(perms["can_delete"])
+        self.assertFalse(perms["can_export"])
+
+    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    @patch("rail_django.extensions.metadata.queries.apps.get_app_config")
+    def test_app_schemas_skips_undiscoverable_models(self, mock_get_app_config, mock_get_meta):
+        model_allowed = _build_model("inventory", "Product")
+        model_denied = _build_model("inventory", "Secret")
+
+        def get_meta(model):
+            meta = MagicMock()
+            if model._meta.model_name == "product":
+                meta.describe_operation_guard.return_value = {
+                    "guarded": False,
+                    "allowed": True,
+                    "reason": None,
+                }
+            else:
+                meta.describe_operation_guard.return_value = {
+                    "guarded": False,
+                    "allowed": False,
+                    "reason": "denied",
+                }
+            return meta
+
+        mock_get_meta.side_effect = get_meta
+        mock_get_app_config.return_value = SimpleNamespace(
+            get_models=lambda: [model_allowed, model_denied]
+        )
+
+        user = MagicMock()
+        user.is_authenticated = True
+        user.is_superuser = False
+        user.has_perm.side_effect = lambda perm: perm == "inventory.view_product"
+        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+
+        with patch.object(ModelSchemaExtractor, "extract", return_value={"model": "Product"}):
+            results = ModelSchemaQuery().resolve_appSchemas(info, app="inventory")
+
+        self.assertEqual(results, [{"model": "Product"}])
 
     @patch("rail_django.extensions.metadata.extractor.evaluate_template_access")
     @patch("rail_django.extensions.metadata.extractor.template_registry")

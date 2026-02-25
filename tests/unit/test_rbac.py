@@ -17,7 +17,12 @@ from rail_django.security.rbac import (
     require_role,
     role_manager,
 )
-from rail_django.security.policies import AccessPolicy, PolicyEffect, policy_manager
+from rail_django.security.policies import (
+    AccessPolicy,
+    PolicyEffect,
+    PolicyManager,
+    policy_manager,
+)
 from test_app.models import Category
 
 pytestmark = pytest.mark.unit
@@ -246,5 +251,12 @@ def test_owner_resolver_override_allows_contextual_access():
     manager.register_owner_resolver(Category, lambda ctx: True)
 
     assert manager.has_permission(user, "category.update_own", context) is True
+
+
+def test_policy_pattern_matching_is_glob_anchored():
+    manager = PolicyManager()
+
+    assert manager._match_pattern("username", "name*") is False
+    assert manager._match_pattern("name_value", "name*") is True
 
 

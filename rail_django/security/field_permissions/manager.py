@@ -9,6 +9,7 @@ This module provides the FieldPermissionManager class which handles:
 """
 
 import logging
+from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Any, Optional, Type, Union
 
 from django.db import models
@@ -26,6 +27,7 @@ from .defaults import (
 from .types import (
     FieldAccessLevel,
     FieldContext,
+    FieldPermissionResult,
     FieldPermissionRule,
     FieldVisibility,
 )
@@ -209,11 +211,11 @@ class FieldPermissionManager:
         """Match a value against a pattern with wildcard support."""
         if not value:
             return False
+        if not pattern:
+            return False
         if pattern == "*" or pattern == value:
             return True
-        if "*" in pattern:
-            return pattern.replace("*", "") in value
-        return False
+        return fnmatchcase(value, pattern)
 
     def _coerce_access_level(self, value: Any) -> Optional[FieldAccessLevel]:
         """Convert a value to FieldAccessLevel enum."""
@@ -371,10 +373,9 @@ class FieldPermissionManager:
                 return False
 
         if rule.field_name != "*":
-            if "*" in rule.field_name:
-                if rule.field_name.replace("*", "") not in context.field_name:
-                    return False
-            elif rule.field_name != context.field_name:
+            if not context.field_name:
+                return False
+            if not self._match_pattern(context.field_name, rule.field_name):
                 return False
 
         if rule.roles:
@@ -395,6 +396,72 @@ class FieldPermissionManager:
                 logger.error(f"Error in rule condition: {e}")
                 return False
         return True
+
+    def check_field_permission(
+        self,
+        user: Any,
+        model_class: Optional[Type[models.Model]],
+        field_name: str,
+        *,
+        instance: Optional[models.Model] = None,
+        operation_type: str = "update",
+        request_context: Optional[dict[str, Any]] = None,
+        parent_instance: Optional[models.Model] = None,
+    ) -> FieldPermissionResult:
+        """
+        Return a normalized field permission decision.
+
+        This compatibility API is used by metadata/form extractors that need a single
+        object exposing visibility and writeability flags.
+        """
+        if user is None:
+            return FieldPermissionResult(
+                access_level=FieldAccessLevel.NONE,
+                visibility=FieldVisibility.HIDDEN,
+                can_read=False,
+                can_write=False,
+                mask_value=None,
+            )
+
+        context = FieldContext(
+            user=user,
+            instance=instance,
+            parent_instance=parent_instance,
+            field_name=field_name,
+            operation_type=operation_type,
+            request_context=request_context,
+            model_class=model_class,
+        )
+        try:
+            access_level = self.get_field_access_level(context)
+            visibility, mask_value = self.get_field_visibility(context)
+        except Exception:
+            logger.exception(
+                "Field permission evaluation failed for %s.%s",
+                getattr(getattr(model_class, "_meta", None), "label_lower", model_class),
+                field_name,
+            )
+            return FieldPermissionResult(
+                access_level=FieldAccessLevel.NONE,
+                visibility=FieldVisibility.HIDDEN,
+                can_read=False,
+                can_write=False,
+                mask_value=None,
+            )
+
+        can_read = visibility != FieldVisibility.HIDDEN and access_level in (
+            FieldAccessLevel.READ,
+            FieldAccessLevel.WRITE,
+            FieldAccessLevel.ADMIN,
+        )
+        can_write = access_level in (FieldAccessLevel.WRITE, FieldAccessLevel.ADMIN)
+        return FieldPermissionResult(
+            access_level=access_level,
+            visibility=visibility,
+            can_read=can_read,
+            can_write=can_write,
+            mask_value=mask_value,
+        )
 
     def _is_sensitive_field(self, field_name: str) -> bool:
         """Check if a field is considered sensitive."""

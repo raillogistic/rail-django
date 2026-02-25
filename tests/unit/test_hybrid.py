@@ -110,3 +110,22 @@ class TestHybridStrategies:
         assert decision.abac_allowed is False
         assert decision.allowed is False
 
+    def test_no_active_abac_policy_falls_back_to_rbac(self, monkeypatch):
+        rbac, _abac_engine, engine = self._setup(
+            CombinationStrategy.RBAC_THEN_ABAC, monkeypatch
+        )
+        user = User.objects.create_user("hybrid_no_policy", password="pass12345")
+        rbac.register_role(
+            RoleDefinition(
+                name="rbac_only_role",
+                role_type=RoleType.BUSINESS,
+                description="RBAC role",
+                permissions=["test.read"],
+            )
+        )
+        rbac.assign_role_to_user(user, "rbac_only_role")
+
+        decision = engine.has_permission(user, "test.read")
+        assert decision.rbac_allowed is True
+        assert decision.abac_allowed is None
+        assert decision.allowed is True

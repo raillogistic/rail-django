@@ -34,18 +34,36 @@ class PermissionExtractorMixin:
     def _extract_permissions(self, model: type[models.Model], user: Any) -> dict:
         """Extract model permissions for user."""
         perms = {
-            "can_list": True, "can_retrieve": True, "can_create": True, "can_update": True, "can_delete": True,
-            "can_bulk_create": True, "can_bulk_update": True, "can_bulk_delete": True, "can_export": True,
+            "can_list": False, "can_retrieve": False, "can_create": False, "can_update": False, "can_delete": False,
+            "can_bulk_create": False, "can_bulk_update": False, "can_bulk_delete": False, "can_export": False,
             "denial_reasons": {},
         }
-        if user and hasattr(user, "has_perm"):
+        if user and getattr(user, "is_superuser", False):
+            perms["can_create"] = True
+            perms["can_update"] = True
+            perms["can_delete"] = True
+            perms["can_list"] = True
+            perms["can_retrieve"] = True
+            perms["can_bulk_create"] = True
+            perms["can_bulk_update"] = True
+            perms["can_bulk_delete"] = True
+            perms["can_export"] = True
+            return perms
+
+        has_perm = getattr(user, "has_perm", None)
+        is_authenticated = bool(user and getattr(user, "is_authenticated", False))
+        if is_authenticated and callable(has_perm):
             app = model._meta.app_label
             name = model.__name__.lower()
-            perms["can_create"] = user.has_perm(f"{app}.add_{name}")
-            perms["can_update"] = user.has_perm(f"{app}.change_{name}")
-            perms["can_delete"] = user.has_perm(f"{app}.delete_{name}")
-            perms["can_list"] = user.has_perm(f"{app}.view_{name}")
+            perms["can_create"] = bool(has_perm(f"{app}.add_{name}"))
+            perms["can_update"] = bool(has_perm(f"{app}.change_{name}"))
+            perms["can_delete"] = bool(has_perm(f"{app}.delete_{name}"))
+            perms["can_list"] = bool(has_perm(f"{app}.view_{name}"))
             perms["can_retrieve"] = perms["can_list"]
+            perms["can_bulk_create"] = perms["can_create"]
+            perms["can_bulk_update"] = perms["can_update"]
+            perms["can_bulk_delete"] = perms["can_delete"]
+            perms["can_export"] = perms["can_list"]
         return perms
 
     def _extract_field_groups(self, model: type[models.Model], graphql_meta: Any) -> Optional[list[dict]]:

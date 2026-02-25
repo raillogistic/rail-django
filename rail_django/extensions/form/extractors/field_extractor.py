@@ -117,7 +117,7 @@ class FieldExtractorMixin:
                         else "VISIBLE"
                     )
                 except Exception:
-                    pass
+                    readable, writable, visibility = False, False, "HIDDEN"
 
             choices = None
             if getattr(field, "choices", None):

@@ -146,3 +146,56 @@ def test_mask_sensitive_fields_uses_null_for_decimal_fields():
     assert masked["price"] == Decimal("0")
     assert masked["name"] == "Maskable Product"
 
+
+@pytest.mark.django_db
+def test_check_field_permission_returns_compatibility_result():
+    user = User.objects.create_user(username="compat_user", password="pass12345")
+    manager = FieldPermissionManager()
+
+    permission = manager.check_field_permission(user, Category, "name")
+
+    assert permission.visibility == FieldVisibility.VISIBLE
+    assert permission.can_read is True
+    assert permission.can_write is False
+
+
+def test_check_field_permission_fails_closed_without_user():
+    manager = FieldPermissionManager()
+
+    permission = manager.check_field_permission(None, Category, "name")
+
+    assert permission.visibility == FieldVisibility.HIDDEN
+    assert permission.can_read is False
+    assert permission.can_write is False
+
+
+@pytest.mark.django_db
+def test_wildcard_rule_does_not_match_midstring_without_glob_alignment():
+    user = User.objects.create_user(username="glob_user", password="pass12345")
+    manager = FieldPermissionManager()
+    manager.register_field_rule(
+        FieldPermissionRule(
+            field_name="name*",
+            model_name="*",
+            access_level=FieldAccessLevel.NONE,
+            visibility=FieldVisibility.HIDDEN,
+        )
+    )
+
+    unrelated_context = FieldContext(
+        user=user,
+        field_name="username",
+        model_class=Category,
+    )
+    unrelated_visibility, _ = manager.get_field_visibility(unrelated_context)
+
+    matching_context = FieldContext(
+        user=user,
+        field_name="name_value",
+        model_class=Category,
+    )
+    matching_visibility, _ = manager.get_field_visibility(matching_context)
+
+    assert unrelated_visibility == FieldVisibility.VISIBLE
+    assert matching_visibility == FieldVisibility.HIDDEN
+

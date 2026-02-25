@@ -43,6 +43,7 @@ from .types import (
     ACCESS_LEVEL_HIERARCHY,
     FieldAccessLevel,
     FieldContext,
+    FieldPermissionResult,
     FieldPermissionRule,
     FieldVisibility,
     access_level_sufficient,
@@ -92,6 +93,7 @@ __all__ = [
     # Dataclasses
     "FieldPermissionRule",
     "FieldContext",
+    "FieldPermissionResult",
     # Constants
     "ACCESS_LEVEL_HIERARCHY",
     "DEFAULT_SENSITIVE_FIELDS",

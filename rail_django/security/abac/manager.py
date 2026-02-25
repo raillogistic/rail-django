@@ -108,24 +108,12 @@ class ABACManager:
 
         return context
 
-    def check_access(self, **kwargs: Any) -> ABACDecision:
+    def check_access(self, **kwargs: Any) -> Optional[ABACDecision]:
         schema_name = kwargs.get("schema_name")
         context = self.build_context(**kwargs)
         decision = self._engine.evaluate(context)
         if decision is None:
-            default_effect = str(
-                get_setting(
-                    "security_settings.abac_default_effect",
-                    "deny",
-                    schema_name=schema_name,
-                )
-            ).lower()
-            allowed = default_effect == "allow"
-            decision = ABACDecision(
-                allowed=allowed,
-                reason="no_active_policy",
-                evaluated_policies=0,
-            )
+            return None
         if bool(
             get_setting(
                 "security_settings.abac_audit_decisions",

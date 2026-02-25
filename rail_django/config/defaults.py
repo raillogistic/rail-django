@@ -181,7 +181,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "permission_audit_log_denies": True,
         "enable_abac": True,
         "hybrid_strategy": "rbac_then_abac",
-        "abac_default_effect": "allow",
+        "abac_default_effect": "deny",
         "abac_cache_ttl_seconds": 60,
         "abac_audit_decisions": False,
         "enable_rate_limiting": False,

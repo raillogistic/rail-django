@@ -327,6 +327,9 @@ class PermissionExtractorMixin:
                         else "VISIBLE"
                     )
                 except Exception:
+                    entry["can_read"] = False
+                    entry["can_write"] = False
+                    entry["visibility"] = "HIDDEN"
                     continue
 
         perms["field_permissions"] = field_permissions

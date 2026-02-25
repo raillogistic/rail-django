@@ -235,7 +235,7 @@ class FieldExtractorMixin:
                         else "VISIBLE"
                     )
                 except Exception:
-                    pass
+                    readable, writable, visibility = False, False, "HIDDEN"
 
             return_type = getattr(property_info, "return_type", Any)
             graphql_type = self._map_property_graphql_type(return_type)
@@ -388,7 +388,7 @@ class FieldExtractorMixin:
                         else "VISIBLE"
                     )
                 except Exception:
-                    pass
+                    readable, writable, visibility = False, False, "HIDDEN"
 
             # Choices
             choices = None
@@ -578,7 +578,7 @@ class FieldExtractorMixin:
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write
                 except Exception:
-                    pass
+                    readable, writable = False, False
 
             if related_model is None:
                 # Skip relationships without a concrete related model (e.g. generic relations).

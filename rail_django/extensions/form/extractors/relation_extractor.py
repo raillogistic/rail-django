@@ -157,7 +157,7 @@ class RelationExtractorMixin:
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write
                 except Exception:
-                    pass
+                    readable, writable = False, False
 
             if related_model is None:
                 return None
