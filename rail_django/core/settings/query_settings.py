@@ -27,6 +27,7 @@ class QueryGeneratorSettings:
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)
     require_model_permissions: bool = True
     model_permission_codename: str = "view"
+    fail_open_on_multitenancy_errors: bool = False
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "QueryGeneratorSettings":

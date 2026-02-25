@@ -12,6 +12,7 @@ Ce module teste:
 from decimal import Decimal
 from typing import Dict, List, Optional, Type
 from unittest.mock import MagicMock, Mock, patch
+from types import SimpleNamespace
 
 import graphene
 import pytest
@@ -22,8 +23,10 @@ from graphene import Boolean, DateTime, Int
 from graphene import List as GrapheneList
 from graphene import ObjectType, String
 from graphene_django import DjangoObjectType
+from graphql import GraphQLError
 from test_app.models import Category, Post, Tag, Product, OrderItem, Comment
 
+from rail_django.core.settings import TypeGeneratorSettings
 from rail_django.generators.introspector import FieldInfo, ModelIntrospector
 from rail_django.generators.types import TypeGenerator
 
@@ -458,4 +461,50 @@ class TestReverseRelationCountFields(TestCase):
         self.assertEqual(stats["unit_price_max"], Decimal("9.50"))
         self.assertEqual(stats["unit_price_count"], 2)
         self.assertEqual(stats["unit_price_distinct_count"], 2)
+
+
+@pytest.mark.unit
+def test_type_generator_tenant_scope_runtime_error_fails_closed():
+    generator = TypeGenerator()
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        with pytest.raises(GraphQLError, match="Tenant scope enforcement failed"):
+            generator._apply_tenant_scope(queryset, info, Category)
+
+
+@pytest.mark.unit
+def test_type_generator_tenant_scope_runtime_error_can_fail_open():
+    generator = TypeGenerator(
+        settings=TypeGeneratorSettings(fail_open_on_multitenancy_errors=True)
+    )
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = generator._apply_tenant_scope(queryset, info, Category)
+
+    assert result is queryset
+
+
+@pytest.mark.django_db
+def test_reverse_relation_resolver_filter_import_path():
+    category = Category.objects.create(name="cat", description="")
+    Post.objects.create(title="import-check", category=category)
+
+    generator = TypeGenerator()
+    category_type = generator.generate_object_type(Category)
+    resolver = getattr(category_type, "resolve_posts")
+
+    info = SimpleNamespace(context=SimpleNamespace())
+
+    result = resolver(category, info, filters={"title": "import-check"})
+    assert len(list(result)) == 1
 

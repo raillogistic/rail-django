@@ -28,6 +28,7 @@ class MutationGeneratorSettings:
     enable_nested_relations: bool = True
     relation_max_nesting_depth: int = 3
     nested_relations_config: Dict[str, bool] = field(default_factory=dict)
+    fail_open_on_multitenancy_errors: bool = False
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "MutationGeneratorSettings":

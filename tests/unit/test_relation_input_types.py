@@ -240,6 +240,55 @@ class TestRelationInputTypeGenerator:
         # Should have update
         assert "update" in result._meta.fields
 
+    def test_cache_key_respects_config_shape(self):
+        """Different config styles should generate distinct cached relation input types."""
+        from rail_django.generators.types.relations import RelationInputTypeGenerator
+        from rail_django.generators.types.relation_config import (
+            FieldRelationConfig,
+            RelationOperationConfig,
+        )
+
+        mock_type_gen = MagicMock()
+        mock_type_gen.mutation_settings.relation_max_nesting_depth = 3
+        mock_type_gen.generate_input_type.return_value = type(
+            "MockInput", (graphene.InputObjectType,), {}
+        )
+
+        generator = RelationInputTypeGenerator(mock_type_gen)
+
+        mock_model = MagicMock()
+        mock_model._meta.label_lower = "test_app.author"
+        mock_model._meta.model_name = "author"
+        mock_model.__name__ = "Author"
+
+        unified_config = FieldRelationConfig(
+            style="unified",
+            create=RelationOperationConfig(enabled=True),
+            update=RelationOperationConfig(enabled=True),
+        )
+        id_only_config = FieldRelationConfig(style="id_only")
+
+        unified = generator.generate_relation_input_type(
+            related_model=mock_model,
+            relation_type="fk",
+            parent_model=None,
+            depth=0,
+            config=unified_config,
+        )
+        id_only = generator.generate_relation_input_type(
+            related_model=mock_model,
+            relation_type="fk",
+            parent_model=None,
+            depth=0,
+            config=id_only_config,
+        )
+
+        assert unified is not id_only
+        assert "create" in unified._meta.fields
+        assert "update" in unified._meta.fields
+        assert "create" not in id_only._meta.fields
+        assert "update" not in id_only._meta.fields
+
 
 class TestRelationOperationConfig:
     """Tests for relation operation configuration dataclasses."""

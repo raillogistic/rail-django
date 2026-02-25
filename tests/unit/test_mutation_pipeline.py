@@ -30,6 +30,7 @@ from rail_django.generators.pipeline.utils import (
     filter_read_only_fields,
     auto_populate_created_by,
     decode_global_id,
+    get_mandatory_fields,
 )
 
 
@@ -466,6 +467,22 @@ class TestPipelineUtils:
         # Test with a non-encoded ID
         type_name, decoded_id = decode_global_id("123")
         assert decoded_id == "123"
+
+    def test_get_mandatory_fields_imports_core_meta(self):
+        """get_mandatory_fields should resolve the core.meta import path."""
+        mock_model = Mock()
+        mock_model._meta.get_fields.return_value = []
+
+        mock_graphql_meta = Mock()
+        mock_graphql_meta.field_config = Mock(mandatory=["owner"])
+
+        with patch(
+            "rail_django.core.meta.get_model_graphql_meta",
+            return_value=mock_graphql_meta,
+        ):
+            result = get_mandatory_fields(mock_model)
+
+        assert result == ["owner"]
 
 
 @pytest.mark.unit

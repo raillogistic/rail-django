@@ -24,6 +24,7 @@ Note:
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Dict, Optional, Set, Type
 
 import graphene
@@ -91,6 +92,11 @@ class NestedFilterInputGenerator:
         # Instance-level cache (not class-level) for better isolation
         self._filter_input_cache: Dict[str, Type[graphene.InputObjectType]] = {}
         self._generation_stack: Set[str] = set()  # Prevent infinite recursion
+        self._placeholder_cache: Dict[str, Type[graphene.InputObjectType]] = {}
+        self._in_progress: Dict[str, threading.Event] = {}
+        self._generation_errors: Dict[str, Exception] = {}
+        self._cache_lock = threading.RLock()
+        self._thread_local = threading.local()
 
         try:
             from ...core.settings import FilteringSettings
@@ -100,8 +106,14 @@ class NestedFilterInputGenerator:
 
     def clear_cache(self) -> None:
         """Clear the filter input cache for this generator."""
-        self._filter_input_cache.clear()
-        self._generation_stack.clear()
+        with self._cache_lock:
+            self._filter_input_cache.clear()
+            self._generation_stack.clear()
+            self._placeholder_cache.clear()
+            self._in_progress.clear()
+            self._generation_errors.clear()
+        if hasattr(self._thread_local, "generation_stack"):
+            delattr(self._thread_local, "generation_stack")
 
     def _evict_cache_if_needed(self) -> None:
         """Evict oldest cache entries if cache exceeds max size."""
@@ -134,27 +146,69 @@ class NestedFilterInputGenerator:
         model_name = model.__name__
         cache_key = f"{self.schema_name}_{model_name}_where_{depth}"
 
-        if cache_key in self._filter_input_cache:
-            return self._filter_input_cache[cache_key]
+        with self._cache_lock:
+            if cache_key in self._filter_input_cache:
+                return self._filter_input_cache[cache_key]
 
-        self._evict_cache_if_needed()
+            self._evict_cache_if_needed()
 
-        if cache_key in self._generation_stack:
+            local_stack = getattr(self._thread_local, "generation_stack", set())
+            if cache_key in local_stack:
+                return self._create_placeholder_input(model_name)
+
+            wait_event = self._in_progress.get(cache_key)
+            if wait_event is None:
+                wait_event = threading.Event()
+                self._in_progress[cache_key] = wait_event
+                self._generation_errors.pop(cache_key, None)
+                self._generation_stack.add(cache_key)
+                new_local_stack = set(local_stack)
+                new_local_stack.add(cache_key)
+                self._thread_local.generation_stack = new_local_stack
+                is_owner = True
+            else:
+                is_owner = False
+
+        if not is_owner:
+            wait_event.wait()
+            with self._cache_lock:
+                cached = self._filter_input_cache.get(cache_key)
+                if cached is not None:
+                    return cached
+                generation_error = self._generation_errors.get(cache_key)
+            if generation_error is not None:
+                raise generation_error
             return self._create_placeholder_input(model_name)
 
-        self._generation_stack.add(cache_key)
-
+        generation_error: Optional[Exception] = None
         try:
             fields = self._generate_model_fields(model, depth)
             fields.update(self._generate_standard_filters(model))
             fields.update(self._generate_optional_filters(model))
 
             where_input = self._create_where_input_type(model_name, fields, depth)
-            self._filter_input_cache[cache_key] = where_input
-
+            with self._cache_lock:
+                self._filter_input_cache[cache_key] = where_input
             return where_input
+        except Exception as exc:
+            generation_error = exc
+            raise
         finally:
-            self._generation_stack.discard(cache_key)
+            with self._cache_lock:
+                if generation_error is not None:
+                    self._generation_errors[cache_key] = generation_error
+                event = self._in_progress.pop(cache_key, None)
+                self._generation_stack.discard(cache_key)
+            local_stack = getattr(self._thread_local, "generation_stack", set())
+            if cache_key in local_stack:
+                updated_stack = set(local_stack)
+                updated_stack.discard(cache_key)
+                if updated_stack:
+                    self._thread_local.generation_stack = updated_stack
+                elif hasattr(self._thread_local, "generation_stack"):
+                    delattr(self._thread_local, "generation_stack")
+            if event is not None:
+                event.set()
 
     def _generate_model_fields(
         self, model: Type[models.Model], depth: int
@@ -458,8 +512,39 @@ class NestedFilterInputGenerator:
         Returns:
             Placeholder InputObjectType
         """
-        # ... implementation ...
-        pass
+        placeholder_name = f"{model_name}WhereInputPlaceholder"
+        with self._cache_lock:
+            cached = self._placeholder_cache.get(placeholder_name)
+            if cached is not None:
+                return cached
+
+            type_ref = [None]
+            fields = {
+                "id": graphene.InputField(
+                    IDFilterInput,
+                    description=f"Placeholder ID filter for {model_name}",
+                ),
+                "AND": graphene.List(
+                    lambda: type_ref[0],
+                    description="Placeholder AND operator",
+                ),
+                "OR": graphene.List(
+                    lambda: type_ref[0],
+                    description="Placeholder OR operator",
+                ),
+                "NOT": graphene.InputField(
+                    lambda: type_ref[0],
+                    description="Placeholder NOT operator",
+                ),
+            }
+            placeholder_input = type(
+                placeholder_name,
+                (graphene.InputObjectType,),
+                fields,
+            )
+            type_ref[0] = placeholder_input
+            self._placeholder_cache[placeholder_name] = placeholder_input
+            return placeholder_input
 
 
 def generate_where_input_for_model(

@@ -189,7 +189,7 @@ def get_mandatory_fields(
         List of field names that are mandatory
     """
     if graphql_meta is None:
-        from ..core.meta import get_model_graphql_meta
+        from ...core.meta import get_model_graphql_meta
 
         graphql_meta = get_model_graphql_meta(model)
 

@@ -133,7 +133,7 @@ def get_mandatory_fields(model: Type[models.Model]) -> List[str]:
     Returns:
         List of field names that are mandatory for this model
     """
-    from ..core.meta import get_model_graphql_meta
+    from ...core.meta import get_model_graphql_meta
 
     # Check GraphQLMeta first
     graphql_meta = get_model_graphql_meta(model)

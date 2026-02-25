@@ -167,7 +167,7 @@ def generate_grouping_query(
                 return []
 
         value_path = group_by
-        queryset = queryset.values(value_path).annotate(total=Count("id"))
+        queryset = queryset.values(value_path).annotate(total=Count("pk"))
 
         order_by = kwargs.get("order_by") or "group"
         if order_by == "count":

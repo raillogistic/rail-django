@@ -314,7 +314,7 @@ class QueryGenerator:
     ) -> models.QuerySet:
         try:
             from ...extensions.multitenancy import apply_tenant_queryset
-        except Exception:
+        except ImportError:
             return queryset
 
         try:
@@ -327,9 +327,10 @@ class QueryGenerator:
             )
         except GraphQLError:
             raise
-        except Exception as e:
-            # logger.warning(f"Failed to apply tenant scope: {e}")
-            return queryset
+        except Exception as exc:
+            if getattr(self.settings, "fail_open_on_multitenancy_errors", False):
+                return queryset
+            raise GraphQLError("Tenant scope enforcement failed") from exc
 
     def _enforce_tenant_access(
         self,

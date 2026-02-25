@@ -10,6 +10,7 @@ from typing import Any, Optional, Type
 
 import graphene
 from django.db import models
+from graphql import GraphQLError
 
 from ...core.meta import get_model_graphql_meta
 
@@ -45,7 +46,6 @@ class TenantMixin:
 
         try:
             from ...extensions.multitenancy import apply_tenant_queryset
-            from graphql import GraphQLError
 
             return apply_tenant_queryset(
                 queryset,
@@ -59,9 +59,17 @@ class TenantMixin:
             return queryset
         except GraphQLError:
             raise
-        except Exception as e:
-            logger.warning(f"Failed to apply tenant scope: {e}")
-            return queryset
+        except Exception as exc:
+            settings = getattr(self, "settings", None)
+            fail_open = getattr(
+                settings,
+                "fail_open_on_multitenancy_errors",
+                getattr(self, "fail_open_on_multitenancy_errors", False),
+            )
+            if fail_open:
+                logger.warning(f"Failed to apply tenant scope: {exc}")
+                return queryset
+            raise GraphQLError("Tenant scope enforcement failed") from exc
 
     def _enforce_tenant_access(
         self,

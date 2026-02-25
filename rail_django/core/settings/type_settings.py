@@ -20,6 +20,7 @@ class TypeGeneratorSettings:
     enable_filtering: bool = True
     auto_camelcase: bool = True
     generate_descriptions: bool = True
+    fail_open_on_multitenancy_errors: bool = False
 
     @classmethod
     def from_schema(cls, schema_name: str) -> "TypeGeneratorSettings":

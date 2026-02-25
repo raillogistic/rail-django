@@ -22,7 +22,9 @@ from graphene import List as GrapheneList
 from graphene import ObjectType, String
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
+from graphql import GraphQLError
 
+from rail_django.core.settings import QueryGeneratorSettings
 from rail_django.generators.filters import AdvancedFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.queries import QueryGenerator
@@ -189,3 +191,31 @@ class TestQueryGenerator(TestCase):
         # La requête doit pouvoir gérer les relations self
         self.assertIsNotNone(category_query.type)
 
+@pytest.mark.unit
+def test_query_generator_tenant_scope_runtime_error_fails_closed():
+    generator = QueryGenerator(TypeGenerator())
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        with pytest.raises(GraphQLError, match="Tenant scope enforcement failed"):
+            generator._apply_tenant_scope(queryset, info, QueryTestAuthor)
+
+
+@pytest.mark.unit
+def test_query_generator_tenant_scope_runtime_error_can_fail_open():
+    settings = QueryGeneratorSettings(fail_open_on_multitenancy_errors=True)
+    generator = QueryGenerator(TypeGenerator(), settings=settings)
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = generator._apply_tenant_scope(queryset, info, QueryTestAuthor)
+
+    assert result is queryset

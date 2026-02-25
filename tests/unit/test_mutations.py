@@ -20,6 +20,7 @@ from django.db import models, transaction
 from django.test import TestCase
 from graphene import Boolean, DateTime, Field, Int, Mutation, ObjectType, String
 from graphene_django import DjangoObjectType
+from graphql import GraphQLError
 from test_app.models import Category, Client, Comment
 from test_app.models import Post
 from test_app.models import Post as OrderForMutation
@@ -27,6 +28,7 @@ from test_app.models import Product as ProductForMutation
 from test_app.models import Profile, Tag
 
 from rail_django.core.decorators import business_logic
+from rail_django.core.settings import MutationGeneratorSettings
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationError, MutationGenerator
 from rail_django.generators.types import TypeGenerator
@@ -276,4 +278,36 @@ class TestUnmanagedMutations(TestCase):
         self.assertNotIn("bulkCreateUnmanagedTestModel", mutations)
         self.assertNotIn("bulkUpdateUnmanagedTestModel", mutations)
         self.assertNotIn("bulkDeleteUnmanagedTestModel", mutations)
+
+
+@pytest.mark.unit
+def test_mutation_generator_tenant_scope_runtime_error_fails_closed():
+    generator = MutationGenerator(TypeGenerator())
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        with pytest.raises(GraphQLError, match="Tenant scope enforcement failed"):
+            generator._apply_tenant_scope(queryset, info, Category)
+
+
+@pytest.mark.unit
+def test_mutation_generator_tenant_scope_runtime_error_can_fail_open():
+    generator = MutationGenerator(
+        TypeGenerator(),
+        settings=MutationGeneratorSettings(fail_open_on_multitenancy_errors=True),
+    )
+    queryset = Mock()
+    info = Mock()
+
+    with patch(
+        "rail_django.extensions.multitenancy.apply_tenant_queryset",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = generator._apply_tenant_scope(queryset, info, Category)
+
+    assert result is queryset
 

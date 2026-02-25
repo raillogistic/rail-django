@@ -3,6 +3,7 @@ Generator for unified relation input types.
 """
 
 from typing import Type, Optional, Dict
+import hashlib
 import graphene
 from django.db import models
 from .relation_config import FieldRelationConfig
@@ -14,6 +15,19 @@ class RelationInputTypeGenerator:
     def __init__(self, type_generator):
         self.type_generator = type_generator
         self._registry: Dict[str, Type[graphene.InputObjectType]] = {}
+
+    def _config_signature(self, config: Optional[FieldRelationConfig]) -> str:
+        """Return a cache signature for config values that shape generated fields."""
+        style = str(getattr(config, "style", "unified") if config else "unified").lower()
+        connect = bool(config.connect.enabled) if config else True
+        create = bool(config.create.enabled) if config else True
+        update = bool(config.update.enabled) if config else True
+        disconnect = bool(config.disconnect.enabled) if config else True
+        set_enabled = bool(config.set.enabled) if config else True
+        return (
+            f"{style}:{int(connect)}:{int(create)}:{int(update)}:"
+            f"{int(disconnect)}:{int(set_enabled)}"
+        )
 
     def generate_relation_input_type(
         self,
@@ -34,13 +48,14 @@ class RelationInputTypeGenerator:
             update = UpdateAuthorInput()
         """
         # Create unique cache key
+        config_signature = self._config_signature(config)
         cache_key = f"{related_model._meta.label_lower}_{relation_type}_Input"
         if parent_model:
             cache_key += f"_from_{parent_model._meta.model_name}"
         if remote_field_name:
             cache_key += f"_exclude_{remote_field_name}"
         
-        cache_key += f"_depth{depth}"
+        cache_key += f"_depth{depth}_cfg_{config_signature}"
 
         if cache_key in self._registry:
             return self._registry[cache_key]
@@ -132,6 +147,9 @@ class RelationInputTypeGenerator:
             type_name = f"{parent_model.__name__}{related_model.__name__}RelationInput"
         if remote_field_name:
             type_name += f"Exclude{remote_field_name.title()}"
+        if config_signature != "unified:1:1:1:1:1":
+            token = hashlib.md5(config_signature.encode("utf-8")).hexdigest()[:8]
+            type_name += f"Cfg{token}"
         
         if depth > 0:
             type_name += f"Level{depth}"

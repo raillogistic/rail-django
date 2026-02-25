@@ -169,7 +169,7 @@ class MutationGenerator:
     ) -> models.QuerySet:
         try:
             from ...extensions.multitenancy import apply_tenant_queryset
-        except Exception:
+        except ImportError:
             return queryset
         
         try:
@@ -182,8 +182,10 @@ class MutationGenerator:
             )
         except GraphQLError:
             raise
-        except Exception:
-            return queryset
+        except Exception as exc:
+            if getattr(self.settings, "fail_open_on_multitenancy_errors", False):
+                return queryset
+            raise GraphQLError("Tenant scope enforcement failed") from exc
 
     def _enforce_tenant_access(
         self,

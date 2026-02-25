@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import MagicMock, Mock, patch
 
 from django.core.exceptions import PermissionDenied, ValidationError
+from graphql import GraphQLError
 
 pytestmark = pytest.mark.unit
 
@@ -139,6 +140,45 @@ class TestMutationBaseMixins:
         # Result should be the same or similar queryset
         assert result is not None
 
+    def test_tenant_mixin_runtime_error_fails_closed_by_default(self):
+        """Runtime errors from multitenancy scoping should fail closed by default."""
+        from rail_django.generators.mutations.base import TenantMixin
+
+        class TestClass(TenantMixin):
+            schema_name = "default"
+
+        obj = TestClass()
+        mock_queryset = MagicMock()
+        mock_info = MagicMock()
+        mock_model = MagicMock()
+
+        with patch(
+            "rail_django.extensions.multitenancy.apply_tenant_queryset",
+            side_effect=RuntimeError("boom"),
+        ):
+            with pytest.raises(GraphQLError, match="Tenant scope enforcement failed"):
+                obj._apply_tenant_scope(mock_queryset, mock_info, mock_model)
+
+    def test_tenant_mixin_runtime_error_can_fail_open(self):
+        """Runtime errors should return original queryset when fail-open is enabled."""
+        from rail_django.generators.mutations.base import TenantMixin
+
+        class TestClass(TenantMixin):
+            schema_name = "default"
+            fail_open_on_multitenancy_errors = True
+
+        obj = TestClass()
+        mock_queryset = MagicMock()
+        mock_info = MagicMock()
+        mock_model = MagicMock()
+
+        with patch(
+            "rail_django.extensions.multitenancy.apply_tenant_queryset",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = obj._apply_tenant_scope(mock_queryset, mock_info, mock_model)
+            assert result is mock_queryset
+
     def test_permission_mixin_has_operation_guard(self):
         """_has_operation_guard should check for guards correctly."""
         from rail_django.generators.mutations.base import PermissionMixin
@@ -221,6 +261,23 @@ class TestInvalidIdFormatHandling:
         assert error.code == "RELATED_OBJECT_NOT_FOUND"
         assert "Author" in str(error)
         assert "999" in str(error)
+
+
+class TestMutationUtilsImportPaths:
+    """Tests for helper import path regressions."""
+
+    def test_get_mandatory_fields_imports_core_meta(self):
+        """get_mandatory_fields should resolve core.meta import correctly."""
+        from rail_django.generators.mutations.utils import get_mandatory_fields
+
+        mock_model = Mock()
+        mock_model._meta.get_fields.return_value = []
+
+        with patch("rail_django.core.meta.get_model_graphql_meta") as mocked_meta:
+            mocked_meta.return_value = Mock(mandatory_fields=["category"])
+            result = get_mandatory_fields(mock_model)
+
+        assert result == ["category"]
 
 
 class TestCircularReferenceHandling:

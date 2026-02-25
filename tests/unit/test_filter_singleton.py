@@ -6,6 +6,7 @@ for NestedFilterInputGenerator and NestedFilterApplicator.
 """
 
 import pytest
+import threading
 from unittest.mock import MagicMock, patch
 
 pytestmark = pytest.mark.unit
@@ -237,6 +238,60 @@ class TestFilterGeneratorBoundedCache:
         # 10% of 3 = 0, but should evict at least 1
         assert len(gen._filter_input_cache) == 2
         assert "a" not in gen._filter_input_cache
+
+    def test_create_placeholder_input_returns_valid_input_type(self):
+        """Placeholder input generation should never return None."""
+        from rail_django.generators.filters import NestedFilterInputGenerator
+        import graphene
+
+        gen = NestedFilterInputGenerator(schema_name="placeholder_test")
+        placeholder = gen._create_placeholder_input("Category")
+
+        assert placeholder is not None
+        assert issubclass(placeholder, graphene.InputObjectType)
+        assert "id" in placeholder._meta.fields
+
+    def test_concurrent_generation_waits_for_owner_result(self):
+        """Concurrent generation should wait and reuse owner output (never None)."""
+        from rail_django.generators.filters import NestedFilterInputGenerator
+        from test_app.models import Category
+
+        gen = NestedFilterInputGenerator(schema_name="concurrency_test")
+        started = threading.Event()
+        release = threading.Event()
+        original_generate_model_fields = gen._generate_model_fields
+
+        def slow_generate_model_fields(model, depth):
+            started.set()
+            release.wait(timeout=2.0)
+            return original_generate_model_fields(model, depth)
+
+        gen._generate_model_fields = slow_generate_model_fields
+
+        results = []
+        errors = []
+
+        def run_generation():
+            try:
+                results.append(gen.generate_where_input(Category))
+            except Exception as exc:
+                errors.append(exc)
+
+        first = threading.Thread(target=run_generation)
+        second = threading.Thread(target=run_generation)
+
+        first.start()
+        assert started.wait(timeout=1.0)
+        second.start()
+        release.set()
+
+        first.join(timeout=2.0)
+        second.join(timeout=2.0)
+
+        assert not errors
+        assert len(results) == 2
+        assert results[0] is results[1]
+        assert not results[0].__name__.endswith("Placeholder")
 
 
 class TestQueryGeneratorUseSingleton:

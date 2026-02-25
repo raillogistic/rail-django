@@ -454,12 +454,18 @@ class TypeGenerator:
     def _apply_tenant_scope(self, queryset: models.QuerySet, info: Any, model: type[models.Model], *, operation: str = "read") -> models.QuerySet:
         try:
             from ...extensions.multitenancy import apply_tenant_queryset
+        except ImportError:
+            return queryset
+
+        try:
             return apply_tenant_queryset(queryset, info, model, schema_name=self.schema_name, operation=operation)
         except GraphQLError:
             raise
-        except Exception as e:
-            logger.warning(f"Failed to apply tenant scope: {e}")
-            return queryset
+        except Exception as exc:
+            if getattr(self.settings, "fail_open_on_multitenancy_errors", False):
+                logger.warning(f"Failed to apply tenant scope: {exc}")
+                return queryset
+            raise GraphQLError("Tenant scope enforcement failed") from exc
 
     def _get_tenant_filter_for_model(self, context: Any, model: type[models.Model]) -> tuple[Optional[str], Optional[Any], Optional[Any]]:
         try:
