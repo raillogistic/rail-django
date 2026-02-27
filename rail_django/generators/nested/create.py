@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models
 
 import graphene
+from ...security.field_permissions.defaults import apply_restricted_field_defaults
 from .operations import RelationOperationProcessor
 
 class NestedCreateMixin:
@@ -96,6 +97,7 @@ class NestedCreateMixin:
             self._handle_create_foreign_keys(
                 model, nested_fields, regular_fields, info
             )
+            regular_fields = apply_restricted_field_defaults(regular_fields, model)
 
             # Create the main instance
             instance = model(**regular_fields)

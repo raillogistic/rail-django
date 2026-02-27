@@ -7,6 +7,7 @@ Handles enum conversion, relation operation processing, and read-only field filt
 from ..base import MutationStep
 from ..context import MutationContext
 from ..utils import (
+    apply_restricted_create_defaults,
     normalize_enum_inputs,
     process_relation_operations,
     filter_read_only_fields,
@@ -97,4 +98,8 @@ class ReadOnlyFieldFilterStep(MutationStep):
             Context with filtered input_data
         """
         ctx.input_data = filter_read_only_fields(ctx.input_data, ctx.graphql_meta)
+        if ctx.operation == "create":
+            ctx.input_data = apply_restricted_create_defaults(
+                ctx.input_data, ctx.model
+            )
         return ctx

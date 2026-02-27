@@ -82,7 +82,10 @@ from .defaults import (
     DEFAULT_CLASSIFICATION_PATTERNS,
     DEFAULT_SENSITIVE_FIELDS,
     FINANCIAL_FIELDS,
+    apply_restricted_field_defaults,
+    has_restricted_field_default,
     is_owner_or_admin,
+    resolve_restricted_field_default,
     setup_default_rules,
 )
 
@@ -99,6 +102,9 @@ __all__ = [
     "DEFAULT_SENSITIVE_FIELDS",
     "DEFAULT_CLASSIFICATION_PATTERNS",
     "FINANCIAL_FIELDS",
+    "resolve_restricted_field_default",
+    "has_restricted_field_default",
+    "apply_restricted_field_defaults",
     # Type helper functions
     "compare_access_levels",
     "access_level_sufficient",

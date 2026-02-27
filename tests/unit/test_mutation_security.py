@@ -81,6 +81,15 @@ def test_nested_fields_respect_disable_nested_relations():
     assert "nested_comments" not in fields
 
 
+def test_create_input_restricted_financial_field_is_optional():
+    type_generator = TypeGenerator()
+    create_input = type_generator.generate_input_type(Product, "create")
+    fields = create_input._meta.fields
+    assert "price" in fields
+    price_field = fields["price"]
+    assert not hasattr(price_field._type, "_of_type")
+
+
 @pytest.mark.django_db
 def test_bulk_create_inherits_create_guard():
     class GuardedMeta(GraphQLMetaConfig):
@@ -183,6 +192,30 @@ def test_create_mutation_requires_model_permission():
     message = result.errors[0].message
     assert "permission" in message.lower()
     assert "test_app.add_category" in message
+
+
+@pytest.mark.django_db
+def test_create_mutation_uses_restricted_default_for_missing_price():
+    generator = MutationGenerator(TypeGenerator())
+    create_mutation = generator.generate_create_mutation(Product)
+
+    user = User.objects.create_user(username="product_creator", password="pass12345")
+    content_type = ContentType.objects.get_for_model(Product)
+    permission = Permission.objects.get(
+        codename="add_product", content_type=content_type
+    )
+    user.user_permissions.add(permission)
+
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+    result = create_mutation.mutate(
+        None,
+        info,
+        input={"name": "fallback-price-product"},
+    )
+
+    assert result.ok is True
+    assert result.object is not None
+    assert result.object.price == Decimal("0")
 
 
 @pytest.mark.django_db

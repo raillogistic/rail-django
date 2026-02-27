@@ -7,6 +7,8 @@ code duplication and provide reusable building blocks for pipeline steps.
 
 from typing import Any, Optional, TYPE_CHECKING
 
+from ...security.field_permissions.defaults import apply_restricted_field_defaults
+
 if TYPE_CHECKING:
     from django.db import models
 
@@ -242,6 +244,18 @@ def filter_read_only_fields(
         return input_data
 
     return {k: v for k, v in input_data.items() if k not in read_only}
+
+
+def apply_restricted_create_defaults(
+    input_data: dict[str, Any], model: type["models.Model"]
+) -> dict[str, Any]:
+    """
+    Inject defaults for restricted fields omitted from create payloads.
+
+    This prevents create flows from failing when required model fields are
+    intentionally non-writable for the caller and have a configured fallback.
+    """
+    return apply_restricted_field_defaults(input_data, model)
 
 
 def auto_populate_created_by(

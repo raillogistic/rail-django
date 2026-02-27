@@ -16,9 +16,12 @@ from rail_django.security.field_permissions import (
     FieldPermissionManager,
     FieldPermissionRule,
     FieldVisibility,
+    apply_restricted_field_defaults,
     field_permission_required,
     field_permission_manager,
+    has_restricted_field_default,
     mask_sensitive_fields,
+    resolve_restricted_field_default,
 )
 from test_app.models import Category, Product
 
@@ -145,6 +148,21 @@ def test_mask_sensitive_fields_uses_null_for_decimal_fields():
 
     assert masked["price"] == Decimal("0")
     assert masked["name"] == "Maskable Product"
+
+
+def test_restricted_field_default_resolution_for_price():
+    value = resolve_restricted_field_default(Product, "price")
+    assert value == Decimal("0")
+    assert has_restricted_field_default(Product, "price") is True
+
+
+def test_apply_restricted_field_defaults_injects_missing_price():
+    payload = {"name": "Fallback Product"}
+    updated = apply_restricted_field_defaults(payload, Product)
+
+    assert "price" not in payload
+    assert updated["price"] == Decimal("0")
+    assert updated["name"] == "Fallback Product"
 
 
 @pytest.mark.django_db

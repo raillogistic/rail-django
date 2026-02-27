@@ -28,10 +28,12 @@ from rail_django.generators.pipeline.utils import (
     sanitize_input_data,
     normalize_enum_inputs,
     filter_read_only_fields,
+    apply_restricted_create_defaults,
     auto_populate_created_by,
     decode_global_id,
     get_mandatory_fields,
 )
+from test_app.models import Product
 
 
 @pytest.mark.unit
@@ -422,6 +424,13 @@ class TestPipelineUtils:
         assert "value" in result
         assert "created_at" not in result
 
+    def test_apply_restricted_create_defaults_adds_financial_fallbacks(self):
+        """Restricted create defaults should inject missing financial fields."""
+        input_data = {"name": "Fallback Product"}
+        result = apply_restricted_create_defaults(input_data, Product)
+        assert result["price"] == 0
+        assert result["name"] == "Fallback Product"
+
     def test_auto_populate_created_by(self):
         """Test auto-population of created_by field."""
         mock_model = Mock()
@@ -701,4 +710,35 @@ class TestPipelineSteps:
         result = step.execute(ctx)
 
         assert result.input_data["status"] == "active"
+
+    def test_read_only_step_applies_restricted_defaults_only_for_create(self):
+        """Read-only filter should only inject restricted defaults on create."""
+        from rail_django.generators.pipeline.steps.normalization import (
+            ReadOnlyFieldFilterStep,
+        )
+
+        step = ReadOnlyFieldFilterStep()
+        mock_info = Mock()
+
+        create_ctx = MutationContext(
+            info=mock_info,
+            model=Product,
+            operation="create",
+            raw_input={"name": "Created"},
+            input_data={"name": "Created"},
+            graphql_meta=None,
+        )
+        create_result = step.execute(create_ctx)
+        assert create_result.input_data["price"] == 0
+
+        update_ctx = MutationContext(
+            info=mock_info,
+            model=Product,
+            operation="update",
+            raw_input={"name": "Updated"},
+            input_data={"name": "Updated"},
+            graphql_meta=None,
+        )
+        update_result = step.execute(update_ctx)
+        assert "price" not in update_result.input_data
 

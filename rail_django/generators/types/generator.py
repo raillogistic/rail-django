@@ -12,6 +12,7 @@ from graphene_django import DjangoObjectType
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
 from graphene_django.converter import convert_django_field
 from graphql import GraphQLError
+from ...security.field_permissions.defaults import has_restricted_field_default
 
 # Django 5.0+ GeneratedField support
 try:
@@ -216,12 +217,14 @@ class TypeGenerator:
         field_name: str = None,
         model: type[models.Model] = None,
     ) -> bool:
+        if field_name and field_name in ("id", "pk"):
+            return False
+        if model and field_name and has_restricted_field_default(model, field_name):
+            return False
         if model and field_name:
             mandatory_fields = self._get_mandatory_fields(model)
             if field_name in mandatory_fields:
                 return True
-        if field_name and field_name in ("id", "pk"):
-            return False
         if field_info.has_auto_now or field_info.has_auto_now_add:
             return False
         if field_info.has_default:
