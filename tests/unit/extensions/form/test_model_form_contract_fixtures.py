@@ -99,6 +99,35 @@ def test_model_form_contract_extractor_includes_field_choices_in_constraints():
     ]
 
 
+def test_model_form_contract_extractor_relations_include_required_and_nullable():
+    extractor = ModelFormContractExtractor(schema_name="default")
+    relations = extractor._build_relations(
+        {
+            "relations": [
+                {
+                    "name": "category",
+                    "field_name": "category",
+                    "label": "Category",
+                    "relation_type": "FOREIGN_KEY",
+                    "is_to_many": False,
+                    "required": True,
+                    "nullable": False,
+                    "related_app": "test_app",
+                    "related_model": "Category",
+                    "operations": {"can_connect": True, "can_set": True},
+                }
+            ]
+        },
+        include_nested=False,
+        mode="CREATE",
+        contract_permissions={"field_permissions": []},
+    )
+
+    assert relations[0]["name"] == "category"
+    assert relations[0]["required"] is True
+    assert relations[0]["nullable"] is False
+
+
 def test_default_sections_include_forward_relations_in_declared_order():
     extractor = ModelFormContractExtractor(schema_name="default")
     contract = extractor.extract_contract(

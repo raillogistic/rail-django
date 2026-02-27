@@ -193,6 +193,7 @@ class RelationExtractorMixin:
                 "relation_type": relation_type,
                 "is_to_many": bool(is_to_many),
                 "required": not is_reverse and not getattr(field, "null", True),
+                "nullable": bool(getattr(field, "null", True)),
                 "read_only": not bool(getattr(field, "editable", True)),
                 "disabled": False,
                 "hidden": False,

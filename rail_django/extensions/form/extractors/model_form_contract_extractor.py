@@ -432,6 +432,8 @@ class ModelFormContractExtractor(FormConfigExtractor):
                     "label": relation.get("label") or relation.get("name"),
                     "relation_type": relation.get("relation_type"),
                     "to_many": bool(relation.get("is_to_many", False)),
+                    "required": bool(relation.get("required", False)),
+                    "nullable": bool(relation.get("nullable", True)),
                     "related_app_label": relation.get("related_app"),
                     "related_model_name": relation.get("related_model"),
                     "policy": {
