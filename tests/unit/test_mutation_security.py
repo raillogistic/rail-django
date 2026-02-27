@@ -17,6 +17,7 @@ from rail_django.core.exceptions import ValidationError as GraphQLValidationErro
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 from rail_django.core.middleware import FieldPermissionMiddleware
 from rail_django.core.settings import MutationGeneratorSettings
+from rail_django.extensions.filters.models import SavedFilter
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationGenerator
 from rail_django.generators.types import TypeGenerator
@@ -216,6 +217,39 @@ def test_create_mutation_uses_restricted_default_for_missing_price():
     assert result.ok is True
     assert result.object is not None
     assert result.object.price == Decimal("0")
+
+
+@pytest.mark.django_db
+def test_create_saved_filter_auto_populates_created_by():
+    generator = MutationGenerator(TypeGenerator())
+    create_mutation = generator.generate_create_mutation(SavedFilter)
+
+    user = User.objects.create_user(
+        username="saved_filter_creator",
+        password="pass12345",
+    )
+    content_type = ContentType.objects.get_for_model(SavedFilter)
+    permission = Permission.objects.get(
+        codename="add_savedfilter",
+        content_type=content_type,
+    )
+    user.user_permissions.add(permission)
+
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+    result = create_mutation.mutate(
+        None,
+        info,
+        input={
+            "name": "My Saved Filter",
+            "model_name": "Product",
+            "filter_json": {"name": {"eq": "Laptop"}},
+            "is_shared": False,
+        },
+    )
+
+    assert result.ok is True
+    assert result.object is not None
+    assert result.object.created_by_id == user.id
 
 
 @pytest.mark.django_db

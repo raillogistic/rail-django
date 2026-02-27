@@ -84,10 +84,13 @@ class NestedCreateMixin:
                     regular_fields[field_name] = value
                     continue
 
-                if isinstance(field, models.ForeignKey):
-                    nested_fields[field_name] = (field, value)
-                elif isinstance(field, models.OneToOneField):
-                    nested_fields[field_name] = (field, value)
+                if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+                    field_attname = getattr(field, "attname", field.name)
+                    is_attname_input = field_name == field_attname and field_name != field.name
+                    if is_attname_input and not isinstance(value, dict):
+                        regular_fields[field_name] = self._coerce_pk(value)
+                    else:
+                        nested_fields[field_name] = (field, value)
                 elif isinstance(field, models.ManyToManyField):
                     m2m_fields[field_name] = (field, value)
                 else:
