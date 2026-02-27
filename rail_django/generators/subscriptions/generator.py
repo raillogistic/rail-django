@@ -151,6 +151,7 @@ class SubscriptionGenerator:
                 "event": event,
                 "node": instance,
                 "id": str(getattr(instance, "pk", None) or ""),
+                "timestamp": payload.get("timestamp"),
             }
 
         class_name = f"{model.__name__}{event.title()}Subscription"
@@ -159,6 +160,7 @@ class SubscriptionGenerator:
             "event": graphene.String(required=True),
             "node": graphene.Field(model_type),
             "id": graphene.ID(required=True),
+            "timestamp": graphene.DateTime(),
             "schema_name": schema_name,
             "model_class": model,
             "event_type": event,
@@ -166,6 +168,7 @@ class SubscriptionGenerator:
             "resolve_event": lambda root, info, **kwargs: root.get("event"),
             "resolve_node": lambda root, info, **kwargs: root.get("node"),
             "resolve_id": lambda root, info, **kwargs: root.get("id"),
+            "resolve_timestamp": lambda root, info, **kwargs: root.get("timestamp"),
         }
         
         # We store 'subscribe' and 'publish' as attributes for the consumer to find
@@ -181,7 +184,16 @@ class SubscriptionGenerator:
         meta_subs = getattr(graphql_meta, "subscriptions", None)
         if meta_subs is False: return {}
 
-        event_config = {"created": self.settings.enable_create, "updated": self.settings.enable_update, "deleted": self.settings.enable_delete}
+        event_config = {
+            "created": self.settings.enable_create,
+            "updated": self.settings.enable_update,
+            "deleted": self.settings.enable_delete,
+            "changed": (
+                self.settings.enable_create
+                or self.settings.enable_update
+                or self.settings.enable_delete
+            ),
+        }
         if meta_subs is not None:
             if isinstance(meta_subs, (list, tuple)):
                 subs_set = {str(s).lower() for s in meta_subs}
@@ -191,6 +203,7 @@ class SubscriptionGenerator:
                 event_config["created"] = "created" in subs_set
                 event_config["updated"] = "updated" in subs_set
                 event_config["deleted"] = "deleted" in subs_set
+                event_config["changed"] = "changed" in subs_set
             elif isinstance(meta_subs, dict):
                 normalized = {}
                 for k, v in meta_subs.items():
@@ -202,8 +215,9 @@ class SubscriptionGenerator:
                 if "created" in normalized: event_config["created"] = normalized["created"]
                 if "updated" in normalized: event_config["updated"] = normalized["updated"]
                 if "deleted" in normalized: event_config["deleted"] = normalized["deleted"]
+                if "changed" in normalized: event_config["changed"] = normalized["changed"]
             elif meta_subs is True:
-                 event_config["created"] = event_config["updated"] = event_config["deleted"] = True
+                 event_config["created"] = event_config["updated"] = event_config["deleted"] = event_config["changed"] = True
 
         model_type = self.type_generator.generate_object_type(model)
         filter_input = self.nested_filter_generator.generate_where_input(model)

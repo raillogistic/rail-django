@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,14 @@ def _handle_post_save(sender, instance, created: bool, **kwargs) -> None:
         return
     event = "created" if created else "updated"
     _schedule_broadcast(instance, event)
+    _schedule_broadcast(instance, "changed")
 
 
 def _handle_post_delete(sender, instance, **kwargs) -> None:
     if kwargs.get("raw"):
         return
     _schedule_broadcast(instance, "deleted")
+    _schedule_broadcast(instance, "changed")
 
 
 def _schedule_broadcast(instance, event: str) -> None:
@@ -67,6 +70,7 @@ def _schedule_broadcast(instance, event: str) -> None:
             "event": event,
             "pk": getattr(instance, "pk", None),
             "snapshot": _snapshot_instance(instance),
+            "timestamp": timezone.now(),
         }
         for schema_name, subscription_class in subscriptions:
             try:

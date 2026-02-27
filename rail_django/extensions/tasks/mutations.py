@@ -101,6 +101,7 @@ def task_mutation(
     name: Optional[str] = None,
     track_progress: bool = True,
     max_retries: Optional[int] = None,
+    queue: Optional[str] = None,
 ):
     def decorator(func: Callable[..., Any]):
         signature = inspect.signature(func)
@@ -138,6 +139,8 @@ def task_mutation(
 
                 context_payload = _snapshot_context(info, schema_name, track_progress)
                 context_payload["call_mode"] = call_mode
+                if queue:
+                    context_payload["queue"] = str(queue)
                 metadata = {
                     "schema_name": schema_name,
                     "payload": _safe_json_payload(kwargs),
@@ -175,7 +178,7 @@ def task_mutation(
                         payload=payload,
                         context_payload=context_payload,
                         backend=settings_obj.backend,
-                        default_queue=settings_obj.default_queue,
+                        default_queue=(str(queue) if queue else settings_obj.default_queue),
                     )
                     if error:
                         schedule_error = error

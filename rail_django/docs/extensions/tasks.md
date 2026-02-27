@@ -65,7 +65,7 @@ def sync_inventory_task(info, provider: str):
 mutation StartSync {
   syncInventory(provider: "AMAZON") {
     taskId
-    status # PENDING, RUNNING, COMPLETED, FAILED
+    status # PENDING, RUNNING, SUCCESS, FAILED
   }
 }
 ```
@@ -88,7 +88,8 @@ query CheckTask($id: ID!) {
 ```
 
 ### Subscriptions
-For real-time updates, use the `taskProgress` subscription:
+For real-time updates, use the `taskProgress` subscription.
+`taskUpdated` is also available as a compatibility alias.
 
 ```graphql
 subscription OnTaskUpdate($taskId: ID!) {

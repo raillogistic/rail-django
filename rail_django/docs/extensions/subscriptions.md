@@ -128,26 +128,33 @@ subscription SpecificOrders {
 
 ## Custom Subscriptions
 
-You can define custom subscriptions by registering them in your schema.
+You can define custom subscriptions by adding fields to your GraphQL
+subscription root type.
 
 ```python
 import graphene
-from rail_django.core.registry import register_subscription
+from rail_django.generators.subscriptions.utils import RailSubscription
 
-class MySubscription(graphene.ObjectType):
-    custom_event = graphene.String()
+class CustomSubscription(RailSubscription):
+    message = graphene.String()
 
-    async def subscribe_custom_event(root, info):
-        # Return the list of channel groups to subscribe to
+    @staticmethod
+    def subscribe(root, info):
         return ["custom_notifications"]
 
-register_subscription(MySubscription)
+    @staticmethod
+    def publish(payload, info):
+        return {"message": payload.get("message")}
+
+
+class Subscription(graphene.ObjectType):
+    custom_event = CustomSubscription.Field()
 ```
 
 To broadcast to this subscription:
 ```python
 from rail_django.extensions.subscriptions import broadcast
-broadcast("custom_notifications", {"custom_event": "Hello World!"})
+broadcast("custom_notifications", {"message": "Hello World!"})
 ```
 
 ## Permissions and Security

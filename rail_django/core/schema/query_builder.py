@@ -233,6 +233,7 @@ class QueryBuilderMixin:
                 task_field = get_task_subscription_field(self.schema_name)
                 if task_field is not None:
                     self._subscription_fields["task_updated"] = task_field
+                    self._subscription_fields["task_progress"] = task_field
         except Exception as exc:
             logger.warning(
                 "Could not import task subscriptions for schema '%s': %s",

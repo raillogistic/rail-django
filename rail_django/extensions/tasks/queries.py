@@ -23,6 +23,7 @@ class TaskExecutionPayloadType(graphene.ObjectType):
     name = graphene.String()
     status = graphene.String()
     progress = graphene.Int()
+    progress_message = graphene.String()
     result = GenericScalar()
     result_reference = graphene.String()
     error = graphene.String()
@@ -38,6 +39,16 @@ class TaskExecutionPayloadType(graphene.ObjectType):
 
     class Meta:
         name = "TaskExecution"
+
+    @staticmethod
+    def resolve_progress_message(root, info):
+        metadata = getattr(root, "metadata", None)
+        if isinstance(metadata, dict):
+            value = metadata.get("progress_message")
+            if value is None:
+                return None
+            return str(value)
+        return None
 
 
 class TaskQuery(graphene.ObjectType):

@@ -39,13 +39,24 @@ class TaskExecutionHandle:
         self.schema_name = schema_name
         self.track_progress = track_progress
 
-    def update_progress(self, progress: int) -> None:
+    def update_progress(self, progress: int, message: Optional[str] = None) -> None:
         if not self.track_progress:
             return
+        metadata_update: Optional[dict[str, Any]] = None
+        if message is not None:
+            task = TaskExecution.objects.filter(pk=self.task_id).only("metadata").first()
+            metadata = {}
+            if task and isinstance(task.metadata, dict):
+                metadata = dict(task.metadata)
+            metadata["progress_message"] = str(message)
+            metadata_update = metadata
+        updates: dict[str, Any] = {"progress": progress}
+        if metadata_update is not None:
+            updates["metadata"] = metadata_update
         _update_task_execution(
             self.task_id,
             schema_name=self.schema_name,
-            progress=progress,
+            **updates,
         )
 
 
@@ -60,6 +71,7 @@ def _get_task_subscription_class() -> Optional[type]:
         task_id = graphene.ID(required=True)
         status = graphene.String(required=True)
         progress = graphene.Int()
+        progress_message = graphene.String()
         result = GenericScalar()
         error = graphene.String()
         task = graphene.Field(TaskExecutionPayloadType)
@@ -86,6 +98,11 @@ def _get_task_subscription_class() -> Optional[type]:
                 "task_id": str(task.id),
                 "status": task.status,
                 "progress": task.progress,
+                "progress_message": (
+                    task.metadata.get("progress_message")
+                    if isinstance(task.metadata, dict)
+                    else None
+                ),
                 "result": task.result,
                 "error": task.error,
                 "task": task,
