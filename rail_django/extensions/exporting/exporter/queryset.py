@@ -4,7 +4,6 @@ This module provides mixin functionality for queryset building,
 filter validation, and GraphQL filter application.
 """
 
-import warnings
 from typing import Any, Iterable, List, Optional, Union
 
 from django.db import models
@@ -261,29 +260,6 @@ class QuerysetMixin:
             raise ExportError(
                 "Filters not allowed: " + ", ".join(sorted(set(invalid_keys)))
             )
-
-    def validate_filters(
-        self,
-        variables: Optional[dict[str, Any]] = None,
-        *,
-        export_settings: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """Validate filter input against allowlists and guardrails.
-
-        .. deprecated::
-            Use :meth:`validate_filter_input` instead.
-        """
-        warnings.warn(
-            "validate_filters() is deprecated; use validate_filter_input() instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if not variables:
-            return
-
-        export_settings = export_settings or self.export_settings
-        filter_input = variables.get("where") or variables.get("filters", variables)
-        self.validate_filter_input(filter_input, export_settings=export_settings)
 
     def get_queryset(
         self,

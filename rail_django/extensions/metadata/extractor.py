@@ -8,7 +8,7 @@ from typing import Any, Optional
 from django.apps import apps
 from graphql import GraphQLError
 
-from ...utils.graphql_meta import get_model_graphql_meta
+from ...core.meta import get_model_graphql_meta
 from ...core.security import get_authz_manager
 from .utils import (
     get_cached_schema,

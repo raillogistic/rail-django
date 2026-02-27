@@ -15,7 +15,9 @@ Usage:
     )
 
     # Use the global health checker instance
-    report = health_checker.get_health_report()
+    report = health_checker.summarize_report(
+        health_checker.get_comprehensive_health_report()
+    )
 
     # Or create a custom instance
     checker = HealthChecker()

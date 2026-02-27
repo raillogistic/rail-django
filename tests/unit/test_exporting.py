@@ -122,7 +122,7 @@ class TestExporting(TestCase):
         expected = "*" * (len(raw) - 4) + raw[-4:]
         self.assertEqual(masked, expected)
 
-    def test_validate_filters_rejects_disallowed_keys(self):
+    def test_validate_filter_input_rejects_disallowed_keys(self):
         export_settings = self._settings(
             ["nom_client"],
             filterable_fields={"tests.testcustomer": ["nom_client"]},
@@ -133,7 +133,7 @@ class TestExporting(TestCase):
             "tests", "TestCustomer", export_settings=export_settings
         )
         with self.assertRaises(ExportError):
-            exporter.validate_filters({"email_client__icontains": "alpha"})
+            exporter.validate_filter_input({"email_client__icontains": "alpha"})
 
     def test_normalize_ordering_allows_only_allowlisted(self):
         export_settings = self._settings(["nom_client"])

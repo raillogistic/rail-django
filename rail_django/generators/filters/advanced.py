@@ -1,12 +1,5 @@
 """
-Advanced Filter Generators for Rail Django.
-
-Provides legacy-compatible filter generators that wrap the new nested filter system,
-ensuring backwards compatibility with existing code.
-
-Classes:
-    - AdvancedFilterGenerator: Legacy-compatible filter generator with full API
-    - EnhancedFilterGenerator: Legacy-compatible enhanced filter generator for metadata
+High-level filter generators for Rail Django.
 """
 
 from __future__ import annotations
@@ -35,18 +28,14 @@ from .mixins import (
 logger = logging.getLogger(__name__)
 
 
-class AdvancedFilterGenerator(
+class ModelFilterGenerator(
     SchemaSettingsMixin, HistoricalModelMixin, GraphQLMetaIntegrationMixin
 ):
     """
-    Legacy-compatible filter generator that provides the same API as the old
-    filters.py AdvancedFilterGenerator, but uses the new nested filter system.
-
-    This class is provided for backwards compatibility with code that imports
-    AdvancedFilterGenerator. New code should use NestedFilterInputGenerator directly.
+    High-level filter generator built on top of nested filter primitives.
 
     Example:
-        generator = AdvancedFilterGenerator(max_nested_depth=3)
+        generator = ModelFilterGenerator(max_nested_depth=3)
         where_input_type = generator.generate_where_input(MyModel)
         filter_set = generator.generate_filter_set(MyModel)
     """
@@ -58,7 +47,7 @@ class AdvancedFilterGenerator(
         schema_name: Optional[str] = None,
     ):
         """
-        Initialize the advanced filter generator.
+        Initialize the filter generator.
 
         Args:
             max_nested_depth: Maximum nesting depth for related model filters
@@ -284,15 +273,12 @@ class AdvancedFilterGenerator(
         return analyzer.get_optimized_queryset(model, filters, base_queryset)
 
 
-class EnhancedFilterGenerator:
+class ModelFilterMetadataGenerator:
     """
-    Legacy-compatible enhanced filter generator for metadata generation.
-
-    This class provides the same API as the old filters.py EnhancedFilterGenerator,
-    but uses the new FilterMetadataGenerator under the hood.
+    High-level metadata filter generator.
 
     Example:
-        generator = EnhancedFilterGenerator(schema_name="default")
+        generator = ModelFilterMetadataGenerator(schema_name="default")
         filters = generator.get_grouped_filters(MyModel)
         for f in filters:
             print(f.field_name, f.operations)
@@ -306,7 +292,7 @@ class EnhancedFilterGenerator:
         enable_quick_filter: bool = False,
     ):
         """
-        Initialize the enhanced filter generator.
+        Initialize the metadata filter generator.
 
         Args:
             max_nested_depth: Maximum nesting depth for related model filters
@@ -339,6 +325,6 @@ class EnhancedFilterGenerator:
 
 
 __all__ = [
-    "AdvancedFilterGenerator",
-    "EnhancedFilterGenerator",
+    "ModelFilterGenerator",
+    "ModelFilterMetadataGenerator",
 ]

@@ -43,9 +43,7 @@ class HealthDashboardView(View):
             # Obtenir les données de santé initiales
             health_checker = HealthChecker()
             comprehensive_report = health_checker.get_comprehensive_health_report()
-            health_status = health_checker.get_health_report(
-                comprehensive_report=comprehensive_report
-            )
+            health_status = health_checker.summarize_report(comprehensive_report)
             initial_data = {
                 "health_status": health_status,
                 "system_metrics": comprehensive_report.get("system_metrics", {}),
@@ -98,9 +96,7 @@ class HealthAPIView(View):
 
             # Obtenir toutes les métriques de santé
             comprehensive_report = health_checker.get_comprehensive_health_report()
-            health_status = health_checker.get_health_report(
-                comprehensive_report=comprehensive_report
-            )
+            health_status = health_checker.summarize_report(comprehensive_report)
             components = comprehensive_report.get("components", {})
 
             health_data = {
@@ -157,8 +153,8 @@ class HealthAPIView(View):
             )
 
             if "healthStatus" in query:
-                response_data["data"]["healthStatus"] = health_checker.get_health_report(
-                    comprehensive_report=comprehensive_report
+                response_data["data"]["healthStatus"] = health_checker.summarize_report(
+                    comprehensive_report
                 )
 
             if "systemMetrics" in query:
@@ -207,8 +203,10 @@ def health_check_endpoint(request):
     try:
         health_checker = HealthChecker()
         cache_ttl = getattr(settings, "HEALTH_CHECK_CACHE_TTL_SECONDS", None)
-        health_report = health_checker.get_health_report(
-            use_cache=True, ttl_seconds=cache_ttl
+        health_report = health_checker.summarize_report(
+            health_checker.get_comprehensive_health_report(
+                use_cache=True, ttl_seconds=cache_ttl
+            )
         )
 
         # Déterminer le code de statut HTTP basé sur la santé

@@ -23,9 +23,9 @@ Package Structure:
         - FilterOperation: Single filter operation representation
         - GroupedFieldFilter: Grouped filter for UI builders
         - FilterMetadataGenerator: Metadata generation
-    - advanced: Legacy-compatible filter generators
-        - AdvancedFilterGenerator: Full-featured filter generator
-        - EnhancedFilterGenerator: Metadata-focused generator
+    - advanced: High-level filter generators
+        - ModelFilterGenerator: Full-featured filter generator
+        - ModelFilterMetadataGenerator: Metadata-focused generator
 
 Example Usage:
     from rail_django.generators.filters import (
@@ -40,9 +40,9 @@ Example Usage:
         # Analysis
         PerformanceAnalyzer,
         FilterMetadataGenerator,
-        # Advanced generators
-        AdvancedFilterGenerator,
-        EnhancedFilterGenerator,
+        # High-level generators
+        ModelFilterGenerator,
+        ModelFilterMetadataGenerator,
     )
 """
 
@@ -145,8 +145,8 @@ from .analysis import (
 
 # Advanced generator exports
 from .advanced import (
-    AdvancedFilterGenerator,
-    EnhancedFilterGenerator,
+    ModelFilterGenerator,
+    ModelFilterMetadataGenerator,
 )
 
 __all__ = [
@@ -225,7 +225,7 @@ __all__ = [
     "FilterOperation",
     "GroupedFieldFilter",
     "FilterMetadataGenerator",
-    # Advanced generators
-    "AdvancedFilterGenerator",
-    "EnhancedFilterGenerator",
+    # High-level generators
+    "ModelFilterGenerator",
+    "ModelFilterMetadataGenerator",
 ]

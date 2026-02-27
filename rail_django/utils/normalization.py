@@ -84,36 +84,6 @@ def normalize_header_key(header_name: str) -> str:
     return header_name.lower().replace("-", "_")
 
 
-def normalize_legacy_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Normalize legacy configuration format to current format.
-
-    Args:
-        config: Configuration dictionary.
-
-    Returns:
-        Normalized configuration dictionary.
-    """
-    if not config:
-        return {}
-
-    result = dict(config)
-
-    # Map legacy keys to new keys
-    legacy_mappings = {
-        "GRAPHQL": "SCHEMA",
-        "AUTO_CAMELCASE": "auto_camelcase",
-        "DEPTH_LIMIT": "depth_limit",
-        "ENABLE_INTROSPECTION": "introspection",
-    }
-
-    for old_key, new_key in legacy_mappings.items():
-        if old_key in result and new_key not in result:
-            result[new_key] = result.pop(old_key)
-
-    return result
-
-
 def normalize_model_label(value: Any) -> Optional[str]:
     """
     Normalize a model label to consistent format.

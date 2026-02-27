@@ -163,7 +163,7 @@ class HealthCheckerTestCase(TestCase):
             self.assertEqual(result.memory_usage_percent, 60.0)
             self.assertGreaterEqual(result.uptime_seconds, 0.0)
 
-    def test_get_health_report(self):
+    def test_summarize_health_report(self):
         """Test de génération du rapport de santé complet."""
         with patch.object(
             self.health_checker, "check_schema_health"
@@ -199,7 +199,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report(use_cache=False)
+            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
 
             self.assertIsInstance(result, dict)
             self.assertEqual(result["overall_status"], "degraded")
@@ -244,7 +244,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report(use_cache=False)
+            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
 
             self.assertEqual(result["overall_status"], "healthy")
             self.assertEqual(result["healthy_components"], 3)
@@ -287,7 +287,7 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.get_health_report(use_cache=False)
+            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
 
             self.assertEqual(result["overall_status"], "unhealthy")
             self.assertEqual(result["healthy_components"], 1)
@@ -308,7 +308,7 @@ class HealthViewsTestCase(TestCase):
         """Test de la vue du tableau de bord de santé."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_health_report.return_value = {
+            mock_instance.summarize_report.return_value = {
                 "overall_status": "healthy",
                 "healthy_components": 3,
             }
@@ -329,7 +329,7 @@ class HealthViewsTestCase(TestCase):
         """Test de l'API de santé en GET."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_health_report.return_value = {"overall_status": "healthy"}
+            mock_instance.summarize_report.return_value = {"overall_status": "healthy"}
             mock_instance.get_comprehensive_health_report.return_value = {
                 "system_metrics": {"cpu_usage_percent": 25.0},
                 "components": {
@@ -351,7 +351,7 @@ class HealthViewsTestCase(TestCase):
         """Test de l'API de santé avec requête GraphQL."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_health_report.return_value = {"overall_status": "healthy"}
+            mock_instance.summarize_report.return_value = {"overall_status": "healthy"}
             mock_instance.get_comprehensive_health_report.return_value = {
                 "system_metrics": {"cpu_usage_percent": 25.0},
                 "components": {},
@@ -378,7 +378,7 @@ class HealthViewsTestCase(TestCase):
         """Test de l'endpoint de vérification simple - système sain."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_health_report.return_value = {
+            mock_instance.summarize_report.return_value = {
                 "overall_status": "healthy",
                 "healthy_components": 3,
                 "degraded_components": 0,
@@ -396,7 +396,7 @@ class HealthViewsTestCase(TestCase):
         """Test de l'endpoint de vérification simple - système défaillant."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
             mock_instance = mock_checker.return_value
-            mock_instance.get_health_report.return_value = {
+            mock_instance.summarize_report.return_value = {
                 "overall_status": "unhealthy",
                 "healthy_components": 1,
                 "degraded_components": 1,
@@ -613,5 +613,6 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
+
 
 

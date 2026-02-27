@@ -92,7 +92,6 @@ EXPORT_DEFAULTS = {
         "trusted_proxies": [],
     },
     "allowed_models": [],
-    "allowed_fields": {},  # legacy alias for export_fields
     "export_fields": {},
     "export_exclude": {},
     "sensitive_fields": DEFAULT_SENSITIVE_FIELDS,
@@ -205,32 +204,6 @@ def is_model_allowed(model: type, export_settings: dict[str, Any]) -> bool:
     return any(key.lower() in allowed for key in model_key_candidates(model))
 
 
-def get_allowed_fields(model: type, export_settings: dict[str, Any]) -> list[str]:
-    """Return the allowed field accessors for a model, if configured.
-
-    Args:
-        model: Django model class.
-        export_settings: Export configuration dictionary.
-
-    Returns:
-        List of allowed field accessor strings.
-    """
-    allowed_fields = export_settings.get("allowed_fields") or {}
-    if not isinstance(allowed_fields, dict):
-        return []
-
-    candidates = {key.lower() for key in model_key_candidates(model)}
-    for key, fields in allowed_fields.items():
-        if not key:
-            continue
-        if str(key).strip().lower() in candidates:
-            if isinstance(fields, (list, tuple, set)):
-                return [str(field).strip() for field in fields if str(field).strip()]
-            return []
-
-    return []
-
-
 def normalize_accessor_value(value: str) -> str:
     """Normalize accessor values to dot-notation lowercase.
 
@@ -315,8 +288,6 @@ def get_export_fields(model: type, export_settings: dict[str, Any]) -> list[str]
         List of normalized field accessor strings.
     """
     export_fields = export_settings.get("export_fields")
-    if export_fields is None:
-        export_fields = export_settings.get("allowed_fields")
     scoped = get_model_scoped_list(model, export_fields)
     if scoped is None:
         return []

@@ -1,8 +1,8 @@
 """
 Role definition loader for meta.yaml/meta.json files.
 
-This module is kept for backward compatibility with older imports. Roles are
-now declared inside meta.yaml or meta.json and loaded by rail_django.core.meta_json.
+Roles are declared inside meta.yaml or meta.json and loaded by
+rail_django.core.meta.json_loader.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Iterable, Optional
 
 from django.apps import apps
 
-from ..core.meta_json import load_app_meta_configs
+from ..core.meta.json_loader import load_app_meta_configs
 
 
 def load_app_role_definitions(

@@ -231,16 +231,11 @@ class JWTManager:
         Retrieve the access token expiration duration in seconds.
 
         Supports non-expiring tokens when configured with 0 or None.
-        Accepts either legacy `JWT_EXPIRATION_DELTA` or new
-        `JWT_ACCESS_TOKEN_LIFETIME` setting (in seconds).
 
         Returns:
             The expiration duration in seconds.
         """
-        # Prefer explicit access token lifetime if present
-        lifetime = getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", None)
-        if lifetime is None:
-            lifetime = getattr(settings, "JWT_EXPIRATION_DELTA", 3600 * 72)
+        lifetime = getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", 3600 * 72)
         # Normalize types that might be timedelta
         if isinstance(lifetime, timedelta):
             lifetime_seconds = int(lifetime.total_seconds())
@@ -253,15 +248,10 @@ class JWTManager:
         """
         Retrieve the refresh token expiration duration in seconds.
 
-        Accepts either legacy `JWT_REFRESH_EXPIRATION_DELTA` or new
-        `JWT_REFRESH_TOKEN_LIFETIME` setting (in seconds).
-
         Returns:
             The expiration duration in seconds.
         """
-        lifetime = getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", None)
-        if lifetime is None:
-            lifetime = getattr(settings, "JWT_REFRESH_EXPIRATION_DELTA", 86400)
+        lifetime = getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400)
         if isinstance(lifetime, timedelta):
             lifetime_seconds = int(lifetime.total_seconds())
         else:

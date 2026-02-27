@@ -63,11 +63,11 @@ class BaseFilterApplicatorMixin:
             return where_input
         from ....core.meta import get_model_graphql_meta
         graphql_meta = get_model_graphql_meta(model)
-        if not graphql_meta or not graphql_meta.filter_presets:
+        if not graphql_meta or not graphql_meta.filtering.presets:
             return where_input
         merged = {}
         for preset_name in presets:
-            preset_def = graphql_meta.filter_presets.get(preset_name)
+            preset_def = graphql_meta.filtering.presets.get(preset_name)
             if preset_def:
                 merged = self._deep_merge(merged, preset_def)
         if where_input:
@@ -106,9 +106,7 @@ class BaseFilterApplicatorMixin:
             try:
                 from ....core.meta import get_model_graphql_meta
                 meta = get_model_graphql_meta(model)
-                meta_quick_fields = (
-                    list(getattr(meta, "quick_filter_fields", [])) if meta else []
-                )
+                meta_quick_fields = list(getattr(meta.filtering, "quick", [])) if meta else []
                 quick_filter_fields = self._get_quick_mixin().merge_quick_filter_fields(
                     model, meta_quick_fields
                 )

@@ -25,7 +25,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql import GraphQLError
 
 from rail_django.core.settings import QueryGeneratorSettings
-from rail_django.generators.filters import AdvancedFilterGenerator
+from rail_django.generators.filters import ModelFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.queries import QueryGenerator
 from rail_django.generators.types import TypeGenerator
@@ -219,3 +219,4 @@ def test_query_generator_tenant_scope_runtime_error_can_fail_open():
         result = generator._apply_tenant_scope(queryset, info, QueryTestAuthor)
 
     assert result is queryset
+

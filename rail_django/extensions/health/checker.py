@@ -323,39 +323,8 @@ class HealthChecker:
 
         return report
 
-    def get_health_report(
-        self,
-        *,
-        use_cache: bool = True,
-        ttl_seconds: Optional[float] = None,
-        comprehensive_report: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """Provide a backward-compatible health report wrapper."""
-        try:
-            if comprehensive_report is None:
-                comprehensive_report = self.get_comprehensive_health_report(
-                    use_cache=use_cache, ttl_seconds=ttl_seconds
-                )
-            return self._summarize_report(comprehensive_report)
-        except Exception as e:
-            logger.error(f"Failed to generate health report: {e}")
-            return {
-                "overall_status": "unhealthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "report_generation_time_ms": 0.0,
-                "healthy_components": 0,
-                "degraded_components": 0,
-                "unhealthy_components": 1,
-                "total_components": 1,
-                "components": {"schema": {}, "databases": [], "caches": []},
-                "system_metrics": asdict(self.get_system_metrics()),
-                "recommendations": [
-                    "Health report generation failed; check system logs for details"
-                ],
-            }
-
-    def _summarize_report(self, comprehensive: Dict[str, Any]) -> Dict[str, Any]:
-        """Summarize comprehensive report for legacy compatibility."""
+    def summarize_report(self, comprehensive: Dict[str, Any]) -> Dict[str, Any]:
+        """Summarize a comprehensive report into lightweight counters."""
         summary = comprehensive.get("summary", {})
         return {
             "overall_status": comprehensive.get("overall_status"),

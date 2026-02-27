@@ -10,7 +10,7 @@ Usage:
     class MyModel(models.Model):
         name = models.CharField(max_length=100)
 
-        class GraphqlMeta(GraphQLMeta):
+        class GraphQLMeta(GraphQLMeta):
             filtering = GraphQLMeta.Filtering(
                 quick=["name"],
                 fields={"name": GraphQLMeta.FilterField(lookups=["icontains", "eq"])}

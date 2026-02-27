@@ -9,7 +9,7 @@ from typing import Any, Optional
 import graphene
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from ...utils.graphql_meta import get_model_graphql_meta
+from ...core.meta import get_model_graphql_meta
 from ...security.field_permissions import field_permission_manager, FieldVisibility
 
 logger = logging.getLogger(__name__)
@@ -391,9 +391,9 @@ class FilterExtractorMixin:
         try:
             graphql_meta = get_model_graphql_meta(model)
             if graphql_meta:
-                if graphql_meta.filter_presets:
+                if graphql_meta.filtering.presets:
                     from graphene.utils.str_converters import to_camel_case
-                    for name, definition in graphql_meta.filter_presets.items():
+                    for name, definition in graphql_meta.filtering.presets.items():
                         presets.append({
                             "name": to_camel_case(name),
                             "preset_name": name,
@@ -435,11 +435,11 @@ class FilterExtractorMixin:
 
     def _supports_quick_filter(self, model: type[models.Model]) -> bool:
         try:
-            from ...generators.filters import AdvancedFilterGenerator
+            from ...generators.filters import get_nested_filter_generator
 
-            filter_generator = AdvancedFilterGenerator(schema_name=self.schema_name)
-            filter_class = filter_generator.generate_filter_set(model)
-            return bool(getattr(filter_class, "base_filters", {}).get("quick"))
+            generator = get_nested_filter_generator(self.schema_name)
+            where_input = generator.generate_where_input(model)
+            return "quick" in getattr(where_input._meta, "fields", {})
         except Exception:
             return False
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ....utils.graphql_meta import get_model_graphql_meta
+from ....core.meta import get_model_graphql_meta
 
 
 def get_graphql_meta(model: Any) -> Any:

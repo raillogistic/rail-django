@@ -92,129 +92,6 @@ def _merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, 
     return merged
 
 
-def _legacy_security_settings() -> dict[str, Any]:
-    config = getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
-    security_settings = config.get("security_settings")
-    if security_settings is None:
-        security_settings = config.get("SECURITY")
-    return security_settings or {}
-
-
-def _legacy_schema_security_rate_limit(schema_name: Optional[str]) -> Optional[dict[str, Any]]:
-    if not schema_name:
-        return None
-    schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {}) or {}
-    schema_config = schema_settings.get(schema_name, {}) if isinstance(schema_settings, dict) else {}
-    if isinstance(schema_config, dict):
-        security_settings = schema_config.get("security_settings")
-        if security_settings is None:
-            security_settings = schema_config.get("SECURITY")
-    else:
-        security_settings = {}
-    if not isinstance(security_settings, dict):
-        security_settings = {}
-    rl = security_settings.get("rate_limiting")
-    if isinstance(rl, dict):
-        return rl
-    return None
-
-
-def _build_legacy_config(schema_name: Optional[str]) -> dict[str, Any]:
-    contexts: dict[str, dict[str, Any]] = {}
-    enabled = False
-
-    security_settings = _legacy_security_settings()
-    security_rl_enabled = bool(security_settings.get("enable_rate_limiting", False))
-    legacy_limit = security_settings.get("rate_limit_requests")
-    legacy_window = security_settings.get("rate_limit_window")
-
-    graphql_rules: list[RateLimitRule] = []
-    if security_rl_enabled:
-        graphql_rules.extend(
-            [
-                RateLimitRule(
-                    name="user_minute",
-                    scope="user_or_ip",
-                    limit=int(security_settings.get("rate_limit_requests_per_minute", 60)),
-                    window_seconds=60,
-                ),
-                RateLimitRule(
-                    name="user_hour",
-                    scope="user_or_ip",
-                    limit=int(security_settings.get("rate_limit_requests_per_hour", 1000)),
-                    window_seconds=3600,
-                ),
-            ]
-        )
-
-    if legacy_limit is not None and legacy_window is not None:
-        graphql_rules.append(
-            RateLimitRule(
-                name="legacy_rule",
-                scope="user_or_ip",
-                limit=int(legacy_limit),
-                window_seconds=int(legacy_window),
-            )
-        )
-
-    graphql_auth_setting = getattr(settings, "GRAPHQL_ENABLE_AUTH_RATE_LIMITING", None)
-    graphql_auth_enabled = graphql_auth_setting is True
-
-    if graphql_auth_enabled:
-        graphql_rules.append(
-            RateLimitRule(
-                name="ip_hour",
-                scope="ip",
-                limit=int(getattr(settings, "GRAPHQL_REQUESTS_LIMIT", 100)),
-                window_seconds=int(getattr(settings, "GRAPHQL_REQUESTS_WINDOW", 3600)),
-            )
-        )
-
-    schema_rl = _legacy_schema_security_rate_limit(schema_name)
-    if schema_rl and bool(schema_rl.get("enable", False)):
-        graphql_rules.append(
-            RateLimitRule(
-                name="schema_rule",
-                scope=_normalize_scope(str(schema_rl.get("scope", "user_or_ip"))),
-                limit=int(schema_rl.get("max_requests", 100)),
-                window_seconds=int(schema_rl.get("window_seconds", 60)),
-            )
-        )
-
-    if graphql_rules:
-        contexts["graphql"] = {"enabled": True, "rules": graphql_rules}
-        enabled = True
-
-    if graphql_auth_enabled:
-        login_rules = [
-            RateLimitRule(
-                name="login_ip",
-                scope="ip",
-                limit=int(getattr(settings, "AUTH_LOGIN_ATTEMPTS_LIMIT", 5)),
-                window_seconds=int(getattr(settings, "AUTH_LOGIN_ATTEMPTS_WINDOW", 900)),
-            )
-        ]
-        contexts["graphql_login"] = {"enabled": True, "rules": login_rules}
-        enabled = True
-
-    schema_api_cfg = getattr(settings, "GRAPHQL_SCHEMA_API_RATE_LIMIT", {}) or {}
-    if isinstance(schema_api_cfg, dict) and bool(schema_api_cfg.get("enable", True)):
-        contexts["schema_api"] = {
-            "enabled": True,
-            "rules": [
-                RateLimitRule(
-                    name="schema_api",
-                    scope=_normalize_scope(str(schema_api_cfg.get("scope", "user_or_ip"))),
-                    limit=int(schema_api_cfg.get("max_requests", 60)),
-                    window_seconds=int(schema_api_cfg.get("window_seconds", 60)),
-                )
-            ],
-        }
-        enabled = True
-
-    return {"enabled": enabled, "contexts": contexts}
-
-
 def _load_rate_limit_config(schema_name: Optional[str]) -> dict[str, Any]:
     raw_config = getattr(settings, "RAIL_DJANGO_RATE_LIMITING", None)
     if isinstance(raw_config, dict):
@@ -227,7 +104,7 @@ def _load_rate_limit_config(schema_name: Optional[str]) -> dict[str, Any]:
             override_normalized = _normalize_config(schema_overrides)
             return _merge_configs(base, override_normalized)
         return base
-    return _build_legacy_config(schema_name)
+    return {"enabled": False, "contexts": {}}
 
 
 def _resolve_user(user: Any, request: Any) -> Optional[Any]:

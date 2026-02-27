@@ -5,6 +5,7 @@ Integration tests for schema snapshot export and diff endpoints.
 import json
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.test import Client as DjangoClient
 from django.test import TestCase, override_settings
 
@@ -40,6 +41,16 @@ class TestSchemaRegistrySnapshots(TestCase):
         clear_all_schemas()
         self._register_schema()
         self.client = DjangoClient()
+        user_model = get_user_model()
+        self.admin_user = user_model.objects.create_superuser(
+            username="schema_registry_admin",
+            email="schema_registry_admin@example.com",
+            password="schema_registry_admin_password",
+        )
+        self.client.login(
+            username="schema_registry_admin",
+            password="schema_registry_admin_password",
+        )
         builder = schema_registry.get_schema_builder(self.schema_name)
         builder.get_schema()
         self.builder = builder

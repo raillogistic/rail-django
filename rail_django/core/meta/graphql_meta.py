@@ -58,13 +58,13 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
     """
     Meta helper for configuring GraphQL behavior on Django models.
 
-    Models can declare an inner ``GraphqlMeta`` (or ``GraphQLMeta``) class and
+    Models can declare an inner ``GraphQLMeta`` class and
     describe their configuration using grouped sections:
 
         class MyModel(models.Model):
             ...
 
-            class GraphqlMeta(GraphQLMeta):
+            class GraphQLMeta(GraphQLMeta):
                 filtering = GraphQLMeta.Filtering(
                     quick=["name", "email"],
                     fields={
@@ -144,16 +144,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         self.field_metadata = getattr(self._meta_config, "field_metadata", None) or {}
         self.field_groups = getattr(self._meta_config, "field_groups", None)
 
-        # Backwards-compatible attribute aliases
-        self.custom_filters = self.filtering.custom
-        self.filter_presets = self.filtering.presets
         self.computed_filters = getattr(self._meta_config, "computed_filters", {})
-        self.custom_resolvers = self.resolvers.queries
-        self.quick_filter_fields = list(self.filtering.quick)
-        self.filters = {"quick": self.quick_filter_fields}
-        self.filter_fields = {
-            name: cfg.lookups[:] for name, cfg in self.filtering.fields.items()
-        }
         self.ordering = list(
             self.ordering_config.allowed or self.ordering_config.default
         )
@@ -198,9 +189,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
 
     def _resolve_meta_class(self, model_class: type[models.Model]) -> Any:
         """Return the declared GraphQL meta configuration class if it exists."""
-        meta_decl = getattr(model_class, "GraphQLMeta", None) or getattr(
-            model_class, "GraphqlMeta", None
-        )
+        meta_decl = getattr(model_class, "GraphQLMeta", None)
         if meta_decl is not None:
             return meta_decl
         try:
@@ -334,7 +323,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
 
     def _validate_configuration(self) -> None:
         """Validate quick filter paths and ensure referenced fields exist."""
-        for field_path in self.quick_filter_fields:
+        for field_path in self.filtering.quick:
             self._validate_field_path(field_path)
 
         for field_name in self.filtering.fields.keys():

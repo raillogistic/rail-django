@@ -36,8 +36,8 @@ from rail_django.generators.filters import (
     apply_where_filter,
     FIELD_TYPE_TO_FILTER_INPUT,
     # New features
-    AdvancedFilterGenerator,
-    EnhancedFilterGenerator,
+    ModelFilterGenerator,
+    ModelFilterMetadataGenerator,
     FilterMetadataGenerator,
     PerformanceAnalyzer,
     FilterOperation,
@@ -999,8 +999,11 @@ class TestGraphQLMetaIntegrationMixin(TestCase):
     """Test GraphQLMeta quick filter merge behaviour."""
 
     def test_get_quick_filter_fields_merges_graphql_meta_with_defaults(self):
+        class _FilteringMock:
+            quick = ["posts__title"]
+
         class _MetaMock:
-            quick_filter_fields = ["posts__title"]
+            filtering = _FilteringMock()
 
         class _MixinUnderTest(GraphQLMetaIntegrationMixin):
             pass
@@ -1181,22 +1184,22 @@ class TestFilterMetadataGenerator(TestCase):
 
 
 class TestLegacyCompatibility(TestCase):
-    """Test legacy AdvancedFilterGenerator and EnhancedFilterGenerator compatibility."""
+    """Test legacy ModelFilterGenerator and ModelFilterMetadataGenerator compatibility."""
 
     def setUp(self):
         # Each test creates fresh generators with empty caches
         pass
 
     def test_advanced_filter_generator_exists(self):
-        """AdvancedFilterGenerator should be importable."""
-        from rail_django.generators.filters import AdvancedFilterGenerator
-        self.assertIsNotNone(AdvancedFilterGenerator)
+        """ModelFilterGenerator should be importable."""
+        from rail_django.generators.filters import ModelFilterGenerator
+        self.assertIsNotNone(ModelFilterGenerator)
 
     def test_advanced_filter_generator_generate_filter_set(self):
         """generate_filter_set should return a FilterSet-like class."""
-        from rail_django.generators.filters import AdvancedFilterGenerator
+        from rail_django.generators.filters import ModelFilterGenerator
 
-        generator = AdvancedFilterGenerator()
+        generator = ModelFilterGenerator()
         filter_set = generator.generate_filter_set(Category)
 
         self.assertIsNotNone(filter_set)
@@ -1204,23 +1207,23 @@ class TestLegacyCompatibility(TestCase):
 
     def test_advanced_filter_generator_generate_where_input(self):
         """generate_where_input should return InputObjectType."""
-        from rail_django.generators.filters import AdvancedFilterGenerator
+        from rail_django.generators.filters import ModelFilterGenerator
 
-        generator = AdvancedFilterGenerator()
+        generator = ModelFilterGenerator()
         where_input = generator.generate_where_input(Category)
 
         self.assertTrue(issubclass(where_input, graphene.InputObjectType))
 
     def test_enhanced_filter_generator_exists(self):
-        """EnhancedFilterGenerator should be importable."""
-        from rail_django.generators.filters import EnhancedFilterGenerator
-        self.assertIsNotNone(EnhancedFilterGenerator)
+        """ModelFilterMetadataGenerator should be importable."""
+        from rail_django.generators.filters import ModelFilterMetadataGenerator
+        self.assertIsNotNone(ModelFilterMetadataGenerator)
 
     def test_enhanced_filter_generator_get_grouped_filters(self):
         """get_grouped_filters should return list of GroupedFieldFilter."""
-        from rail_django.generators.filters import EnhancedFilterGenerator
+        from rail_django.generators.filters import ModelFilterMetadataGenerator
 
-        generator = EnhancedFilterGenerator()
+        generator = ModelFilterMetadataGenerator()
         filters = generator.get_grouped_filters(Category)
 
         self.assertIsInstance(filters, list)
@@ -1298,4 +1301,5 @@ class TestNestedFilterApplicatorNewFeatures(TestCase):
 
         self.assertIsInstance(q, Q)
         self.assertEqual(annotations, {})
+
 

@@ -77,7 +77,8 @@ class GraphQLMetaIntegrationMixin:
             return {}
 
         try:
-            if graphql_meta.custom_filters:
+            custom = getattr(graphql_meta.filtering, "custom", {})
+            if custom:
                 return graphql_meta.get_custom_filters()
         except AttributeError:
             pass
@@ -100,7 +101,7 @@ class GraphQLMetaIntegrationMixin:
         graphql_meta = self.get_graphql_meta(model)
         if graphql_meta:
             try:
-                quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
+                quick_fields = list(getattr(graphql_meta.filtering, "quick", []))
                 return quick_mixin.merge_quick_filter_fields(model, quick_fields)
             except (TypeError, AttributeError):
                 pass

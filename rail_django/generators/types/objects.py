@@ -327,9 +327,9 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
                     # Apply filters if provided
                     if filters:
-                        from ..filters import AdvancedFilterGenerator
+                        from ..filters import ModelFilterGenerator
 
-                        filter_generator = AdvancedFilterGenerator()
+                        filter_generator = ModelFilterGenerator()
                         filter_set_class = filter_generator.generate_filter_set(
                             related_model
                         )
@@ -462,9 +462,9 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
                 # Apply filters if provided
                 if filters:
-                    from ..filters import AdvancedFilterGenerator
+                    from ..filters import ModelFilterGenerator
 
-                    filter_generator = AdvancedFilterGenerator()
+                    filter_generator = ModelFilterGenerator()
                     filter_set_class = filter_generator.generate_filter_set(
                         related_model
                     )
@@ -585,9 +585,9 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                     )
 
                     if filters:
-                        from ..filters import AdvancedFilterGenerator
+                        from ..filters import ModelFilterGenerator
 
-                        filter_generator = AdvancedFilterGenerator()
+                        filter_generator = ModelFilterGenerator()
                         filter_set_class = filter_generator.generate_filter_set(
                             related_model
                         )
@@ -702,3 +702,4 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
     self._type_registry[model] = model_type
     return model_type
+

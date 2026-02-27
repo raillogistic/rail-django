@@ -150,7 +150,7 @@ class TestMetadataFieldNames(TestCase):
         # Patch in filter_extractor because _extract_filter_config is defined there
         with unittest.mock.patch('rail_django.extensions.metadata.filter_extractor.get_model_graphql_meta') as mock_get_meta:
             mock_meta = MagicMock(custom_metadata=None, field_groups=[])
-            mock_meta.filter_presets = {
+            mock_meta.filtering.presets = {
                 "active_users": {"status": "active"},
                 "recent_items": {"created_at__gt": "2023-01-01"}
             }

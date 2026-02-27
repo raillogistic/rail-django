@@ -33,7 +33,7 @@ class SchemaExportAPIView(BaseAPIView):
             try:
                 builder = schema_registry.get_schema_builder(schema_name)
                 schema = builder.get_schema()
-                from rail_django.introspection.schema_introspector import SchemaIntrospector
+                from rail_django.introspection import SchemaIntrospector
                 from graphql.utilities import print_schema
                 import hashlib
                 graphql_schema = getattr(schema, "graphql_schema", None)
@@ -49,7 +49,7 @@ class SchemaExportAPIView(BaseAPIView):
         if export_format == "markdown":
             try:
                 from rail_django.introspection.documentation import DocumentationGenerator
-                from rail_django.introspection.schema_introspector import SchemaIntrospection
+                from rail_django.introspection import SchemaIntrospection
                 markdown = DocumentationGenerator().generate_markdown_documentation(SchemaIntrospection.from_dict(schema_json))
                 return self.json_response({"schema_name": schema_name, "version": version or schema_info.version, "schema_hash": schema_hash, "markdown": markdown})
             except Exception as exc: return self.error_response(f"Markdown export failed: {exc}", status=500)

@@ -115,9 +115,7 @@ class ResourceAttributeProvider(BaseAttributeProvider):
                     attrs["owner_id"] = getattr(instance, owner_id_attr)
                     break
 
-        graphql_meta = getattr(model, "GraphQLMeta", None) or getattr(
-            model, "GraphqlMeta", None
-        )
+        graphql_meta = getattr(model, "GraphQLMeta", None)
         if graphql_meta is not None:
             attrs["classification"] = getattr(graphql_meta, "classification", None)
             attrs["sensitivity"] = getattr(graphql_meta, "sensitivity", None)

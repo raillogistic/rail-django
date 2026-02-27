@@ -12,7 +12,7 @@ from graphql import GraphQLError
 from ...core.meta import get_model_graphql_meta
 from ...core.settings import SchemaSettings, SubscriptionGeneratorSettings
 from ...extensions.subscriptions.registry import register_subscription
-from ..filters import AdvancedFilterGenerator, NestedFilterInputGenerator, NestedFilterApplicator
+from ..filters import ModelFilterGenerator, NestedFilterInputGenerator, NestedFilterApplicator
 from ..types import TypeGenerator
 
 from .utils import (
@@ -43,7 +43,7 @@ class SubscriptionGenerator:
         self.settings = (
             settings if settings is not None else SubscriptionGeneratorSettings.from_schema(schema_name)
         )
-        self.filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
+        self.filter_generator = ModelFilterGenerator(schema_name=schema_name)
         self.nested_filter_generator = NestedFilterInputGenerator(schema_name=schema_name)
         self.nested_filter_applicator = NestedFilterApplicator(schema_name=schema_name)
 

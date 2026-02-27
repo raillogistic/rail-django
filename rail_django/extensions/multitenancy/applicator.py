@@ -33,9 +33,7 @@ def get_tenant_field_config(
     model: type[models.Model], *, schema_name: Optional[str] = None
 ) -> Optional[TenantFieldConfig]:
     tenant_field = None
-    meta_decl = getattr(model, "GraphQLMeta", None) or getattr(
-        model, "GraphqlMeta", None
-    )
+    meta_decl = getattr(model, "GraphQLMeta", None)
     if meta_decl is not None and hasattr(meta_decl, "tenant_field"):
         tenant_field = getattr(meta_decl, "tenant_field", None)
         if not tenant_field:

@@ -6,7 +6,7 @@ and core utilities.
 """
 
 from .config import ConfigLoader
-from .debug import (
+from ..middleware.performance import (
     GraphQLPerformanceMiddleware,
     GraphQLPerformanceView,
     PerformanceAggregator,

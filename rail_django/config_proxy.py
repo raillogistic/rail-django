@@ -11,7 +11,6 @@ from django.conf import settings
 
 # Import comprehensive library defaults from defaults.py
 from .config.defaults import LIBRARY_DEFAULTS
-from .core.config.helpers import normalize_legacy_sections
 
 
 # Runtime storage for schema settings overrides (avoids modifying Django settings)
@@ -95,8 +94,7 @@ class SettingsProxy:
         # Check runtime settings first
         runtime_settings = _RUNTIME_SCHEMA_SETTINGS.get(self.schema_name)
         if runtime_settings:
-            runtime_config = self._normalize_legacy_sections(runtime_settings)
-            val = self._get_nested_value(runtime_config, key)
+            val = self._get_nested_value(runtime_settings, key)
             if val is not None:
                 return val
 
@@ -105,10 +103,7 @@ class SettingsProxy:
         if self.schema_name not in schema_settings:
             return None
 
-        schema_config = self._normalize_legacy_sections(
-            schema_settings[self.schema_name]
-        )
-        return self._get_nested_value(schema_config, key)
+        return self._get_nested_value(schema_settings[self.schema_name], key)
 
     def _get_django_setting(self, key: str) -> Any:
         """
@@ -120,9 +115,7 @@ class SettingsProxy:
         Returns:
             The setting value or None if not found
         """
-        django_settings = self._normalize_legacy_sections(
-            getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
-        )
+        django_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
         return self._get_nested_value(django_settings, key)
 
     def _get_library_default(self, key: str) -> Any:
@@ -160,10 +153,6 @@ class SettingsProxy:
             current = current[k]
 
         return current
-
-    def _normalize_legacy_sections(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Normalize legacy settings keys to current names."""
-        return normalize_legacy_sections(data)
 
     def set(self, key: str, value: Any) -> None:
         """
@@ -435,4 +424,3 @@ def get_core_schema_settings(schema_name: Optional[str] = None) -> dict[str, Any
         field.name: getattr(schema_settings, field.name)
         for field in schema_settings.__dataclass_fields__.values()
     }
-

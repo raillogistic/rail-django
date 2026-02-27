@@ -2,8 +2,7 @@
 Configuration Builders for GraphQL Meta
 
 This module provides functions for building configuration dataclass instances
-from raw meta class declarations. These functions handle legacy format
-fallbacks and normalization.
+from raw meta class declarations.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def build_filtering_config(meta_config: Any) -> FilteringConfig:
     """
-    Construct filtering configuration with legacy fallbacks.
+    Construct filtering configuration.
 
     Args:
         meta_config: The model's GraphQLMeta configuration class
@@ -71,38 +70,6 @@ def build_filtering_config(meta_config: Any) -> FilteringConfig:
         )
     else:
         config = FilteringConfig()
-
-    # Apply legacy fallbacks
-    if not config.presets:
-        legacy_presets = getattr(meta_config, "filter_presets", {})
-        if isinstance(legacy_presets, dict):
-            config.presets = dict(legacy_presets)
-
-    if not config.custom:
-        legacy_custom = getattr(meta_config, "custom_filters", {})
-        if isinstance(legacy_custom, dict):
-            config.custom = dict(legacy_custom)
-
-    if not config.quick:
-        legacy_quick = getattr(meta_config, "quick_filter_fields", None)
-        if legacy_quick:
-            config.quick = list(legacy_quick)
-
-    legacy_filters = getattr(meta_config, "filters", {})
-    if isinstance(legacy_filters, dict):
-        for name, value in legacy_filters.items():
-            config.fields.setdefault(name, coerce_filter_field_config(value))
-
-    legacy_filter_fields = getattr(meta_config, "filter_fields", {})
-    if isinstance(legacy_filter_fields, dict):
-        for name, value in legacy_filter_fields.items():
-            if name == "quick" and not config.quick:
-                if isinstance(value, (list, tuple)):
-                    config.quick = list(value)
-                elif isinstance(value, str):
-                    config.quick = [value]
-                continue
-            config.fields.setdefault(name, coerce_filter_field_config(value))
 
     return config
 
@@ -243,10 +210,6 @@ def build_resolver_config(meta_config: Any) -> ResolverConfig:
             mutations=dict(raw.get("mutations", {})),
             fields=dict(raw.get("fields", {})),
         )
-
-    legacy_resolvers = getattr(meta_config, "custom_resolvers", {})
-    if isinstance(legacy_resolvers, dict):
-        return ResolverConfig(queries=dict(legacy_resolvers))
 
     return ResolverConfig()
 

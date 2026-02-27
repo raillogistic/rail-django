@@ -17,7 +17,6 @@ from rail_django.utils.normalization import (
     normalize_string_list,
     normalize_accessor,
     normalize_header_key,
-    normalize_legacy_config,
     normalize_model_label,
     normalize_dict_keys
 )
@@ -69,17 +68,6 @@ class TestNormalizationUtils:
     def test_normalize_header_key(self):
         assert normalize_header_key("X-Tenant-ID") == "x_tenant_id"
         assert normalize_header_key("Authorization") == "authorization"
-
-    def test_normalize_legacy_config(self):
-        legacy = {
-            "GRAPHQL": {"path": "/gql"},
-            "AUTO_CAMELCASE": True
-        }
-        normalized = normalize_legacy_config(legacy)
-        assert "SCHEMA" in normalized
-        assert "auto_camelcase" in normalized
-        assert normalized["SCHEMA"] == {"path": "/gql"}
-        assert normalized["auto_camelcase"] is True
 
     def test_normalize_model_label(self):
         assert normalize_model_label("myapp.MyModel") == "myapp.MyModel"

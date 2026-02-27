@@ -31,7 +31,7 @@ from tests.models import (
 
 from rail_django.core.schema import AutoSchemaGenerator, SchemaBuilder
 from rail_django.core.decorators import business_logic
-from rail_django.generators.filters import AdvancedFilterGenerator
+from rail_django.generators.filters import ModelFilterGenerator
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationGenerator
 from rail_django.generators.queries import QueryGenerator
@@ -59,7 +59,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         self.introspector = ModelIntrospector(TestCompany)
         self.type_generator = TypeGenerator(settings=TypeGeneratorSettings())
-        self.filter_generator = AdvancedFilterGenerator()
+        self.filter_generator = ModelFilterGenerator()
         self.query_generator = QueryGenerator(
             self.type_generator, self.filter_generator
         )
@@ -163,7 +163,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête pour récupérer les entreprises
         query = """
         query {
-            companies {
+            testCompanyList {
                 nomEntreprise
                 secteurActivite
                 nombreEmployes
@@ -179,14 +179,14 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
-        self.assertIn("companies", result["data"])
-        companies = result["data"]["companies"]
+        self.assertIn("testCompanyList", result["data"])
+        companies = result["data"]["testCompanyList"]
         self.assertTrue(
             all(item["secteurActivite"] == "Technology" for item in companies)
         )
 
         # Vérifier les données retournées
-        companies = result["data"]["companies"]
+        companies = result["data"]["testCompanyList"]
         self.assertEqual(len(companies), 1)
         self.assertEqual(companies[0]["nomEntreprise"], "Test Company")
         self.assertEqual(companies[0]["secteurActivite"], "Technology")
@@ -281,7 +281,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête avec relations
         query = """
         query {
-            employees {
+            testEmployeeList {
                 utilisateurEmploye {
                     username
                     email
@@ -301,10 +301,10 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Vérifier que la requête fonctionne
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
-        self.assertIn("employees", result["data"])
+        self.assertIn("testEmployeeList", result["data"])
 
         # Vérifier les relations
-        employees = result["data"]["employees"]
+        employees = result["data"]["testEmployeeList"]
         if employees:
             employee_data = employees[0]
             self.assertIn("utilisateurEmploye", employee_data)
@@ -382,7 +382,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Exécuter une requête avec filtres
         query = """
         query {
-            companies(
+            testCompanyList(
                 secteur_activite: "Technology"
                 est_active: true
                 limit: 3
@@ -399,7 +399,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         # Vérifier que la requête fonctionne
         self.assertIn("data", result)
-        self.assertIn("companies", result["data"])
+        self.assertIn("testCompanyList", result["data"])
 
     def test_schema_validation(self):
         """Test la validation du schéma généré."""
@@ -462,7 +462,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
 
         query = """
         query {
-            companies(limit: 10) {
+            testCompanyList(limit: 10) {
                 nomEntreprise
                 secteurActivite
             }
@@ -547,7 +547,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 )
                 query = """
                 query {
-                    companies {
+                    testCompanyList {
                         nomEntreprise
                     }
                 }
@@ -644,3 +644,4 @@ class TestSchemaGeneratorAdvanced:
         assert schema is not None
         assert isinstance(schema, Schema)
 
+

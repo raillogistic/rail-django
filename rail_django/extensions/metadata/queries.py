@@ -11,7 +11,7 @@ from graphql import GraphQLError
 
 from .extractor import ModelSchemaExtractor
 from .detail_extractor import DetailContractExtractor
-from ...utils.graphql_meta import get_model_graphql_meta
+from ...core.meta import get_model_graphql_meta
 from .types import (
     DetailContractInputType,
     DetailContractResultType,

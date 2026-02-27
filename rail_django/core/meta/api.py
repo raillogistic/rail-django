@@ -42,10 +42,8 @@ class GraphQLMetaAPIMixin:
     _read_only_fields: set[str]
     _write_only_fields: set[str]
     _include_fields_set: Optional[set[str]]
-    custom_resolvers: dict[str, Any]
-    custom_filters: dict[str, Any]
-    quick_filter_fields: list[str]
     filtering: Any
+    resolvers: Any
     ordering_config: Any
 
     def ensure_operation_access(
@@ -276,7 +274,7 @@ class GraphQLMetaAPIMixin:
         Returns:
             The resolver function or None if not found
         """
-        resolver = self.custom_resolvers.get(resolver_name)
+        resolver = (self.resolvers.queries or {}).get(resolver_name)
 
         if isinstance(resolver, str):
             if hasattr(self.model_class, resolver):
@@ -300,7 +298,7 @@ class GraphQLMetaAPIMixin:
         Returns:
             The filter function or None if not found
         """
-        filter_func = self.custom_filters.get(filter_name)
+        filter_func = (self.filtering.custom or {}).get(filter_name)
 
         if isinstance(filter_func, str):
             if hasattr(self.model_class, filter_func):
@@ -325,7 +323,7 @@ class GraphQLMetaAPIMixin:
 
         filter_instances: dict[str, Any] = {}
 
-        for filter_name, filter_func in self.custom_filters.items():
+        for filter_name, filter_func in (self.filtering.custom or {}).items():
             callable_fn = filter_func
             if isinstance(filter_func, str):
                 callable_fn = getattr(self.model_class, filter_func, None)
@@ -421,7 +419,7 @@ class GraphQLMetaAPIMixin:
         Returns:
             Filtered queryset
         """
-        quick_fields = self.quick_filter_fields
+        quick_fields = self.filtering.quick
 
         if not quick_fields or not search_value:
             return queryset
@@ -478,7 +476,7 @@ class GraphQLMetaAPIMixin:
         Returns:
             True if the resolver exists
         """
-        return resolver_name in self.custom_resolvers
+        return resolver_name in (self.resolvers.queries or {})
 
     def has_custom_filter(self, filter_name: str) -> bool:
         """
@@ -490,7 +488,7 @@ class GraphQLMetaAPIMixin:
         Returns:
             True if the filter exists
         """
-        return filter_name in self.custom_filters
+        return filter_name in (self.filtering.custom or {})
 
     def has_quick_filter(self) -> bool:
         """
@@ -499,4 +497,4 @@ class GraphQLMetaAPIMixin:
         Returns:
             True if quick filter fields are configured
         """
-        return bool(self.quick_filter_fields)
+        return bool(self.filtering.quick)

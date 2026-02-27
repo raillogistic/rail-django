@@ -284,8 +284,6 @@ def _normalize_meta_config(
             for guard in fields:
                 _resolve_condition(guard, meta_path)
 
-    _resolve_callable_map(normalized.get("custom_filters"), meta_path)
-    _resolve_callable_map(normalized.get("custom_resolvers"), meta_path)
     _resolve_abac_policies(normalized.get("abac_policies"), meta_path)
 
     return normalized

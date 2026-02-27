@@ -35,9 +35,8 @@ if TYPE_CHECKING:
         DateTimeFilterInput,
         IDFilterInput,
         CountFilterInput,
-        # Legacy compatibility
-        AdvancedFilterGenerator,
-        EnhancedFilterGenerator,
+        ModelFilterGenerator,
+        ModelFilterMetadataGenerator,
         FilterMetadataGenerator,
         PerformanceAnalyzer,
         FilterOperation,
@@ -65,9 +64,8 @@ __all__ = [
     "IDFilterInput",
     "CountFilterInput",
     "get_nested_filter_generator",
-    # Legacy compatibility (from old filters.py)
-    "AdvancedFilterGenerator",
-    "EnhancedFilterGenerator",
+    "ModelFilterGenerator",
+    "ModelFilterMetadataGenerator",
     "FilterMetadataGenerator",
     "PerformanceAnalyzer",
     "FilterOperation",

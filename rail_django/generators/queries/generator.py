@@ -17,7 +17,7 @@ from ...core.services import get_query_optimizer
 from ...core.settings import QueryGeneratorSettings
 from ...extensions.optimization import get_optimizer, get_performance_monitor
 from ...security.field_permissions import mask_sensitive_fields
-from ..filters import AdvancedFilterGenerator
+from ..filters import ModelFilterGenerator
 from .grouping import (  # noqa: F401
     GroupingBucketType,
     generate_grouping_query as _generate_grouping_query,
@@ -83,7 +83,7 @@ class QueryGenerator:
         self.authorization_manager = get_authz_manager(schema_name)
 
         self._query_registry: dict[type[models.Model], dict[str, Any]] = {}
-        self._filter_generator = AdvancedFilterGenerator(schema_name=schema_name)
+        self._filter_generator = ModelFilterGenerator(schema_name=schema_name)
         self._query_fields: dict[str, graphene.Field] = {}
 
         # Initialize performance optimization
