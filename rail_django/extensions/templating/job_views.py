@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 
 # Optional JWT protection (mirrors export endpoints)
 try:
-    from ..auth.decorators import jwt_required
+    from ..auth.decorators import jwt_optional
 except ImportError:
-    jwt_required = None
+    jwt_optional = None
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class PdfTemplateJobStatusView(View):
     """Return status for async PDF jobs."""
@@ -86,7 +86,7 @@ class PdfTemplateJobStatusView(View):
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class PdfTemplateJobDownloadView(View):
     """Download completed PDF job files."""

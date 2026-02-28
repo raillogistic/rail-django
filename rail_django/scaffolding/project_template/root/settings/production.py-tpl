@@ -16,6 +16,10 @@ ALLOWED_HOSTS = env.list(
 
 ENABLE_PROD_GRAPHIQL = env.bool('RAIL_ENABLE_PROD_GRAPHIQL', default=False)
 ENABLE_PROD_INTROSPECTION = env.bool('RAIL_ENABLE_PROD_INTROSPECTION', default=False)
+PROD_GRAPHIQL_ALLOWED_HOSTS = env.list(
+    'RAIL_PROD_GRAPHIQL_ALLOWED_HOSTS',
+    default=ALLOWED_HOSTS,
+)
 
 # Prebuild schemas on startup in production to avoid first-request latency.
 if "RAIL_DJANGO_GRAPHQL" in globals():
@@ -31,20 +35,19 @@ if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
         schema_config["schema_settings"]["enable_graphiql"] = False
         schema_config["schema_settings"]["enable_introspection"] = False
 
-    # Optional production GraphiQL: superusers from loopback hosts only.
-    if ENABLE_PROD_GRAPHIQL or ENABLE_PROD_INTROSPECTION:
-        RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
-            "schema_settings", {}
-        )
-        RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
-            {
-                "enable_graphiql": ENABLE_PROD_GRAPHIQL,
-                "enable_introspection": ENABLE_PROD_INTROSPECTION,
-                "authentication_required": True,
-                "graphiql_superuser_only": True,
-                "graphiql_allowed_hosts": ["localhost", "127.0.0.1", "::1"],
-            }
-        )
+    # Production GraphiQL policy: opt-in UI/introspection, superuser-only access.
+    RAIL_DJANGO_GRAPHQL_SCHEMAS.setdefault("graphiql", {}).setdefault(
+        "schema_settings", {}
+    )
+    RAIL_DJANGO_GRAPHQL_SCHEMAS["graphiql"]["schema_settings"].update(
+        {
+            "enable_graphiql": ENABLE_PROD_GRAPHIQL,
+            "enable_introspection": ENABLE_PROD_INTROSPECTION,
+            "authentication_required": True,
+            "graphiql_superuser_only": True,
+            "graphiql_allowed_hosts": PROD_GRAPHIQL_ALLOWED_HOSTS,
+        }
+    )
 
 # Database performance: Keep connections alive for 10 minutes
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)

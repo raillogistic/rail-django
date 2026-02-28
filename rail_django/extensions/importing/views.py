@@ -16,9 +16,9 @@ from django.views.decorators.csrf import csrf_exempt
 from ..excel.builder import OPENPYXL_AVAILABLE, render_excel
 
 try:
-    from ..auth.decorators import jwt_required
+    from ..auth.decorators import jwt_optional
 except ImportError:  # pragma: no cover
-    jwt_required = None
+    jwt_optional = None
 
 from .services import require_import_access, resolve_template_descriptor
 
@@ -241,7 +241,7 @@ def _render_xlsx_template(
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class ModelImportTemplateDownloadView(View):
     """Download a template file for model imports."""

@@ -26,16 +26,16 @@ from .jobs import (
 
 # Optional imports
 try:
-    from ..auth.decorators import jwt_required
+    from ..auth.decorators import jwt_optional
 except ImportError:
-    jwt_required = None
+    jwt_optional = None
 
 logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class ExcelTemplateJobStatusView(View):
     """Return status for async Excel jobs."""
@@ -86,7 +86,7 @@ class ExcelTemplateJobStatusView(View):
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class ExcelTemplateJobDownloadView(View):
     """Download completed Excel job files."""

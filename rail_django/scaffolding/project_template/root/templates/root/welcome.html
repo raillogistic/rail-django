@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Welcome to Rail Django</title>
+    <title>Rail Django operations</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,7 +20,7 @@
         --panel: #ffffff;
         --panel-alt: #f8f5f0;
         --border: rgba(27, 27, 32, 0.12);
-        --shadow: 0 24px 60px rgba(27, 27, 32, 0.14);
+        --shadow: 0 20px 46px rgba(27, 27, 32, 0.12);
       }
 
       * {
@@ -59,9 +59,9 @@
       .page {
         position: relative;
         z-index: 1;
-        max-width: 1120px;
+        max-width: 1200px;
         margin: 0 auto;
-        padding: 32px 24px 64px;
+        padding: 24px 24px 56px;
       }
 
       .top {
@@ -69,13 +69,13 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 48px;
+        margin-bottom: 30px;
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
       }
 
       .badge {
@@ -86,294 +86,264 @@
         background: var(--ink);
         color: #fff;
         font-weight: 600;
-        letter-spacing: 0.4px;
         font-size: 12px;
+        letter-spacing: 0.4px;
         text-transform: uppercase;
       }
 
       .label {
-        font-size: 14px;
         color: var(--muted);
+        font-size: 14px;
       }
 
-      .status {
-        display: inline-flex;
+      .session {
+        display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 14px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.7);
-        border: 1px solid rgba(27, 27, 32, 0.1);
+        gap: 12px;
         font-size: 13px;
       }
 
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--accent-2);
-        box-shadow: 0 0 0 4px rgba(28, 154, 138, 0.18);
+      .session span {
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
       }
 
-      .hero-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-        gap: 36px;
-        align-items: start;
+      .session a {
+        color: var(--ink);
+        text-decoration: none;
+        font-weight: 600;
       }
 
       .hero {
-        animation: rise 0.7s ease-out;
-      }
-
-      .eyebrow {
-        font-size: 14px;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 0 0 16px;
-      }
-
-      h1 {
-        font-family: "Fraunces", "Times New Roman", serif;
-        font-size: clamp(2.6rem, 4vw, 3.8rem);
-        line-height: 1.05;
-        margin: 0 0 20px;
-      }
-
-      .lead {
-        font-size: 1.1rem;
-        line-height: 1.6;
-        color: var(--muted);
-        max-width: 520px;
-        margin-bottom: 26px;
-      }
-
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: var(--shadow);
+        padding: 28px;
         margin-bottom: 24px;
       }
 
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 20px;
-        border-radius: 999px;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 14px;
-        border: 1px solid transparent;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      .eyebrow {
+        margin: 0 0 12px;
+        font-size: 13px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--muted);
       }
 
-      .btn.primary {
-        background: var(--ink);
-        color: #fff;
-        box-shadow: 0 14px 30px rgba(27, 27, 32, 0.18);
-      }
-
-      .btn.ghost {
-        background: rgba(255, 255, 255, 0.8);
-        color: var(--ink);
-        border-color: var(--border);
-      }
-
-      .btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 18px 30px rgba(27, 27, 32, 0.2);
-      }
-
-      .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      .chip {
-        padding: 6px 12px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.75);
-        border: 1px solid rgba(27, 27, 32, 0.08);
-        font-size: 12px;
-      }
-
-      .stack {
-        display: grid;
-        gap: 18px;
-      }
-
-      .panel {
-        background: var(--panel);
-        border-radius: 20px;
-        padding: 22px;
-        border: 1px solid var(--border);
-        box-shadow: var(--shadow);
-        animation: fadeUp 0.7s ease-out;
-      }
-
-      .panel:nth-child(2) {
-        animation-delay: 0.1s;
-      }
-
-      .panel h2 {
-        font-size: 18px;
+      h1 {
         margin: 0 0 14px;
+        font-family: "Fraunces", "Times New Roman", serif;
+        line-height: 1.06;
+        font-size: clamp(2.2rem, 3.3vw, 3.2rem);
       }
 
-      .panel ol {
-        margin: 0 0 18px;
-        padding-left: 18px;
+      .lead {
+        max-width: 760px;
+        margin: 0;
         color: var(--muted);
         line-height: 1.6;
       }
 
-      pre {
-        background: #111318;
-        color: #f3f3f3;
-        padding: 14px 16px;
-        border-radius: 14px;
-        font-size: 12px;
-        overflow-x: auto;
+      .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
       }
 
-      .endpoints {
-        list-style: none;
-        margin: 0;
-        padding: 0;
+      .quick-link {
+        display: block;
+        border: 1px solid rgba(27, 27, 32, 0.1);
+        border-radius: 16px;
+        padding: 14px;
+        text-decoration: none;
+        color: var(--ink);
+        background: var(--panel-alt);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .quick-link:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 20px rgba(27, 27, 32, 0.13);
+      }
+
+      .quick-link strong {
+        display: block;
+        font-size: 15px;
+        margin-bottom: 4px;
+      }
+
+      .quick-link small {
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .layout {
         display: grid;
-        gap: 12px;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .side {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.88);
+        padding: 18px;
+        height: fit-content;
+        position: sticky;
+        top: 18px;
+      }
+
+      .side h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .jump {
+        display: grid;
+        gap: 8px;
+      }
+
+      .jump a {
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 14px;
+      }
+
+      .note {
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .content {
+        display: grid;
+        gap: 14px;
+      }
+
+      .section {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+
+      .section h3 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+
+      .section p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .endpoint-list {
+        display: grid;
+        gap: 8px;
       }
 
       .endpoint {
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: 72px minmax(0, 1fr);
         gap: 10px;
-        align-items: start;
+        align-items: flex-start;
+        border: 1px solid rgba(27, 27, 32, 0.08);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(248, 245, 240, 0.52);
       }
 
-      .verb {
+      .method {
+        display: inline-flex;
+        justify-content: center;
+        min-width: 58px;
+        padding: 4px 8px;
+        border-radius: 999px;
         font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
+        font-weight: 700;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--accent);
-        padding-top: 2px;
       }
 
-      .endpoint a,
-      .endpoint span.path {
-        display: block;
+      .method.get {
+        background: rgba(28, 154, 138, 0.16);
+        color: #0b6559;
+      }
+
+      .method.post {
+        background: rgba(228, 87, 46, 0.16);
+        color: #9e3b1e;
+      }
+
+      .method.put,
+      .method.patch {
+        background: rgba(242, 193, 78, 0.28);
+        color: #8a6617;
+      }
+
+      .method.delete {
+        background: rgba(185, 38, 73, 0.16);
+        color: #89203a;
+      }
+
+      .endpoint-path {
+        margin: 0 0 3px;
         font-weight: 600;
+        word-break: break-all;
+      }
+
+      .endpoint-path a {
         color: var(--ink);
         text-decoration: none;
       }
 
+      .endpoint-path code {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 12px;
+      }
+
       .endpoint small {
-        display: block;
         color: var(--muted);
-        margin-top: 2px;
+        line-height: 1.45;
       }
 
-      .feature-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 18px;
-        margin-top: 36px;
-      }
-
-      .feature {
-        background: var(--panel-alt);
-        border-radius: 18px;
-        padding: 20px;
-        border: 1px solid rgba(27, 27, 32, 0.08);
-        animation: fadeUp 0.7s ease-out;
-      }
-
-      .feature:nth-child(2) {
-        animation-delay: 0.08s;
-      }
-
-      .feature:nth-child(3) {
-        animation-delay: 0.16s;
-      }
-
-      .feature h3 {
-        margin: 0 0 10px;
-        font-size: 16px;
-      }
-
-      .feature p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      .footer {
-        margin-top: 40px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        justify-content: space-between;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      @keyframes rise {
-        from {
-          opacity: 0;
-          transform: translateY(12px);
+      @media (max-width: 1080px) {
+        .quick-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
 
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(16px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @media (max-width: 980px) {
-        .hero-grid {
+        .layout {
           grid-template-columns: 1fr;
+        }
+
+        .side {
+          position: static;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .page {
+          padding: 18px 14px 44px;
         }
 
         .top {
           flex-direction: column;
           align-items: flex-start;
         }
-      }
 
-      @media (max-width: 720px) {
-        .feature-grid {
+        .quick-grid {
           grid-template-columns: 1fr;
         }
 
-        .actions {
-          flex-direction: column;
-          align-items: stretch;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .hero,
-        .panel,
-        .feature {
-          animation: none;
-        }
-
-        .btn {
-          transition: none;
+        .endpoint {
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -383,100 +353,75 @@
       <header class="top">
         <div class="brand">
           <span class="badge">Rail Django</span>
-          <span class="label">GraphQL-first project template</span>
+          <span class="label">Superuser operations workspace</span>
         </div>
-        <div class="status">
-          <span class="status-dot"></span>
-          Service ready
+        <div class="session">
+          <span>Signed in as <strong>{{ request.user.username }}</strong></span>
+          <a href="/admin/logout/">Log out</a>
         </div>
       </header>
 
-      <main class="hero-grid">
-        <section class="hero">
-          <p class="eyebrow">Welcome</p>
-          <h1>Design your schema, then let the rails deliver the API.</h1>
-          <p class="lead">
-            This starter gives you a production-minded GraphQL stack with guardrails for
-            auth, performance, and schema evolution. Customize it and ship fast.
-          </p>
-          <div class="actions">
-            <a class="btn primary" href="/graphql/gql/">Open GraphQL endpoint</a>
-            <a class="btn ghost" href="/schemas/">View schema registry</a>
-          </div>
-          <div class="chips">
-            <div class="chip">GraphQL auto-generation</div>
-            <div class="chip">Security middleware</div>
-            <div class="chip">Schema registry hooks</div>
-          </div>
-        </section>
+      <section class="hero">
+        <p class="eyebrow">Control center</p>
+        <h1>Schema and API operations dashboard.</h1>
+        <p class="lead">
+          This page is restricted to superusers and maps the active Rail Django
+          HTTP and GraphQL entry points. Use it to navigate API management flows quickly
+          without digging through route files.
+        </p>
 
-        <aside class="stack">
-          <div class="panel">
-            <h2>Quickstart</h2>
-            <ol>
-              <li>Define models inside the <strong>apps/</strong> directory.</li>
-              <li>Run migrations to build tables.</li>
-              <li>Query the schema from the GraphQL endpoint.</li>
-            </ol>
-            <pre><code>python manage.py makemigrations
-python manage.py migrate
-python manage.py runserver</code></pre>
-          </div>
-          <div class="panel">
-            <h2>Key endpoints</h2>
-            <ul class="endpoints">
-              <li class="endpoint">
-                <span class="verb">POST</span>
-                <div>
-                  <a href="/graphql/gql/">/graphql/gql/</a>
-                  <small>Main protected API endpoint</small>
-                </div>
-              </li>
-              <li class="endpoint">
-                <span class="verb">POST</span>
-                <div>
-                  <a href="/graphql/auth/">/graphql/auth/</a>
-                  <small>Public auth mutations only</small>
-                </div>
-              </li>
-              <li class="endpoint">
-                <span class="verb">GET</span>
-                <div>
-                  <a href="/schemas/">/schemas/</a>
-                  <small>Schema registry overview</small>
-                </div>
-              </li>
-              <li class="endpoint">
-                <span class="verb">GET</span>
-                <div>
-                  <a href="/graphql/graphiql/">/graphql/graphiql/</a>
-                  <small>Interactive IDE when enabled</small>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </aside>
-      </main>
-
-      <section class="feature-grid">
-        <article class="feature">
-          <h3>Schema automation</h3>
-          <p>Generate queries and mutations from your models with a single config block.</p>
-        </article>
-        <article class="feature">
-          <h3>Security defaults</h3>
-          <p>Authentication, CSRF, and validation hooks are wired in from the start.</p>
-        </article>
-        <article class="feature">
-          <h3>Performance focus</h3>
-          <p>Query optimization and configurable limits keep the API fast and predictable.</p>
-        </article>
+        <div class="quick-grid" id="quick-links">
+          {% for link in quick_links %}
+            <a class="quick-link" href="{{ link.href }}">
+              <strong>{{ link.label }}</strong>
+              <small>{{ link.description }}</small>
+            </a>
+          {% endfor %}
+        </div>
       </section>
 
-      <footer class="footer">
-        <div>Swap this page in <strong>root/templates/root/welcome.html</strong>.</div>
-        <div>Next: add an app, define models, and expose new types.</div>
-      </footer>
+      <div class="layout">
+        <aside class="side">
+          <h2>Jump to section</h2>
+          <nav class="jump">
+            {% for section in api_sections %}
+              <a href="#{{ section.id }}">{{ section.title }}</a>
+            {% endfor %}
+          </nav>
+          <p class="note">
+            Most <code>/api/v1/</code> routes require JWT authentication and admin-level
+            authorization. Placeholder parameters (<code>&lt;schema_name&gt;</code>,
+            <code>&lt;job_id&gt;</code>, <code>&lt;pk&gt;</code>) must be replaced with
+            real values.
+          </p>
+        </aside>
+
+        <main class="content">
+          {% for section in api_sections %}
+            <section class="section" id="{{ section.id }}">
+              <h3>{{ section.title }}</h3>
+              <p>{{ section.summary }}</p>
+              <div class="endpoint-list">
+                {% for item in section.items %}
+                  <article class="endpoint">
+                    <span class="method {{ item.method|lower }}">{{ item.method }}</span>
+                    <div>
+                      <p class="endpoint-path">
+                        {% if item.href %}
+                          <a href="{{ item.href }}"><code>{{ item.path }}</code></a>
+                        {% else %}
+                          <code>{{ item.path }}</code>
+                        {% endif %}
+                      </p>
+                      <small>{{ item.description }}</small>
+                    </div>
+                  </article>
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </main>
+      </div>
     </div>
   </body>
 </html>

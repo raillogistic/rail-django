@@ -13,6 +13,12 @@ def _project_template_file(*relative_parts: str) -> str:
     ).read_text(encoding="utf-8")
 
 
+def _rail_django_file(*relative_parts: str) -> str:
+    return resources.files("rail_django").joinpath(*relative_parts).read_text(
+        encoding="utf-8"
+    )
+
+
 def test_env_prod_disables_startup_migrations_and_collectstatic() -> None:
     text = _project_template_file(".env.prod-tpl")
 
@@ -199,6 +205,14 @@ def test_base_settings_selects_env_file_by_settings_module() -> None:
     assert "Missing required environment file" in text
 
 
+def test_base_settings_allow_csrf_trusted_origins_override() -> None:
+    text = _project_template_file("root", "settings", "base.py-tpl")
+
+    assert 'CSRF_TRUSTED_ORIGINS = env.list(' in text
+    assert '"CSRF_TRUSTED_ORIGINS"' in text
+    assert "default=CORS_ALLOWED_ORIGINS" in text
+
+
 def test_project_template_dockerignore_keeps_nginx_tls_assets_for_build() -> None:
     text = _project_template_file(".dockerignore")
 
@@ -273,6 +287,16 @@ def test_production_template_disables_graphiql_and_introspection_by_default() ->
     assert 'schema_config["schema_settings"]["enable_introspection"] = False' in text
 
 
+def test_production_template_requires_superuser_for_graphiql_when_enabled() -> None:
+    text = _project_template_file("root", "settings", "production.py-tpl")
+
+    assert "'RAIL_PROD_GRAPHIQL_ALLOWED_HOSTS'" in text
+    assert "default=ALLOWED_HOSTS" in text
+    assert '"authentication_required": True' in text
+    assert '"graphiql_superuser_only": True' in text
+    assert '"graphiql_allowed_hosts": PROD_GRAPHIQL_ALLOWED_HOSTS' in text
+
+
 def test_production_template_adds_graphql_security_middleware_after_auth() -> None:
     text = _project_template_file("root", "settings", "production.py-tpl")
 
@@ -280,3 +304,32 @@ def test_production_template_adds_graphql_security_middleware_after_auth() -> No
     assert "rail_django.middleware.auth.GraphQLRateLimitMiddleware" in text
     assert '_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"' in text
     assert "MIDDLEWARE.insert(_insert_at, mw)" in text
+
+
+def test_root_urls_use_superuser_protected_welcome_view() -> None:
+    text = _project_template_file("root", "urls.py-tpl")
+
+    assert "from rail_django.http.views.welcome import WelcomeView" in text
+    assert "path('', WelcomeView.as_view(), name='welcome')" in text
+    assert "TemplateView.as_view" not in text
+
+
+def test_root_welcome_view_requires_authenticated_superuser() -> None:
+    text = _rail_django_file("http", "views", "welcome.py")
+
+    assert "class SuperuserRequiredTemplateView(TemplateView):" in text
+    assert "if not user.is_authenticated:" in text
+    assert "redirect_to_login(" in text
+    assert "if not user.is_superuser:" in text
+    assert 'raise PermissionDenied("Superuser access required.")' in text
+    assert "class WelcomeView(SuperuserRequiredTemplateView):" in text
+    assert 'context["api_sections"]' in text
+    assert "/api/v1/templates/catalog/" in text
+
+
+def test_welcome_template_renders_dynamic_api_navigation() -> None:
+    text = _project_template_file("root", "templates", "root", "welcome.html")
+
+    assert "Signed in as <strong>{{ request.user.username }}</strong>" in text
+    assert "{% for section in api_sections %}" in text
+    assert "{% for item in section.items %}" in text

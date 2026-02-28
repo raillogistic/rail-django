@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 
 # Optional JWT protection (mirrors export endpoints)
 try:
-    from ..auth.decorators import jwt_required
+    from ..auth.decorators import jwt_optional
 except ImportError:
-    jwt_required = None
+    jwt_optional = None
 
 # Optional audit logging
 try:
@@ -74,7 +74,7 @@ except ImportError:
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class PdfTemplateView(View):
     """Serve model PDFs rendered with WeasyPrint."""
@@ -447,7 +447,7 @@ class PdfTemplateView(View):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-@method_decorator(jwt_required if jwt_required else (lambda view: view), name="dispatch")
+@method_decorator(jwt_optional if jwt_optional else (lambda view: view), name="dispatch")
 class PdfTemplatePreviewView(View):
     """Render HTML previews for PDF templates."""
     http_method_names = ["get"]
@@ -480,7 +480,7 @@ class PdfTemplatePreviewView(View):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-@method_decorator(jwt_required if jwt_required else (lambda view: view), name="dispatch")
+@method_decorator(jwt_optional if jwt_optional else (lambda view: view), name="dispatch")
 class PdfTemplateCatalogView(View):
     """Expose template catalog metadata for UI-driven workflows."""
     http_method_names = ["get"]

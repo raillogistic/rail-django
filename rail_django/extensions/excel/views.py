@@ -38,9 +38,9 @@ from .job_views import ExcelTemplateJobDownloadView, ExcelTemplateJobStatusView
 
 # Optional imports
 try:
-    from ..auth.decorators import jwt_required
+    from ..auth.decorators import jwt_optional
 except ImportError:
-    jwt_required = None
+    jwt_optional = None
 
 try:
     from ...security import security, EventType, Outcome
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name="dispatch")
 @method_decorator(
-    jwt_required if jwt_required else (lambda view: view), name="dispatch"
+    jwt_optional if jwt_optional else (lambda view: view), name="dispatch"
 )
 class ExcelTemplateView(View):
     """Serve model Excel files rendered with openpyxl."""
@@ -291,7 +291,7 @@ class ExcelTemplateView(View):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-@method_decorator(jwt_required if jwt_required else (lambda view: view), name="dispatch")
+@method_decorator(jwt_optional if jwt_optional else (lambda view: view), name="dispatch")
 class ExcelTemplateCatalogView(View):
     """Expose Excel template catalog metadata for UI-driven workflows."""
 
