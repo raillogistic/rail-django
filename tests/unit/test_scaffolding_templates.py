@@ -38,7 +38,7 @@ def test_env_prod_sets_asgi_runtime_defaults() -> None:
     assert "ASGI_PORT=8000" in text
 
 
-def test_env_prod_exposes_backup_postgres_image_override() -> None:
+def test_env_prod_exposes_backup_retention_override() -> None:
     text = _project_template_file(".env.prod-tpl")
 
     assert "BACKUP_RETENTION_DAYS=30" in text
@@ -84,6 +84,14 @@ def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
     text = _project_template_file("deploy", "docker", "docker-compose.yml")
 
     assert "${CACHE_PATH:-../../cache}:/home/app/web/cache" in text
+
+
+def test_compose_builds_nginx_image_from_scaffold_template() -> None:
+    text = _project_template_file("deploy", "docker", "docker-compose.yml")
+
+    assert "dockerfile: deploy/nginx/Dockerfile" in text
+    assert "../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" not in text
+    assert "../nginx/certs:/etc/nginx/certs:ro" not in text
 
 
 def test_compose_uses_env_prod_file() -> None:
@@ -179,11 +187,11 @@ def test_base_settings_selects_env_file_by_settings_module() -> None:
     assert "Missing required environment file" in text
 
 
-def test_project_template_dockerignore_excludes_tls_key_material() -> None:
+def test_project_template_dockerignore_keeps_nginx_tls_assets_for_build() -> None:
     text = _project_template_file(".dockerignore")
 
-    assert "deploy/nginx/certs/*.crt" in text
-    assert "deploy/nginx/certs/*.key" in text
+    assert "deploy/nginx/certs/*.crt" not in text
+    assert "deploy/nginx/certs/*.key" not in text
 
 
 def test_nginx_template_restricts_sensitive_health_diagnostics() -> None:
@@ -195,10 +203,18 @@ def test_nginx_template_restricts_sensitive_health_diagnostics() -> None:
     assert "deny all;" in text
 
 
+def test_nginx_dockerfile_embeds_config_and_tls_assets() -> None:
+    text = _project_template_file("deploy", "nginx", "Dockerfile")
+
+    assert "FROM nginx:1.25-alpine" in text
+    assert "COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf" in text
+    assert "COPY deploy/nginx/certs/ /etc/nginx/certs/" in text
+
+
 def test_deploy_usage_manual_steps_run_schema_tasks_before_starting_services() -> None:
     text = _project_template_file("deploy", "USAGE.md")
 
-    build_cmd = "docker-compose -f deploy/docker/docker-compose.yml build web"
+    build_cmd = "docker-compose -f deploy/docker/docker-compose.yml build web nginx"
     migrate_cmd = (
         "docker-compose -f deploy/docker/docker-compose.yml run --rm "
         "--entrypoint python web manage.py migrate"

@@ -1823,12 +1823,12 @@ nano .env.prod
 
 Run these commands from your project root:
 
-#### A. Build web image
+#### A. Build web and nginx images
 
-Build the Python image before running schema tasks.
+Build the Python and Nginx images before running schema tasks.
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml build web
+docker-compose -f deploy/docker/docker-compose.yml build web nginx
 ```
 The default web runtime is ASGI, so GraphQL subscriptions are available
 without switching servers.
@@ -1851,7 +1851,7 @@ docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python 
 
 #### D. Start Services
 
-Start the Web, Nginx, and Backup containers.
+Start the Web and Nginx containers.
 
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d
@@ -1891,7 +1891,7 @@ docker-compose -f deploy/docker/docker-compose.yml down
 2. Re-run build, schema tasks, and startup:
 
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml build web
+docker-compose -f deploy/docker/docker-compose.yml build web nginx
 docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
 docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
 docker-compose -f deploy/docker/docker-compose.yml up -d
@@ -1926,7 +1926,7 @@ GraphiQL remains restricted to superusers from loopback hosts.
 
 ### 6. Setup HTTPS (Internal Network / Enterprise)
 
-Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and mount your certificates into it.
+Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and bake your certificates into the scaffolded Nginx image.
 
 #### Step 1: Obtain Certificates
 
@@ -1957,6 +1957,12 @@ Update `deploy/nginx/default.conf` and set `server_name` to your internal domain
 
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
+```
+
+When certificates or `deploy/nginx/default.conf` change, rebuild Nginx:
+```bash
+docker-compose -f deploy/docker/docker-compose.yml build nginx
+docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
 
 ---

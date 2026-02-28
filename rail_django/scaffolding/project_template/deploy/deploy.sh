@@ -270,14 +270,14 @@ else
   ensure_dir "$SCRIPT_DIR/docker/$cache_path"
 fi
 
-note "Building web image..."
+note "Building web and nginx images..."
 build_args=()
 build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
 if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
   build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
 fi
 
-"${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web nginx
 
 note "Validating runtime storage permissions..."
 ensure_runtime_mount_writable

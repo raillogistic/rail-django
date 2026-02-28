@@ -25,5 +25,3 @@ backups/
 cache/
 logs/
 *.sqlite3
-deploy/nginx/certs/*.crt
-deploy/nginx/certs/*.key
