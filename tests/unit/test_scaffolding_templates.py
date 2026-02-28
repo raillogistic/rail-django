@@ -13,15 +13,15 @@ def _project_template_file(*relative_parts: str) -> str:
     ).read_text(encoding="utf-8")
 
 
-def test_env_example_disables_startup_migrations_and_collectstatic() -> None:
-    text = _project_template_file(".env.example")
+def test_env_prod_disables_startup_migrations_and_collectstatic() -> None:
+    text = _project_template_file(".env.prod-tpl")
 
     assert "RUN_MIGRATIONS=False" in text
     assert "RUN_COLLECTSTATIC=False" in text
 
 
-def test_env_example_uses_non_default_secret_placeholders() -> None:
-    text = _project_template_file(".env.example")
+def test_env_prod_uses_non_default_secret_placeholders() -> None:
+    text = _project_template_file(".env.prod-tpl")
 
     assert "DJANGO_SECRET_KEY=REPLACE_WITH_LONG_RANDOM_SECRET_KEY" in text
     assert "DJANGO_SUPERUSER_PASSWORD=REPLACE_WITH_STRONG_PASSWORD" in text
@@ -29,8 +29,8 @@ def test_env_example_uses_non_default_secret_placeholders() -> None:
     assert "DJANGO_SUPERUSER_PASSWORD=change_me" not in text
 
 
-def test_env_example_sets_asgi_runtime_defaults() -> None:
-    text = _project_template_file(".env.example")
+def test_env_prod_sets_asgi_runtime_defaults() -> None:
+    text = _project_template_file(".env.prod-tpl")
 
     assert "DJANGO_SERVER_MODE=asgi" in text
     assert "DJANGO_ASGI_MODULE=root.asgi:application" in text
@@ -38,8 +38,8 @@ def test_env_example_sets_asgi_runtime_defaults() -> None:
     assert "ASGI_PORT=8000" in text
 
 
-def test_env_example_exposes_backup_postgres_image_override() -> None:
-    text = _project_template_file(".env.example")
+def test_env_prod_exposes_backup_postgres_image_override() -> None:
+    text = _project_template_file(".env.prod-tpl")
 
     assert "BACKUP_POSTGRES_IMAGE=postgres:16-alpine" in text
 
@@ -84,6 +84,19 @@ def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
     text = _project_template_file("deploy", "docker", "docker-compose.yml")
 
     assert "${CACHE_PATH:-../../cache}:/home/app/web/cache" in text
+
+
+def test_compose_uses_env_prod_file() -> None:
+    text = _project_template_file("deploy", "docker", "docker-compose.yml")
+
+    assert "../../.env.prod" in text
+
+
+def test_env_dev_uses_development_settings_module() -> None:
+    text = _project_template_file(".env.dev-tpl")
+
+    assert "DJANGO_DEBUG=True" in text
+    assert "DJANGO_SETTINGS_MODULE=root.settings.development" in text
 
 
 def test_deploy_script_runs_schema_tasks_before_up() -> None:
@@ -138,11 +151,12 @@ def test_deploy_script_ensures_cache_directory_exists() -> None:
     assert 'ensure_dir "$SCRIPT_DIR/docker/$cache_path"' in text
 
 
-def test_deploy_script_rejects_placeholder_secret_values() -> None:
+def test_deploy_script_bootstraps_secret_and_rejects_weak_superuser_password() -> None:
     text = _project_template_file("deploy", "deploy.sh")
 
     assert 'if is_insecure_secret "$secret_key"; then' in text
-    assert "DJANGO_SECRET_KEY appears to use a placeholder" in text
+    assert "generating a secure value in .env.prod" in text
+    assert 'set_env_value "DJANGO_SECRET_KEY" "$secret_key"' in text
     assert 'if is_insecure_secret "$su_password"; then' in text
     assert "DJANGO_SUPERUSER_PASSWORD appears to use a placeholder" in text
 
@@ -150,9 +164,19 @@ def test_deploy_script_rejects_placeholder_secret_values() -> None:
 def test_project_template_gitignore_covers_runtime_artifacts() -> None:
     text = _project_template_file(".gitignore")
 
+    assert ".env.dev" in text
+    assert ".env.prod" in text
     assert "media/" in text
     assert "backups/" in text
     assert "cache/" in text
+
+
+def test_base_settings_selects_env_file_by_settings_module() -> None:
+    text = _project_template_file("root", "settings", "base.py-tpl")
+
+    assert "_env_filename = \".env.prod\"" in text
+    assert "_env_filename = \".env.dev\"" in text
+    assert "Missing required environment file" in text
 
 
 def test_project_template_dockerignore_excludes_tls_key_material() -> None:

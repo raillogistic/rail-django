@@ -14,7 +14,7 @@ services:
     expose:
       - 8000
     env_file:
-      - ../../.env
+      - ../../.env.prod
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import sys, urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/health/ready/', timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)\""]
       interval: 30s
@@ -44,7 +44,7 @@ services:
       - ./backup.sh:/usr/local/bin/backup.sh
     command: sh /usr/local/bin/backup.sh
     env_file:
-      - ../../.env
+      - ../../.env.prod
 
 volumes:
   static_volume:

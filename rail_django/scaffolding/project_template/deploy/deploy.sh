@@ -18,8 +18,7 @@ die() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker/docker-compose.yml"
-ENV_FILE="$PROJECT_ROOT/.env"
-ENV_EXAMPLE="$PROJECT_ROOT/.env.example"
+ENV_FILE="$PROJECT_ROOT/.env.prod"
 CERTS_DIR="$SCRIPT_DIR/nginx/certs"
 CERT_CRT="$CERTS_DIR/server.crt"
 CERT_KEY="$CERTS_DIR/server.key"
@@ -45,7 +44,7 @@ Options:
 Environment:
   DEPLOY_DOMAIN        Domain for self-signed certs when none exist.
   DEPLOY_CREATE_SUPERUSER=1
-                       Create a superuser non-interactively from .env values.
+                       Create a superuser non-interactively from .env.prod values.
                        Requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD.
   DEPLOY_REFRESH_DEPS=1
                        Force dependency layer rebuild on deploy.
@@ -149,6 +148,25 @@ read_env() {
   echo "$value"
 }
 
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  if grep -q -E "^[[:space:]]*${key}=" "$ENV_FILE"; then
+    sed -i.bak -E "s|^[[:space:]]*${key}=.*$|${key}=${value}|" "$ENV_FILE"
+    rm -f "${ENV_FILE}.bak"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+
+generate_secure_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 64 | tr -d '\r\n'
+    return 0
+  fi
+  python -c "import secrets; print(secrets.token_urlsafe(64))"
+}
+
 require_cmd docker
 
 if docker compose version >/dev/null 2>&1; then
@@ -164,29 +182,27 @@ if [ ! -f "$COMPOSE_FILE" ]; then
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
-  if [ -f "$ENV_EXAMPLE" ]; then
-    cp "$ENV_EXAMPLE" "$ENV_FILE"
-    die "Created .env from .env.example. Edit .env and re-run deploy.sh."
-  fi
-  die ".env not found and .env.example missing."
+  die ".env.prod not found. Create $ENV_FILE and re-run deploy.sh."
 fi
 
 ensure_tls_not_tracked
 
 missing=()
-for key in DJANGO_SECRET_KEY DATABASE_URL DJANGO_ALLOWED_HOSTS; do
+for key in DATABASE_URL DJANGO_ALLOWED_HOSTS; do
   if [ -z "$(read_env "$key")" ]; then
     missing+=("$key")
   fi
 done
 
 if [ ${#missing[@]} -gt 0 ]; then
-  die "Missing required .env values: ${missing[*]}"
+  die "Missing required .env.prod values: ${missing[*]}"
 fi
 
 secret_key="$(read_env DJANGO_SECRET_KEY)"
 if is_insecure_secret "$secret_key"; then
-  die "DJANGO_SECRET_KEY appears to use a placeholder or weak default value."
+  note "DJANGO_SECRET_KEY is missing or insecure; generating a secure value in .env.prod."
+  secret_key="$(generate_secure_secret)"
+  set_env_value "DJANGO_SECRET_KEY" "$secret_key"
 fi
 
 if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then

@@ -10,11 +10,10 @@ This guide explains how to manually deploy your `rail-django` application using 
 
 ## 1. Environment Configuration
 
-Copy the `.env.example` file to `.env` in your project root and update the variables:
+Use `.env.prod` for deployment in your project root and update the variables:
 
 ```bash
-cp .env.example .env
-nano .env
+nano .env.prod
 ```
 
 **Key variables to set:**
@@ -26,7 +25,8 @@ nano .env
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
 - `RAIL_ENABLE_PROD_GRAPHIQL=False`: Keep GraphiQL disabled by default in production.
 - `RAIL_ENABLE_PROD_INTROSPECTION=False`: Keep introspection disabled by default in production.
-The deploy script rejects placeholder values for `DJANGO_SECRET_KEY` and
+The deploy script auto-generates `DJANGO_SECRET_KEY` when it is missing or a
+placeholder value. It still rejects placeholder values for
 `DJANGO_SUPERUSER_PASSWORD`.
 
 **Optional runtime toggles:**
@@ -58,7 +58,7 @@ From your project root:
 bash deploy/deploy.sh
 ```
 
-The script validates `.env` (creates it from `.env.example` if missing), ensures TLS
+The script validates `.env.prod`, ensures TLS
 certs exist, builds/starts containers, and runs migrations + collectstatic.
 This is the default owner for migration/static orchestration in the scaffold.
 
@@ -70,7 +70,7 @@ Use `--refresh-deps` to bust the base dependency layer; the `rail-django` Git
 install is refreshed on every build.
 
 ### Non-Interactive Superuser (CI/Automation)
-Set these in your `.env` and re-run the script:
+Set these in your `.env.prod` and re-run the script:
 ```bash
 DEPLOY_CREATE_SUPERUSER=1
 DJANGO_SUPERUSER_USERNAME=admin
@@ -79,9 +79,9 @@ DJANGO_SUPERUSER_PASSWORD=<strong-random-password>
 ```
 
 ### CI Example (Non-Interactive)
-In your CI job, export secrets as environment variables, then template `.env` and deploy:
+In your CI job, export secrets as environment variables, then template `.env.prod` and deploy:
 ```bash
-cat > .env <<EOF
+cat > .env.prod <<EOF
 DJANGO_DEBUG=False
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
 DJANGO_SETTINGS_MODULE=root.settings.production
@@ -137,7 +137,7 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 
 - **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
 - **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
-- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env`).
+- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env.prod`).
 
 ## 5. Maintenance
 
@@ -194,7 +194,7 @@ GraphiQL remains restricted to superusers from loopback hosts.
     ufw allow ssh
     ufw enable
     ```
-3.  **Secrets**: Never commit your `.env` file, TLS private keys, or TLS certificates to version control.
+3.  **Secrets**: Never commit your `.env.dev` or `.env.prod` files, TLS private keys, or TLS certificates to version control.
 4.  **Updates**: Keep the VM OS updated (`apt update && apt upgrade`).
 
 ## 7. Setup HTTPS (Internal Network / Enterprise)
@@ -228,3 +228,4 @@ Update `deploy/nginx/default.conf` and set `server_name` to your internal domain
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
+

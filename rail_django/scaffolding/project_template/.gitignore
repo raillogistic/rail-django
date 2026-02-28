@@ -1,5 +1,7 @@
 # Environment secrets
 .env
+.env.dev
+.env.prod
 
 # Runtime logs
 logs/

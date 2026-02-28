@@ -6,7 +6,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
 
 ---
 
-## 📑 Table of Contents
+## ðŸ“‘ Table of Contents
 
 1.  [Introduction & Philosophy](#1-introduction--philosophy)
 2.  [Installation & Setup](#2-installation--setup)
@@ -114,6 +114,8 @@ Rail Django exists to solve the "boilerplate fatigue" associated with Graphene-D
     ```bash
     python manage.py runserver
     ```
+    `manage.py` uses `root.settings.development`, which loads environment
+    values from `.env.dev` in the project root.
     Access GraphiQL at: `http://localhost:8000/graphql/`. In production,
     GraphiQL and introspection are disabled by default. Enable them explicitly
     with `RAIL_ENABLE_PROD_GRAPHIQL=True` and
@@ -147,15 +149,15 @@ Rail Django enforces a clean architecture to keep your codebase scalable.
 
 ```
 my_platform/
-├── manage.py           # Django entry point
-├── root/               # Core configuration (formerly 'project_name')
-│   ├── settings/       # Split settings (base, dev, prod)
-│   ├── urls.py         # Global URL routing
-│   └── wsgi.py         # WSGI entry point
-├── apps/               # Directory for your Django apps
-│   └── store/          # Example storefront app
-├── requirements/       # Project dependencies (base, dev, prod)
-└── Dockerfile          # Production-ready Docker build
+â”œâ”€â”€ manage.py           # Django entry point
+â”œâ”€â”€ root/               # Core configuration (formerly 'project_name')
+â”‚   â”œâ”€â”€ settings/       # Split settings (base, dev, prod)
+â”‚   â”œâ”€â”€ urls.py         # Global URL routing
+â”‚   â””â”€â”€ wsgi.py         # WSGI entry point
+â”œâ”€â”€ apps/               # Directory for your Django apps
+â”‚   â””â”€â”€ store/          # Example storefront app
+â”œâ”€â”€ requirements/       # Project dependencies (base, dev, prod)
+â””â”€â”€ Dockerfile          # Production-ready Docker build
 ```
 
 ---
@@ -1670,7 +1672,7 @@ class Order(models.Model):
         # Group fields for frontend organization
         field_groups = [
             {"key": "main", "label": "Informations principales", "fields": ["reference", "customer", "status"]},
-            {"key": "details", "label": "Détails", "fields": ["notes"]},
+            {"key": "details", "label": "DÃ©tails", "fields": ["notes"]},
         ]
 
         # Custom metadata passed through to frontend
@@ -1686,9 +1688,9 @@ class Order(models.Model):
 | -------------------- | -------------------- | ----------------------------- |
 | Query count          | 3 separate queries   | 1 unified query               |
 | Field classification | Limited              | 15+ boolean flags             |
-| FSM transitions      | ❌                   | ✅ Full support               |
-| Field groups         | ❌                   | ✅ Via GraphQLMeta            |
-| Custom metadata      | ❌                   | ✅ Pass-through               |
+| FSM transitions      | âŒ                   | âœ… Full support               |
+| Field groups         | âŒ                   | âœ… Via GraphQLMeta            |
+| Custom metadata      | âŒ                   | âœ… Pass-through               |
 | Relationship details | Basic                | Complete (on_delete, through) |
 
 Both APIs remain available simultaneously for gradual migration.
@@ -1743,7 +1745,7 @@ The project comes with a multi-stage `Dockerfile`.
 - **Final Stage:** Minimal slim image, copies wheels, installs runtime deps.
 
 **Environment Variables:**
-Ensure these are set in production (see `.env.example`):
+Ensure these are set in production (see `.env.prod`):
 
 - `DJANGO_SECRET_KEY`: Must be random and secret.
 - `DJANGO_DEBUG`: **Must** be `False`.
@@ -1762,7 +1764,7 @@ Ensure these are set in production (see `.env.example`):
 ### Production Checklist
 
 1.  [ ] **HTTPS:** Ensure SSL is enabled (use the container Nginx or a load balancer).
-2.  [ ] **Secrets:** Move `.env` vars to a secure secret manager.
+2.  [ ] **Secrets:** Move `.env.prod` values to a secure secret manager.
 3.  [ ] **Static Files:** Ensure `collectstatic` runs during build/deploy.
 4.  [ ] **Migrations:** Run `migrate` on release.
 5.  [ ] **MFA:** Enforce MFA for staff users.
@@ -1799,11 +1801,10 @@ This guide explains how to manually deploy your `rail-django` application using 
 
 ### 1. Environment Configuration
 
-Copy the `.env.example` file to `.env` in your project root and update the variables:
+Use `.env.prod` for deployment in your project root and update the variables:
 
 ```bash
-cp .env.example .env
-nano .env
+nano .env.prod
 ```
 
 **Key variables to set:**
@@ -1866,7 +1867,7 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 
 - **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
 - **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
-- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env`).
+- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env.prod`).
 
 ### 4. Maintenance
 
@@ -1920,7 +1921,7 @@ GraphiQL remains restricted to superusers from loopback hosts.
     ufw allow ssh
     ufw enable
     ```
-3.  **Secrets**: Never commit your `.env` file to version control.
+3.  **Secrets**: Never commit your `.env.dev` or `.env.prod` files to version control.
 4.  **Updates**: Keep the VM OS updated (`apt update && apt upgrade`).
 
 ### 6. Setup HTTPS (Internal Network / Enterprise)
@@ -1961,3 +1962,4 @@ docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ---
 
 **Rail Django** - _Build faster, scale better._
+
