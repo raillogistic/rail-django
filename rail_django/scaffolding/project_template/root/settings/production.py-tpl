@@ -114,6 +114,25 @@ JWT_AUTH_HEADER_PREFIX = 'Bearer'
 JWT_AUTH_HEADER_NAME = 'HTTP_AUTHORIZATION'
 JWT_USER_CACHE_TIMEOUT = 300  # 5 minutes
 
+# Cookie-auth hardening for production.
+JWT_ALLOW_COOKIE_AUTH = env.bool("JWT_ALLOW_COOKIE_AUTH", default=True)
+JWT_ENFORCE_CSRF = env.bool("JWT_ENFORCE_CSRF", default=True)
+
+# HTTPS-only JWT cookies in production.
+JWT_COOKIE_SECURE = env.bool("JWT_COOKIE_SECURE", default=True)
+JWT_COOKIE_SAMESITE = env("JWT_COOKIE_SAMESITE", default="Lax")
+JWT_COOKIE_DOMAIN = env("JWT_COOKIE_DOMAIN", default=None)
+
+JWT_AUTH_COOKIE_SECURE = env.bool("JWT_AUTH_COOKIE_SECURE", default=JWT_COOKIE_SECURE)
+JWT_AUTH_COOKIE_SAMESITE = env("JWT_AUTH_COOKIE_SAMESITE", default=JWT_COOKIE_SAMESITE)
+JWT_AUTH_COOKIE_DOMAIN = env("JWT_AUTH_COOKIE_DOMAIN", default=JWT_COOKIE_DOMAIN)
+JWT_AUTH_COOKIE_PATH = env("JWT_AUTH_COOKIE_PATH", default="/")
+
+JWT_REFRESH_COOKIE_SECURE = env.bool("JWT_REFRESH_COOKIE_SECURE", default=JWT_COOKIE_SECURE)
+JWT_REFRESH_COOKIE_SAMESITE = env("JWT_REFRESH_COOKIE_SAMESITE", default=JWT_COOKIE_SAMESITE)
+JWT_REFRESH_COOKIE_DOMAIN = env("JWT_REFRESH_COOKIE_DOMAIN", default=JWT_COOKIE_DOMAIN)
+JWT_REFRESH_COOKIE_PATH = env("JWT_REFRESH_COOKIE_PATH", default="/")
+
 # =============================================================================
 # AUDIT LOGGING
 # =============================================================================

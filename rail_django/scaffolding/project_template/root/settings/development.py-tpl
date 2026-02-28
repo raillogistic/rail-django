@@ -10,7 +10,25 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default=env('SECRET_KEY', default='{{ secr
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list(
+    'DJANGO_ALLOWED_HOSTS',
+    default=env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '::1']),
+)
+
+# Same-server dev mode:
+# Enable GraphQLAuthenticationMiddleware so cookie/JWT auth is resolved on GraphQL requests.
+_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"
+_insert_at = MIDDLEWARE.index(_auth_middleware) + 1 if _auth_middleware in MIDDLEWARE else len(MIDDLEWARE)
+if "rail_django.middleware.auth.GraphQLAuthenticationMiddleware" not in MIDDLEWARE:
+    MIDDLEWARE.insert(_insert_at, "rail_django.middleware.auth.GraphQLAuthenticationMiddleware")
+
+# Keep defaults compatible with local HTTP in same-origin development.
+JWT_COOKIE_SECURE = env.bool("JWT_COOKIE_SECURE", default=False)
+JWT_AUTH_COOKIE_SECURE = env.bool("JWT_AUTH_COOKIE_SECURE", default=JWT_COOKIE_SECURE)
+JWT_REFRESH_COOKIE_SECURE = env.bool("JWT_REFRESH_COOKIE_SECURE", default=JWT_COOKIE_SECURE)
+JWT_COOKIE_SAMESITE = env("JWT_COOKIE_SAMESITE", default="Lax")
+JWT_AUTH_COOKIE_SAMESITE = env("JWT_AUTH_COOKIE_SAMESITE", default=JWT_COOKIE_SAMESITE)
+JWT_REFRESH_COOKIE_SAMESITE = env("JWT_REFRESH_COOKIE_SAMESITE", default=JWT_COOKIE_SAMESITE)
 
 if "GRAPHENE" in globals():
     GRAPHENE.setdefault("MIDDLEWARE", [])
