@@ -126,7 +126,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Lire tous les clients
         query = """
         query {
-            customers {
+            testCustomerList {
                 id
                 nomClient
                 prenomClient
@@ -144,7 +144,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
 
-        customers = result["data"]["customers"]
+        customers = result["data"]["testCustomerList"]
         self.assertEqual(len(customers), 2)
 
         # Vérifier les données
@@ -267,7 +267,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         # Lire les données avec relations
         query = """
         query {
-            customers {
+            testCustomerList {
                 id
                 nomClient
                 prenomClient
@@ -288,7 +288,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIn("data", result)
 
-        customers = result["data"]["customers"]
+        customers = result["data"]["testCustomerList"]
         self.assertEqual(len(customers), 1)
 
         customer_data = customers[0]

@@ -105,8 +105,10 @@ def _get_request_host(request: HttpRequest) -> str:
     if callable(getter):
         try:
             resolved = getter()
-            if resolved:
-                return _normalize_host(resolved)
+            if isinstance(resolved, str):
+                normalized = _normalize_host(resolved)
+                if normalized:
+                    return normalized
         except Exception:
             # Invalid/blocked host header: do not trust raw HTTP_HOST fallback.
             return ""

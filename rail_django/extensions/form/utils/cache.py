@@ -86,7 +86,17 @@ def set_cached_config(
 def invalidate_form_cache(app: str, model: str) -> str:
     """Rotate cache version token for a model and return the new version."""
     key = f"form_version:{app}:{model}"
-    version = str(int(time.time() * 1000))
+    now_ms = int(time.time() * 1000)
+    version_int = now_ms
+    current = cache.get(key)
+    if current is not None:
+        try:
+            current_int = int(str(current))
+            if version_int <= current_int:
+                version_int = current_int + 1
+        except (TypeError, ValueError):
+            pass
+    version = str(version_int)
     cache.set(key, version, timeout=None)
     return version
 
