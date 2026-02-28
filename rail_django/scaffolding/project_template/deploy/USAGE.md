@@ -199,7 +199,7 @@ GraphiQL remains restricted to superusers from loopback hosts.
 1.  **SSL/TLS**: Mandatory. Use company-issued certificates or self-signed certs for internal traffic.
 2.  **Firewall**: Configure `ufw` on your Ubuntu VM to allow traffic only from trusted internal subnets.
     ```bash
-    ufw allow from 10.0.0.0/8 to any port 443
+    ufw allow from 10.0.0.0/8 to any port 8000
     ufw allow ssh
     ufw enable
     ```
@@ -231,7 +231,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ```
 
 ### Step 2: Configure Nginx
-Update `deploy/nginx/default.conf` and set `server_name` to your internal domain or IP. The template already redirects HTTP to HTTPS and listens on port 443.
+Update `deploy/nginx/default.conf` and set `server_name` to your internal domain or IP. The template serves HTTPS directly on port 8000.
 
 ### Step 3: Activate
 ```bash

@@ -981,75 +981,75 @@
                     body: JSON.stringify({
                         query: `
                             query {
-                    health_status {
-                        overall_status
+                    health_status: healthStatus {
+                        overall_status: overallStatus
                         timestamp
-                        report_generation_time_ms
-                        healthy_components
-                        degraded_components
-                        unhealthy_components
+                        report_generation_time_ms: reportGenerationTimeMs
+                        healthy_components: healthyComponents
+                        degraded_components: degradedComponents
+                        unhealthy_components: unhealthyComponents
                         recommendations
                     }
-                    system_metrics {
-                        cpu_usage_percent
-                        memory_usage_percent
-                        memory_used_mb
-                        memory_available_mb
-                        disk_usage_percent
-                        active_connections
-                        cache_hit_rate
-                        uptime_seconds
+                    system_metrics: systemMetrics {
+                        cpu_usage_percent: cpuUsagePercent
+                        memory_usage_percent: memoryUsagePercent
+                        memory_used_mb: memoryUsedMb
+                        memory_available_mb: memoryAvailableMb
+                        disk_usage_percent: diskUsagePercent
+                        active_connections: activeConnections
+                        cache_hit_rate: cacheHitRate
+                        uptime_seconds: uptimeSeconds
                     }
-                    schema_health {
+                    schema_health: schemaHealth {
                         component
                         status
                         message
-                        response_time_ms
+                        response_time_ms: responseTimeMs
                         timestamp
                     }
                     performance {
-                        execution_time_distribution(time_window_minutes: 60) {
+                        execution_time_distribution: executionTimeDistribution(timeWindowMinutes: 60) {
                             p50
                             p75
                             p90
                             p95
                             p99
-                            min_time
-                            max_time
-                            avg_time
-                            total_requests
+                            min_time: minTime
+                            max_time: maxTime
+                            avg_time: avgTime
+                            total_requests: totalRequests
                         }
-                        most_frequent_queries(limit: 10) {
-                            query_hash
-                            query_name
-                            query_text
-                            call_count
-                            avg_execution_time
-                            success_rate
+                        most_frequent_queries: mostFrequentQueries(limit: 10) {
+                            query_hash: queryHash
+                            query_name: queryName
+                            query_text: queryText
+                            call_count: callCount
+                            avg_execution_time: avgExecutionTime
+                            success_rate: successRate
                         }
-                        slowest_queries(limit: 10) {
-                            query_hash
-                            query_name
-                            query_text
-                            call_count
-                            avg_execution_time
-                            success_rate
+                        slowest_queries: slowestQueries(limit: 10) {
+                            query_hash: queryHash
+                            query_name: queryName
+                            query_text: queryText
+                            call_count: callCount
+                            avg_execution_time: avgExecutionTime
+                            success_rate: successRate
                         }
-                        recent_slow_queries(limit: 20) {
-                            query_hash
-                            query_name
-                            execution_time
+                        recent_slow_queries: recentSlowQueries(limit: 20) {
+                            query_hash: queryHash
+                            query_name: queryName
+                            execution_time: executionTime
                             threshold
                             timestamp
-                            query_complexity
+                            query_complexity: queryComplexity
                         }
-                        complexity_stats {
-                            avg_complexity
-                            max_complexity
-                            avg_depth
-                            max_depth
-                            complex_queries_count
-                            deep_queries_count
+                        complexity_stats: complexityStats {
+                            avg_complexity: avgComplexity
+                            max_complexity: maxComplexity
+                            avg_depth: avgDepth
+                            max_depth: maxDepth
+                            complex_queries_count: complexQueriesCount
+                            deep_queries_count: deepQueriesCount
                         }
                     }
                 }

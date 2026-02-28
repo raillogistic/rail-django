@@ -101,6 +101,35 @@ class HealthCheckerTestCase(TestCase):
             self.assertEqual(result.status, "unhealthy")
             self.assertIn("Schema build failed", result.message)
 
+    def test_check_schema_health_fallback_to_available_schema(self):
+        """Uses the next schema candidate when 'default' is not available."""
+        with patch.object(
+            self.health_checker,
+            "_get_health_schema_candidates",
+            return_value=["default", "gql"],
+        ), patch("rail_django.core.schema.get_schema") as mock_get_schema:
+            fake_schema = MagicMock()
+
+            class FakeResult:
+                errors = None
+                data = {"__schema": {"types": ["Query", "Mutation"]}}
+
+            fake_schema.execute.return_value = FakeResult()
+
+            def _load_schema(schema_name):
+                if schema_name == "default":
+                    raise Exception("Schema 'default' not found")
+                return fake_schema
+
+            mock_get_schema.side_effect = _load_schema
+
+            result = self.health_checker.check_schema_health()
+
+            self.assertEqual(result.status, "healthy")
+            self.assertIn("gql", result.message)
+            self.assertEqual(mock_get_schema.call_args_list[0].args[0], "default")
+            self.assertEqual(mock_get_schema.call_args_list[1].args[0], "gql")
+
     def test_check_database_health_success(self):
         """Test de vérification de santé de la base de données."""
         result = self.health_checker.check_database_health()
@@ -546,6 +575,13 @@ class HealthSystemIntegrationTestCase(TestCase):
         self.assertIn("Chart.js", content)
         self.assertIn("autoRefreshInterval", content)
         self.assertIn("healthHistory", content)
+        # The dashboard query should use camelCase GraphQL fields with aliases.
+        self.assertIn("health_status: healthStatus", content)
+        self.assertIn("system_metrics: systemMetrics", content)
+        self.assertIn(
+            "execution_time_distribution: executionTimeDistribution",
+            content,
+        )
 
     def test_health_api_graphql_integration(self):
         """Test de l'intégration GraphQL de l'API de santé."""
@@ -613,6 +649,4 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
-
-
 

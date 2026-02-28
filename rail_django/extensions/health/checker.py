@@ -98,20 +98,84 @@ class HealthChecker:
             cache_owner._health_report_cache = copy.deepcopy(report)
             cache_owner._health_report_cache_ts = time.monotonic()
 
+    def _get_health_schema_candidates(self) -> List[str]:
+        """
+        Resolve candidate schema names to validate for schema health.
+
+        Priority:
+        1. `HEALTH_CHECK_SCHEMA_NAME` (explicit override)
+        2. Enabled schemas from the schema registry
+        3. Enabled schemas from `RAIL_DJANGO_GRAPHQL_SCHEMAS`
+        4. Conventional fallbacks (`gql`, `default`)
+        """
+        candidates: List[str] = []
+
+        configured_name = getattr(settings, "HEALTH_CHECK_SCHEMA_NAME", None)
+        if isinstance(configured_name, str):
+            configured_name = configured_name.strip()
+            if configured_name:
+                candidates.append(configured_name)
+
+        try:
+            from rail_django.core.registry import schema_registry
+
+            schema_registry.discover_schemas()
+            enabled_names = schema_registry.get_schema_names(enabled_only=True)
+            all_names = schema_registry.get_schema_names(enabled_only=False)
+            for schema_name in [*enabled_names, *all_names]:
+                if isinstance(schema_name, str) and schema_name:
+                    candidates.append(schema_name)
+        except Exception as e:
+            logger.debug("Unable to resolve schema candidates from registry: %s", e)
+
+        schema_configs = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+        if isinstance(schema_configs, dict):
+            for schema_name, schema_config in schema_configs.items():
+                if not isinstance(schema_name, str) or not schema_name:
+                    continue
+                if isinstance(schema_config, dict) and not schema_config.get("enabled", True):
+                    continue
+                candidates.append(schema_name)
+
+        candidates.extend(["gql", "default"])
+
+        deduped: List[str] = []
+        for candidate in candidates:
+            if candidate not in deduped:
+                deduped.append(candidate)
+        return deduped
+
     def check_schema_health(self) -> HealthStatus:
         """Check GraphQL schema health and validation."""
         start_time = time.time()
 
         try:
             from rail_django.core.schema import get_schema
+            schema = None
+            resolved_schema_name = "default"
+            last_error: Optional[Exception] = None
 
-            schema = get_schema()
+            for candidate in self._get_health_schema_candidates():
+                try:
+                    schema = get_schema(candidate)
+                    resolved_schema_name = candidate
+                    break
+                except Exception as e:
+                    last_error = e
+                    logger.debug(
+                        "Health schema candidate '%s' failed to load: %s",
+                        candidate,
+                        e,
+                    )
 
             if not schema:
+                message = "GraphQL schema not found or not initialized"
+                if last_error:
+                    message = f"Schema health check failed: {str(last_error)}"
                 return HealthStatus(
                     component="schema",
                     status="unhealthy",
-                    message="GraphQL schema not found or not initialized",
+                    message=message,
                     response_time_ms=(time.time() - start_time) * 1000,
                     timestamp=datetime.now(timezone.utc),
                 )
@@ -138,10 +202,16 @@ class HealthChecker:
                 return HealthStatus(
                     component="schema",
                     status="healthy",
-                    message=f"Schema validation successful with {type_count} types",
+                    message=(
+                        f"Schema '{resolved_schema_name}' validation successful "
+                        f"with {type_count} types"
+                    ),
                     response_time_ms=(time.time() - start_time) * 1000,
                     timestamp=datetime.now(timezone.utc),
-                    details={"type_count": type_count},
+                    details={
+                        "schema_name": resolved_schema_name,
+                        "type_count": type_count,
+                    },
                 )
 
             except Exception as e:

@@ -80,6 +80,14 @@ def test_compose_does_not_include_backup_service() -> None:
     assert "\n  backup:\n" not in text
 
 
+def test_compose_exposes_nginx_on_port_8000_only() -> None:
+    text = _project_template_file("deploy", "docker", "docker-compose.yml")
+
+    assert '- "8000:8000"' in text
+    assert '- "80:80"' not in text
+    assert '- "443:443"' not in text
+
+
 def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
     text = _project_template_file("deploy", "docker", "docker-compose.yml")
 
@@ -137,10 +145,14 @@ def test_deploy_script_validates_runtime_storage_before_schema_tasks() -> None:
     assert text.index(validation_step) < text.index(migrate_cmd)
 
 
-def test_deploy_script_waits_for_http_readiness_probe() -> None:
+def test_deploy_script_waits_for_https_readiness_probe_via_nginx() -> None:
     text = _project_template_file("deploy", "deploy.sh")
 
-    assert "http://127.0.0.1:8000/health/ready/" in text
+    assert "RAIL_READINESS_HOST" in text
+    assert '"https://nginx:8000/health/ready/"' in text
+    assert 'headers={"Host": host}' in text
+    assert 'candidates = [host] if host == "localhost" else [host, "localhost"]' not in text
+    assert "ssl._create_unverified_context()" in text
     assert "print('ready')" not in text
 
 
@@ -197,6 +209,9 @@ def test_project_template_dockerignore_keeps_nginx_tls_assets_for_build() -> Non
 def test_nginx_template_restricts_sensitive_health_diagnostics() -> None:
     text = _project_template_file("deploy", "nginx", "default.conf")
 
+    assert "listen 8000 ssl;" in text
+    assert "listen 443 ssl;" not in text
+    assert "listen 80;" not in text
     assert "location ~ ^/health/(api|metrics|components|history)/?$ {" in text
     assert "location ~ ^/api/v1/health/?$ {" in text
     assert "allow 127.0.0.1;" in text

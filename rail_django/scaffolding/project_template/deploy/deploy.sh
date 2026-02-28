@@ -297,11 +297,51 @@ note "Starting containers..."
 
 note "Waiting for web readiness endpoint..."
 attempts=30
-readiness_cmd="import sys, urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/health/ready/', timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)"
-until "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T web python -c "$readiness_cmd" >/dev/null 2>&1; do
+allowed_hosts="$(read_env DJANGO_ALLOWED_HOSTS)"
+allowed_hosts="${allowed_hosts// /}"
+readiness_host="${allowed_hosts%%,*}"
+if [ -z "$readiness_host" ] || [ "$readiness_host" = "*" ]; then
+  readiness_host="localhost"
+fi
+readiness_url="https://nginx:8000/health/ready/"
+note "Readiness probe URL: ${readiness_url} (Host header: ${readiness_host})"
+readiness_cmd="$(cat <<'PY'
+import os
+import ssl
+import sys
+import urllib.request
+
+host = os.environ.get("RAIL_READINESS_HOST", "localhost")
+tls_context = ssl._create_unverified_context()
+
+try:
+    req = urllib.request.Request(
+        "https://nginx:8000/health/ready/",
+        headers={"Host": host},
+    )
+    resp = urllib.request.urlopen(
+        req,
+        timeout=3,
+        context=tls_context,
+    )
+    status = getattr(resp, "status", 200)
+    if 200 <= status < 400:
+        sys.exit(0)
+except Exception:
+    pass
+
+sys.exit(1)
+PY
+)"
+last_probe_error=""
+until probe_output="$("${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T -e "RAIL_READINESS_HOST=$readiness_host" web python -c "$readiness_cmd" 2>&1)"; do
+  last_probe_error="$probe_output"
   attempts=$((attempts - 1))
   if [ "$attempts" -le 0 ]; then
-    die "Web readiness probe did not pass."
+    if [ -n "$last_probe_error" ]; then
+      warn "Last readiness probe error: $last_probe_error"
+    fi
+    die "Web readiness probe did not pass for ${readiness_url} (Host: ${readiness_host})."
   fi
   sleep 1
 done

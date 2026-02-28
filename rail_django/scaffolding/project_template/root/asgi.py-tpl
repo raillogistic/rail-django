@@ -13,11 +13,13 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import path
-from rail_django.extensions.subscriptions import get_subscription_consumer
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'root.settings.production')
 
 django_asgi_app = get_asgi_application()
+
+# Import after Django app loading to avoid AppRegistryNotReady during startup.
+from rail_django.extensions.subscriptions import get_subscription_consumer
 
 application = ProtocolTypeRouter(
     {
