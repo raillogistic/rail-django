@@ -460,7 +460,7 @@ class RefreshTokenMutation(graphene.Mutation):
 
             # Log successful token refresh
             security.emit(
-                EventType.AUTH_TOKEN_REFRESH,
+                EventType.AUTH_TOKEN_REFRESHED,
                 request=request,
                 outcome=Outcome.SUCCESS,
                 context={"user_id": user.id, "username": user.username}
