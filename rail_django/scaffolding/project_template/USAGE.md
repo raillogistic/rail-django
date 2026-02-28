@@ -6,7 +6,7 @@ This guide is designed to take you from a fresh installation to deploying a comp
 
 ---
 
-## ðŸ“‘ Table of Contents
+## Ã°Å¸â€œâ€˜ Table of Contents
 
 1.  [Introduction & Philosophy](#1-introduction--philosophy)
 2.  [Installation & Setup](#2-installation--setup)
@@ -149,15 +149,15 @@ Rail Django enforces a clean architecture to keep your codebase scalable.
 
 ```
 my_platform/
-â”œâ”€â”€ manage.py           # Django entry point
-â”œâ”€â”€ root/               # Core configuration (formerly 'project_name')
-â”‚   â”œâ”€â”€ settings/       # Split settings (base, dev, prod)
-â”‚   â”œâ”€â”€ urls.py         # Global URL routing
-â”‚   â””â”€â”€ wsgi.py         # WSGI entry point
-â”œâ”€â”€ apps/               # Directory for your Django apps
-â”‚   â””â”€â”€ store/          # Example storefront app
-â”œâ”€â”€ requirements/       # Project dependencies (base, dev, prod)
-â””â”€â”€ Dockerfile          # Production-ready Docker build
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ manage.py           # Django entry point
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ root/               # Core configuration (formerly 'project_name')
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ settings/       # Split settings (base, dev, prod)
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ urls.py         # Global URL routing
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ wsgi.py         # WSGI entry point
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ apps/               # Directory for your Django apps
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ store/          # Example storefront app
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ requirements/       # Project dependencies (base, dev, prod)
+Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Dockerfile          # Production-ready Docker build
 ```
 
 ---
@@ -1672,7 +1672,7 @@ class Order(models.Model):
         # Group fields for frontend organization
         field_groups = [
             {"key": "main", "label": "Informations principales", "fields": ["reference", "customer", "status"]},
-            {"key": "details", "label": "DÃ©tails", "fields": ["notes"]},
+            {"key": "details", "label": "DÃƒÂ©tails", "fields": ["notes"]},
         ]
 
         # Custom metadata passed through to frontend
@@ -1688,9 +1688,9 @@ class Order(models.Model):
 | -------------------- | -------------------- | ----------------------------- |
 | Query count          | 3 separate queries   | 1 unified query               |
 | Field classification | Limited              | 15+ boolean flags             |
-| FSM transitions      | âŒ                   | âœ… Full support               |
-| Field groups         | âŒ                   | âœ… Via GraphQLMeta            |
-| Custom metadata      | âŒ                   | âœ… Pass-through               |
+| FSM transitions      | Ã¢ÂÅ’                   | Ã¢Å“â€¦ Full support               |
+| Field groups         | Ã¢ÂÅ’                   | Ã¢Å“â€¦ Via GraphQLMeta            |
+| Custom metadata      | Ã¢ÂÅ’                   | Ã¢Å“â€¦ Pass-through               |
 | Relationship details | Basic                | Complete (on_delete, through) |
 
 Both APIs remain available simultaneously for gradual migration.
@@ -1811,7 +1811,7 @@ nano .env.prod
 
 - `DJANGO_DEBUG=False`
 - `DJANGO_SECRET_KEY`: A long, random string.
-- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
+- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by deploy/backup.sh.
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
@@ -1867,7 +1867,7 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 
 - **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
 - **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
-- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env.prod`).
+- **`backups/`**: Database backups are written here by `deploy/backup.sh`.
 
 ### 4. Maintenance
 
@@ -1962,4 +1962,5 @@ docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ---
 
 **Rail Django** - _Build faster, scale better._
+
 

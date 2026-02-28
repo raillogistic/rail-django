@@ -19,7 +19,7 @@ nano .env.prod
 **Key variables to set:**
 - `DJANGO_DEBUG=False`
 - `DJANGO_SECRET_KEY`: A long, random string.
-- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by the backup service.
+- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by deploy/backup.sh.
 - `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
 - `DJANGO_SETTINGS_MODULE`: `root.settings.production`
 - `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
@@ -137,7 +137,7 @@ docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py cre
 
 - **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
 - **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
-- **`backups/`**: Database backups will be stored here automatically every 24h (defined in `.env.prod`).
+- **`backups/`**: Database backups are written here by `deploy/backup.sh`.
 
 ## 5. Maintenance
 
@@ -173,6 +173,15 @@ docker-compose -f deploy/docker/docker-compose.yml up -d
 Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
 need to rebuild base dependencies. The `rail-django` Git install is refreshed
 on every build.
+
+### Running Backups
+Run a one-shot backup on the host:
+
+```bash
+bash deploy/backup.sh
+```
+
+To automate backups, schedule this command with cron/systemd on your server.
 
 ### Production GraphiQL policy
 GraphiQL and introspection are disabled by default in production templates.
@@ -228,4 +237,5 @@ Update `deploy/nginx/default.conf` and set `server_name` to your internal domain
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d --build
 ```
+
 

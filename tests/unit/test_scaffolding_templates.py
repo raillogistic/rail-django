@@ -41,7 +41,7 @@ def test_env_prod_sets_asgi_runtime_defaults() -> None:
 def test_env_prod_exposes_backup_postgres_image_override() -> None:
     text = _project_template_file(".env.prod-tpl")
 
-    assert "BACKUP_POSTGRES_IMAGE=postgres:16-alpine" in text
+    assert "BACKUP_RETENTION_DAYS=30" in text
 
 
 def test_entrypoint_defaults_to_asgi_server_with_wsgi_fallback() -> None:
@@ -53,18 +53,18 @@ def test_entrypoint_defaults_to_asgi_server_with_wsgi_fallback() -> None:
 
 
 def test_backup_script_does_not_use_pipeline_success_for_pg_dump() -> None:
-    text = _project_template_file("deploy", "docker", "backup.sh")
+    text = _project_template_file("deploy", "backup.sh")
 
     assert 'pg_dump --dbname="$DATABASE_URL" > "$RAW_FILE"' in text
     assert "| gzip >" not in text
 
 
 def test_backup_script_checks_pg_dump_major_against_server_major() -> None:
-    text = _project_template_file("deploy", "docker", "backup.sh")
+    text = _project_template_file("deploy", "backup.sh")
 
     assert "SHOW server_version_num;" in text
     assert "pg_dump major version (" in text
-    assert "BACKUP_POSTGRES_IMAGE" in text
+    assert "DATABASE_URL is required in .env.prod." in text
 
 
 def test_compose_healthcheck_uses_http_readiness_probe() -> None:
@@ -74,10 +74,10 @@ def test_compose_healthcheck_uses_http_readiness_probe() -> None:
     assert "socket.socket()" not in text
 
 
-def test_compose_backup_image_is_configurable_for_server_compatibility() -> None:
+def test_compose_does_not_include_backup_service() -> None:
     text = _project_template_file("deploy", "docker", "docker-compose.yml")
 
-    assert "image: ${BACKUP_POSTGRES_IMAGE:-postgres:16-alpine}" in text
+    assert "\n  backup:\n" not in text
 
 
 def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
