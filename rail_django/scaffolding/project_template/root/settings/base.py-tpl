@@ -227,6 +227,16 @@ GRAPHQL_ENABLE_AUDIT_LOGGING = True
 AUDIT_STORE_IN_DATABASE = True
 AUDIT_STORE_IN_FILE = True
 AUDIT_FILE_LOGGER_NAME = env("AUDIT_FILE_LOGGER_NAME", default="audit")
+
+# Control Center media export defaults
+MEDIA_EXPORT_MAX_UNCOMPRESSED_BYTES = env.int(
+    "MEDIA_EXPORT_MAX_UNCOMPRESSED_BYTES",
+    default=2 * 1024 * 1024 * 1024,
+)
+MEDIA_EXPORT_RETENTION_HOURS = env.int("MEDIA_EXPORT_RETENTION_HOURS", default=24)
+MEDIA_EXPORT_POLL_INTERVAL_SECONDS = env.int(
+    "MEDIA_EXPORT_POLL_INTERVAL_SECONDS", default=2
+)
 # Project app labels to audit via signals (admin/ORM changes)
 # Leave unset to auto-include project apps only.
 # AUDIT_SIGNAL_APP_LABELS = ["root", "store"]

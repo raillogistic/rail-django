@@ -229,6 +229,11 @@ AUDIT_FILE_LOGGER_NAME = "audit"
 AUDIT_WEBHOOK_URL = None  # e.g., "https://siem.example.com/webhook"
 AUDIT_RETENTION_DAYS = 90
 
+# Control Center media export defaults
+MEDIA_EXPORT_MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024  # 2GB
+MEDIA_EXPORT_RETENTION_HOURS = 24
+MEDIA_EXPORT_POLL_INTERVAL_SECONDS = 2
+
 # Redaction
 AUDIT_REDACTION_FIELDS = [
     "password", "token", "secret", "key", "credential",

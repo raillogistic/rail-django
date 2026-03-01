@@ -127,6 +127,73 @@
         margin: 0;
       }
 
+      .media-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        z-index: 1000;
+      }
+
+      .media-modal-backdrop.visible {
+        display: flex;
+      }
+
+      .media-modal {
+        width: min(760px, 100%);
+        max-height: 86vh;
+        overflow: auto;
+        border: 3px solid #000;
+        background: #fff;
+        box-shadow: 8px 8px 0 #000;
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .media-modal h3 {
+        margin: 0;
+        text-transform: uppercase;
+      }
+
+      .media-entry-grid {
+        border: 2px solid #000;
+        padding: 10px;
+        max-height: 280px;
+        overflow: auto;
+        display: grid;
+        gap: 6px;
+      }
+
+      .media-entry {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 12px;
+      }
+
+      .media-entry code {
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      .media-modal-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .media-status {
+        border: 2px solid #000;
+        background: #f8fafc;
+        padding: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+
       .field {
         border: 2px solid #000;
         box-shadow: 3px 3px 0 #000;
@@ -314,6 +381,9 @@
                 {% csrf_token %}
                 <button class="btn" type="submit">Create & Download Backup</button>
               </form>
+              {% if media_entries_endpoint and media_job_start_endpoint %}
+                <button class="btn" type="button" onclick="openMediaExportModal()">Export Media (ZIP)</button>
+              {% endif %}
             {% endif %}
             <a class="btn" href="/">Welcome</a>
             <button class="btn" type="button" onclick="refreshPayload()">Refresh</button>
@@ -357,12 +427,41 @@
       </div>
     </div>
 
+    {% if active_section == "backups" and media_entries_endpoint and media_job_start_endpoint %}
+      <div id="mediaExportModal" class="media-modal-backdrop" aria-hidden="true">
+        <div class="media-modal" role="dialog" aria-modal="true" aria-labelledby="mediaExportTitle">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <h3 id="mediaExportTitle">Export Media (ZIP)</h3>
+            <button class="btn" type="button" onclick="closeMediaExportModal()">Close</button>
+          </div>
+          <p id="mediaExportMeta" style="margin:0;font-size:12px;color:#4b5563;"></p>
+          <div id="mediaExportEntries" class="media-entry-grid"></div>
+          <div class="media-modal-actions">
+            <button class="btn" type="button" onclick="selectAllMediaEntries(true)">Select All</button>
+            <button class="btn" type="button" onclick="selectAllMediaEntries(false)">Unselect All</button>
+            <button class="btn" type="button" onclick="startMediaExportJob()">Start Export</button>
+          </div>
+          <div id="mediaExportStatus" class="media-status">Idle.</div>
+          <div class="media-modal-actions">
+            <a id="mediaExportDownload" class="btn btn-inline" href="#" style="display:none;">Download Archive</a>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
     <script id="initialPayload" type="application/json">{{ payload_json|safe }}</script>
     <script>
       const apiEndpoint = "{{ api_endpoint }}";
       const activeSection = "{{ active_section }}";
+      const mediaEntriesEndpoint = "{{ media_entries_endpoint|default:'' }}";
+      const mediaJobStartEndpoint = "{{ media_job_start_endpoint|default:'' }}";
+      const mediaJobStatusTemplate = "{{ media_job_status_template|default:'' }}";
+      const mediaPollIntervalSeconds = Number("{{ media_poll_interval_seconds|default:'2' }}") || 2;
       let payload = {};
       let selectedLogFile = null;
+      let mediaEntries = [];
+      let activeMediaJobId = null;
+      let mediaPollTimer = null;
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -371,6 +470,30 @@
           .replaceAll(">", "&gt;")
           .replaceAll("\"", "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      function getCsrfToken() {
+        const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : "";
+      }
+
+      function formatBytes(value) {
+        const num = Number(value) || 0;
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let size = num;
+        let unit = 0;
+        while (size >= 1024 && unit < units.length - 1) {
+          size /= 1024;
+          unit += 1;
+        }
+        return `${size.toFixed(1)}${units[unit]}`;
+      }
+
+      function setMediaStatus(text) {
+        const node = document.getElementById("mediaExportStatus");
+        if (node) {
+          node.textContent = text;
+        }
       }
 
       function normalizeItem(item) {
@@ -478,6 +601,187 @@
 
       function renderRaw() {
         document.getElementById("rawJson").textContent = JSON.stringify(payload, null, 2);
+      }
+
+      function mediaJobStatusUrl(jobId) {
+        if (!mediaJobStatusTemplate) return "";
+        return mediaJobStatusTemplate.replace(
+          "00000000-0000-0000-0000-000000000000",
+          jobId
+        );
+      }
+
+      function renderMediaEntries() {
+        const node = document.getElementById("mediaExportEntries");
+        const meta = document.getElementById("mediaExportMeta");
+        if (!node) return;
+
+        if (!mediaEntries.length) {
+          node.innerHTML = "<div class='media-entry'>No media entries found under MEDIA_ROOT.</div>";
+          if (meta) meta.textContent = "";
+          return;
+        }
+
+        const totalBytes = mediaEntries.reduce((acc, entry) => acc + (Number(entry.size_bytes) || 0), 0);
+        if (meta) {
+          meta.textContent = `${mediaEntries.length} top-level entries detected, estimated size ${formatBytes(totalBytes)}.`;
+        }
+
+        node.innerHTML = mediaEntries
+          .map((entry, index) => {
+            const id = `media-entry-${index}`;
+            return `
+              <label class="media-entry" for="${id}">
+                <input type="checkbox" id="${id}" data-entry-id="${escapeHtml(entry.id)}" checked />
+                <strong>${escapeHtml(entry.type.toUpperCase())}</strong>
+                <code>${escapeHtml(entry.rel_path)}</code>
+                <span>${escapeHtml(formatBytes(entry.size_bytes))}</span>
+              </label>
+            `;
+          })
+          .join("");
+      }
+
+      async function loadMediaEntries() {
+        if (!mediaEntriesEndpoint) return;
+        setMediaStatus("Loading media entries...");
+        const downloadNode = document.getElementById("mediaExportDownload");
+        if (downloadNode) {
+          downloadNode.style.display = "none";
+          downloadNode.href = "#";
+        }
+        try {
+          const response = await fetch(mediaEntriesEndpoint, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) {
+            throw new Error("Failed to load media entries.");
+          }
+          const data = await response.json();
+          mediaEntries = Array.isArray(data.entries) ? data.entries : [];
+          renderMediaEntries();
+          setMediaStatus("Entries loaded. Adjust selection then start export.");
+        } catch (error) {
+          console.error(error);
+          setMediaStatus("Unable to load media entries.");
+        }
+      }
+
+      function openMediaExportModal() {
+        const modal = document.getElementById("mediaExportModal");
+        if (!modal) return;
+        modal.classList.add("visible");
+        modal.setAttribute("aria-hidden", "false");
+        loadMediaEntries();
+      }
+
+      function closeMediaExportModal() {
+        const modal = document.getElementById("mediaExportModal");
+        if (!modal) return;
+        modal.classList.remove("visible");
+        modal.setAttribute("aria-hidden", "true");
+        if (mediaPollTimer) {
+          clearTimeout(mediaPollTimer);
+          mediaPollTimer = null;
+        }
+      }
+
+      function selectAllMediaEntries(checked) {
+        const node = document.getElementById("mediaExportEntries");
+        if (!node) return;
+        node.querySelectorAll("input[type='checkbox'][data-entry-id]").forEach((checkbox) => {
+          checkbox.checked = Boolean(checked);
+        });
+      }
+
+      function collectSelectedMediaEntryIds() {
+        const node = document.getElementById("mediaExportEntries");
+        if (!node) return [];
+        return Array.from(
+          node.querySelectorAll("input[type='checkbox'][data-entry-id]:checked")
+        ).map((checkbox) => checkbox.getAttribute("data-entry-id"));
+      }
+
+      async function startMediaExportJob() {
+        if (!mediaJobStartEndpoint) return;
+        const selectedIds = collectSelectedMediaEntryIds();
+        if (!selectedIds.length) {
+          setMediaStatus("Select at least one entry before exporting.");
+          return;
+        }
+        setMediaStatus("Starting media export job...");
+        try {
+          const response = await fetch(mediaJobStartEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-CSRFToken": getCsrfToken(),
+            },
+            body: JSON.stringify({ selected_entry_ids: selectedIds }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || "Unable to start media export.");
+          }
+          activeMediaJobId = data.job_id;
+          setMediaStatus(`Job ${activeMediaJobId} started. Polling status...`);
+          pollMediaExportJob();
+        } catch (error) {
+          console.error(error);
+          setMediaStatus(String(error.message || "Media export start failed."));
+        }
+      }
+
+      async function pollMediaExportJob() {
+        if (!activeMediaJobId) return;
+        const statusUrl = mediaJobStatusUrl(activeMediaJobId);
+        if (!statusUrl) return;
+
+        try {
+          const response = await fetch(statusUrl, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to fetch media export status.");
+          }
+
+          const status = String(data.status || "");
+          const progress = Number(data.progress) || 0;
+          const message = data.message || "";
+          setMediaStatus(`Status: ${status} (${progress}%)\n${message}`);
+
+          const downloadNode = document.getElementById("mediaExportDownload");
+          if (status === "SUCCESS" && data.download_url) {
+            if (downloadNode) {
+              downloadNode.href = data.download_url;
+              downloadNode.style.display = "inline-block";
+            }
+            refreshPayload();
+            return;
+          }
+
+          if (status === "FAILED" || status === "CANCELED") {
+            if (downloadNode) {
+              downloadNode.style.display = "none";
+              downloadNode.href = "#";
+            }
+            setMediaStatus(`Status: ${status}\n${data.error || message || "Job did not complete."}`);
+            refreshPayload();
+            return;
+          }
+
+          mediaPollTimer = setTimeout(
+            pollMediaExportJob,
+            Math.max(1, mediaPollIntervalSeconds) * 1000
+          );
+        } catch (error) {
+          console.error(error);
+          setMediaStatus(String(error.message || "Status polling failed."));
+        }
       }
 
       function findSummaryValue(label) {

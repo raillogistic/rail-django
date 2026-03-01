@@ -8,8 +8,10 @@ the GraphQL auto schema can expose CRUD and method-based mutations.
 from __future__ import annotations
 
 import copy
+import uuid
 from typing import Any, Dict, List
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models as django_models
 
@@ -272,6 +274,54 @@ class MetadataDeployVersionModel(django_models.Model):
         return f"{self.key} ({self.version})"
 
 
+class MediaExportJobStatus(django_models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    RUNNING = "RUNNING", "Running"
+    SUCCESS = "SUCCESS", "Success"
+    FAILED = "FAILED", "Failed"
+    CANCELED = "CANCELED", "Canceled"
+
+
+class MediaExportJob(django_models.Model):
+    """Persisted asynchronous media export job."""
+
+    id = django_models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requested_by = django_models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=django_models.SET_NULL,
+        related_name="rail_media_export_jobs",
+    )
+    status = django_models.CharField(
+        max_length=20,
+        choices=MediaExportJobStatus.choices,
+        default=MediaExportJobStatus.PENDING,
+        db_index=True,
+    )
+    progress = django_models.PositiveSmallIntegerField(default=0)
+    selected_paths = django_models.JSONField(default=list, blank=True)
+    archive_name = django_models.CharField(max_length=255, blank=True, default="")
+    archive_path = django_models.TextField(blank=True, default="")
+    uncompressed_size_bytes = django_models.BigIntegerField(default=0)
+    archive_size_bytes = django_models.BigIntegerField(default=0)
+    message = django_models.TextField(blank=True, default="")
+    error_message = django_models.TextField(blank=True, default="")
+    metadata = django_models.JSONField(default=dict, blank=True)
+    created_at = django_models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = django_models.DateTimeField(null=True, blank=True)
+    finished_at = django_models.DateTimeField(null=True, blank=True)
+    expires_at = django_models.DateTimeField(null=True, blank=True)
+    updated_at = django_models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "rail_django_media_export_job"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"MediaExportJob({self.id}, {self.status})"
+
+
 __all__ = [
     "AuditEventModel",
     "ReportingDataset",
@@ -280,6 +330,8 @@ __all__ = [
     "ReportingReportBlock",
     "ReportingExportJob",
     "TaskExecution",
+    "MediaExportJobStatus",
+    "MediaExportJob",
     "SchemaRegistryModel",
     "SchemaSnapshotModel",
     "MetadataDeployVersionModel",

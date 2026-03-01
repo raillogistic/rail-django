@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-import gzip
 import subprocess
+import tempfile
+import threading
+import zipfile
+from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -15,6 +18,7 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import close_old_connections
 from django.db.models import Count
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.urls import NoReverseMatch, reverse
@@ -30,11 +34,84 @@ from rail_django.extensions.importing.models import ImportBatch
 from rail_django.extensions.reporting.models.export_job import ReportingExportJob
 from rail_django.extensions.tasks.models import TaskExecution
 from rail_django.extensions.templating.registry import template_registry
-from rail_django.models import MetadataDeployVersionModel, SchemaRegistryModel
+from rail_django.models import (
+    MediaExportJob,
+    MediaExportJobStatus,
+    MetadataDeployVersionModel,
+    SchemaRegistryModel,
+)
 from rail_django.security.config import SecurityConfig
 
 logger = logging.getLogger(__name__)
 _PROCESS_STARTED_AT = now()
+_MEDIA_EXPORT_GLOBAL_CONCURRENCY = 2
+_MEDIA_EXPORT_MAX_UNCOMPRESSED_DEFAULT = 2 * 1024 * 1024 * 1024
+_MEDIA_EXPORT_RETENTION_HOURS_DEFAULT = 24
+_MEDIA_EXPORT_POLL_INTERVAL_SECONDS_DEFAULT = 2
+
+
+def _media_export_max_uncompressed_bytes() -> int:
+    value = getattr(
+        settings,
+        "MEDIA_EXPORT_MAX_UNCOMPRESSED_BYTES",
+        _MEDIA_EXPORT_MAX_UNCOMPRESSED_DEFAULT,
+    )
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return _MEDIA_EXPORT_MAX_UNCOMPRESSED_DEFAULT
+    return max(1, parsed)
+
+
+def _media_export_retention_hours() -> int:
+    value = getattr(
+        settings,
+        "MEDIA_EXPORT_RETENTION_HOURS",
+        _MEDIA_EXPORT_RETENTION_HOURS_DEFAULT,
+    )
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return _MEDIA_EXPORT_RETENTION_HOURS_DEFAULT
+    return max(1, parsed)
+
+
+def _media_export_poll_interval_seconds() -> int:
+    value = getattr(
+        settings,
+        "MEDIA_EXPORT_POLL_INTERVAL_SECONDS",
+        _MEDIA_EXPORT_POLL_INTERVAL_SECONDS_DEFAULT,
+    )
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return _MEDIA_EXPORT_POLL_INTERVAL_SECONDS_DEFAULT
+    return max(1, parsed)
+
+
+def _is_within_directory(base_dir: Path, candidate: Path) -> bool:
+    base_dir = base_dir.resolve()
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(base_dir)
+        return True
+    except ValueError:
+        return False
+
+
+def _resolve_media_root() -> Path:
+    configured = str(getattr(settings, "MEDIA_ROOT", "") or "").strip()
+    base_dir = Path(getattr(settings, "BASE_DIR", Path.cwd()))
+    if not configured:
+        return (base_dir / "mediafiles").resolve()
+    candidate = Path(configured)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    return (base_dir / candidate).resolve()
+
+
+def _resolve_media_export_dir() -> Path:
+    return (_resolve_backup_dir() / "media_exports").resolve()
 
 
 def _safe_value(loader: Callable[[], Any], default: Any) -> Any:
@@ -96,7 +173,7 @@ def _is_postgresql_database() -> bool:
     return "postgresql" in engine or "postgis" in engine
 
 
-def _build_pg_dump_command(raw_file: Path) -> tuple[list[str], dict[str, str]]:
+def _build_pg_dump_command(output_file: Path) -> tuple[list[str], dict[str, str]]:
     db = _default_database_config()
     db_name = db.get("NAME")
     if not db_name:
@@ -104,10 +181,11 @@ def _build_pg_dump_command(raw_file: Path) -> tuple[list[str], dict[str, str]]:
 
     command = [
         "pg_dump",
-        "--format=plain",
+        "--format=custom",
+        "--compress=9",
         "--no-owner",
         "--no-privileges",
-        f"--file={raw_file}",
+        f"--file={output_file}",
         f"--dbname={db_name}",
     ]
     host = db.get("HOST")
@@ -132,9 +210,8 @@ def _create_postgresql_backup_file() -> Path:
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    raw_file = backup_dir / f"backup_{timestamp}.sql"
-    archive_file = Path(f"{raw_file}.gz")
-    command, env = _build_pg_dump_command(raw_file)
+    output_file = backup_dir / f"backup_{timestamp}.dump"
+    command, env = _build_pg_dump_command(output_file)
 
     try:
         subprocess.run(command, env=env, check=True, capture_output=True, text=True)
@@ -144,14 +221,280 @@ def _create_postgresql_backup_file() -> Path:
         message = (exc.stderr or "").strip() or "pg_dump failed."
         raise RuntimeError(message) from exc
 
-    if not raw_file.exists() or raw_file.stat().st_size == 0:
-        raw_file.unlink(missing_ok=True)
+    if not output_file.exists() or output_file.stat().st_size == 0:
+        output_file.unlink(missing_ok=True)
         raise RuntimeError("pg_dump produced an empty backup file.")
 
-    with raw_file.open("rb") as source, gzip.open(archive_file, "wb") as target:
-        target.write(source.read())
-    raw_file.unlink(missing_ok=True)
-    return archive_file
+    return output_file
+
+
+def _list_media_top_level_entries() -> tuple[list[dict[str, Any]], dict[str, Path]]:
+    media_root = _resolve_media_root()
+    if not media_root.exists() or not media_root.is_dir():
+        return [], {}
+
+    entries: list[dict[str, Any]] = []
+    entry_map: dict[str, Path] = {}
+    for candidate in sorted(media_root.iterdir(), key=lambda p: p.name.lower()):
+        entry_id = candidate.name
+        entry_type = "folder" if candidate.is_dir() else "file"
+        size_bytes = 0
+        if candidate.is_file():
+            try:
+                size_bytes = candidate.stat().st_size
+            except OSError:
+                size_bytes = 0
+        else:
+            try:
+                size_bytes = _calculate_uncompressed_size(
+                    [candidate], media_root, _media_export_max_uncompressed_bytes()
+                )[0]
+            except Exception:
+                size_bytes = 0
+        entries.append(
+            {
+                "id": entry_id,
+                "name": candidate.name,
+                "type": entry_type,
+                "rel_path": candidate.name,
+                "size_bytes": size_bytes,
+                "selected_default": True,
+            }
+        )
+        entry_map[entry_id] = candidate
+    return entries, entry_map
+
+
+def _iter_selected_media_files(
+    selected_paths: list[Path], media_root: Path
+):
+    seen: set[str] = set()
+    for selected_path in selected_paths:
+        try:
+            resolved_selected = selected_path.resolve()
+        except OSError:
+            continue
+        if not _is_within_directory(media_root, resolved_selected):
+            continue
+
+        if resolved_selected.is_file():
+            rel_path = resolved_selected.relative_to(media_root).as_posix()
+            if rel_path in seen:
+                continue
+            seen.add(rel_path)
+            try:
+                size = resolved_selected.stat().st_size
+            except OSError:
+                size = 0
+            yield (resolved_selected, rel_path, max(0, int(size)))
+            continue
+
+        if not resolved_selected.is_dir():
+            continue
+
+        for root, dirs, names in os.walk(resolved_selected, followlinks=False):
+            root_path = Path(root)
+            safe_dirs: list[str] = []
+            for directory_name in dirs:
+                dir_path = root_path / directory_name
+                try:
+                    if _is_within_directory(media_root, dir_path.resolve()):
+                        safe_dirs.append(directory_name)
+                except OSError:
+                    continue
+            dirs[:] = safe_dirs
+
+            for file_name in names:
+                file_path = root_path / file_name
+                try:
+                    resolved_file = file_path.resolve()
+                except OSError:
+                    continue
+                if not _is_within_directory(media_root, resolved_file):
+                    continue
+                if not resolved_file.is_file():
+                    continue
+                rel_path = resolved_file.relative_to(media_root).as_posix()
+                if rel_path in seen:
+                    continue
+                seen.add(rel_path)
+                try:
+                    size = resolved_file.stat().st_size
+                except OSError:
+                    size = 0
+                yield (resolved_file, rel_path, max(0, int(size)))
+
+
+def _calculate_uncompressed_size(
+    selected_paths: list[Path], media_root: Path, max_bytes: int
+) -> tuple[int, int]:
+    total_bytes = 0
+    total_files = 0
+    for _path, _rel, size in _iter_selected_media_files(selected_paths, media_root):
+        total_files += 1
+        total_bytes += size
+        if total_bytes > max_bytes:
+            break
+    return total_bytes, total_files
+
+
+def _cleanup_expired_media_exports() -> None:
+    export_dir = _resolve_media_export_dir()
+    expired_jobs = MediaExportJob.objects.filter(
+        expires_at__isnull=False, expires_at__lte=now()
+    )
+    for job in expired_jobs:
+        archive_path = Path(job.archive_path) if job.archive_path else None
+        if archive_path and archive_path.is_file() and _is_within_directory(
+            export_dir, archive_path
+        ):
+            archive_path.unlink(missing_ok=True)
+    expired_jobs.delete()
+
+
+def _reconcile_stale_media_jobs() -> None:
+    stale_before = now() - timedelta(hours=2)
+    MediaExportJob.objects.filter(
+        status__in=[MediaExportJobStatus.PENDING, MediaExportJobStatus.RUNNING],
+        created_at__lt=stale_before,
+    ).update(
+        status=MediaExportJobStatus.FAILED,
+        error_message="Job timed out before completion.",
+        finished_at=now(),
+        progress=0,
+    )
+
+
+def _run_media_export_job(job_id: UUID) -> None:
+    close_old_connections()
+    try:
+        job = MediaExportJob.objects.filter(pk=job_id).first()
+        if job is None:
+            return
+        media_root = _resolve_media_root()
+        max_bytes = _media_export_max_uncompressed_bytes()
+        retention_hours = _media_export_retention_hours()
+
+        job.status = MediaExportJobStatus.RUNNING
+        job.started_at = now()
+        job.progress = 1
+        job.message = "Preparing file list..."
+        job.error_message = ""
+        job.save(
+            update_fields=[
+                "status",
+                "started_at",
+                "progress",
+                "message",
+                "error_message",
+                "updated_at",
+            ]
+        )
+
+        if not media_root.exists() or not media_root.is_dir():
+            raise RuntimeError("MEDIA_ROOT does not exist on this server.")
+
+        selected_paths: list[Path] = []
+        for rel_path in job.selected_paths:
+            candidate = (media_root / str(rel_path)).resolve()
+            if not _is_within_directory(media_root, candidate):
+                continue
+            if candidate.exists():
+                selected_paths.append(candidate)
+        if not selected_paths:
+            raise RuntimeError("No valid media entries were selected.")
+
+        files = list(_iter_selected_media_files(selected_paths, media_root))
+        if not files:
+            raise RuntimeError("Selected entries do not contain readable files.")
+        total_uncompressed = sum(item[2] for item in files)
+        if total_uncompressed > max_bytes:
+            max_display = _human_size(max_bytes)
+            actual_display = _human_size(total_uncompressed)
+            raise RuntimeError(
+                f"Selected media exceeds limit ({actual_display} > {max_display})."
+            )
+
+        export_dir = _resolve_media_export_dir()
+        export_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        archive_name = f"media_export_{timestamp}_{str(job.id)[:8]}.zip"
+        final_archive = (export_dir / archive_name).resolve()
+        if not _is_within_directory(export_dir, final_archive):
+            raise RuntimeError("Invalid media export path.")
+
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=".zip",
+            dir=export_dir,
+            prefix=f".tmp_media_export_{str(job.id)[:8]}_",
+            delete=False,
+        ) as tmp_handle:
+            tmp_path = Path(tmp_handle.name)
+
+        written_bytes = 0
+        try:
+            with zipfile.ZipFile(
+                tmp_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+            ) as archive:
+                for index, (file_path, rel_path, size) in enumerate(files, start=1):
+                    archive.write(file_path, arcname=rel_path)
+                    written_bytes += size
+                    if index % 25 == 0 or index == len(files):
+                        if total_uncompressed > 0:
+                            progress = min(
+                                95,
+                                max(5, int((written_bytes / total_uncompressed) * 95)),
+                            )
+                        else:
+                            progress = min(95, max(5, int((index / len(files)) * 95)))
+                        MediaExportJob.objects.filter(pk=job.id).update(
+                            progress=progress,
+                            message=f"Compressed {index}/{len(files)} files...",
+                        )
+            tmp_path.replace(final_archive)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        archive_size = final_archive.stat().st_size if final_archive.exists() else 0
+        if archive_size <= 0:
+            final_archive.unlink(missing_ok=True)
+            raise RuntimeError("Archive generation failed (empty ZIP output).")
+
+        MediaExportJob.objects.filter(pk=job.id).update(
+            status=MediaExportJobStatus.SUCCESS,
+            progress=100,
+            archive_name=archive_name,
+            archive_path=str(final_archive),
+            uncompressed_size_bytes=total_uncompressed,
+            archive_size_bytes=archive_size,
+            message=f"Archive ready ({len(files)} files).",
+            finished_at=now(),
+            expires_at=now() + timedelta(hours=retention_hours),
+            error_message="",
+        )
+    except Exception as exc:
+        logger.exception("Media export job %s failed: %s", job_id, exc)
+        MediaExportJob.objects.filter(pk=job_id).update(
+            status=MediaExportJobStatus.FAILED,
+            progress=0,
+            message="Media export failed.",
+            error_message=str(exc),
+            finished_at=now(),
+        )
+    finally:
+        close_old_connections()
+
+
+def _start_media_export_job(job_id: UUID) -> None:
+    worker = threading.Thread(
+        target=_run_media_export_job,
+        args=(job_id,),
+        daemon=True,
+        name=f"media-export-{str(job_id)[:8]}",
+    )
+    worker.start()
 
 
 def _tail_lines(
@@ -683,11 +1026,22 @@ def _build_data_ops_payload() -> dict[str, Any]:
 
 def _build_backups_payload() -> dict[str, Any]:
     backup_dir = _resolve_backup_dir()
+    media_root = _resolve_media_root()
+    media_export_dir = _resolve_media_export_dir()
+    _cleanup_expired_media_exports()
+    _reconcile_stale_media_jobs()
     retention_days = os.environ.get("BACKUP_RETENTION_DAYS", "30")
     files = []
+    allowed_patterns = (".sql", ".sql.gz", ".dump")
     if backup_dir.exists():
         for path in sorted(
-            backup_dir.glob("backup_*.sql*"),
+            (
+                candidate
+                for candidate in backup_dir.glob("backup_*")
+                if candidate.is_file()
+                and candidate.name.startswith("backup_")
+                and candidate.name.endswith(allowed_patterns)
+            ),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         ):
@@ -708,12 +1062,63 @@ def _build_backups_payload() -> dict[str, Any]:
             )
 
     newest = files[0] if files else None
+    recent_media_exports = []
+    for row in MediaExportJob.objects.values(
+        "id",
+        "status",
+        "progress",
+        "archive_name",
+        "archive_size_bytes",
+        "uncompressed_size_bytes",
+        "created_at",
+        "finished_at",
+        "error_message",
+    )[:20]:
+        archive_name = row.get("archive_name") or ""
+        download_url = ""
+        if (
+            row.get("status") == MediaExportJobStatus.SUCCESS
+            and archive_name.endswith(".zip")
+        ):
+            archive_path = (media_export_dir / archive_name).resolve()
+            if archive_path.is_file() and _is_within_directory(
+                media_export_dir, archive_path
+            ):
+                download_url = reverse(
+                    "control_center_media_export_download",
+                    kwargs={"archive_name": archive_name},
+                )
+        recent_media_exports.append(
+            {
+                "id": str(row["id"]),
+                "status": row["status"],
+                "progress": row["progress"],
+                "archive_name": archive_name or "-",
+                "archive_size": _human_size(int(row["archive_size_bytes"] or 0)),
+                "uncompressed_size": _human_size(
+                    int(row["uncompressed_size_bytes"] or 0)
+                ),
+                "created_at": _iso(row["created_at"]),
+                "finished_at": _iso(row["finished_at"]),
+                "error_message": row["error_message"] or "-",
+                "download": download_url,
+            }
+        )
+
     return {
         "generated_at": _iso(now()),
         "summary": [
             {"label": "Backup directory", "value": str(backup_dir)},
             {"label": "Retention days", "value": retention_days},
             {"label": "Total backup files", "value": len(files)},
+            {
+                "label": "Media root",
+                "value": str(media_root),
+            },
+            {
+                "label": "Media export jobs",
+                "value": _safe_value(lambda: MediaExportJob.objects.count(), 0),
+            },
             {
                 "label": "Latest backup",
                 "value": newest.get("name") if newest else "none",
@@ -726,6 +1131,14 @@ def _build_backups_payload() -> dict[str, Any]:
                     ("Script", "deploy/backup.sh"),
                     ("One-shot", "bash deploy/backup.sh"),
                     ("Automate", "Use cron/systemd on server host"),
+                    (
+                        "Media export max size",
+                        _human_size(_media_export_max_uncompressed_bytes()),
+                    ),
+                    (
+                        "Media export retention",
+                        f"{_media_export_retention_hours()}h",
+                    ),
                 ],
             }
         ],
@@ -734,7 +1147,23 @@ def _build_backups_payload() -> dict[str, Any]:
                 "title": "Backup files",
                 "columns": ["name", "size", "modified_at", "download", "path"],
                 "rows": files,
-            }
+            },
+            {
+                "title": "Recent media exports",
+                "columns": [
+                    "id",
+                    "status",
+                    "progress",
+                    "archive_name",
+                    "archive_size",
+                    "uncompressed_size",
+                    "created_at",
+                    "finished_at",
+                    "error_message",
+                    "download",
+                ],
+                "rows": recent_media_exports,
+            },
         ],
     }
 
@@ -1104,9 +1533,23 @@ class ControlCenterPageView(SuperuserRequiredViewMixin, TemplateView):
             kwargs={"section_key": section_key},
         )
         context["create_backup_endpoint"] = ""
+        context["media_entries_endpoint"] = ""
+        context["media_job_start_endpoint"] = ""
+        context["media_job_status_template"] = ""
+        context["media_poll_interval_seconds"] = _media_export_poll_interval_seconds()
         if section_key == "backups":
             context["create_backup_endpoint"] = reverse(
                 "control_center_backup_create_download"
+            )
+            context["media_entries_endpoint"] = reverse(
+                "control_center_media_export_entries"
+            )
+            context["media_job_start_endpoint"] = reverse(
+                "control_center_media_export_job_create"
+            )
+            context["media_job_status_template"] = reverse(
+                "control_center_media_export_job_status",
+                kwargs={"job_id": UUID("00000000-0000-0000-0000-000000000000")},
             )
         return context
 
@@ -1134,13 +1577,188 @@ class ControlCenterApiView(SuperuserRequiredViewMixin, View):
         return JsonResponse(response, safe=False)
 
 
+class ControlCenterMediaExportEntriesView(SuperuserRequiredViewMixin, View):
+    """List selectable top-level media entries for export."""
+
+    def get(self, request: HttpRequest) -> JsonResponse:
+        _cleanup_expired_media_exports()
+        _reconcile_stale_media_jobs()
+        entries, _entry_map = _list_media_top_level_entries()
+        media_root = _resolve_media_root()
+        response = {
+            "media_root": str(media_root),
+            "exists": media_root.exists() and media_root.is_dir(),
+            "entries": entries,
+            "constraints": {
+                "max_uncompressed_bytes": _media_export_max_uncompressed_bytes(),
+                "retention_hours": _media_export_retention_hours(),
+                "poll_interval_seconds": _media_export_poll_interval_seconds(),
+            },
+        }
+        return JsonResponse(response)
+
+
+class ControlCenterMediaExportJobCreateView(SuperuserRequiredViewMixin, View):
+    """Create asynchronous media export job."""
+
+    def post(self, request: HttpRequest) -> JsonResponse:
+        _cleanup_expired_media_exports()
+        _reconcile_stale_media_jobs()
+
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+        selected_entry_ids = payload.get("selected_entry_ids")
+        if not isinstance(selected_entry_ids, list):
+            return JsonResponse(
+                {"error": "selected_entry_ids must be a list."},
+                status=400,
+            )
+        selected_entry_ids = [
+            str(entry_id).strip()
+            for entry_id in selected_entry_ids
+            if str(entry_id).strip()
+        ]
+        if not selected_entry_ids:
+            return JsonResponse(
+                {"error": "At least one media entry must be selected."},
+                status=400,
+            )
+
+        entries, entry_map = _list_media_top_level_entries()
+        valid_ids = {row["id"] for row in entries}
+        selected_ids: list[str] = []
+        seen: set[str] = set()
+        for entry_id in selected_entry_ids:
+            if entry_id not in valid_ids:
+                continue
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+            selected_ids.append(entry_id)
+        if not selected_ids:
+            return JsonResponse(
+                {"error": "Selected media entries are not valid."},
+                status=400,
+            )
+
+        running_statuses = [MediaExportJobStatus.PENDING, MediaExportJobStatus.RUNNING]
+        if MediaExportJob.objects.filter(
+            requested_by=request.user, status__in=running_statuses
+        ).exists():
+            return JsonResponse(
+                {
+                    "error": (
+                        "You already have a running media export job. "
+                        "Wait for completion before starting a new one."
+                    )
+                },
+                status=409,
+            )
+        global_running = MediaExportJob.objects.filter(status__in=running_statuses).count()
+        if global_running >= _MEDIA_EXPORT_GLOBAL_CONCURRENCY:
+            return JsonResponse(
+                {"error": "Media export concurrency limit reached. Try again shortly."},
+                status=429,
+            )
+
+        selected_paths = [entry_map[entry_id].name for entry_id in selected_ids]
+        job = MediaExportJob.objects.create(
+            requested_by=request.user,
+            status=MediaExportJobStatus.PENDING,
+            progress=0,
+            selected_paths=selected_paths,
+            message="Job queued.",
+            metadata={"selected_entry_ids": selected_ids},
+        )
+        _start_media_export_job(job.id)
+        return JsonResponse(
+            {
+                "job_id": str(job.id),
+                "status": job.status,
+                "created_at": _iso(job.created_at),
+            },
+            status=201,
+        )
+
+
+class ControlCenterMediaExportJobStatusView(SuperuserRequiredViewMixin, View):
+    """Return asynchronous media export job status for polling."""
+
+    def get(self, request: HttpRequest, job_id: UUID) -> JsonResponse:
+        _cleanup_expired_media_exports()
+        _reconcile_stale_media_jobs()
+        job = MediaExportJob.objects.filter(pk=job_id).first()
+        if job is None:
+            return JsonResponse({"error": "Media export job not found."}, status=404)
+
+        download_url = ""
+        if job.status == MediaExportJobStatus.SUCCESS and job.archive_name:
+            archive_path = (_resolve_media_export_dir() / job.archive_name).resolve()
+            if archive_path.is_file() and _is_within_directory(
+                _resolve_media_export_dir(), archive_path
+            ):
+                download_url = reverse(
+                    "control_center_media_export_download",
+                    kwargs={"archive_name": job.archive_name},
+                )
+
+        return JsonResponse(
+            {
+                "job_id": str(job.id),
+                "status": job.status,
+                "progress": int(job.progress or 0),
+                "message": job.message or "",
+                "error": job.error_message or "",
+                "archive_name": job.archive_name or "",
+                "download_url": download_url,
+                "created_at": _iso(job.created_at),
+                "started_at": _iso(job.started_at),
+                "finished_at": _iso(job.finished_at),
+                "expires_at": _iso(job.expires_at),
+            }
+        )
+
+
+class ControlCenterMediaExportDownloadView(SuperuserRequiredViewMixin, View):
+    """Download generated media export ZIP file."""
+
+    def get(self, request: HttpRequest, archive_name: str) -> HttpResponse:
+        archive_name = str(archive_name or "")
+        if "/" in archive_name or "\\" in archive_name:
+            raise Http404("Archive not found")
+        if not archive_name.startswith("media_export_") or not archive_name.endswith(
+            ".zip"
+        ):
+            raise Http404("Archive not found")
+
+        export_dir = _resolve_media_export_dir().resolve()
+        archive_path = (export_dir / archive_name).resolve()
+        if not _is_within_directory(export_dir, archive_path):
+            raise Http404("Archive not found")
+        if not archive_path.is_file():
+            raise Http404("Archive not found")
+
+        return FileResponse(
+            archive_path.open("rb"),
+            as_attachment=True,
+            filename=archive_name,
+        )
+
+
 class ControlCenterBackupDownloadView(SuperuserRequiredViewMixin, View):
     """Download one backup artifact from the configured backup directory."""
 
     def get(self, request: HttpRequest, backup_name: str) -> HttpResponse:
         if not backup_name.startswith("backup_"):
             raise Http404("Backup file not found")
-        if not (backup_name.endswith(".sql") or backup_name.endswith(".sql.gz")):
+        if not (
+            backup_name.endswith(".sql")
+            or backup_name.endswith(".sql.gz")
+            or backup_name.endswith(".dump")
+        ):
             raise Http404("Backup file not found")
 
         backup_dir = _resolve_backup_dir().resolve()
@@ -1215,6 +1833,26 @@ def get_control_center_urls():
             ControlCenterBackupCreateDownloadView.as_view(),
             name="control_center_backup_create_download",
         ),
+        path(
+            "control-center/api/media-export/entries/",
+            ControlCenterMediaExportEntriesView.as_view(),
+            name="control_center_media_export_entries",
+        ),
+        path(
+            "control-center/media-export/jobs/",
+            ControlCenterMediaExportJobCreateView.as_view(),
+            name="control_center_media_export_job_create",
+        ),
+        path(
+            "control-center/media-export/jobs/<uuid:job_id>/",
+            ControlCenterMediaExportJobStatusView.as_view(),
+            name="control_center_media_export_job_status",
+        ),
+        path(
+            "control-center/media-export/download/<str:archive_name>/",
+            ControlCenterMediaExportDownloadView.as_view(),
+            name="control_center_media_export_download",
+        ),
     ]
 
 
@@ -1222,6 +1860,10 @@ __all__ = [
     "ControlCenterApiView",
     "ControlCenterBackupCreateDownloadView",
     "ControlCenterBackupDownloadView",
+    "ControlCenterMediaExportEntriesView",
+    "ControlCenterMediaExportJobCreateView",
+    "ControlCenterMediaExportJobStatusView",
+    "ControlCenterMediaExportDownloadView",
     "ControlCenterPageView",
     "SECTION_META",
     "get_control_center_urls",
