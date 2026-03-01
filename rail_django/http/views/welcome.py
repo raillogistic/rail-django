@@ -66,7 +66,7 @@ SYSTEM_DASHBOARDS = [
         "title": "Control Center",
         "href": "/control-center/",
         "badge": "Ops",
-        "description": "Unified operations pages: overview, health, security, logs, jobs, and settings.",
+        "description": "Unified operations pages: overview, health, security, logs, jobs, backups, capacity/cost, and settings.",
     },
     {
         "title": "Schema Registry UI",

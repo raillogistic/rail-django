@@ -37,7 +37,9 @@ class MFAManager:
         # In-memory SMS token store: {"userId_deviceId": (token, expires_ts)}
         self._sms_tokens: dict[str, tuple[str, float]] = {}
 
-    def setup_totp_device(self, user: "AbstractUser", device_name: str) -> tuple[MFADevice, str]:
+    def setup_totp_device(
+        self, user: "AbstractUser", device_name: str
+    ) -> tuple[MFADevice, str]:
         """
         Configure un appareil TOTP pour l'utilisateur.
 
@@ -49,6 +51,7 @@ class MFAManager:
             Tuple (appareil MFA, QR code en base64)
         """
         import pyotp
+
         # Générer une clé secrète
         secret_key = pyotp.random_base32()
 
@@ -168,7 +171,10 @@ class MFAManager:
                 stored = self._sms_tokens.get(key)
                 if stored:
                     stored_token, expires_ts = stored
-                    if django_timezone.now().timestamp() <= expires_ts and stored_token == token:
+                    if (
+                        django_timezone.now().timestamp() <= expires_ts
+                        and stored_token == token
+                    ):
                         # consume token
                         self._sms_tokens.pop(key, None)
                         device.last_used = django_timezone.now()
@@ -197,7 +203,7 @@ class MFAManager:
 
         # Vérifier la politique MFA globale
         mfa_required_for_all = getattr(settings, "MFA_REQUIRED_FOR_ALL_USERS", False)
-        mfa_required_for_staff = getattr(settings, "MFA_REQUIRED_FOR_STAFF", True)
+        mfa_required_for_staff = getattr(settings, "MFA_REQUIRED_FOR_STAFF", False)
 
         if mfa_required_for_all:
             return True

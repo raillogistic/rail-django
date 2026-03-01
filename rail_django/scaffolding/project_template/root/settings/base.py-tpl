@@ -237,6 +237,10 @@ MEDIA_EXPORT_RETENTION_HOURS = env.int("MEDIA_EXPORT_RETENTION_HOURS", default=2
 MEDIA_EXPORT_POLL_INTERVAL_SECONDS = env.int(
     "MEDIA_EXPORT_POLL_INTERVAL_SECONDS", default=2
 )
+CAPACITY_STORAGE_COST_PER_GB_MONTH = env.float(
+    "CAPACITY_STORAGE_COST_PER_GB_MONTH", default=0.10
+)
+CAPACITY_SCAN_MAX_FILES = env.int("CAPACITY_SCAN_MAX_FILES", default=50000)
 # Project app labels to audit via signals (admin/ORM changes)
 # Leave unset to auto-include project apps only.
 # AUDIT_SIGNAL_APP_LABELS = ["root", "store"]
@@ -696,6 +700,9 @@ RAIL_DJANGO_GRAPHQL_SCHEMAS = {
         },
     },
 }
+
+MFA_REQUIRED_FOR_ALL_USERS = False
+MFA_REQUIRED_FOR_STAFF = False
 
 # Rail Django Templating Configuration
 

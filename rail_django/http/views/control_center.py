@@ -535,6 +535,344 @@ def _tail_lines(
         return []
 
 
+def _capacity_cost_per_gb_month() -> float:
+    value = getattr(settings, "CAPACITY_STORAGE_COST_PER_GB_MONTH", 0.10)
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0.10
+    return max(0.0, parsed)
+
+
+def _capacity_scan_limit_files() -> int:
+    value = getattr(settings, "CAPACITY_SCAN_MAX_FILES", 50000)
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 50000
+    return max(1000, parsed)
+
+
+def _estimate_monthly_cost(size_bytes: int, cost_per_gb_month: float) -> float:
+    gib = size_bytes / float(1024**3)
+    return gib * cost_per_gb_month
+
+
+def _scan_directory(
+    root: Path,
+    *,
+    max_files: int,
+    retention_days: int | None = None,
+    retention_hours: int | None = None,
+) -> dict[str, Any]:
+    stats = {
+        "exists": root.exists() and root.is_dir(),
+        "path": str(root),
+        "total_bytes": 0,
+        "total_files": 0,
+        "bytes_24h": 0,
+        "bytes_7d": 0,
+        "reclaimable_bytes": 0,
+        "largest_files": [],
+        "top_children": {},
+        "scan_truncated": False,
+    }
+    if not stats["exists"]:
+        return stats
+
+    now_ts = datetime.now(timezone.utc)
+    day_cutoff = now_ts - timedelta(days=1)
+    week_cutoff = now_ts - timedelta(days=7)
+    retention_cutoff: datetime | None = None
+    if retention_days is not None and retention_days > 0:
+        retention_cutoff = now_ts - timedelta(days=retention_days)
+    elif retention_hours is not None and retention_hours > 0:
+        retention_cutoff = now_ts - timedelta(hours=retention_hours)
+
+    largest_files: list[tuple[int, str, str]] = []
+    children: dict[str, dict[str, int]] = {}
+    scanned = 0
+
+    for walk_root, dirs, files in os.walk(root, followlinks=False):
+        root_path = Path(walk_root)
+        safe_dirs: list[str] = []
+        for directory_name in dirs:
+            dir_path = root_path / directory_name
+            try:
+                if _is_within_directory(root, dir_path.resolve()):
+                    safe_dirs.append(directory_name)
+            except OSError:
+                continue
+        dirs[:] = safe_dirs
+
+        for file_name in files:
+            file_path = root_path / file_name
+            try:
+                resolved_file = file_path.resolve()
+            except OSError:
+                continue
+            if not _is_within_directory(root, resolved_file):
+                continue
+            if not resolved_file.is_file():
+                continue
+            try:
+                file_stat = resolved_file.stat()
+            except OSError:
+                continue
+
+            size = max(0, int(file_stat.st_size))
+            try:
+                modified = datetime.fromtimestamp(file_stat.st_mtime, tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                modified = now_ts
+
+            scanned += 1
+            stats["total_files"] += 1
+            stats["total_bytes"] += size
+            if modified >= day_cutoff:
+                stats["bytes_24h"] += size
+            if modified >= week_cutoff:
+                stats["bytes_7d"] += size
+            if retention_cutoff and modified < retention_cutoff:
+                stats["reclaimable_bytes"] += size
+
+            rel_path = resolved_file.relative_to(root).as_posix()
+            top_child = rel_path.split("/", 1)[0] if "/" in rel_path else "."
+            child_entry = children.setdefault(top_child, {"bytes": 0, "files": 0})
+            child_entry["bytes"] += size
+            child_entry["files"] += 1
+
+            largest_files.append((size, rel_path, _iso(modified)))
+            if len(largest_files) > 40:
+                largest_files.sort(key=lambda item: item[0], reverse=True)
+                largest_files = largest_files[:40]
+
+            if scanned >= max_files:
+                stats["scan_truncated"] = True
+                break
+        if stats["scan_truncated"]:
+            break
+
+    largest_files.sort(key=lambda item: item[0], reverse=True)
+    stats["largest_files"] = largest_files[:20]
+    stats["top_children"] = children
+    return stats
+
+
+def _build_capacity_cost_payload() -> dict[str, Any]:
+    def _read_int_env(key: str, default: int) -> int:
+        raw = os.environ.get(key, str(default))
+        try:
+            parsed = int(str(raw).strip())
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
+
+    cost_per_gb_month = _capacity_cost_per_gb_month()
+    scan_limit = _capacity_scan_limit_files()
+    backup_retention_days = _read_int_env("BACKUP_RETENTION_DAYS", 30)
+    media_export_retention_hours = _media_export_retention_hours()
+    log_retention_days = _read_int_env("LOG_RETENTION_DAYS", 14)
+
+    area_specs = [
+        {
+            "name": "Media uploads",
+            "key": "media",
+            "path": _resolve_media_root(),
+            "retention_days": None,
+            "retention_hours": None,
+        },
+        {
+            "name": "Database backups",
+            "key": "backups",
+            "path": _resolve_backup_dir(),
+            "retention_days": backup_retention_days,
+            "retention_hours": None,
+        },
+        {
+            "name": "Media exports",
+            "key": "media_exports",
+            "path": _resolve_media_export_dir(),
+            "retention_days": None,
+            "retention_hours": media_export_retention_hours,
+        },
+        {
+            "name": "Application logs",
+            "key": "logs",
+            "path": _resolve_log_dir(),
+            "retention_days": log_retention_days,
+            "retention_hours": None,
+        },
+    ]
+
+    static_root_raw = str(getattr(settings, "STATIC_ROOT", "") or "").strip()
+    if static_root_raw:
+        static_root = Path(static_root_raw)
+        area_specs.append(
+            {
+                "name": "Static files",
+                "key": "static",
+                "path": static_root if static_root.is_absolute() else (Path(getattr(settings, "BASE_DIR", Path.cwd())) / static_root).resolve(),
+                "retention_days": None,
+                "retention_hours": None,
+            }
+        )
+
+    rows = []
+    top_files = []
+    top_consumers = []
+    total_bytes = 0
+    total_growth_24h = 0
+    total_growth_7d = 0
+    total_reclaimable = 0
+    any_truncated = False
+    area_sizes: list[tuple[str, int]] = []
+
+    for spec in area_specs:
+        stats = _scan_directory(
+            spec["path"],
+            max_files=scan_limit,
+            retention_days=spec["retention_days"],
+            retention_hours=spec["retention_hours"],
+        )
+        monthly_cost = _estimate_monthly_cost(stats["total_bytes"], cost_per_gb_month)
+        rows.append(
+            {
+                "area": spec["name"],
+                "path": stats["path"],
+                "exists": stats["exists"],
+                "files": stats["total_files"],
+                "size": _human_size(stats["total_bytes"]),
+                "growth_24h": _human_size(stats["bytes_24h"]),
+                "growth_7d": _human_size(stats["bytes_7d"]),
+                "estimated_monthly_cost": f"${monthly_cost:.2f}",
+                "reclaimable_by_retention": _human_size(stats["reclaimable_bytes"]),
+                "scan_truncated": stats["scan_truncated"],
+            }
+        )
+        area_sizes.append((spec["name"], int(stats["total_bytes"])))
+
+        total_bytes += stats["total_bytes"]
+        total_growth_24h += stats["bytes_24h"]
+        total_growth_7d += stats["bytes_7d"]
+        total_reclaimable += stats["reclaimable_bytes"]
+        any_truncated = any_truncated or bool(stats["scan_truncated"])
+
+        for size, rel_path, modified_at in stats["largest_files"]:
+            top_files.append(
+                {
+                    "area": spec["name"],
+                    "relative_path": rel_path,
+                    "size": _human_size(size),
+                    "size_bytes": size,
+                    "modified_at": modified_at,
+                }
+            )
+
+        for child_name, child_stats in stats["top_children"].items():
+            top_consumers.append(
+                {
+                    "area": spec["name"],
+                    "entry": child_name,
+                    "size_bytes": int(child_stats.get("bytes", 0)),
+                    "files": int(child_stats.get("files", 0)),
+                }
+            )
+
+    top_files = sorted(top_files, key=lambda row: row["size_bytes"], reverse=True)[:25]
+    for row in top_files:
+        row.pop("size_bytes", None)
+
+    top_consumers = sorted(top_consumers, key=lambda row: row["size_bytes"], reverse=True)[:25]
+    for row in top_consumers:
+        row["size"] = _human_size(row.pop("size_bytes", 0))
+
+    largest_area_name = max(area_sizes, key=lambda item: item[1])[0] if area_sizes else "n/a"
+
+    monthly_total = _estimate_monthly_cost(total_bytes, cost_per_gb_month)
+    monthly_reclaimable = _estimate_monthly_cost(total_reclaimable, cost_per_gb_month)
+
+    recommendations: list[tuple[str, str]] = []
+    if total_reclaimable > 0:
+        recommendations.append(
+            (
+                "Retention cleanup",
+                f"Estimated reclaimable storage: {_human_size(total_reclaimable)} (~${monthly_reclaimable:.2f}/month).",
+            )
+        )
+    if total_growth_7d > (500 * 1024 * 1024):
+        recommendations.append(
+            (
+                "Growth watch",
+                f"Storage grew {_human_size(total_growth_7d)} in the last 7 days; review media/backups policy.",
+            )
+        )
+    if any_truncated:
+        recommendations.append(
+            (
+                "Scan limit reached",
+                "Some directories exceeded scan limit; increase CAPACITY_SCAN_MAX_FILES for full visibility.",
+            )
+        )
+    if not recommendations:
+        recommendations.append(("Status", "No immediate storage optimization action required."))
+
+    return {
+        "generated_at": _iso(now()),
+        "summary": [
+            {"label": "Tracked storage", "value": _human_size(total_bytes)},
+            {"label": "Estimated monthly storage cost", "value": f"${monthly_total:.2f}"},
+            {"label": "Growth (24h)", "value": _human_size(total_growth_24h)},
+            {"label": "Growth (7d)", "value": _human_size(total_growth_7d)},
+            {"label": "Largest area", "value": largest_area_name},
+            {"label": "Scan limit", "value": scan_limit},
+        ],
+        "panels": [
+            {
+                "title": "Cost model",
+                "items": [
+                    ("cost_per_gb_month", f"${cost_per_gb_month:.2f}"),
+                    ("backup_retention_days", backup_retention_days),
+                    ("media_export_retention_hours", media_export_retention_hours),
+                    ("log_retention_days", log_retention_days),
+                ],
+            },
+            {
+                "title": "Recommendations",
+                "items": recommendations,
+            },
+        ],
+        "tables": [
+            {
+                "title": "Area usage",
+                "columns": [
+                    "area",
+                    "path",
+                    "exists",
+                    "files",
+                    "size",
+                    "growth_24h",
+                    "growth_7d",
+                    "estimated_monthly_cost",
+                    "reclaimable_by_retention",
+                    "scan_truncated",
+                ],
+                "rows": rows,
+            },
+            {
+                "title": "Top consumers",
+                "columns": ["area", "entry", "size", "files"],
+                "rows": top_consumers,
+            },
+            {
+                "title": "Largest files",
+                "columns": ["area", "relative_path", "size", "modified_at"],
+                "rows": top_files,
+            },
+        ],
+    }
+
+
 def _build_health_payload() -> dict[str, Any]:
     checker = HealthChecker()
     report = checker.get_comprehensive_health_report()
@@ -1439,6 +1777,10 @@ SECTION_META = {
         "title": "Integrations",
         "description": "Connectivity/configuration status for external services.",
     },
+    "capacity-cost": {
+        "title": "Capacity & Cost",
+        "description": "Storage usage, growth, top consumers, and retention cost simulation.",
+    },
     "audit": {
         "title": "Audit",
         "description": "Audit event trends, top event categories, and recent trail.",
@@ -1458,6 +1800,7 @@ SECTION_LOADERS: dict[str, Callable[[HttpRequest], dict[str, Any]]] = {
     "data-ops": lambda _request: _build_data_ops_payload(),
     "backups": lambda _request: _build_backups_payload(),
     "integrations": lambda _request: _build_integrations_payload(),
+    "capacity-cost": lambda _request: _build_capacity_cost_payload(),
     "audit": lambda _request: _build_audit_payload(),
     "settings": lambda _request: _build_settings_payload(),
 }

@@ -234,6 +234,10 @@ MEDIA_EXPORT_MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024  # 2GB
 MEDIA_EXPORT_RETENTION_HOURS = 24
 MEDIA_EXPORT_POLL_INTERVAL_SECONDS = 2
 
+# Control Center capacity dashboard defaults
+CAPACITY_STORAGE_COST_PER_GB_MONTH = 0.10
+CAPACITY_SCAN_MAX_FILES = 50000
+
 # Redaction
 AUDIT_REDACTION_FIELDS = [
     "password", "token", "secret", "key", "credential",

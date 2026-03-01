@@ -53,6 +53,12 @@ class ControlCenterIntegrationTests(TestCase):
         self.assertContains(response, "Create & Download Backup")
         self.assertContains(response, "Export Media (ZIP)")
 
+    def test_capacity_cost_page_renders_for_superuser(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get("/control-center/capacity-cost/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Capacity &amp; Cost")
+
     def test_api_requires_authentication(self):
         response = self.client.get(
             "/control-center/api/overview/",
@@ -88,6 +94,37 @@ class ControlCenterIntegrationTests(TestCase):
         self.assertIn("meta", body)
         self.assertIn("payload", body)
         self.assertIn("summary", body["payload"])
+
+    def test_capacity_cost_api_returns_usage_tables(self):
+        self.client.force_login(self.superuser)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            media_dir = Path(temp_dir, "mediafiles")
+            logs_dir = Path(temp_dir, "logs")
+            backups_dir = Path(temp_dir, "backups")
+            media_dir.mkdir(parents=True, exist_ok=True)
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            backups_dir.mkdir(parents=True, exist_ok=True)
+            Path(media_dir, "photo.jpg").write_bytes(b"x" * 1024)
+            Path(logs_dir, "django.log").write_text("hello", encoding="utf-8")
+            Path(backups_dir, "backup_20260301_100000.dump").write_bytes(b"PGDMP")
+
+            with patch.dict(
+                os.environ, {"BACKUP_PATH": str(backups_dir)}, clear=False
+            ):
+                with override_settings(MEDIA_ROOT=str(media_dir), LOGGING_DIR=str(logs_dir)):
+                    response = self.client.get(
+                        "/control-center/api/capacity-cost/",
+                        HTTP_ACCEPT="application/json",
+                    )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["section"], "capacity-cost")
+        tables = body["payload"]["tables"]
+        titles = {table["title"] for table in tables}
+        self.assertIn("Area usage", titles)
+        self.assertIn("Top consumers", titles)
+        self.assertIn("Largest files", titles)
 
     def test_backups_api_exposes_download_link(self):
         self.client.force_login(self.superuser)

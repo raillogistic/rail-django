@@ -79,7 +79,6 @@ ensure_backup_client_is_compatible() {
 
 require_cmd pg_dump
 require_cmd psql
-require_cmd gzip
 require_cmd date
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -104,16 +103,20 @@ BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 ensure_backup_client_is_compatible
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-RAW_FILE="$BACKUP_PATH/backup_${TIMESTAMP}.sql"
-ARCHIVE_FILE="${RAW_FILE}.gz"
+BACKUP_FILE="$BACKUP_PATH/backup_${TIMESTAMP}.dump"
 
 note "Starting backup..."
-pg_dump --dbname="$DATABASE_URL" > "$RAW_FILE"
-gzip -f "$RAW_FILE"
-note "Backup created: $ARCHIVE_FILE"
+pg_dump \
+  --format=custom \
+  --compress=9 \
+  --no-owner \
+  --no-privileges \
+  --dbname="$DATABASE_URL" \
+  --file="$BACKUP_FILE"
+note "Backup created: $BACKUP_FILE"
 
 if is_number "$BACKUP_RETENTION_DAYS"; then
-  find "$BACKUP_PATH" -name "backup_*.sql.gz" -mtime +"$BACKUP_RETENTION_DAYS" -delete
+  find "$BACKUP_PATH" -name "backup_*.dump" -mtime +"$BACKUP_RETENTION_DAYS" -delete
 fi
 
 note "Done."
