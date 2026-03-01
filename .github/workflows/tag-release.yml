@@ -29,11 +29,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install setuptools-scm build
 
-      - name: Read project version from SCM
+      - name: Resolve stable release version
         id: version
         run: |
-          VERSION="$(python -m setuptools_scm)"
-          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import subprocess
+          import re
+
+          raw = subprocess.check_output(
+              ["python", "-m", "setuptools_scm"],
+              text=True,
+          ).strip()
+          stable = re.split(r"\.dev\d+", raw, maxsplit=1)[0]
+          stable = stable.split("+", 1)[0]
+          with open("version.txt", "w", encoding="utf-8") as handle:
+              handle.write(stable)
+          PY
+          echo "value=$(cat version.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Check if tag already exists on origin
         id: tag_exists
