@@ -1,51 +1,100 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  /**
+   * @file log_viewer.html
+   * @description Visualiseur de journaux (logs) serveur pour Rail Django.
+   * Design: Néo-Brutalisme Moderne.
+   * 
+   * @author Antigravity
+   * @version 2.0.0
+   */
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Server Log Viewer</title>
+    <title>Rail Django | Visionneuse de Logs</title>
+    
+    <!-- Polices Modernes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
         :root {
-            --bg-color: #0d1117;
-            --text-color: #c9d1d9;
-            --term-bg: #010409;
-            --border-color: #30363d;
-            --accent-color: #58a6ff;
-            --error-color: #f85149;
-            --warn-color: #d29922;
-            --info-color: #58a6ff;
-            --success-color: #2ea043;
+            --bg-color: #dbeafe;
+            --main-color: #ffffff;
+            --border-color: #000000;
+            --shadow-color: #000000;
+            
+            --term-bg: #1a1a1a;
+            --term-text: #e0e0e0;
+            
+            --accent-pink: #f472b6;
+            --accent-yellow: #fde047;
+            --accent-mint: #34d399;
+            --accent-indigo: #818cf8;
+            --accent-blue: #3b82f6;
+            --accent-orange: #fb923c;
+            --accent-red: #fca5a5;
+            
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+            font-family: var(--font-main);
             background-color: var(--bg-color);
-            color: var(--text-color);
+            color: var(--border-color);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-size: 40px 40px;
+            background-image: 
+              linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+            z-index: -2;
+        }
+
         /* Header */
         .header {
-            background-color: #161b22;
-            border-bottom: 1px solid var(--border-color);
-            padding: 15px 20px;
+            background: var(--main-color);
+            border-bottom: 4px solid var(--border-color);
+            padding: 15px 25px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 60px;
+            height: 80px;
+            z-index: 10;
         }
 
-        .header h1 { font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .header h1 { 
+            font-size: 1.5rem; 
+            font-weight: 900; 
+            text-transform: uppercase;
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+            letter-spacing: -1px;
+        }
+
         .live-indicator {
-            width: 10px; height: 10px; border-radius: 50%;
-            background-color: #3fb950;
+            width: 14px; height: 14px; border-radius: 50%;
+            background-color: var(--accent-green);
+            border: 2px solid #000;
             display: inline-block;
-            box-shadow: 0 0 8px #3fb950;
+            box-shadow: 2px 2px 0 #000;
             animation: pulse 2s infinite;
         }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
@@ -53,91 +102,135 @@
         /* Controls */
         .controls {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
         }
 
-        select, input, button {
-            background-color: #0d1117;
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.9rem;
+        select, input, .btn {
+            background-color: var(--main-color);
+            border: 2px solid var(--border-color);
+            color: var(--border-color);
+            padding: 8px 12px;
+            font-family: var(--font-main);
+            font-weight: 800;
+            font-size: 0.85rem;
+            box-shadow: 3px 3px 0 0 var(--shadow-color);
+            transition: all 0.1s;
         }
 
-        button { cursor: pointer; transition: background 0.2s; }
-        button:hover { background-color: #30363d; }
+        select:hover, input:focus, .btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0 0 var(--shadow-color);
+        }
 
-        .btn-primary { background-color: #238636; color: white; border-color: rgba(240,246,252,0.1); }
-        .btn-primary:hover { background-color: #2ea043; }
+        select:active, .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 0 var(--shadow-color);
+        }
+
+        .btn-primary { background-color: var(--accent-blue); color: #fff; }
+        .btn-warning { background-color: var(--accent-yellow); }
+        .btn-danger { background-color: var(--accent-red); }
+
+        #filterInput { 
+            width: 200px;
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
 
         /* Terminal Window */
+        .terminal-wrapper {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            overflow: hidden;
+        }
+
         .terminal-container {
             flex: 1;
             background-color: var(--term-bg);
-            padding: 10px;
+            border: 4px solid var(--border-color);
+            box-shadow: 12px 12px 0 0 var(--shadow-color);
+            padding: 15px;
             overflow-y: auto;
-            scroll-behavior: smooth;
-            position: relative;
+            scroll-behavior: auto; /* Disabled smooth for logs */
+            font-family: var(--font-mono);
+            color: var(--term-text);
         }
 
         .log-line {
-            padding: 2px 5px;
+            padding: 2px 8px;
             white-space: pre-wrap;
             word-break: break-all;
-            line-height: 1.4;
-            font-size: 0.9rem;
-            border-left: 3px solid transparent;
+            line-height: 1.5;
+            font-size: 0.85rem;
+            border-left: 4px solid transparent;
+            margin-bottom: 1px;
         }
 
-        .log-line:hover { background-color: rgba(110, 118, 129, 0.1); }
+        .log-line:hover { background-color: rgba(255, 255, 255, 0.05); }
 
         /* Log Level Coloring */
-        .log-line.error { color: #ff7b72; border-left-color: var(--error-color); }
-        .log-line.warning { color: #d29922; border-left-color: var(--warn-color); }
-        .log-line.info { color: #79c0ff; border-left-color: var(--info-color); }
-        .log-line.debug { color: #8b949e; }
-        .log-line.critical { background-color: rgba(248, 81, 73, 0.1); color: #ff7b72; border-left-color: #ff0000; font-weight: bold; }
+        .log-line.error { color: #ff8080; border-left-color: var(--accent-red); background-color: rgba(252, 165, 165, 0.05); }
+        .log-line.warning { color: #ffd580; border-left-color: var(--accent-yellow); background-color: rgba(253, 224, 71, 0.05); }
+        .log-line.info { color: #80b3ff; border-left-color: var(--accent-blue); }
+        .log-line.debug { color: #a0a0a0; }
+        .log-line.critical { background-color: rgba(255, 0, 0, 0.1); color: #ff4d4d; border-left-color: #ff0000; font-weight: 900; }
+
+        .timestamp { color: #707070; font-weight: 700; margin-right: 8px; }
 
         /* Status Bar */
         .status-bar {
-            background-color: #161b22;
-            border-top: 1px solid var(--border-color);
-            padding: 5px 20px;
-            font-size: 0.8rem;
-            color: #8b949e;
+            background: var(--accent-yellow);
+            border-top: 4px solid var(--border-color);
+            padding: 8px 25px;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
             display: flex;
             justify-content: space-between;
+            letter-spacing: 1px;
         }
 
         /* Loading */
         .loader {
             display: none;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid var(--accent-color);
+            border: 3px solid rgba(0,0,0,0.1);
+            border-top: 3px solid #000;
             border-radius: 50%;
-            width: 14px; height: 14px;
-            animation: spin 1s linear infinite;
-            margin-right: 5px;
+            width: 16px; height: 16px;
+            animation: spin 0.8s linear infinite;
         }
         .loading .loader { display: inline-block; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         /* Scroll Lock Button */
-        #scrollLockBtn.active { background-color: #1f6feb; border-color: #1f6feb; color: white; }
+        #scrollLockBtn.locked { background-color: var(--accent-green); box-shadow: 4px 4px 0 0 var(--shadow-color); }
+        #scrollLockBtn.locked::before { content: "LOCKED"; }
+        #scrollLockBtn:not(.locked)::before { content: "AUTO-SCROLL"; }
+
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: var(--term-bg); }
+        ::-webkit-scrollbar-thumb { background: #333; border: 2px solid var(--term-bg); }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+        @media (max-width: 900px) {
+            .header { height: auto; flex-direction: column; gap: 15px; padding: 20px; }
+            .controls { flex-wrap: wrap; justify-content: center; }
+        }
     </style>
 </head>
 <body>
+    <div class="bg-grid"></div>
+
     <div class="header">
         <h1>
             <span class="live-indicator"></span>
-            Server Logs
+            Visionneuse de Logs
         </h1>
         <div class="controls">
-            <div id="loadingIndicator" class="loading" style="display: none; align-items: center; gap: 5px;">
-                <span class="loader"></span> Syncing...
+            <div id="loadingIndicator" class="loading" style="display: none; align-items: center; gap: 8px; font-weight: 900; font-size: 12px;">
+                <span class="loader"></span> SYNC EN COURS...
             </div>
 
             <select id="logFileSelect" onchange="changeLogFile()">
@@ -147,35 +240,38 @@
                 <option value="celery.log">celery.log</option>
             </select>
 
-            <input type="text" id="filterInput" placeholder="Grep..." onkeyup="filterLogs()">
+            <input type="text" id="filterInput" placeholder="Recherche (grep)..." onkeyup="filterLogs()">
 
             <select id="linesSelect" onchange="refreshLogs()">
-                <option value="100">100 lines</option>
-                <option value="500">500 lines</option>
-                <option value="1000">1000 lines</option>
-                <option value="5000">5000 lines</option>
+                <option value="100">100 lignes</option>
+                <option value="500">500 lignes</option>
+                <option value="1000">1000 lignes</option>
+                <option value="5000">5000 lignes</option>
             </select>
 
-            <button id="scrollLockBtn" class="active" onclick="toggleScrollLock()" title="Auto-scroll to bottom">
-                ⬇ Lock
+            <button id="scrollLockBtn" class="btn locked" onclick="toggleScrollLock()" title="Auto-défilement vers le bas">
+                <!-- Text set via CSS -->
             </button>
-            <button onclick="refreshLogs()" class="btn-primary">Refresh</button>
-            <button onclick="clearView()">Clear</button>
+            <button onclick="refreshLogs()" class="btn btn-primary">RAFRAÎCHIR</button>
+            <button onclick="clearView()" class="btn btn-danger">VIDER</button>
         </div>
     </div>
 
-    <div class="terminal-container" id="terminal">
-        <div style="padding: 20px; text-align: center; color: #8b949e;">Select a log file to view...</div>
+    <div class="terminal-wrapper">
+        <div class="terminal-container" id="terminal">
+            <div style="padding: 40px; text-align: center; font-weight: 700; opacity: 0.5;">
+                SÉLECTIONNEZ UN FICHIER POUR DÉMARRER...
+            </div>
+        </div>
     </div>
 
     <div class="status-bar">
-        <span id="statusText">Ready</span>
-        <span id="lastUpdated"></span>
+        <span id="statusText">PRÊT</span>
+        <span id="lastUpdated">DERNIÈRE MISE À JOUR : ---</span>
     </div>
 
     <script>
         let scrollLock = true;
-        let pollingInterval = null;
         let currentFile = 'django.log';
         let allLogs = [];
 
@@ -183,10 +279,10 @@
             scrollLock = !scrollLock;
             const btn = document.getElementById('scrollLockBtn');
             if (scrollLock) {
-                btn.classList.add('active');
+                btn.classList.add('locked');
                 scrollToBottom();
             } else {
-                btn.classList.remove('active');
+                btn.classList.remove('locked');
             }
         }
 
@@ -207,11 +303,11 @@
         }
 
         function detectLogLevel(line) {
-            line = line.toLowerCase();
-            if (line.includes('critical')) return 'critical';
-            if (line.includes('error') || line.includes('exception')) return 'error';
-            if (line.includes('warning') || line.includes('warn')) return 'warning';
-            if (line.includes('debug')) return 'debug';
+            const low = line.toLowerCase();
+            if (low.includes('critical')) return 'critical';
+            if (low.includes('error') || low.includes('exception')) return 'error';
+            if (low.includes('warning') || low.includes('warn')) return 'warning';
+            if (low.includes('debug')) return 'debug';
             return 'info';
         }
 
@@ -219,15 +315,12 @@
             const terminal = document.getElementById('terminal');
             const filter = document.getElementById('filterInput').value.toLowerCase();
 
-            // Only append new lines if we have them, usually we just replace for simplicity in this MVP
-            // Ideally we'd diff, but for tailing log files, replacing is okay for small n
-
             const html = lines
                 .filter(line => !filter || line.toLowerCase().includes(filter))
                 .map(line => {
                     const level = detectLogLevel(line);
-                    // Basic highlighting for timestamps [YYYY-MM-DD...]
-                    const formatted = line.replace(/^(\[.*?\]|\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}[,\.]\d+)/, '<span style="color: #8b949e;">$1</span>');
+                    // Match timestamps [YYYY-MM-DD...] or YYYY-MM-DD HH:MM:SS
+                    const formatted = line.replace(/^(\[.*?\]|\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}[,\.]\d+)/, '<span class="timestamp">$1</span>');
                     return `<div class="log-line ${level}">${formatted}</div>`;
                 })
                 .join('');
@@ -245,12 +338,12 @@
             const lines = document.getElementById('linesSelect').value;
 
             loading.style.display = 'flex';
-            status.textContent = `Fetching ${currentFile}...`;
+            status.textContent = `CHARGEMENT DE ${currentFile}...`;
 
             try {
                 const response = await fetch(`/audit/logs/api/?file=${currentFile}&lines=${lines}`);
                 if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                    throw new Error(`Erreur ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -261,11 +354,10 @@
                 allLogs = data.logs || [];
                 renderLogs(allLogs);
 
-                status.textContent = `Showing last ${allLogs.length} lines from ${currentFile}`;
-                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+                status.textContent = `${allLogs.length} LIGNES AFFICHÉES (${currentFile})`;
+                document.getElementById('lastUpdated').textContent = `DERNIÈRE MISE À JOUR : ${new Date().toLocaleTimeString()}`;
             } catch (error) {
-                status.textContent = `Error: ${error.message}`;
-                document.getElementById('terminal').innerHTML += `<div class="log-line error">Failed to fetch logs: ${error.message}</div>`;
+                status.textContent = `ERREUR : ${error.message}`;
             } finally {
                 loading.style.display = 'none';
             }
@@ -284,7 +376,7 @@
         // Handle scroll events to disable lock if user scrolls up
         document.getElementById('terminal').addEventListener('scroll', function() {
             const t = this;
-            if (t.scrollHeight - t.scrollTop - t.clientHeight > 50) {
+            if (t.scrollHeight - t.scrollTop - t.clientHeight > 80) {
                 if (scrollLock) toggleScrollLock();
             }
         });

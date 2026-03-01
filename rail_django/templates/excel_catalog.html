@@ -1,0 +1,250 @@
+<!doctype html>
+<!--
+  /**
+   * @file excel_catalog.html
+   * @description Catalogue des modèles Excel enregistrés dans Rail Django.
+   * Design: Néo-Brutalisme Moderne.
+   * 
+   * @author Antigravity
+   * @version 2.0.0
+   */
+-->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rail Django | Catalogue Excel</title>
+    
+    <!-- Polices Modernes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-color: #dbeafe;
+        --main-color: #ffffff;
+        --border-color: #000000;
+        --shadow-color: #000000;
+        
+        --accent-pink: #f472b6;
+        --accent-yellow: #fde047;
+        --accent-mint: #34d399;
+        --accent-indigo: #818cf8;
+        --accent-blue: #3b82f6;
+        --accent-green: #4ade80;
+        
+        --font-main: 'Outfit', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: var(--font-main);
+        color: var(--border-color);
+        background-color: var(--bg-color);
+        min-height: 100vh;
+      }
+
+      .bg-grid {
+        position: fixed;
+        inset: 0;
+        background-size: 40px 40px;
+        background-image: 
+          linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+        z-index: -2;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 60px 20px;
+      }
+
+      /* Hero section */
+      .hero {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 40px;
+        margin-bottom: 40px;
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
+        position: relative;
+      }
+
+      .hero-tag {
+        position: absolute;
+        top: -15px;
+        left: 20px;
+        background-color: var(--accent-green);
+        padding: 4px 12px;
+        border: 2px solid #000;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
+        box-shadow: 3px 3px 0 0 #000;
+      }
+
+      h1 {
+        font-weight: 900;
+        font-size: 2.8rem;
+        margin: 0 0 10px;
+        text-transform: uppercase;
+        letter-spacing: -2px;
+      }
+
+      .subtitle {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 20px;
+      }
+
+      .meta-bar {
+        background: var(--accent-yellow);
+        border: 2px solid #000;
+        padding: 10px 20px;
+        display: inline-flex;
+        gap: 20px;
+        font-weight: 800;
+        font-size: 12px;
+        text-transform: uppercase;
+        box-shadow: 4px 4px 0 0 #000;
+      }
+
+      .meta-bar code {
+        font-family: var(--font-mono);
+        background: #fff;
+        padding: 2px 6px;
+        border: 1px solid #000;
+      }
+
+      /* Grid of templates */
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .card {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 25px;
+        box-shadow: 6px 6px 0 0 var(--shadow-color);
+        transition: all 0.1s;
+      }
+
+      .card:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .endpoint-path {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 700;
+        background: #f0f0f0;
+        padding: 6px 12px;
+        border: 2px solid #000;
+      }
+
+      .pills {
+        display: flex;
+        gap: 8px;
+      }
+
+      .pill {
+        padding: 3px 10px;
+        border: 2px solid #000;
+        font-weight: 900;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: var(--accent-indigo);
+        color: #fff;
+        box-shadow: 2px 2px 0 0 #000;
+      }
+
+      .pill-model { background-color: var(--accent-pink); color: #000; }
+
+      .card-title {
+        font-weight: 900;
+        font-size: 1.2rem;
+        margin-top: 15px;
+      }
+
+      .empty-state {
+        background: #fff;
+        border: 3px dashed #000;
+        padding: 60px;
+        text-align: center;
+        font-weight: 800;
+        font-size: 1.2rem;
+      }
+
+      footer {
+        margin-top: 60px;
+        padding: 30px;
+        border-top: 3px solid #000;
+        text-align: center;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+
+    <div class="container">
+      <header class="hero">
+        <div class="hero-tag">Ressources Excel</div>
+        <h1>Catalogue des Modèles Excel.</h1>
+        <p class="subtitle">Modèles d'exportation Excel enregistrés et disponibles pour votre compte.</p>
+        
+        <div class="meta-bar">
+          <div>Chemin : <code>{{ catalog_path }}</code></div>
+          <div>Total : <strong>{{ template_count }}</strong> modèles</div>
+        </div>
+      </header>
+
+      <section class="grid">
+        {% for item in templates %}
+          <article class="card">
+            <div class="card-header">
+              <div class="endpoint-path">/api/v1/excel/{{ item.url_path }}/?pk=&lt;id&gt;</div>
+              <div class="pills">
+                <span class="pill">{{ item.source }}</span>
+                {% if item.model %}
+                <span class="pill pill-model">{{ item.model }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="card-title">{{ item.title }}</div>
+          </article>
+        {% empty %}
+          <div class="empty-state">
+            <p>Aucun modèle Excel n'est disponible pour votre compte.</p>
+          </div>
+        {% endfor %}
+      </section>
+
+      <footer>
+        Rail Django &copy; {% now "Y" %} &bull; Système d'exportation structuré
+      </footer>
+    </div>
+  </body>
+</html>

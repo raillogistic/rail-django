@@ -1,23 +1,46 @@
 <!doctype html>
-<html lang="en">
+<!--
+  /**
+   * @file schema_registry.html
+   * @description Registre des schémas GraphQL de Rail Django.
+   * Design: Néo-Brutalisme Moderne.
+   * 
+   * @author Antigravity
+   * @version 2.0.0
+   */
+-->
+<html lang="fr">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Schema Registry</title>
+    <title>Rail Django | Registre des Schémas</title>
+    
+    <!-- Polices Modernes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    
     <style>
       :root {
-        color-scheme: light;
-        --ink: #1f2a2d;
-        --muted: #5c6b6f;
-        --surface: #ffffff;
-        --line: #e3ded5;
-        --sand: #f7f1e7;
-        --mint: #dff2ea;
-        --sea: #137a7f;
-        --amber: #c86b2c;
-        --shadow: 0 18px 40px rgba(17, 28, 32, 0.12);
-        --font-display: "Fraunces", "Iowan Old Style", "Palatino", "Palatino Linotype", serif;
-        --font-text: "Space Grotesk", "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+        --bg-color: #dbeafe;
+        --main-color: #ffffff;
+        --border-color: #000000;
+        --shadow-color: #000000;
+        
+        --accent-pink: #f472b6;
+        --accent-yellow: #fde047;
+        --accent-mint: #34d399;
+        --accent-indigo: #818cf8;
+        --accent-blue: #3b82f6;
+        --accent-green: #4ade80;
+        --accent-orange: #fb923c;
+        --accent-red: #fca5a5;
+        
+        --font-main: 'Outfit', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
       }
 
       * {
@@ -26,218 +49,250 @@
 
       body {
         margin: 0;
-        font-family: var(--font-text);
-        color: var(--ink);
-        background: radial-gradient(circle at 10% 10%, #fff7eb 0%, #f8f1e5 30%, #e8f2f2 70%, #e2ebea 100%);
+        font-family: var(--font-main);
+        color: var(--border-color);
+        background-color: var(--bg-color);
         min-height: 100vh;
+        overflow-x: hidden;
       }
 
-      body::before {
-        content: "";
+      .bg-grid {
         position: fixed;
         inset: 0;
-        background-image:
-          radial-gradient(circle at 20% 10%, rgba(200, 107, 44, 0.12) 0, rgba(200, 107, 44, 0) 42%),
-          radial-gradient(circle at 80% 0%, rgba(19, 122, 127, 0.18) 0, rgba(19, 122, 127, 0) 45%),
-          linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
-        pointer-events: none;
-        z-index: 0;
+        background-size: 40px 40px;
+        background-image: 
+          linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+        z-index: -2;
       }
 
-      .page {
-        position: relative;
-        z-index: 1;
-        max-width: 1120px;
+      .container {
+        max-width: 1200px;
         margin: 0 auto;
-        padding: 56px 24px 90px;
-        animation: pageIn 700ms ease both;
+        padding: 40px 20px;
+        position: relative;
       }
 
+      /* Hero */
       .hero {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 40px;
+        margin-bottom: 30px;
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
         display: flex;
-        flex-wrap: wrap;
-        gap: 24px;
-        align-items: flex-end;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: 20px;
       }
 
-      .hero-title {
-        margin: 0 0 12px;
-        font-family: var(--font-display);
-        font-size: clamp(32px, 5vw, 56px);
-        letter-spacing: 0.5px;
+      .hero-tag {
+        background-color: var(--accent-pink);
+        padding: 4px 12px;
+        border: 2px solid #000;
+        display: inline-block;
+        align-self: flex-start;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 14px;
+        transform: rotate(-1deg);
+        box-shadow: 2px 2px 0 0 #000;
       }
 
-      .hero-lede {
+      .hero h1 {
+        font-weight: 900;
+        font-size: clamp(2rem, 5vw, 3.5rem);
         margin: 0;
-        color: var(--muted);
-        max-width: 520px;
-        font-size: 1.05rem;
-        line-height: 1.6;
+        line-height: 1;
+        text-transform: uppercase;
+        letter-spacing: -2px;
+      }
+
+      .hero p {
+        font-size: 1.1rem;
+        color: #333;
+        max-width: 800px;
+        line-height: 1.5;
+        font-weight: 500;
+        margin: 0;
+      }
+
+      .hero-split {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 20px;
+        flex-wrap: wrap;
       }
 
       .hero-actions {
         display: flex;
         gap: 12px;
-        flex-wrap: wrap;
-        align-items: center;
       }
 
-      .pill {
+      .btn {
+        padding: 12px 24px;
+        background: var(--main-color);
+        border: 2px solid var(--border-color);
+        box-shadow: 4px 4px 0 0 var(--shadow-color);
+        text-decoration: none;
+        color: inherit;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 14px;
+        transition: all 0.1s;
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 14px;
-        border-radius: 999px;
-        font-size: 0.78rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        background: var(--mint);
-        color: var(--sea);
-        border: 1px solid rgba(19, 122, 127, 0.2);
       }
 
-      .action-link {
-        padding: 10px 16px;
-        border-radius: 12px;
-        text-decoration: none;
-        font-weight: 600;
-        color: var(--ink);
-        background: var(--surface);
-        border: 1px solid var(--line);
-        box-shadow: 0 12px 28px rgba(27, 36, 38, 0.12);
-        transition: transform 160ms ease, box-shadow 160ms ease;
+      .btn:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 0 var(--shadow-color);
+        background-color: var(--accent-yellow);
       }
 
-      .action-link:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 16px 30px rgba(27, 36, 38, 0.16);
+      .btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0 0 var(--shadow-color);
       }
 
-      .stats {
-        margin-top: 28px;
+      .btn-blue { background-color: var(--accent-blue); color: #fff; }
+
+      /* Stats */
+      .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
       }
 
       .stat-card {
-        background: var(--surface);
-        border-radius: 16px;
-        padding: 16px;
-        border: 1px solid var(--line);
-        box-shadow: 0 8px 18px rgba(27, 36, 38, 0.08);
+        background: var(--main-color);
+        border: 2px solid var(--border-color);
+        padding: 20px;
+        box-shadow: 6px 6px 0 0 var(--shadow-color);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
       }
 
       .stat-label {
-        color: var(--muted);
-        font-size: 0.85rem;
-        letter-spacing: 0.05em;
+        font-weight: 800;
         text-transform: uppercase;
+        font-size: 12px;
+        color: #555;
       }
 
       .stat-value {
-        margin-top: 6px;
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: var(--ink);
+        font-size: 2.5rem;
+        font-weight: 900;
+        line-height: 1;
       }
 
-      .alert {
-        margin-top: 28px;
-        padding: 16px 18px;
-        background: #fff2e8;
-        border-left: 4px solid var(--amber);
-        border-radius: 12px;
-        color: #6a3c1c;
-      }
-
+      /* Sections */
       .section-title {
-        margin: 40px 0 16px;
-        font-size: 1.2rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
+        font-weight: 900;
+        font-size: 24px;
         text-transform: uppercase;
-        color: var(--muted);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
       }
 
+      .section-title::after {
+        content: "";
+        flex-grow: 1;
+        height: 3px;
+        background-color: #000;
+      }
+
+      /* Schema Grid */
       .schema-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 30px;
       }
 
       .schema-card {
-        background: var(--surface);
-        border-radius: 18px;
-        padding: 18px 18px 16px;
-        border: 1px solid var(--line);
-        box-shadow: var(--shadow);
-        position: relative;
-        overflow: hidden;
-        animation: cardIn 600ms ease both;
-        animation-delay: calc(var(--i, 1) * 60ms);
-      }
-
-      .schema-card::after {
-        content: "";
-        position: absolute;
-        inset: auto 0 0 0;
-        height: 6px;
-        background: linear-gradient(90deg, var(--amber), var(--sea));
-        opacity: 0.7;
-      }
-
-      .schema-head {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 30px;
+        box-shadow: 8px 8px 0 0 var(--shadow-color);
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        gap: 15px;
+        position: relative;
+        transition: all 0.2s;
+      }
+
+      .schema-card:hover {
+        transform: translate(-4px, -4px);
+        box-shadow: 12px 12px 0 0 var(--shadow-color);
+      }
+
+      .schema-header {
+        display: flex;
         justify-content: space-between;
-        gap: 12px;
+        align-items: flex-start;
+        gap: 10px;
       }
 
       .schema-name {
+        font-weight: 900;
+        font-size: 1.5rem;
         margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700;
-      }
-
-      .badge {
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        letter-spacing: 0.12em;
         text-transform: uppercase;
-        border: 1px solid transparent;
       }
 
-      .badge.on {
-        background: rgba(19, 122, 127, 0.12);
-        color: var(--sea);
-        border-color: rgba(19, 122, 127, 0.25);
+      .status-badge {
+        font-size: 10px;
+        font-weight: 900;
+        text-transform: uppercase;
+        padding: 4px 8px;
+        border: 2px solid #000;
+        box-shadow: 2px 2px 0 0 #000;
       }
 
-      .badge.off {
-        background: rgba(200, 107, 44, 0.12);
-        color: var(--amber);
-        border-color: rgba(200, 107, 44, 0.25);
-      }
+      .status-on { background-color: var(--accent-mint); }
+      .status-off { background-color: var(--accent-red); }
 
       .schema-desc {
-        margin: 10px 0 12px;
-        color: var(--muted);
-        line-height: 1.6;
+        font-size: 14px;
+        font-weight: 500;
+        color: #444;
+        line-height: 1.5;
+        margin: 0;
       }
 
-      .models {
-        margin-top: 12px;
+      .metadata {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .meta-tag {
+        font-size: 11px;
+        font-weight: 800;
+        background-color: #f3f4f6;
+        border: 1px solid #000;
+        padding: 4px 8px;
+        text-transform: uppercase;
+      }
+
+      .models-box {
+        background-color: #f9fafb;
+        border: 2px solid #000;
+        padding: 15px;
       }
 
       .models-title {
-        font-size: 0.78rem;
-        letter-spacing: 0.08em;
+        font-weight: 900;
+        font-size: 12px;
         text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 6px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 5px;
       }
 
       .models-list {
@@ -247,227 +302,196 @@
       }
 
       .model-chip {
-        padding: 4px 8px;
-        border-radius: 10px;
-        font-size: 0.76rem;
-        background: rgba(223, 242, 234, 0.6);
-        border: 1px solid rgba(19, 122, 127, 0.15);
-        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: #fff;
+        border: 1px solid #000;
+        padding: 2px 6px;
+        font-weight: 600;
       }
 
-      .model-chip.muted {
-        background: rgba(247, 241, 231, 0.8);
-        border-color: var(--line);
-        color: var(--muted);
-      }
-
-      .meta {
+      .card-links {
+        margin-top: auto;
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 15px;
+        padding-top: 10px;
       }
 
-      .meta-chip {
-        padding: 4px 8px;
-        border-radius: 10px;
-        font-size: 0.78rem;
-        background: var(--sand);
-        border: 1px solid var(--line);
-      }
-
-      .links {
-        margin-top: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 14px;
-        font-size: 0.9rem;
-      }
-
-      .links a {
-        color: var(--sea);
+      .card-links a {
+        font-weight: 800;
+        font-size: 13px;
+        color: var(--accent-blue);
         text-decoration: none;
-        border-bottom: 1px solid transparent;
+        border-bottom: 2px solid transparent;
       }
 
-      .links a:hover {
+      .card-links a:hover {
         border-bottom-color: currentColor;
       }
 
+      .alert-box {
+        background-color: var(--accent-orange);
+        border: 3px solid #000;
+        padding: 20px;
+        font-weight: 800;
+        box-shadow: 6px 6px 0 0 #000;
+        margin-bottom: 30px;
+      }
+
       .empty-state {
-        padding: 32px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.7);
-        border: 1px dashed rgba(31, 42, 45, 0.15);
+        grid-column: 1 / -1;
+        background: var(--main-color);
+        border: 3px dashed #000;
+        padding: 60px;
+        text-align: center;
+        font-weight: 800;
+        font-size: 1.2rem;
       }
 
-      .footer {
-        margin-top: 40px;
-        color: var(--muted);
-        font-size: 0.9rem;
+      footer {
+        margin-top: 60px;
+        padding: 40px 0;
+        border-top: 3px solid #000;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
       }
 
-      @keyframes pageIn {
-        from {
-          opacity: 0;
-          transform: translateY(12px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @keyframes cardIn {
-        from {
-          opacity: 0;
-          transform: translateY(18px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @media (max-width: 720px) {
-        .hero {
-          align-items: flex-start;
-        }
-        .hero-actions {
-          width: 100%;
-        }
-        .action-link {
-          flex: 1 1 auto;
-          text-align: center;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        * {
-          animation: none !important;
-          transition: none !important;
-        }
+      @media (max-width: 600px) {
+        .hero { padding: 20px; }
+        .hero-split { flex-direction: column; align-items: stretch; }
       }
     </style>
   </head>
   <body>
-    <main class="page">
+    <div class="bg-grid"></div>
+    
+    <div class="container">
       <section class="hero">
-        <div>
-          <div class="pill">Schema registry</div>
-          <h1 class="hero-title">Schema Registry</h1>
-          <p class="hero-lede">
-            A live index of GraphQL schemas discovered by Rail Django. Each card
-            shows access requirements, GraphiQL availability, and the endpoint
-            path for quick verification.
-          </p>
-        </div>
-        <div class="hero-actions">
-          <a class="action-link" href="/graphql/">Open primary GraphQL</a>
-          <a class="action-link" href="/schemas/?format=json">Download JSON</a>
+        <div class="hero-tag">Registre des schémas</div>
+        <div class="hero-split">
+          <div style="flex: 1;">
+            <h1>Répertoire des Schémas.</h1>
+            <p>
+              Index en temps réel des schémas GraphQL découverts. 
+              Visualisez les accès, la disponibilité de GraphiQL et les points d'entrée configurés.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <a href="/graphql/" class="btn btn-blue">GraphQL Principal</a>
+            <a href="/schemas/?format=json" class="btn">Télécharger JSON</a>
+          </div>
         </div>
       </section>
 
-      <section class="stats">
+      <section class="stats-grid">
         <div class="stat-card">
-          <div class="stat-label">Total schemas</div>
-          <div class="stat-value">{{ counts.total }}</div>
+          <span class="stat-label">Total Schémas</span>
+          <span class="stat-value">{{ counts.total }}</span>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Enabled</div>
-          <div class="stat-value">{{ counts.enabled }}</div>
+          <span class="stat-label">Activés</span>
+          <span class="stat-value">{{ counts.enabled }}</span>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Disabled</div>
-          <div class="stat-value">{{ counts.disabled }}</div>
+          <span class="stat-label">Désactivés</span>
+          <span class="stat-value">{{ counts.disabled }}</span>
         </div>
         <div class="stat-card">
-          <div class="stat-label">GraphiQL on</div>
-          <div class="stat-value">{{ counts.graphiql_enabled }}</div>
+          <span class="stat-label">GraphiQL ON</span>
+          <span class="stat-value">{{ counts.graphiql_enabled }}</span>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Auth required</div>
-          <div class="stat-value">{{ counts.auth_required }}</div>
+          <span class="stat-label">Auth Requise</span>
+          <span class="stat-value">{{ counts.auth_required }}</span>
         </div>
       </section>
 
       {% if error %}
-      <div class="alert">{{ error }}</div>
+      <div class="alert-box">
+        ERREUR : {{ error }}
+      </div>
       {% endif %}
 
-      <div class="section-title">Schemas</div>
+      <h2 class="section-title">Schémas Détectés</h2>
 
-      {% if schemas %}
       <section class="schema-grid">
-        {% for schema in schemas %}
-        <article class="schema-card" style="--i: {{ forloop.counter }}">
-          <div class="schema-head">
-            <h2 class="schema-name">{{ schema.name }}</h2>
-            {% if schema.enabled %}
-            <span class="badge on">Enabled</span>
-            {% else %}
-            <span class="badge off">Disabled</span>
-            {% endif %}
-          </div>
-
-          <p class="schema-desc">
-            {% if schema.description %}
-              {{ schema.description }}
-            {% else %}
-              No description provided for this schema.
-            {% endif %}
-          </p>
-
-          <div class="meta">
-            <span class="meta-chip">Version {{ schema.version }}</span>
-            {% if schema.authentication_required %}
-            <span class="meta-chip">Auth required</span>
-            {% else %}
-            <span class="meta-chip">Public access</span>
-            {% endif %}
-            {% if schema.graphiql_enabled %}
-            <span class="meta-chip">GraphiQL enabled</span>
-            {% else %}
-            <span class="meta-chip">GraphiQL disabled</span>
-            {% endif %}
-          </div>
-
-          <div class="models">
-            <div class="models-title">
-              Models{% if schema.models %} ({{ schema.models|length }}){% endif %}
-            </div>
-            <div class="models-list">
-              {% if schema.models %}
-                {% for model in schema.models|slice:":8" %}
-                  <span class="model-chip">{{ model }}</span>
-                {% endfor %}
-                {% if schema.models|length > 8 %}
-                  <span class="model-chip">+ {{ schema.models|length|add:"-8" }} more</span>
-                {% endif %}
+        {% if schemas %}
+          {% for schema in schemas %}
+          <article class="schema-card">
+            <div class="schema-header">
+              <h2 class="schema-name">{{ schema.name }}</h2>
+              {% if schema.enabled %}
+              <span class="status-badge status-on">Actif</span>
               {% else %}
-                <span class="model-chip muted">All models (auto)</span>
+              <span class="status-badge status-off">Inactif</span>
               {% endif %}
             </div>
-          </div>
 
-          <div class="links">
-            <a href="/graphql/{{ schema.name }}/">/graphql/{{ schema.name }}/</a>
-            {% if schema.graphiql_enabled %}
-            <a href="/graphql/{{ schema.name }}/">Open GraphiQL</a>
-            {% endif %}
+            <p class="schema-desc">
+              {% if schema.description %}
+                {{ schema.description }}
+              {% else %}
+                Aucune description fournie pour ce schéma.
+              {% endif %}
+            </p>
+
+            <div class="metadata">
+              <span class="meta-tag">v{{ schema.version }}</span>
+              {% if schema.authentication_required %}
+              <span class="meta-tag" style="background-color: var(--accent-red);">Auth Requise</span>
+              {% else %}
+              <span class="meta-tag" style="background-color: var(--accent-mint);">Accès Public</span>
+              {% endif %}
+              {% if schema.graphiql_enabled %}
+              <span class="meta-tag" style="background-color: var(--accent-indigo); color: #fff;">GraphiQL Actif</span>
+              {% endif %}
+            </div>
+
+            <div class="models-box">
+              <div class="models-title">
+                Modèles Django{% if schema.models %} ({{ schema.models|length }}){% endif %}
+              </div>
+              <div class="models-list">
+                {% if schema.models %}
+                  {% for model in schema.models|slice:":8" %}
+                    <span class="model-chip">{{ model }}</span>
+                  {% endfor %}
+                  {% if schema.models|length > 8 %}
+                    <span class="model-chip">+ {{ schema.models|length|add:"-8" }} de plus</span>
+                  {% endif %}
+                {% else %}
+                  <span class="model-chip" style="font-style: italic; opacity: 0.6;">Découverte automatique...</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card-links">
+              <a href="/graphql/{{ schema.name }}/">Point d'entrée HTTP</a>
+              {% if schema.graphiql_enabled %}
+              <a href="/graphql/{{ schema.name }}/?graphiql=1" style="color: var(--accent-indigo);">Ouvrir GraphiQL →</a>
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">
+            Aucun schéma n'a encore été détecté.
+            Configurez vos applications ou la variable <code>RAIL_DJANGO_GRAPHQL_SCHEMAS</code>.
           </div>
-        </article>
-        {% endfor %}
+        {% endif %}
       </section>
-      {% else %}
-      <div class="empty-state">
-        No schemas found yet. Check your registered apps or configure
-        <code>RAIL_DJANGO_GRAPHQL_SCHEMAS</code> and reload the server.
-      </div>
-      {% endif %}
 
-      <div class="footer">
-        Tip: add <code>?format=json</code> to this URL for a machine-readable list.
-      </div>
-    </main>
+      <footer>
+        <div>Rail Django &copy; {% now "Y" %}</div>
+        <div>
+          Astuce : Ajoutez <code>?format=json</code> à l'URL pour une réponse machine.
+        </div>
+      </footer>
+    </div>
   </body>
 </html>

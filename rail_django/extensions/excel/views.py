@@ -12,6 +12,9 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import render
+from django.template import TemplateDoesNotExist
+from django.utils.html import escape
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -297,7 +300,7 @@ class ExcelTemplateCatalogView(View):
 
     http_method_names = ["get"]
 
-    def get(self, request: HttpRequest) -> JsonResponse:
+    def get(self, request: HttpRequest) -> HttpResponse:
         """Return the catalog of available Excel templates."""
         from .access import _resolve_request_user
         from .exporter import evaluate_excel_template_access, excel_template_registry
@@ -332,7 +335,59 @@ class ExcelTemplateCatalogView(View):
                 entry["access"] = {"allowed": access.allowed, "reason": access.reason, "status_code": access.status_code}
             templates.append(entry)
 
+        if self._wants_html(request):
+            context = {
+                "templates": templates,
+                "template_count": len(templates),
+                "catalog_path": request.path,
+            }
+            try:
+                return render(
+                    request,
+                    "excel_catalog.html",
+                    context,
+                )
+            except TemplateDoesNotExist:
+                return self._render_html_fallback(context)
+
         return JsonResponse({"templates": templates})
+
+    def _render_html_fallback(self, context: Dict[str, Any]) -> HttpResponse:
+        rows = []
+        for item in context.get("templates", []):
+            rows.append(
+                "<li><strong>{title}</strong> - <code>/api/v1/excel/{path}/?pk=&lt;id&gt;</code></li>".format(
+                    title=escape(str(item.get("title") or item.get("url_path") or "Untitled")),
+                    path=escape(str(item.get("url_path") or "")),
+                )
+            )
+        rows_html = "".join(rows) or "<li>No templates available for this account.</li>"
+        html = (
+            "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Excel Templates Catalog</title></head><body>"
+            "<h1>Excel Templates Catalog</h1>"
+            "<p>Path: <code>{path}</code> | Total: {total}</p>"
+            "<ul>{rows}</ul>"
+            "</body></html>"
+        ).format(
+            path=escape(str(context.get("catalog_path", ""))),
+            total=escape(str(context.get("template_count", 0))),
+            rows=rows_html,
+        )
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+    def _wants_html(self, request: HttpRequest) -> bool:
+        view_hint = (request.GET.get("view") or "").strip().lower()
+        if view_hint == "json":
+            return False
+        if view_hint in {"html", "web", "page"}:
+            return True
+
+        accept = (request.headers.get("Accept") or "").lower()
+        if "text/html" in accept and "application/json" not in accept:
+            return True
+        return False
 
 
 __all__ = [

@@ -15,6 +15,7 @@ from django.urls import include, path
 from .http.urls.health import health_urlpatterns
 from .http.urls.csrf import csrf_urlpatterns
 from .http.urls.audit import audit_urlpatterns
+from .http.views.welcome import EndpointGuideView
 from .core.settings import get_test_graphql_endpoint_path
 from .graphql.views import MultiSchemaGraphQLView, SchemaListView
 
@@ -42,6 +43,11 @@ urlpatterns = [
         name="multi-schema-graphql",
     ),
     path("schemas/", SchemaListView.as_view(), name="schema-list"),
+    path(
+        "ops/endpoints/<slug:endpoint_key>/",
+        EndpointGuideView.as_view(),
+        name="rail-endpoint-guide",
+    ),
     # REST API for schema management
     path("api/v1/", include("rail_django.http.api.urls", namespace="schema_api")),
 ]

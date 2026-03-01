@@ -3,12 +3,15 @@ Unit tests for PDF templating utilities.
 """
 
 from dataclasses import dataclass
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.template import TemplateDoesNotExist
 from django.test import RequestFactory, TestCase, override_settings
 
 from rail_django.extensions.templating import (
+    PdfTemplateCatalogView,
     PdfTemplatePreviewView,
     TemplateDefinition,
     WEASYPRINT_AVAILABLE,
@@ -208,4 +211,91 @@ class TestTemplatingRendering(TestCase):
         body = response.content.decode("utf-8")
         self.assertIn("Header", body)
         self.assertIn("Content", body)
+
+
+class TestTemplateCatalogView(TestCase):
+    def setUp(self):
+        self._original_templates = template_registry.all()
+
+    def tearDown(self):
+        template_registry._templates = dict(self._original_templates)
+
+    def _seed_template(self):
+        template_registry._templates = {
+            "testapp/dummy/printable_base": TemplateDefinition(
+                model=None,
+                method_name=None,
+                handler=lambda request, pk: {"ok": True},
+                source="function",
+                header_template="pdf/header.html",
+                content_template="pdf/content.html",
+                footer_template="pdf/footer.html",
+                url_path="testapp/dummy/printable_base",
+                config={},
+                roles=(),
+                permissions=(),
+                guard=None,
+                require_authentication=False,
+                title="Printable base",
+                allow_client_data=False,
+                client_data_fields=(),
+                client_data_schema=(),
+            )
+        }
+
+    @override_settings(
+        RAIL_DJANGO_GRAPHQL_TEMPLATING={"catalog": {"require_authentication": False}}
+    )
+    def test_catalog_returns_html_for_browser_accept_header(self):
+        self._seed_template()
+        request = RequestFactory().get(
+            "/api/v1/templates/catalog/",
+            HTTP_ACCEPT="text/html,application/xhtml+xml",
+        )
+
+        response = PdfTemplateCatalogView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response["Content-Type"])
+        body = response.content.decode("utf-8")
+        self.assertIn("/api/v1/templates/catalog/", body)
+        self.assertIn("testapp/dummy/printable_base", body)
+
+    @override_settings(
+        RAIL_DJANGO_GRAPHQL_TEMPLATING={"catalog": {"require_authentication": False}}
+    )
+    def test_catalog_returns_json_for_api_accept_header(self):
+        self._seed_template()
+        request = RequestFactory().get(
+            "/api/v1/templates/catalog/",
+            HTTP_ACCEPT="application/json",
+        )
+
+        response = PdfTemplateCatalogView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/json", response["Content-Type"])
+        self.assertIn("templates", response.content.decode("utf-8"))
+
+    @override_settings(
+        RAIL_DJANGO_GRAPHQL_TEMPLATING={"catalog": {"require_authentication": False}}
+    )
+    def test_catalog_html_fallback_when_template_missing(self):
+        self._seed_template()
+        request = RequestFactory().get(
+            "/api/v1/templates/catalog/",
+            HTTP_ACCEPT="text/html",
+        )
+
+        with patch(
+            "rail_django.extensions.templating.views.render",
+            side_effect=TemplateDoesNotExist("templating_catalog.html"),
+        ):
+            response = PdfTemplateCatalogView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response["Content-Type"])
+        body = response.content.decode("utf-8")
+        self.assertIn("PDF Templates Catalog", body)
+        self.assertIn("/api/v1/templates/testapp/dummy/printable_base/&lt;pk&gt;/", body)
 

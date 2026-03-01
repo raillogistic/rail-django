@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Templates Catalog</title>
+    <style>
+      :root {
+        --ink: #1e293b;
+        --muted: #64748b;
+        --panel: #ffffff;
+        --line: rgba(30, 41, 59, 0.16);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background:
+          radial-gradient(circle at 8% 10%, rgba(14, 165, 233, 0.14), transparent 40%),
+          linear-gradient(120deg, #f8fafc, #eef2ff);
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .meta {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        margin-top: 18px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .row {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 12px 14px;
+      }
+
+      .row-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .path {
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        font-size: 13px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 2px 8px;
+        background: rgba(30, 41, 59, 0.08);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .row p {
+        margin: 7px 0 0;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>PDF Templates Catalog</h1>
+      <p class="subtitle">Registered template endpoints available for the current user.</p>
+      <p class="meta">Path: <code>{{ catalog_path }}</code> | Total: {{ template_count }}</p>
+
+      <section class="grid">
+        {% for item in templates %}
+          <article class="row">
+            <div class="row-title">
+              <span class="path">/api/v1/templates/{{ item.url_path }}/&lt;pk&gt;/</span>
+              <span class="pill">{{ item.source }}</span>
+              {% if item.model %}<span class="pill">{{ item.model }}</span>{% endif %}
+            </div>
+            <p><strong>{{ item.title }}</strong></p>
+          </article>
+        {% empty %}
+          <article class="row">
+            <p>No templates available for this account.</p>
+          </article>
+        {% endfor %}
+      </section>
+    </div>
+  </body>
+</html>

@@ -4,13 +4,17 @@ Integration tests for Excel template endpoints.
 
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.template import TemplateDoesNotExist
 from django.test import RequestFactory, override_settings
 
 from rail_django.extensions.auth import JWTManager
 from rail_django.extensions.excel import (
+    ExcelTemplateCatalogView,
+    ExcelTemplateDefinition,
     ExcelTemplateView,
     OPENPYXL_AVAILABLE,
     excel_template_registry,
@@ -82,3 +86,128 @@ def test_model_excel_template_view_returns_excel_response():
         excel_template_registry._templates = dict(original_templates)
         if hasattr(TestCustomer, "export_customer"):
             delattr(TestCustomer, "export_customer")
+
+
+@override_settings(
+    RAIL_DJANGO_GRAPHQL_EXCEL_EXPORT={
+        "catalog": {"require_authentication": False},
+    }
+)
+def test_excel_catalog_returns_html_for_browser_accept_header():
+    original_templates = excel_template_registry.all()
+    try:
+        excel_template_registry._templates = {
+            "testing/customer_excel": ExcelTemplateDefinition(
+                model=None,
+                method_name=None,
+                handler=lambda request, pk: [["ok"]],
+                source="function",
+                url_path="testing/customer_excel",
+                config={},
+                roles=(),
+                permissions=(),
+                guard=None,
+                require_authentication=False,
+                title="Customer excel",
+                allow_client_data=False,
+                client_data_fields=(),
+            )
+        }
+
+        request = RequestFactory().get(
+            "/api/v1/excel/catalog/",
+            HTTP_ACCEPT="text/html,application/xhtml+xml",
+        )
+        response = ExcelTemplateCatalogView.as_view()(request)
+
+        assert response.status_code == 200
+        assert "text/html" in response["Content-Type"]
+        body = response.content.decode("utf-8")
+        assert "/api/v1/excel/catalog/" in body
+        assert "testing/customer_excel" in body
+    finally:
+        excel_template_registry._templates = dict(original_templates)
+
+
+@override_settings(
+    RAIL_DJANGO_GRAPHQL_EXCEL_EXPORT={
+        "catalog": {"require_authentication": False},
+    }
+)
+def test_excel_catalog_returns_json_for_api_accept_header():
+    original_templates = excel_template_registry.all()
+    try:
+        excel_template_registry._templates = {
+            "testing/customer_excel": ExcelTemplateDefinition(
+                model=None,
+                method_name=None,
+                handler=lambda request, pk: [["ok"]],
+                source="function",
+                url_path="testing/customer_excel",
+                config={},
+                roles=(),
+                permissions=(),
+                guard=None,
+                require_authentication=False,
+                title="Customer excel",
+                allow_client_data=False,
+                client_data_fields=(),
+            )
+        }
+
+        request = RequestFactory().get(
+            "/api/v1/excel/catalog/",
+            HTTP_ACCEPT="application/json",
+        )
+        response = ExcelTemplateCatalogView.as_view()(request)
+
+        assert response.status_code == 200
+        assert "application/json" in response["Content-Type"]
+        assert "templates" in response.content.decode("utf-8")
+    finally:
+        excel_template_registry._templates = dict(original_templates)
+
+
+@override_settings(
+    RAIL_DJANGO_GRAPHQL_EXCEL_EXPORT={
+        "catalog": {"require_authentication": False},
+    }
+)
+def test_excel_catalog_html_fallback_when_template_missing():
+    original_templates = excel_template_registry.all()
+    try:
+        excel_template_registry._templates = {
+            "testing/customer_excel": ExcelTemplateDefinition(
+                model=None,
+                method_name=None,
+                handler=lambda request, pk: [["ok"]],
+                source="function",
+                url_path="testing/customer_excel",
+                config={},
+                roles=(),
+                permissions=(),
+                guard=None,
+                require_authentication=False,
+                title="Customer excel",
+                allow_client_data=False,
+                client_data_fields=(),
+            )
+        }
+
+        request = RequestFactory().get(
+            "/api/v1/excel/catalog/",
+            HTTP_ACCEPT="text/html",
+        )
+        with patch(
+            "rail_django.extensions.excel.views.render",
+            side_effect=TemplateDoesNotExist("excel_catalog.html"),
+        ):
+            response = ExcelTemplateCatalogView.as_view()(request)
+
+        assert response.status_code == 200
+        assert "text/html" in response["Content-Type"]
+        body = response.content.decode("utf-8")
+        assert "Excel Templates Catalog" in body
+        assert "/api/v1/excel/testing/customer_excel/?pk=&lt;id&gt;" in body
+    finally:
+        excel_template_registry._templates = dict(original_templates)

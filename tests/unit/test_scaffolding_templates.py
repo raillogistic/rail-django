@@ -13,6 +13,12 @@ def _project_template_file(*relative_parts: str) -> str:
     ).read_text(encoding="utf-8")
 
 
+def _project_template_path(*relative_parts: str):
+    return resources.files("rail_django").joinpath(
+        "scaffolding", "project_template", *relative_parts
+    )
+
+
 def _rail_django_file(*relative_parts: str) -> str:
     return resources.files("rail_django").joinpath(*relative_parts).read_text(
         encoding="utf-8"
@@ -323,13 +329,36 @@ def test_root_welcome_view_requires_authenticated_superuser() -> None:
     assert "if not user.is_superuser:" in text
     assert 'raise PermissionDenied("Superuser access required.")' in text
     assert "class WelcomeView(SuperuserRequiredTemplateView):" in text
+    assert "class EndpointGuideView(SuperuserRequiredTemplateView):" in text
+    assert '"rail-endpoint-guide"' in text
     assert 'context["api_sections"]' in text
+    assert 'context["system_dashboards"]' in text
     assert "/api/v1/templates/catalog/" in text
+    assert "/audit/dashboard/" in text
+    assert "/health/" in text
 
 
-def test_welcome_template_renders_dynamic_api_navigation() -> None:
-    text = _project_template_file("root", "templates", "root", "welcome.html")
+def test_welcome_template_uses_package_source() -> None:
+    project_welcome = _project_template_path("root", "templates", "root", "welcome.html")
+    package_source = _rail_django_file("templates", "root", "welcome.html")
 
-    assert "Signed in as <strong>{{ request.user.username }}</strong>" in text
-    assert "{% for section in api_sections %}" in text
-    assert "{% for item in section.items %}" in text
+    assert not project_welcome.is_file()
+    assert "{{ request.user.username }}" in package_source
+    assert "{% for panel in system_dashboards %}" in package_source
+    assert "{% for section in api_sections %}" in package_source
+    assert "{% for item in section.items %}" in package_source
+
+
+def test_rail_urls_include_endpoint_guide_route() -> None:
+    text = _rail_django_file("urls.py")
+
+    assert '"ops/endpoints/<slug:endpoint_key>/"' in text
+    assert 'name="rail-endpoint-guide"' in text
+
+
+def test_endpoint_guide_template_is_scaffolded() -> None:
+    text = _project_template_file("root", "templates", "root", "endpoint_guide.html")
+
+    assert "{{ welcome_url }}" in text
+    assert "{{ endpoint.path }}" in text
+    assert "{{ endpoint.sample_curl }}" in text

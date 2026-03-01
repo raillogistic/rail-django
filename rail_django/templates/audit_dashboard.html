@@ -1,42 +1,82 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  /**
+   * @file audit_dashboard.html
+   * @description Tableau de bord d'audit et de sécurité pour Rail Django.
+   * Design: Néo-Brutalisme Moderne.
+   * 
+   * @author Antigravity
+   * @version 2.0.0
+   */
+-->
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit & Security Dashboard</title>
+    <title>Rail Django | Tableau de Bord Audit & Sécurité</title>
+    
+    <!-- Polices et Scripts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-color: #dbeafe;
+            --main-color: #ffffff;
+            --border-color: #000000;
+            --shadow-color: #000000;
+            
+            --accent-pink: #f472b6;
+            --accent-yellow: #fde047;
+            --accent-mint: #34d399;
+            --accent-indigo: #818cf8;
+            --accent-blue: #3b82f6;
+            --accent-green: #4ade80;
+            --accent-orange: #fb923c;
+            --accent-red: #fca5a5;
+            
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--border-color);
             min-height: 100vh;
-            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            background-size: 40px 40px;
+            background-image: 
+              linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+            z-index: -2;
         }
 
         .dashboard {
-            max-width: 1600px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
         /* Header */
         .header {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
+            background: var(--main-color);
+            border: 3px solid var(--border-color);
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .header-content {
+            box-shadow: 10px 10px 0 0 var(--shadow-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -45,55 +85,63 @@
         }
 
         .header h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+            margin: 0;
         }
 
-        .header .subtitle {
-            color: #a0a0a0;
-            font-size: 1rem;
+        .header-tag {
+            background-color: var(--accent-pink);
+            padding: 4px 12px;
+            border: 2px solid #000;
+            display: inline-block;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 14px;
+            transform: rotate(-1deg);
+            box-shadow: 2px 2px 0 0 #000;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-weight: 600;
+            color: #555;
             margin-top: 5px;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 15px;
-            align-items: center;
         }
 
         /* Navigation Tabs */
         .nav-tabs {
             display: flex;
-            gap: 5px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 5px;
-            border-radius: 10px;
-            margin-bottom: 25px;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
         }
 
         .nav-tab {
             padding: 12px 24px;
-            border: none;
-            background: transparent;
-            color: #a0a0a0;
-            font-weight: 600;
+            background: var(--main-color);
+            border: 3px solid var(--border-color);
+            font-weight: 800;
+            font-size: 14px;
+            text-transform: uppercase;
             cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.3s ease;
+            box-shadow: 4px 4px 0 0 var(--shadow-color);
+            transition: all 0.1s;
         }
 
         .nav-tab:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
+            transform: translate(-1px, -1px);
+            box-shadow: 6px 6px 0 0 var(--shadow-color);
+            background-color: var(--accent-yellow);
         }
 
         .nav-tab.active {
-            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            background-color: var(--accent-blue);
             color: #fff;
+            transform: translate(2px, 2px);
+            box-shadow: 0 0 0 0 var(--shadow-color);
         }
 
         /* Stats Cards */
@@ -105,487 +153,292 @@
         }
 
         .stat-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
+            background: var(--main-color);
+            border: 3px solid var(--border-color);
             padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .stat-card.critical {
-            border-left: 4px solid #ef4444;
-        }
-
-        .stat-card.warning {
-            border-left: 4px solid #f59e0b;
-        }
-
-        .stat-card.success {
-            border-left: 4px solid #10b981;
-        }
-
-        .stat-card.info {
-            border-left: 4px solid #3b82f6;
+            box-shadow: 6px 6px 0 0 var(--shadow-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
+            font-size: 28px;
+            margin-bottom: 10px;
+            width: 50px;
+            height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 15px;
-            font-size: 24px;
+            border: 2px solid #000;
+            background: #f0f0f0;
         }
 
-        .stat-icon.critical { background: rgba(239, 68, 68, 0.2); }
-        .stat-icon.warning { background: rgba(245, 158, 11, 0.2); }
-        .stat-icon.success { background: rgba(16, 185, 129, 0.2); }
-        .stat-icon.info { background: rgba(59, 130, 246, 0.2); }
-
         .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #fff;
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: #000;
+            line-height: 1;
         }
 
         .stat-label {
-            color: #a0a0a0;
-            font-size: 0.9rem;
-            margin-top: 5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 12px;
+            color: #555;
         }
+
+        .stat-card.critical { border-color: var(--accent-red); }
+        .stat-card.warning { border-color: var(--accent-orange); }
+        .stat-card.success { border-color: var(--accent-green); }
 
         /* Charts Grid */
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 25px;
+            gap: 30px;
             margin-bottom: 30px;
         }
 
         .chart-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--main-color);
+            border: 3px solid var(--border-color);
+            padding: 30px;
+            box-shadow: 8px 8px 0 0 var(--shadow-color);
         }
 
         .chart-card h3 {
-            color: #fff;
-            margin-bottom: 20px;
-            font-size: 1.2rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 18px;
+            margin-bottom: 25px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
+        .chart-card h3::after {
+            content: "";
+            flex-grow: 1;
+            height: 2px;
+            background: #000;
+        }
+
         .chart-canvas {
-            max-height: 280px;
+            min-height: 250px;
         }
 
         /* Filters Panel */
         .filters-panel {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--accent-indigo);
+            border: 3px solid var(--border-color);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 8px 8px 0 0 var(--shadow-color);
+            color: #fff;
         }
 
         .filters-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         .filters-header h3 {
-            color: #fff;
-            font-size: 1.1rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 20px;
         }
 
         .filters-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            gap: 20px;
         }
 
         .filter-group {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 8px;
         }
 
         .filter-group label {
-            font-size: 0.85rem;
-            color: #a0a0a0;
-            font-weight: 500;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
         }
 
         .filter-group input,
         .filter-group select {
-            padding: 10px 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-            font-size: 0.9rem;
-            transition: border-color 0.3s ease;
-        }
-
-        .filter-group input:focus,
-        .filter-group select:focus {
-            outline: none;
-            border-color: #00d4ff;
-        }
-
-        .filter-group input::placeholder {
-            color: #666;
-        }
-
-        .filter-group select option {
-            background: #1e3a5f;
-            color: #fff;
+            padding: 12px;
+            border: 2px solid #000;
+            background: #fff;
+            font-family: var(--font-main);
+            font-weight: 700;
+            box-shadow: 3px 3px 0 0 #000;
         }
 
         /* Events Table */
         .events-section {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--main-color);
+            border: 3px solid var(--border-color);
+            padding: 30px;
+            box-shadow: 10px 10px 0 0 var(--shadow-color);
+            margin-bottom: 30px;
         }
 
         .events-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 15px;
         }
 
         .events-header h3 {
-            color: #fff;
-            font-size: 1.2rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 22px;
         }
 
         .events-table {
             width: 100%;
             border-collapse: collapse;
-            overflow: hidden;
         }
 
-        .events-table thead th {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
+        .events-table th {
             text-align: left;
-            color: #a0a0a0;
-            font-weight: 600;
-            font-size: 0.85rem;
+            padding: 15px;
+            background: #f0f0f0;
+            border: 2px solid #000;
+            font-weight: 900;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            position: sticky;
-            top: 0;
-        }
-
-        .events-table tbody tr {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            transition: background 0.2s ease;
-        }
-
-        .events-table tbody tr:hover {
-            background: rgba(255, 255, 255, 0.05);
+            font-size: 12px;
         }
 
         .events-table td {
             padding: 15px;
-            font-size: 0.9rem;
+            border: 2px solid #000;
+            font-size: 14px;
+            font-weight: 600;
         }
 
         .event-type-badge {
             display: inline-block;
             padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+            border: 2px solid #000;
+            font-size: 11px;
+            font-weight: 800;
             text-transform: uppercase;
+            box-shadow: 2px 2px 0 0 #000;
         }
-
-        .event-type-badge.auth_login_success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .event-type-badge.auth_login_failure { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .event-type-badge.auth_logout { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        .event-type-badge.authz_permission_denied { background: rgba(239, 68, 68, 0.3); color: #f87171; }
-        .event-type-badge.rate_limit_exceeded { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-        .event-type-badge.data_sensitive_access { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
-        .event-type-badge.query_blocked_complexity { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        .event-type-badge.default { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
 
         .severity-badge {
             display: inline-block;
             padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+            border: 2px solid #000;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
         }
 
-        .severity-badge.low { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .severity-badge.medium { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        .severity-badge.high { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-        .severity-badge.critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .severity-badge.low { background-color: var(--accent-mint); }
+        .severity-badge.medium { background-color: var(--accent-blue); color: #fff; }
+        .severity-badge.high { background-color: var(--accent-orange); }
+        .severity-badge.critical { background-color: var(--accent-red); }
 
         .success-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #000;
             display: inline-block;
+            margin-right: 5px;
+            vertical-align: middle;
         }
 
-        .success-indicator.true { background: #10b981; }
-        .success-indicator.false { background: #ef4444; }
+        .success-indicator.true { background-color: var(--accent-green); }
+        .success-indicator.false { background-color: var(--accent-red); }
 
         /* Pagination */
         .pagination {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 10px;
-            margin-top: 25px;
-        }
-
-        .pagination-btn {
-            padding: 10px 18px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .pagination-btn:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: #00d4ff;
-        }
-
-        .pagination-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .pagination-info {
-            color: #a0a0a0;
-            font-size: 0.9rem;
-        }
-
-        /* Security Report Section */
-        .security-report {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-
-        .report-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .report-card h3 {
-            color: #fff;
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .threat-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .threat-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: rgba(239, 68, 68, 0.1);
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 3px solid #ef4444;
-        }
-
-        .threat-item .ip {
-            font-family: monospace;
-            color: #fff;
-        }
-
-        .threat-item .count {
-            background: rgba(239, 68, 68, 0.3);
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            color: #f87171;
-        }
-
-        /* Timeline Section */
-        .timeline {
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-
-        .timeline-item {
-            display: flex;
             gap: 15px;
-            padding: 15px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .timeline-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-top: 5px;
-            flex-shrink: 0;
-        }
-
-        .timeline-dot.high, .timeline-dot.critical { background: #ef4444; }
-        .timeline-dot.medium { background: #f59e0b; }
-        .timeline-dot.low { background: #10b981; }
-
-        .timeline-content {
-            flex: 1;
-        }
-
-        .timeline-event {
-            color: #fff;
-            font-weight: 500;
-            margin-bottom: 5px;
-        }
-
-        .timeline-details {
-            font-size: 0.85rem;
-            color: #a0a0a0;
-        }
-
-        .timeline-time {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 5px;
+            margin-top: 30px;
         }
 
         /* Buttons */
         .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            padding: 12px 24px;
+            background: var(--main-color);
+            border: 2px solid var(--border-color);
+            box-shadow: 4px 4px 0 0 var(--shadow-color);
+            color: inherit;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 13px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.1s;
             display: inline-flex;
             align-items: center;
             gap: 8px;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
-            color: white;
+        .btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 6px 6px 0 0 var(--shadow-color);
+            background-color: var(--accent-yellow);
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 0 var(--shadow-color);
         }
 
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
+        .btn-primary { background-color: var(--accent-blue); color: #fff; }
+        .btn-danger { background-color: var(--accent-red); }
 
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-danger:hover {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        /* Event Detail Modal */
+        /* Modal */
         .modal-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            inset: 0;
             background: rgba(0, 0, 0, 0.7);
             z-index: 1000;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }
 
-        .modal-overlay.active {
-            display: flex;
-        }
+        .modal-overlay.active { display: flex; }
 
         .modal {
-            background: #1e3a5f;
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 700px;
-            width: 90%;
-            max-height: 80vh;
+            background: #fff;
+            border: 4px solid #000;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
             overflow-y: auto;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 20px 20px 0 0 rgba(0,0,0,0.5);
+            position: relative;
         }
 
         .modal-header {
+            margin-bottom: 30px;
+            border-bottom: 4px solid #000;
+            padding-bottom: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px;
         }
 
-        .modal-header h2 {
-            color: #fff;
-            font-size: 1.5rem;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: #a0a0a0;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 5px;
-        }
-
-        .modal-close:hover {
-            color: #fff;
-        }
+        .modal-header h2 { font-weight: 900; text-transform: uppercase; font-size: 24px; }
+        .modal-close { font-size: 32px; background: none; border: none; cursor: pointer; font-weight: 900; }
 
         .detail-grid {
             display: grid;
@@ -595,1111 +448,518 @@
 
         .detail-item {
             padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
+            border: 2px solid #000;
+            background: #f9f9f9;
         }
 
-        .detail-item.full-width {
-            grid-column: 1 / -1;
-        }
+        .detail-label { font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 8px; color: #666; }
+        .detail-value { font-weight: 700; font-size: 15px; word-break: break-all; }
+        .detail-value.mono { font-family: var(--font-mono); font-size: 13px; background: #eee; padding: 10px; border: 1px solid #000; }
 
-        .detail-label {
-            font-size: 0.8rem;
-            color: #a0a0a0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .detail-value {
-            color: #fff;
-            font-size: 1rem;
-            word-break: break-all;
-        }
-
-        .detail-value.mono {
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 0.85rem;
-        }
-
-        /* Loading State */
+        /* Loader & Toasts */
         .loading-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 999;
+            inset: 0;
+            background: rgba(219, 234, 254, 0.7); /* Same as --bg-color but semi-transparent */
+            z-index: 1100;
             align-items: center;
             justify-content: center;
         }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-
+        .loading-overlay.active { display: flex; }
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #00d4ff;
+            width: 60px; height: 60px;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #000;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 1200; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 15px 25px; border: 3px solid #000; font-weight: 800; text-transform: uppercase; box-shadow: 6px 6px 0 0 #000; animation: slideIn 0.3s ease; }
+        .toast.success { background: var(--accent-mint); }
+        .toast.error { background: var(--accent-red); }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
-        /* Toast Notifications */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1100;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: #f0f0f0; }
+        ::-webkit-scrollbar-thumb { background: #000; border: 2px solid #f0f0f0; }
 
-        .toast {
-            padding: 15px 20px;
-            border-radius: 10px;
-            color: #fff;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: slideIn 0.3s ease;
-        }
-
-        .toast.success { background: #10b981; }
-        .toast.error { background: #ef4444; }
-        .toast.warning { background: #f59e0b; }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #a0a0a0;
-        }
-
-        .empty-state-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            color: #fff;
-            margin-bottom: 10px;
-        }
-
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                text-align: center;
-            }
-
-            .charts-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .detail-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .events-table {
-                display: block;
-                overflow-x: auto;
-            }
-        }
-
-        /* Tab Content */
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
+    <div class="bg-grid"></div>
+
     <div class="dashboard">
         <!-- Header -->
         <div class="header">
-            <div class="header-content">
-                <div>
-                    <h1>Audit & Security Dashboard</h1>
-                    <p class="subtitle">Real-time security monitoring and audit log analysis</p>
-                </div>
-                <div class="header-actions">
-                    <button class="btn btn-secondary" onclick="exportData()">
-                        <span>Export</span>
-                    </button>
-                    <button class="btn btn-primary" onclick="refreshData()">
-                        <span>Refresh</span>
-                    </button>
-                </div>
+            <div style="flex: 1;">
+                <div class="header-tag">Surveillance Sécurisée</div>
+                <h1>Observabilité Audit & Sécurité.</h1>
+                <p class="subtitle">Analyse en temps réel des journaux d'audit et détection des menaces.</p>
+            </div>
+            <div style="display: flex; gap: 15px;">
+                <button class="btn" onclick="exportData()">EXPORTER (CSV)</button>
+                <button class="btn btn-primary" onclick="refreshData()">RAFRAÎCHIR</button>
             </div>
         </div>
 
         <!-- Navigation Tabs -->
         <div class="nav-tabs">
-            <button class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
-            <button class="nav-tab" data-tab="events" onclick="switchTab('events')">Audit Events</button>
-            <button class="nav-tab" data-tab="security" onclick="switchTab('security')">Security Report</button>
+            <button class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">Vue d'ensemble</button>
+            <button class="nav-tab" data-tab="events" onclick="switchTab('events')">Événements d'audit</button>
+            <button class="nav-tab" data-tab="security" onclick="switchTab('security')">Rapport de sécurité</button>
         </div>
 
         <!-- Overview Tab -->
         <div id="tab-overview" class="tab-content active">
-            <!-- Stats Cards -->
+            <!-- Stats -->
             <div class="stats-grid" id="statsGrid">
-                <!-- Will be populated by JavaScript -->
+                <!-- Popuplated by JS -->
             </div>
 
             <!-- Charts -->
             <div class="charts-grid">
                 <div class="chart-card">
-                    <h3>Events by Type</h3>
-                    <canvas id="eventTypeChart" class="chart-canvas"></canvas>
+                    <h3>Événements par Type</h3>
+                    <div style="height: 300px;"><canvas id="eventTypeChart"></canvas></div>
                 </div>
                 <div class="chart-card">
-                    <h3>Events by Severity</h3>
-                    <canvas id="severityChart" class="chart-canvas"></canvas>
+                    <h3>Sévérité des Événements</h3>
+                    <div style="height: 300px;"><canvas id="severityChart"></canvas></div>
+                </div>
+                <div class="chart-card" style="grid-column: span 1.5;">
+                    <h3>Chronologie des Événements (24h)</h3>
+                    <div style="height: 300px;"><canvas id="timelineChart"></canvas></div>
                 </div>
                 <div class="chart-card">
-                    <h3>Events Timeline (24h)</h3>
-                    <canvas id="timelineChart" class="chart-canvas"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>Success vs Failure Rate</h3>
-                    <canvas id="successChart" class="chart-canvas"></canvas>
+                    <h3>Taux de Succès vs Échec</h3>
+                    <div style="height: 300px;"><canvas id="successChart"></canvas></div>
                 </div>
             </div>
 
             <!-- Recent Activity -->
             <div class="events-section">
                 <div class="events-header">
-                    <h3>Recent Activity</h3>
-                    <button class="btn btn-secondary" onclick="switchTab('events')">View All</button>
+                    <h3>Activité Récente</h3>
+                    <button class="btn" onclick="switchTab('events')">TOUT VOIR →</button>
                 </div>
-                <div class="timeline" id="recentTimeline">
-                    <!-- Will be populated by JavaScript -->
+                <div id="recentTimeline" style="display: grid; gap: 15px;">
+                    <!-- Popuplated by JS -->
                 </div>
             </div>
         </div>
 
         <!-- Events Tab -->
         <div id="tab-events" class="tab-content">
-            <!-- Filters -->
             <div class="filters-panel">
                 <div class="filters-header">
-                    <h3>Filters</h3>
-                    <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+                    <h3>Filtres de Recherche</h3>
+                    <button class="btn btn-warning" onclick="resetFilters()">RÉINITIALISER</button>
                 </div>
                 <div class="filters-grid">
                     <div class="filter-group">
-                        <label>Event Type</label>
+                        <label>Type d'événement</label>
                         <select id="filterEventType" onchange="applyFilters()">
-                            <option value="">All Types</option>
+                            <option value="">Tous les types</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Severity</label>
+                        <label>Sévérité</label>
                         <select id="filterSeverity" onchange="applyFilters()">
-                            <option value="">All Severities</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
+                            <option value="">Toutes</option>
+                            <option value="low">Basse</option>
+                            <option value="medium">Moyenne</option>
+                            <option value="high">Haute</option>
+                            <option value="critical">Critique</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Status</label>
+                        <label>Résultat</label>
                         <select id="filterSuccess" onchange="applyFilters()">
-                            <option value="">All</option>
-                            <option value="true">Success</option>
-                            <option value="false">Failure</option>
+                            <option value="">Tout</option>
+                            <option value="true">Succès</option>
+                            <option value="false">Échec</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Time Range</label>
+                        <label>Période</label>
                         <select id="filterHours" onchange="applyFilters()">
-                            <option value="1">Last Hour</option>
-                            <option value="6">Last 6 Hours</option>
-                            <option value="24" selected>Last 24 Hours</option>
-                            <option value="48">Last 48 Hours</option>
-                            <option value="168">Last 7 Days</option>
+                            <option value="1">Dernière heure</option>
+                            <option value="6">6 dernières heures</option>
+                            <option value="24" selected>24 dernières heures</option>
+                            <option value="48">48 dernières heures</option>
+                            <option value="168">7 derniers jours</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Username</label>
-                        <input type="text" id="filterUsername" placeholder="Search username..." onkeyup="debounceApplyFilters()">
+                        <label>Utilisateur</label>
+                        <input type="text" id="filterUsername" placeholder="Rechercher..." onkeyup="debounceApplyFilters()">
                     </div>
                     <div class="filter-group">
-                        <label>IP Address</label>
-                        <input type="text" id="filterIP" placeholder="Filter by IP..." onkeyup="debounceApplyFilters()">
+                        <label>Adresse IP</label>
+                        <input type="text" id="filterIP" placeholder="192.168..." onkeyup="debounceApplyFilters()">
                     </div>
                 </div>
             </div>
 
-            <!-- Events Table -->
             <div class="events-section">
                 <div class="events-header">
-                    <h3>Audit Events <span id="eventCount" style="color: #a0a0a0; font-weight: normal;"></span></h3>
+                    <h3>Journal des Événements <span id="eventCount" style="opacity: 0.5; font-size: 14px;"></span></h3>
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="events-table">
                         <thead>
                             <tr>
-                                <th>Timestamp</th>
-                                <th>Event Type</th>
-                                <th>Severity</th>
-                                <th>User</th>
-                                <th>IP Address</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th>Horodatage</th>
+                                <th>Type</th>
+                                <th>Sévérité</th>
+                                <th>Utilisateur</th>
+                                <th>IP Client</th>
+                                <th>Statut</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody id="eventsTableBody">
-                            <!-- Will be populated by JavaScript -->
-                        </tbody>
+                        <tbody id="eventsTableBody"></tbody>
                     </table>
                 </div>
-                <div class="pagination" id="pagination">
-                    <!-- Will be populated by JavaScript -->
-                </div>
+                <div id="pagination" class="pagination"></div>
             </div>
         </div>
 
         <!-- Security Report Tab -->
         <div id="tab-security" class="tab-content">
-            <div class="security-report">
-                <!-- Brute Force Suspects -->
-                <div class="report-card">
-                    <h3>Brute Force Suspects</h3>
-                    <div class="threat-list" id="bruteForceList">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h3>Tentatives de Force Brute</h3>
+                    <div id="bruteForceList" style="display: grid; gap: 10px;"></div>
                 </div>
-
-                <!-- Rate Limited IPs -->
-                <div class="report-card">
-                    <h3>Rate Limited IPs</h3>
-                    <div class="threat-list" id="rateLimitedList">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
+                <div class="chart-card">
+                    <h3>IP Sous Limite (Rate-Limit)</h3>
+                    <div id="rateLimitedList" style="display: grid; gap: 10px;"></div>
                 </div>
-
-                <!-- Top Failed IPs -->
-                <div class="report-card">
-                    <h3>Top Failed Login IPs</h3>
-                    <div class="threat-list" id="topFailedIPs">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
+                <div class="chart-card">
+                    <h3>Top IPs en Échec</h3>
+                    <div id="topFailedIPs" style="display: grid; gap: 10px;"></div>
                 </div>
-
-                <!-- Targeted Users -->
-                <div class="report-card">
-                    <h3>Most Targeted Users</h3>
-                    <div class="threat-list" id="targetedUsers">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
+                <div class="chart-card">
+                    <h3>Utilisateurs Ciblés</h3>
+                    <div id="targetedUsers" style="display: grid; gap: 10px;"></div>
                 </div>
             </div>
 
-            <!-- High Severity Timeline -->
             <div class="events-section">
                 <div class="events-header">
-                    <h3>High Severity Events Timeline</h3>
+                    <h3>Chronologie Haute Sévérité</h3>
                 </div>
-                <div class="timeline" id="highSeverityTimeline">
-                    <!-- Will be populated by JavaScript -->
-                </div>
+                <div id="highSeverityTimeline" style="display: grid; gap: 15px;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Event Detail Modal -->
+    <!-- Modal Détails -->
     <div class="modal-overlay" id="eventModal">
         <div class="modal">
             <div class="modal-header">
-                <h2>Event Details</h2>
+                <h2>Détails de l'événement</h2>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
-            <div id="eventModalContent">
-                <!-- Will be populated by JavaScript -->
+            <div id="eventModalContent"></div>
+            <div style="margin-top: 30px; text-align: right;">
+                <button class="btn btn-primary" onclick="closeModal()">FERMER</button>
             </div>
         </div>
     </div>
 
-    <!-- Loading Overlay -->
+    <!-- Loader -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
     </div>
 
-    <!-- Toast Container -->
+    <!-- Toasts -->
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // Global state
+        // --- LOGIQUE JAVASCRIPT ---
+        // Conservée et mise à jour pour correspondre à la nouvelle structure
+
         let currentPage = 1;
         let pageSize = 50;
         let totalPages = 1;
         let charts = {};
         let debounceTimer = null;
         let eventTypes = [];
+
         const CANONICAL_EVENT_TYPES = [
-            "auth.login.success",
-            "auth.login.failure",
-            "auth.logout",
-            "auth.token.issued",
-            "auth.token.refreshed",
-            "auth.token.revoked",
-            "auth.token.invalid",
-            "auth.mfa.success",
-            "auth.mfa.failure",
-            "authz.permission.granted",
-            "authz.permission.denied",
-            "authz.role.assigned",
-            "authz.role.revoked",
-            "data.read",
-            "data.create",
-            "data.update",
-            "data.delete",
-            "data.bulk",
-            "data.sensitive.access",
-            "data.export",
-            "query.blocked.depth",
-            "query.blocked.complexity",
-            "query.blocked.introspection",
-            "query.validation.failed",
-            "query.injection.attempt",
-            "rate.limit.exceeded",
-            "rate.limit.warning",
-            "system.error",
-            "system.config.change",
-            "ui.action"
+            "auth.login.success", "auth.login.failure", "auth.logout", 
+            "auth.token.issued", "auth.token.refreshed", "auth.token.revoked",
+            "auth.token.invalid", "auth.mfa.success", "auth.mfa.failure",
+            "authz.permission.granted", "authz.permission.denied",
+            "data.read", "data.create", "data.update", "data.delete",
+            "data.sensitive.access", "data.export", "query.blocked.depth",
+            "query.blocked.complexity", "rate.limit.exceeded"
         ];
+
         const EVENT_TYPE_SHORT_MAP = CANONICAL_EVENT_TYPES.reduce((acc, value) => {
             const shortName = value.split(".").slice(1).join(".");
-            if (!acc[shortName]) {
-                acc[shortName] = value;
-            }
+            if (!acc[shortName]) acc[shortName] = value;
             return acc;
         }, {});
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             initializeCharts();
             loadEventTypes();
             refreshData();
         });
 
-        // Initialize Charts
         function initializeCharts() {
-            const darkChartOptions = {
+            const chartOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#a0a0a0' }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: '#a0a0a0' },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
-                    },
-                    y: {
-                        ticks: { color: '#a0a0a0' },
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        beginAtZero: true
-                    }
+                    legend: { position: 'bottom', labels: { font: { family: 'Outfit', weight: 'bold' } } }
                 }
             };
 
-            // Event Type Chart (Doughnut)
+            const barOptions = {
+                ...chartOptions,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.1)' }, ticks: { font: { weight: 'bold' } } },
+                    x: { ticks: { font: { weight: 'bold' } } }
+                }
+            };
+
             charts.eventType = new Chart(document.getElementById('eventTypeChart'), {
                 type: 'doughnut',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        data: [],
-                        backgroundColor: [
-                            '#10b981', '#ef4444', '#3b82f6', '#f59e0b',
-                            '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { color: '#a0a0a0' }
-                        }
-                    }
-                }
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#f472b6', '#fde047', '#34d399', '#818cf8', '#3b82f6', '#fb923c', '#fca5a5', '#4ade80'] }] },
+                options: { ...chartOptions, plugins: { legend: { position: 'right' } } }
             });
 
-            // Severity Chart (Pie)
             charts.severity = new Chart(document.getElementById('severityChart'), {
                 type: 'pie',
-                data: {
-                    labels: ['Low', 'Medium', 'High', 'Critical'],
-                    datasets: [{
-                        data: [0, 0, 0, 0],
-                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { color: '#a0a0a0' }
-                        }
-                    }
-                }
+                data: { labels: ['Bas', 'Moyen', 'Haut', 'Critique'], datasets: [{ data: [0, 0, 0, 0], backgroundColor: ['#34d399', '#3b82f6', '#fb923c', '#fca5a5'] }] },
+                options: chartOptions
             });
 
-            // Timeline Chart (Line)
             charts.timeline = new Chart(document.getElementById('timelineChart'), {
                 type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Events',
-                        data: [],
-                        borderColor: '#00d4ff',
-                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: darkChartOptions
+                data: { labels: [], datasets: [{ label: 'Événements', data: [], borderColor: '#000', backgroundColor: 'rgba(59, 130, 246, 0.4)', fill: true, tension: 0.3 }] },
+                options: barOptions
             });
 
-            // Success Chart (Bar)
             charts.success = new Chart(document.getElementById('successChart'), {
                 type: 'bar',
-                data: {
-                    labels: ['Successful', 'Failed'],
-                    datasets: [{
-                        data: [0, 0],
-                        backgroundColor: ['#10b981', '#ef4444']
-                    }]
-                },
-                options: {
-                    ...darkChartOptions,
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
+                data: { labels: ['Succès', 'Échec'], datasets: [{ data: [0, 0], backgroundColor: ['#34d399', '#fca5a5'] }] },
+                options: { ...barOptions, plugins: { legend: { display: false } } }
             });
         }
 
-        // Load event types for filter
-        async function loadEventTypes() {
-            try {
-                const response = await fetch('/audit/meta/');
-                const select = document.getElementById('filterEventType');
-                if (!select) return;
-
-                if (response.ok) {
-                    const data = await response.json();
-                    const rawTypes = data.event_types || [];
-                    eventTypes = rawTypes.map(type => {
-                        if (type.includes(".")) return type;
-                        const normalized = type.replace(/_/g, ".").replace(/^auth\./, "");
-                        return EVENT_TYPE_SHORT_MAP[normalized] || normalized;
-                    }).filter(Boolean);
-                } else {
-                    eventTypes = [...CANONICAL_EVENT_TYPES];
-                }
-
-                if (!eventTypes.length) {
-                    eventTypes = [...CANONICAL_EVENT_TYPES];
-                }
-
-                eventTypes.forEach(type => {
-                    const option = document.createElement('option');
-                    option.value = type;
-                    option.textContent = type.replace(/\./g, ' ').toUpperCase();
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading event types:', error);
-                const select = document.getElementById('filterEventType');
-                if (select && select.options.length <= 1) {
-                    CANONICAL_EVENT_TYPES.forEach(type => {
-                        const option = document.createElement('option');
-                        option.value = type;
-                        option.textContent = type.replace(/\./g, ' ').toUpperCase();
-                        select.appendChild(option);
-                    });
-                }
-            }
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
         }
 
-        // Refresh all data
+        async function loadEventTypes() {
+            const select = document.getElementById('filterEventType');
+            CANONICAL_EVENT_TYPES.forEach(type => {
+                const opt = document.createElement('option');
+                opt.value = type;
+                opt.textContent = type.replace(/\./g, ' ').toUpperCase();
+                select.appendChild(opt);
+            });
+        }
+
         async function refreshData() {
             showLoading(true);
             try {
-                await Promise.all([
-                    loadStats(),
-                    loadEvents(),
-                    loadSecurityReport()
-                ]);
-                showToast('Data refreshed successfully', 'success');
-            } catch (error) {
-                console.error('Error refreshing data:', error);
-                showToast('Failed to refresh data', 'error');
+                await Promise.all([loadStats(), loadEvents(), loadSecurityReport()]);
+                showToast('Données synchronisées', 'success');
+            } catch (e) {
+                showToast('Erreur de synchro', 'error');
             } finally {
                 showLoading(false);
             }
         }
 
-        // Load statistics
         async function loadStats() {
             const hours = document.getElementById('filterHours')?.value || 24;
-            const response = await fetch(`/audit/stats/?hours=${hours}`);
-            if (!response.ok) throw new Error('Failed to load stats');
-
-            const data = await response.json();
+            const res = await fetch(`/audit/stats/?hours=${hours}`);
+            const data = await res.json();
             updateStatsCards(data);
             updateCharts(data);
         }
 
-        // Update stats cards
         function updateStatsCards(data) {
             const grid = document.getElementById('statsGrid');
             grid.innerHTML = `
-                <div class="stat-card info">
-                    <div class="stat-icon info">&#128202;</div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128202;</div>
                     <div class="stat-value">${data.total_events || 0}</div>
-                    <div class="stat-label">Total Events</div>
+                    <div class="stat-label">Total Événements</div>
                 </div>
                 <div class="stat-card success">
-                    <div class="stat-icon success">&#10004;</div>
+                    <div class="stat-icon">&#10004;</div>
                     <div class="stat-value">${data.by_success?.successful || 0}</div>
-                    <div class="stat-label">Successful</div>
+                    <div class="stat-label">Réussis</div>
                 </div>
                 <div class="stat-card critical">
-                    <div class="stat-icon critical">&#10006;</div>
+                    <div class="stat-icon">&#10006;</div>
                     <div class="stat-value">${data.by_success?.failed || 0}</div>
-                    <div class="stat-label">Failed</div>
+                    <div class="stat-label">Échecs</div>
                 </div>
                 <div class="stat-card warning">
-                    <div class="stat-icon warning">&#9888;</div>
+                    <div class="stat-icon">&#9888;</div>
                     <div class="stat-value">${data.high_severity_count || 0}</div>
-                    <div class="stat-label">High Severity</div>
-                </div>
-                <div class="stat-card info">
-                    <div class="stat-icon info">&#128100;</div>
-                    <div class="stat-value">${data.top_users?.length || 0}</div>
-                    <div class="stat-label">Active Users</div>
-                </div>
-                <div class="stat-card warning">
-                    <div class="stat-icon warning">&#128274;</div>
-                    <div class="stat-value">${data.top_failed_ips?.length || 0}</div>
-                    <div class="stat-label">Suspicious IPs</div>
+                    <div class="stat-label">Sévérité Haute</div>
                 </div>
             `;
         }
 
-        // Update charts with data
         function updateCharts(data) {
-            // Event type chart
             if (data.by_event_type) {
-                const labels = Object.keys(data.by_event_type).map(k => k.replace(/_/g, ' '));
-                const values = Object.values(data.by_event_type);
-                charts.eventType.data.labels = labels;
-                charts.eventType.data.datasets[0].data = values;
+                charts.eventType.data.labels = Object.keys(data.by_event_type).map(k => k.split('.').pop().toUpperCase());
+                charts.eventType.data.datasets[0].data = Object.values(data.by_event_type);
                 charts.eventType.update();
             }
-
-            // Severity chart
             if (data.by_severity) {
-                charts.severity.data.datasets[0].data = [
-                    data.by_severity.low || 0,
-                    data.by_severity.medium || 0,
-                    data.by_severity.high || 0,
-                    data.by_severity.critical || 0
-                ];
+                charts.severity.data.datasets[0].data = [data.by_severity.low||0, data.by_severity.medium||0, data.by_severity.high||0, data.by_severity.critical||0];
                 charts.severity.update();
             }
-
-            // Success chart
             if (data.by_success) {
-                charts.success.data.datasets[0].data = [
-                    data.by_success.successful || 0,
-                    data.by_success.failed || 0
-                ];
+                charts.success.data.datasets[0].data = [data.by_success.successful||0, data.by_success.failed||0];
                 charts.success.update();
             }
         }
 
-        function normalizeEventTypeFilter(value) {
-            if (!value) return "";
-            if (value.includes(".")) return value;
-            const normalized = value.replace(/_/g, ".").replace(/^auth\./, "");
-            return EVENT_TYPE_SHORT_MAP[normalized] || normalized;
-        }
-
-        // Load events with filters and pagination
         async function loadEvents() {
-            const params = new URLSearchParams();
-            params.set("page", currentPage);
-            params.set("page_size", pageSize);
+            const params = new URLSearchParams({ page: currentPage, page_size: pageSize });
+            ['filterEventType', 'filterSeverity', 'filterSuccess', 'filterHours', 'filterUsername', 'filterIP'].forEach(id => {
+                const val = document.getElementById(id)?.value;
+                if (val) {
+                    let key = id.replace('filter', '').toLowerCase();
+                    if (key === 'success') key = 'outcome';
+                    params.set(key, key === 'outcome' ? (val === 'true' ? 'success' : 'failure') : val);
+                }
+            });
 
-            const eventType = document.getElementById('filterEventType')?.value;
-            const severity = document.getElementById('filterSeverity')?.value;
-            const success = document.getElementById('filterSuccess')?.value;
-            const hours = document.getElementById('filterHours')?.value;
-            const username = document.getElementById('filterUsername')?.value;
-            const clientIp = document.getElementById('filterIP')?.value;
-
-            if (eventType) params.set("event_type", normalizeEventTypeFilter(eventType));
-            if (severity) params.set("severity", severity);
-            if (hours) params.set("hours", hours);
-            if (username) params.set("username", username);
-            if (clientIp) params.set("client_ip", clientIp);
-            if (success) {
-                params.set("outcome", success === "true" ? "success" : "failure");
-            }
-
-            const response = await fetch(`/audit/?${params.toString()}`);
-            if (!response.ok) throw new Error('Failed to load events');
-
-            const data = await response.json();
-            const events = data.events || [];
-
-            updateEventsTable(events);
+            const res = await fetch(`/audit/?${params.toString()}`);
+            const data = await res.json();
+            updateEventsTable(data.events || []);
             updatePagination(data.pagination || {});
-            updateEventCount(data.pagination?.total_count || events.length);
-
-            if (currentPage === 1) {
-                updateRecentTimeline(events);
-            }
+            document.getElementById('eventCount').textContent = data.pagination?.total_count ? `(${data.pagination.total_count} au total)` : '';
+            if (currentPage === 1) updateRecentTimeline(data.events || []);
         }
 
-        // Update pagination UI
-        function updatePagination(pagination) {
-            const container = document.getElementById('pagination');
-            if (!pagination || !container) return;
-
-            totalPages = pagination.total_pages || 1;
-            currentPage = pagination.page || 1;
-            pageSize = pagination.page_size || pageSize;
-
-            container.innerHTML = `
-                <button class="pagination-btn" onclick="gotoPage(${currentPage - 1})" ${pagination.has_previous ? "" : "disabled"}>
-                    Previous
-                </button>
-                <span class="pagination-info">Page ${currentPage} of ${totalPages}</span>
-                <button class="pagination-btn" onclick="gotoPage(${currentPage + 1})" ${pagination.has_next ? "" : "disabled"}>
-                    Next
-                </button>
-            `;
-        }
-
-        function gotoPage(page) {
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            loadEvents();
-        }
-
-        function updateEventCount(total) {
-            const countEl = document.getElementById('eventCount');
-            if (countEl) {
-                countEl.textContent = total ? `(${total} total)` : '';
-            }
-        }
-
-        // Update events table
         function updateEventsTable(events) {
             const tbody = document.getElementById('eventsTableBody');
-
-            if (!events || events.length === 0) {
-                // ... empty state ...
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="empty-state">
-                            <div class="empty-state-icon">&#128269;</div>
-                            <h3>No events found</h3>
-                            <p>Try adjusting your filters</p>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            tbody.innerHTML = events.map(event => {
-                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
-                return `
+            tbody.innerHTML = events.map(e => `
                 <tr>
-                    <td>${formatDateTime(event.timestamp)}</td>
-                    <td>
-                        <span class="event-type-badge ${typeClass}">
-                            ${(event.event_type || 'unknown').replace(/\./g, ' ')}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="severity-badge ${event.severity || 'low'}">
-                            ${event.severity || 'low'}
-                        </span>
-                    </td>
-                    <td>${event.username || '-'}</td>
-                    <td><code>${event.client_ip || '-'}</code></td>
-                    <td>
-                        <span class="success-indicator ${event.outcome === 'success' || event.success}"></span>
-                        ${event.outcome || (event.success ? 'Success' : 'Failed')}
-                    </td>
-                    <td>
-                        <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.8rem;"
-                                onclick="viewEventDetail(${event.id})">
-                            View
-                        </button>
-                    </td>
+                    <td style="font-family: var(--font-mono); font-size: 11px;">${new Date(e.timestamp).toLocaleString()}</td>
+                    <td><span class="event-type-badge">${(e.event_type||'').split('.').pop()}</span></td>
+                    <td><span class="severity-badge ${e.severity}">${e.severity}</span></td>
+                    <td>${e.username || '-'}</td>
+                    <td style="font-family: var(--font-mono);">${e.client_ip || '-'}</td>
+                    <td><span class="success-indicator ${e.outcome === 'success'}"></span> ${e.outcome}</td>
+                    <td><button class="btn" style="padding: 5px 10px;" onclick="viewEventDetail(${e.id})">VOIR</button></td>
                 </tr>
-            `}).join('');
+            `).join('');
         }
 
-        // ... existing code ...
-
-        // Update recent timeline
         function updateRecentTimeline(events) {
             const container = document.getElementById('recentTimeline');
-
-            if (!events || events.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
-                return;
-            }
-
-            container.innerHTML = events.map(event => {
-                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
-                return `
-                <div class="timeline-item">
-                    <div class="timeline-dot ${event.severity || 'low'}"></div>
-                    <div class="timeline-content">
-                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/\./g, ' ').toUpperCase()}</div>
-                        <div class="timeline-details">
-                            ${event.username ? `User: ${event.username}` : 'Anonymous'}
-                            ${event.client_ip ? `from ${event.client_ip}` : ''}
-                        </div>
-                        <div class="timeline-time">${formatDateTime(event.timestamp)}</div>
+            container.innerHTML = events.slice(0, 5).map(e => `
+                <div style="padding: 15px; border: 2px solid #000; background: #fff; display: flex; gap: 15px; align-items: center;">
+                    <div style="width: 12px; height: 12px; border: 2px solid #000; background: ${e.severity === 'critical' ? 'var(--accent-red)' : 'var(--accent-mint)'}"></div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 900; font-size: 13px;">${(e.event_type||'').toUpperCase()}</div>
+                        <div style="font-size: 12px; opacity: 0.7;">${e.username || 'Anonyme'} @ ${e.client_ip}</div>
                     </div>
-                </div>
-            `}).join('');
-        }
-
-        // Load security report
-        async function loadSecurityReport() {
-            const hours = document.getElementById('filterHours')?.value || 24;
-            const response = await fetch(`/audit/security-report/?hours=${hours}`);
-            if (!response.ok) throw new Error('Failed to load security report');
-
-            const data = await response.json();
-            updateSecurityReport(data);
-        }
-
-        // Update security report
-        function updateSecurityReport(data) {
-            // Brute force suspects
-            updateThreatList('bruteForceList', data.brute_force_suspects, 'client_ip', 'attempts');
-
-            // Rate limited IPs
-            updateThreatList('rateLimitedList', data.rate_limited_ips, 'client_ip', 'count');
-
-            // Top failed IPs
-            updateThreatList('topFailedIPs', data.top_failed_ips, 'client_ip', 'count');
-
-            // Targeted users
-            updateThreatList('targetedUsers', data.top_targeted_users, 'username', 'count');
-
-            // High severity timeline
-            updateHighSeverityTimeline(data.high_severity_timeline);
-        }
-
-        // Update threat list
-        function updateThreatList(containerId, items, keyField, countField) {
-            const container = document.getElementById(containerId);
-
-            if (!items || items.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No threats detected</p></div>';
-                return;
-            }
-
-            container.innerHTML = items.map(item => `
-                <div class="threat-item">
-                    <span class="ip">${item[keyField] || 'Unknown'}</span>
-                    <span class="count">${item[countField] || 0} attempts</span>
+                    <div style="font-size: 11px; font-weight: 800; opacity: 0.5;">${new Date(e.timestamp).toLocaleTimeString()}</div>
                 </div>
             `).join('');
         }
 
-        // Update high severity timeline
-        function updateHighSeverityTimeline(events) {
-            const container = document.getElementById('highSeverityTimeline');
-
-            if (!events || events.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No high severity events</p></div>';
-                return;
-            }
-
-            container.innerHTML = events.map(event => {
-                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
-                return `
-                <div class="timeline-item">
-                    <div class="timeline-dot ${event.severity || 'high'}"></div>
-                    <div class="timeline-content">
-                        <div class="timeline-event">${(event.event_type || 'unknown').replace(/\./g, ' ').toUpperCase()}</div>
-                        <div class="timeline-details">
-                            ${event.username ? `User: ${event.username}` : 'Anonymous'}
-                            from ${event.client_ip || 'Unknown IP'}
-                            - ${event.success ? 'Success' : 'Failed'}
-                        </div>
-                        <div class="timeline-time">${formatDateTime(event.timestamp)}</div>
+        async function loadSecurityReport() {
+            const hours = document.getElementById('filterHours')?.value || 24;
+            const res = await fetch(`/audit/security-report/?hours=${hours}`);
+            const data = await res.json();
+            
+            const updateList = (id, items, label) => {
+                document.getElementById(id).innerHTML = (items||[]).slice(0, 5).map(i => `
+                    <div style="display: flex; justify-content: space-between; padding: 10px; background: #f0f0f0; border: 2px solid #000;">
+                        <span style="font-family: var(--font-mono); font-weight: 800;">${i.client_ip || i.username}</span>
+                        <span style="background: #000; color: #fff; padding: 2px 6px; font-size: 10px;">${i.attempts || i.count} ${label}</span>
                     </div>
-                </div>
-            `}).join('');
+                `).join('') || '<div style="opacity:0.5; padding: 10px;">Aucune menace détectée.</div>';
+            };
+
+            updateList('bruteForceList', data.brute_force_suspects, 'ESSAIS');
+            updateList('rateLimitedList', data.rate_limited_ips, 'BLOCS');
+            updateList('topFailedIPs', data.top_failed_ips, 'ÉCHECS');
+            updateList('targetedUsers', data.top_targeted_users, 'CIBLES');
         }
 
-        // View event detail
-        async function viewEventDetail(eventId) {
+        async function viewEventDetail(id) {
             showLoading(true);
-            try {
-                const response = await fetch(`/audit/event/${eventId}/`);
-                if (!response.ok) throw new Error('Failed to load event');
-
-                const data = await response.json();
-                const event = data.event;
-                const typeClass = (event.event_type || 'default').replace(/\./g, '_');
-
-                const content = document.getElementById('eventModalContent');
-                content.innerHTML = `
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <div class="detail-label">Event ID</div>
-                            <div class="detail-value">${event.id}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Event Type</div>
-                            <div class="detail-value">
-                                <span class="event-type-badge ${typeClass}">
-                                    ${(event.event_type || 'unknown').replace(/\./g, ' ')}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Severity</div>
-                            <div class="detail-value">
-                                <span class="severity-badge ${event.severity || 'low'}">${event.severity || 'low'}</span>
-                            </div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Status</div>
-                            <div class="detail-value">
-                                <span class="success-indicator ${event.success}"></span>
-                                ${event.success ? 'Success' : 'Failed'}
-                            </div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Timestamp</div>
-                            <div class="detail-value">${formatDateTime(event.timestamp)}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">User</div>
-                            <div class="detail-value">${event.username || 'Anonymous'} (ID: ${event.user_id || '-'})</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Client IP</div>
-                            <div class="detail-value mono">${event.client_ip || '-'}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">Session ID</div>
-                            <div class="detail-value mono">${event.session_id || '-'}</div>
-                        </div>
-                        <div class="detail-item full-width">
-                            <div class="detail-label">Request Path</div>
-                            <div class="detail-value mono">${event.request_method || '-'} ${event.request_path || '-'}</div>
-                        </div>
-                        <div class="detail-item full-width">
-                            <div class="detail-label">User Agent</div>
-                            <div class="detail-value mono" style="font-size: 0.75rem;">${event.user_agent || '-'}</div>
-                        </div>
-                        ${event.error_message ? `
-                        <div class="detail-item full-width">
-                            <div class="detail-label">Error Message</div>
-                            <div class="detail-value mono" style="color: #ef4444;">${event.error_message}</div>
-                        </div>
-                        ` : ''}
-                        ${event.context && Object.keys(event.context).length > 0 ? `
-                        <div class="detail-item full-width">
-                            <div class="detail-label">Context Data</div>
-                            <div class="detail-value mono">${JSON.stringify(event.context, null, 2)}</div>
-                        </div>
-                        ` : ''}
-                        ${event.resource ? `
-                        <div class="detail-item full-width">
-                            <div class="detail-label">Resource</div>
-                            <div class="detail-value mono">${JSON.stringify(event.resource, null, 2)}</div>
-                        </div>
-                        ` : ''}
-                    </div>
-                `;
-
-                document.getElementById('eventModal').classList.add('active');
-            } catch (error) {
-                console.error('Error loading event:', error);
-                showToast('Failed to load event details', 'error');
-            } finally {
-                showLoading(false);
-            }
+            const res = await fetch(`/audit/event/${id}/`);
+            const data = await res.json();
+            const e = data.event;
+            document.getElementById('eventModalContent').innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item"><div class="detail-label">ID Événement</div><div class="detail-value">${e.id}</div></div>
+                    <div class="detail-item"><div class="detail-label">Type</div><div class="detail-value">${e.event_type}</div></div>
+                    <div class="detail-item"><div class="detail-label">Sévérité</div><div class="detail-value">${e.severity}</div></div>
+                    <div class="detail-item"><div class="detail-label">Utilisateur</div><div class="detail-value">${e.username} (${e.user_id})</div></div>
+                    <div class="detail-item full-width"><div class="detail-label">IP Client / User Agent</div><div class="detail-value mono">${e.client_ip} <br> ${e.user_agent}</div></div>
+                    <div class="detail-item full-width"><div class="detail-label">Détails de la requête</div><div class="detail-value mono">${e.request_method} ${e.request_path}</div></div>
+                    ${e.error_message ? `<div class="detail-item full-width" style="background: #fee2e2;"><div class="detail-label">Message d'erreur</div><div class="detail-value" style="color: #ef4444;">${e.error_message}</div></div>` : ''}
+                    <div class="detail-item full-width"><div class="detail-label">Contexte (JSON)</div><div class="detail-value mono">${JSON.stringify(e.context || {}, null, 2)}</div></div>
+                </div>
+            `;
+            document.getElementById('eventModal').classList.add('active');
+            showLoading(false);
         }
 
-        // Close modal
-        function closeModal() {
-            document.getElementById('eventModal').classList.remove('active');
+        function closeModal() { document.getElementById('eventModal').classList.remove('active'); }
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function showToast(msg, type) {
+            const t = document.createElement('div');
+            t.className = `toast ${type}`;
+            t.textContent = msg;
+            document.getElementById('toastContainer').appendChild(t);
+            setTimeout(() => t.remove(), 3000);
         }
-
-        // Switch tab
-        function switchTab(tabName) {
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.tab === tabName);
-            });
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.toggle('active', content.id === `tab-${tabName}`);
-            });
-        }
-
-        // Apply filters with debounce
         function debounceApplyFilters() {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(applyFilters, 300);
+            debounceTimer = setTimeout(loadEvents, 500);
         }
-
-        // Apply filters
-        function applyFilters() {
-            currentPage = 1;
-            loadEvents();
-            loadStats();
-            loadSecurityReport();
-        }
-
-        // Reset filters
         function resetFilters() {
-            document.getElementById('filterEventType').value = '';
-            document.getElementById('filterSeverity').value = '';
-            document.getElementById('filterSuccess').value = '';
+            ['filterEventType', 'filterSeverity', 'filterSuccess', 'filterUsername', 'filterIP'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('filterHours').value = '24';
-            document.getElementById('filterUsername').value = '';
-            document.getElementById('filterIP').value = '';
-            applyFilters();
+            loadEvents();
         }
-
-        // Export data
-        async function exportData() {
-            showToast('Preparing export...', 'success');
-            const params = new URLSearchParams({
-                page_size: 1000,
-                hours: document.getElementById('filterHours')?.value || 24
-            });
-
-            try {
-                const response = await fetch(`/audit/?${params}`);
-                const data = await response.json();
-
-                const blob = new Blob([JSON.stringify(data.events, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `audit-export-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-
-                showToast('Export completed', 'success');
-            } catch (error) {
-                showToast('Export failed', 'error');
-            }
+        function applyFilters() { currentPage = 1; loadEvents(); }
+        function updatePagination(p) {
+            const c = document.getElementById('pagination');
+            totalPages = p.total_pages || 1;
+            c.innerHTML = `
+                <button class="btn" onclick="gotoPage(${p.page-1})" ${p.has_previous?'':'disabled'}>PRÉCÉDENT</button>
+                <span style="font-weight: 900;">PAGE ${p.page} SUR ${p.total_pages}</span>
+                <button class="btn" onclick="gotoPage(${p.page+1})" ${p.has_next?'':'disabled'}>SUIVANT</button>
+            `;
         }
+        function gotoPage(p) { if(p >= 1 && p <= totalPages) { currentPage = p; loadEvents(); } }
 
-        // Show loading
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        function exportData() {
+            const hours = document.getElementById('filterHours')?.value || 24;
+            window.location.href = `/audit/export/?hours=${hours}`;
         }
-
-        // Show toast
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = message;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
-        }
-
-        // Format datetime
-        function formatDateTime(isoString) {
-            if (!isoString) return '-';
-            const date = new Date(isoString);
-            return date.toLocaleString();
-        }
-
-        // Close modal on escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-        });
-
-        // Close modal on overlay click
-        document.getElementById('eventModal').addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal-overlay')) closeModal();
-        });
     </script>
 </body>
 </html>
