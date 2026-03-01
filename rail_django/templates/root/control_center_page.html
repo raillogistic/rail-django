@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rail Django | Control Center - {{ section_meta.title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #dbeafe;
+        --surface: #ffffff;
+        --ink: #111111;
+        --muted: #4b5563;
+        --blue: #3b82f6;
+        --green: #34d399;
+        --yellow: #fde047;
+        --orange: #fb923c;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Outfit", sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      .grid-bg {
+        position: fixed;
+        inset: 0;
+        background-size: 38px 38px;
+        background-image:
+          linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+        z-index: -1;
+      }
+
+      .layout {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 24px 16px 42px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .panel {
+        border: 3px solid #000;
+        background: var(--surface);
+        box-shadow: 7px 7px 0 #000;
+      }
+
+      .header {
+        padding: 18px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        border: 2px solid #000;
+        background: var(--green);
+        box-shadow: 2px 2px 0 #000;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .head-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.4rem, 3vw, 2.3rem);
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .btn {
+        border: 2px solid #000;
+        box-shadow: 4px 4px 0 #000;
+        background: var(--yellow);
+        color: #000;
+        padding: 8px 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+
+      .btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0 #000;
+      }
+
+      .btn-inline {
+        display: inline-block;
+        text-decoration: none;
+        font-size: 11px;
+        padding: 5px 8px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .toolbar-form {
+        margin: 0;
+      }
+
+      .field {
+        border: 2px solid #000;
+        box-shadow: 3px 3px 0 #000;
+        padding: 7px 9px;
+        font-size: 12px;
+        font-weight: 700;
+        background: #fff;
+      }
+
+      .body-grid {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 16px;
+      }
+
+      .sidebar {
+        padding: 14px;
+        height: fit-content;
+        position: sticky;
+        top: 10px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav a {
+        text-decoration: none;
+        color: var(--ink);
+        border: 2px solid #000;
+        box-shadow: 3px 3px 0 #000;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        background: #fff;
+      }
+
+      .nav a.active {
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .content {
+        display: grid;
+        gap: 16px;
+      }
+
+      .section {
+        padding: 14px;
+      }
+
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+        text-transform: uppercase;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px;
+      }
+
+      .summary-item {
+        border: 2px solid #000;
+        box-shadow: 3px 3px 0 #000;
+        background: #fff;
+        padding: 10px;
+      }
+
+      .summary-item .k {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .summary-item .v {
+        margin-top: 4px;
+        font-size: 1.2rem;
+        font-weight: 900;
+        word-break: break-word;
+      }
+
+      .panel-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .panel-item {
+        border: 2px solid #000;
+        box-shadow: 3px 3px 0 #000;
+        padding: 10px;
+      }
+
+      .panel-item h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .kv {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 8px;
+        padding: 2px 0;
+        font-size: 12px;
+      }
+
+      .kv dt {
+        margin: 0;
+        font-weight: 800;
+        color: var(--muted);
+      }
+
+      .kv dd {
+        margin: 0;
+        font-family: "JetBrains Mono", monospace;
+        word-break: break-word;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        border: 2px solid #000;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      th, td {
+        border: 1px solid #000;
+        padding: 7px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--orange);
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .json {
+        margin: 0;
+        white-space: pre-wrap;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        border: 2px solid #000;
+        background: #f8fafc;
+        padding: 10px;
+        max-height: 280px;
+        overflow: auto;
+      }
+
+      @media (max-width: 980px) {
+        .body-grid { grid-template-columns: 1fr; }
+        .sidebar { position: static; }
+        .kv { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid-bg"></div>
+    <div class="layout">
+      <header class="panel header">
+        <span class="badge">Rail Django Control Center</span>
+        <div class="head-row">
+          <div>
+            <h1>{{ section_meta.title }}</h1>
+            <p class="subtitle">{{ section_meta.description }}</p>
+          </div>
+          <div class="toolbar">
+            {% if active_section == "logs" %}
+              <label for="logFileSelect" style="font-size:12px;font-weight:800;text-transform:uppercase;">File</label>
+              <select id="logFileSelect" class="field" onchange="onLogFileChanged()"></select>
+            {% endif %}
+            {% if active_section == "backups" and create_backup_endpoint %}
+              <form class="toolbar-form" method="post" action="{{ create_backup_endpoint }}">
+                {% csrf_token %}
+                <button class="btn" type="submit">Create & Download Backup</button>
+              </form>
+            {% endif %}
+            <a class="btn" href="/">Welcome</a>
+            <button class="btn" type="button" onclick="refreshPayload()">Refresh</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="body-grid">
+        <aside class="panel sidebar">
+          <h2 style="margin: 0 0 10px; text-transform: uppercase; font-size: 13px;">Pages</h2>
+          <nav class="nav">
+            {% for section in control_sections %}
+              <a href="{{ section.url }}" class="{% if section.key == active_section %}active{% endif %}">
+                {{ section.title }}
+              </a>
+            {% endfor %}
+          </nav>
+        </aside>
+
+        <main class="content">
+          <section class="panel section">
+            <h2>Summary</h2>
+            <div id="summaryGrid" class="summary-grid"></div>
+          </section>
+
+          <section class="panel section">
+            <h2>Panels</h2>
+            <div id="panelGrid" class="panel-grid"></div>
+          </section>
+
+          <section class="panel section">
+            <h2>Tables</h2>
+            <div id="tablesContainer" class="panel-grid"></div>
+          </section>
+
+          <section class="panel section">
+            <h2>Raw payload</h2>
+            <pre class="json" id="rawJson"></pre>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script id="initialPayload" type="application/json">{{ payload_json|safe }}</script>
+    <script>
+      const apiEndpoint = "{{ api_endpoint }}";
+      const activeSection = "{{ active_section }}";
+      let payload = {};
+      let selectedLogFile = null;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function normalizeItem(item) {
+        if (Array.isArray(item)) {
+          return { key: item[0], value: item[1] };
+        }
+        if (item && typeof item === "object") {
+          if ("label" in item && "value" in item) {
+            return { key: item.label, value: item.value };
+          }
+          if ("key" in item && "value" in item) {
+            return { key: item.key, value: item.value };
+          }
+        }
+        return { key: "", value: item };
+      }
+
+      function renderSummary() {
+        const container = document.getElementById("summaryGrid");
+        const summary = Array.isArray(payload.summary) ? payload.summary : [];
+        if (!summary.length) {
+          container.innerHTML = "<div class='summary-item'><div class='k'>Info</div><div class='v'>No summary data</div></div>";
+          return;
+        }
+        container.innerHTML = summary
+          .map((item) => {
+            const row = normalizeItem(item);
+            return `
+              <article class="summary-item">
+                <div class="k">${escapeHtml(row.key)}</div>
+                <div class="v">${escapeHtml(row.value)}</div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderPanels() {
+        const container = document.getElementById("panelGrid");
+        const panels = Array.isArray(payload.panels) ? payload.panels : [];
+        if (!panels.length) {
+          container.innerHTML = "<article class='panel-item'><h3>Info</h3><p>No panel data</p></article>";
+          return;
+        }
+        container.innerHTML = panels
+          .map((panel) => {
+            const items = Array.isArray(panel.items) ? panel.items : [];
+            const rows = items
+              .map((item) => {
+                const entry = normalizeItem(item);
+                return `<div class="kv"><dt>${escapeHtml(entry.key)}</dt><dd>${escapeHtml(entry.value)}</dd></div>`;
+              })
+              .join("");
+            return `
+              <article class="panel-item">
+                <h3>${escapeHtml(panel.title || "Panel")}</h3>
+                <dl>${rows || "<div class='kv'><dt>Info</dt><dd>No items</dd></div>"}</dl>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderTables() {
+        const container = document.getElementById("tablesContainer");
+        const tables = Array.isArray(payload.tables) ? payload.tables : [];
+        if (!tables.length) {
+          container.innerHTML = "<article class='panel-item'><h3>Info</h3><p>No table data</p></article>";
+          return;
+        }
+        const renderCell = (column, value) => {
+          if (column === "download" && typeof value === "string" && value.trim()) {
+            const href = escapeHtml(value);
+            return `<a class="btn btn-inline" href="${href}">Download</a>`;
+          }
+          return escapeHtml(value);
+        };
+        container.innerHTML = tables
+          .map((table) => {
+            const cols = Array.isArray(table.columns) ? table.columns : [];
+            const rows = Array.isArray(table.rows) ? table.rows : [];
+            const head = cols.map((col) => `<th>${escapeHtml(col)}</th>`).join("");
+            const body = rows
+              .map((row) => {
+                const cells = cols
+                  .map((col) => `<td>${renderCell(col, row?.[col])}</td>`)
+                  .join("");
+                return `<tr>${cells}</tr>`;
+              })
+              .join("");
+            return `
+              <article class="panel-item">
+                <h3>${escapeHtml(table.title || "Table")}</h3>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr>${head}</tr></thead>
+                    <tbody>${body || "<tr><td colspan='" + cols.length + "'>No rows</td></tr>"}</tbody>
+                  </table>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderRaw() {
+        document.getElementById("rawJson").textContent = JSON.stringify(payload, null, 2);
+      }
+
+      function findSummaryValue(label) {
+        const summary = Array.isArray(payload.summary) ? payload.summary : [];
+        const row = summary.find((item) => {
+          const normalized = normalizeItem(item);
+          return String(normalized.key || "").toLowerCase() === String(label).toLowerCase();
+        });
+        return row ? normalizeItem(row).value : null;
+      }
+
+      function extractLogFiles() {
+        const tables = Array.isArray(payload.tables) ? payload.tables : [];
+        for (const table of tables) {
+          const rows = Array.isArray(table.rows) ? table.rows : [];
+          if (!rows.length) continue;
+          if (rows.some((row) => Object.prototype.hasOwnProperty.call(row || {}, "file"))) {
+            return rows
+              .map((row) => String(row?.file || "").trim())
+              .filter((name) => name.length > 0);
+          }
+        }
+        return [];
+      }
+
+      function syncLogFileSelect() {
+        if (activeSection !== "logs") return;
+        const select = document.getElementById("logFileSelect");
+        if (!select) return;
+
+        const files = extractLogFiles();
+        const summarySelected = String(findSummaryValue("Selected file") || "");
+        const querySelected = new URLSearchParams(window.location.search).get("file") || "";
+        const candidate = selectedLogFile || querySelected || summarySelected || files[0] || "";
+
+        const options = files.map((file) => `<option value="${escapeHtml(file)}">${escapeHtml(file)}</option>`).join("");
+        select.innerHTML = options;
+
+        if (candidate && files.includes(candidate)) {
+          select.value = candidate;
+          selectedLogFile = candidate;
+        } else if (files.length > 0) {
+          select.value = files[0];
+          selectedLogFile = files[0];
+        } else {
+          selectedLogFile = null;
+        }
+      }
+
+      function renderAll() {
+        renderSummary();
+        renderPanels();
+        renderTables();
+        renderRaw();
+        syncLogFileSelect();
+      }
+
+      function buildApiUrl() {
+        const url = new URL(apiEndpoint, window.location.origin);
+        if (activeSection === "logs" && selectedLogFile) {
+          url.searchParams.set("file", selectedLogFile);
+        }
+        return url.toString();
+      }
+
+      function syncLocationQuery() {
+        if (activeSection !== "logs") return;
+        const current = new URL(window.location.href);
+        if (selectedLogFile) {
+          current.searchParams.set("file", selectedLogFile);
+        } else {
+          current.searchParams.delete("file");
+        }
+        window.history.replaceState({}, "", current.toString());
+      }
+
+      function onLogFileChanged() {
+        const select = document.getElementById("logFileSelect");
+        selectedLogFile = select ? select.value : null;
+        syncLocationQuery();
+        refreshPayload();
+      }
+
+      async function refreshPayload() {
+        try {
+          const response = await fetch(buildApiUrl(), {
+            method: "GET",
+            headers: { Accept: "application/json" }
+          });
+          if (!response.ok) {
+            throw new Error("Unable to refresh section payload.");
+          }
+          const data = await response.json();
+          payload = data.payload || {};
+          renderAll();
+        } catch (error) {
+          console.error(error);
+          alert("Refresh failed. Check server logs.");
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        try {
+          payload = JSON.parse(document.getElementById("initialPayload").textContent || "{}");
+        } catch (_err) {
+          payload = {};
+        }
+        if (activeSection === "logs") {
+          const preselected = new URLSearchParams(window.location.search).get("file");
+          if (preselected) {
+            selectedLogFile = preselected;
+          }
+        }
+        renderAll();
+      });
+    </script>
+  </body>
+</html>

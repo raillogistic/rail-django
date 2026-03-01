@@ -25,6 +25,11 @@ from rail_django.http.views.audit import (
     AuditEventTypesView,
     get_audit_urls,
 )
+from rail_django.http.views.control_center import (
+    ControlCenterApiView,
+    ControlCenterPageView,
+    get_control_center_urls,
+)
 
 __all__ = [
     "HealthDashboardView",
@@ -43,4 +48,7 @@ __all__ = [
     "AuditEventDetailView",
     "AuditEventTypesView",
     "get_audit_urls",
+    "ControlCenterApiView",
+    "ControlCenterPageView",
+    "get_control_center_urls",
 ]

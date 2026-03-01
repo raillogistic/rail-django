@@ -225,6 +225,7 @@ SECURITY_METRICS_ENABLED = False  # Enable Prometheus metrics sink
 
 # Audit Storage
 AUDIT_STORE_IN_FILE = True
+AUDIT_FILE_LOGGER_NAME = "audit"
 AUDIT_WEBHOOK_URL = None  # e.g., "https://siem.example.com/webhook"
 AUDIT_RETENTION_DAYS = 90
 

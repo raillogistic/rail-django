@@ -169,7 +169,8 @@ def _create_event_bus() -> EventBus:
 
     # Add file sink
     if getattr(settings, "AUDIT_STORE_IN_FILE", True):
-        bus.add_sink(FileSink())
+        file_logger_name = getattr(settings, "AUDIT_FILE_LOGGER_NAME", "audit")
+        bus.add_sink(FileSink(logger_name=file_logger_name))
 
     # Add webhook sink
     webhook_url = getattr(settings, "AUDIT_WEBHOOK_URL", None)

@@ -6,7 +6,7 @@ from Django models with advanced features for security, permissions,
 and performance optimization.
 """
 
-__version__ = "1.1.4"
+__version__ = "0.1.6"
 __author__ = "Rail Logistic Team"
 __email__ = "contact@raillogistic.com"
 __title__ = "rail-django"

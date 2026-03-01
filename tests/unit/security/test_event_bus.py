@@ -1,4 +1,5 @@
 import pytest
+from django.test import override_settings
 from unittest.mock import Mock, patch
 from rail_django.security.events.types import SecurityEvent, EventType, Outcome
 from rail_django.security.events.bus import EventBus, EventRedactor
@@ -61,6 +62,26 @@ class TestEventBus:
         bus.emit(event)  # Should not raise
 
         assert len(working_sink.events) == 1
+
+    @override_settings(
+        SECURITY_EVENT_ASYNC=False,
+        AUDIT_STORE_IN_DATABASE=False,
+        AUDIT_STORE_IN_FILE=True,
+        AUDIT_FILE_LOGGER_NAME="audit.custom",
+        AUDIT_WEBHOOK_URL=None,
+        SECURITY_METRICS_ENABLED=False,
+    )
+    def test_create_event_bus_uses_configured_file_logger_name(self):
+        from rail_django.security.events import bus as bus_module
+
+        with (
+            patch("rail_django.security.events.sinks.file.FileSink") as file_sink_cls,
+            patch.object(bus_module.EventBus, "start", autospec=True),
+        ):
+            bus = bus_module._create_event_bus()
+
+        file_sink_cls.assert_called_once_with(logger_name="audit.custom")
+        assert len(bus._sinks) == 1
 
 
 @pytest.mark.unit

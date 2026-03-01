@@ -1,116 +1,253 @@
 <!doctype html>
-<html lang="en">
+<!--
+  /**
+   * @file catalog.html
+   * @description Catalogue des modèles PDF enregistrés dans Rail Django.
+   * Design: Néo-Brutalisme Moderne.
+   * 
+   * @author Antigravity
+   * @version 2.0.0
+   */
+-->
+<html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF Templates Catalog</title>
+    <title>Rail Django | Catalogue PDF</title>
+    
+    <!-- Polices Modernes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
       :root {
-        --ink: #1e293b;
-        --muted: #64748b;
-        --panel: #ffffff;
-        --line: rgba(30, 41, 59, 0.16);
+        --bg-color: #fef2f2; /* Light pink/red tint for PDF catalog */
+        --main-color: #ffffff;
+        --border-color: #000000;
+        --shadow-color: #000000;
+        
+        --accent-pink: #f472b6;
+        --accent-yellow: #fde047;
+        --accent-mint: #34d399;
+        --accent-indigo: #818cf8;
+        --accent-blue: #3b82f6;
+        --accent-red: #ef4444;
+        
+        --font-main: 'Outfit', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        color: var(--ink);
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background:
-          radial-gradient(circle at 8% 10%, rgba(14, 165, 233, 0.14), transparent 40%),
-          linear-gradient(120deg, #f8fafc, #eef2ff);
+        font-family: var(--font-main);
+        color: var(--border-color);
+        background-color: var(--bg-color);
+        min-height: 100vh;
       }
 
-      .page {
-        max-width: 980px;
+      .bg-grid {
+        position: fixed;
+        inset: 0;
+        background-size: 40px 40px;
+        background-image: 
+          linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+        z-index: -2;
+      }
+
+      .container {
+        max-width: 1000px;
         margin: 0 auto;
-        padding: 24px 16px 40px;
+        padding: 60px 20px;
+      }
+
+      /* Hero section */
+      .hero {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 40px;
+        margin-bottom: 40px;
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
+        position: relative;
+      }
+
+      .hero-tag {
+        position: absolute;
+        top: -15px;
+        left: 20px;
+        background-color: var(--accent-red);
+        color: #fff;
+        padding: 4px 12px;
+        border: 2px solid #000;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
+        box-shadow: 3px 3px 0 0 #000;
       }
 
       h1 {
-        margin: 0 0 8px;
-        font-size: 30px;
+        font-weight: 900;
+        font-size: 2.8rem;
+        margin: 0 0 10px;
+        text-transform: uppercase;
+        letter-spacing: -2px;
       }
 
       .subtitle {
-        margin: 0;
-        color: var(--muted);
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 20px;
       }
 
-      .meta {
-        margin-top: 10px;
-        color: var(--muted);
-        font-size: 13px;
+      .meta-bar {
+        background: var(--accent-indigo);
+        color: #fff;
+        border: 2px solid #000;
+        padding: 10px 20px;
+        display: inline-flex;
+        gap: 20px;
+        font-weight: 800;
+        font-size: 12px;
+        text-transform: uppercase;
+        box-shadow: 4px 4px 0 0 #000;
       }
 
+      .meta-bar code {
+        font-family: var(--font-mono);
+        background: rgba(0,0,0,0.2);
+        padding: 2px 6px;
+        border: 1px solid rgba(255,255,255,0.3);
+        color: #fff;
+      }
+
+      /* Grid of templates */
       .grid {
-        margin-top: 18px;
         display: grid;
+        gap: 20px;
+      }
+
+      .card {
+        background: var(--main-color);
+        border: 3px solid var(--border-color);
+        padding: 25px;
+        box-shadow: 6px 6px 0 0 var(--shadow-color);
+        transition: all 0.1s;
+      }
+
+      .card:hover {
+        transform: translate(-3px, -3px);
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
         gap: 10px;
       }
 
-      .row {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--panel);
-        padding: 12px 14px;
+      .endpoint-path {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 700;
+        background: #f8fafc;
+        padding: 6px 12px;
+        border: 2px solid #000;
       }
 
-      .row-title {
+      .pills {
         display: flex;
         gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-
-      .path {
-        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-        font-size: 13px;
       }
 
       .pill {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 2px 8px;
-        background: rgba(30, 41, 59, 0.08);
-        font-size: 11px;
+        padding: 3px 10px;
+        border: 2px solid #000;
+        font-weight: 900;
+        font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.5px;
+        background: var(--accent-yellow);
+        color: #000;
+        box-shadow: 2px 2px 0 0 #000;
       }
 
-      .row p {
-        margin: 7px 0 0;
-        color: var(--muted);
+      .pill-model { background-color: var(--accent-mint); }
+
+      .card-title {
+        font-weight: 900;
+        font-size: 1.2rem;
+        margin-top: 15px;
+      }
+
+      .empty-state {
+        background: #fff;
+        border: 3px dashed #000;
+        padding: 60px;
+        text-align: center;
+        font-weight: 800;
+        font-size: 1.2rem;
+      }
+
+      footer {
+        margin-top: 60px;
+        padding: 30px;
+        border-top: 3px solid #000;
+        text-align: center;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
       }
     </style>
   </head>
-  <body>
-    <div class="page">
-      <h1>PDF Templates Catalog</h1>
-      <p class="subtitle">Registered template endpoints available for the current user.</p>
-      <p class="meta">Path: <code>{{ catalog_path }}</code> | Total: {{ template_count }}</p>
+  <body>xx
+    <div class="bg-grid"></div>
+
+    <div class="container">
+      <header class="hero">
+        <div class="hero-tag">Modèles PDF</div>
+        <h1>Catalogue des Modèles PDF.</h1>
+        <p class="subtitle">Modèles d'impression PDF enregistrés et disponibles pour votre compte.</p>
+        
+        <div class="meta-bar">
+          <div>Chemin : <code>{{ catalog_path }}</code></div>
+          <div>Total : <strong>{{ template_count }}</strong> modèles</div>
+        </div>
+      </header>
 
       <section class="grid">
         {% for item in templates %}
-          <article class="row">
-            <div class="row-title">
-              <span class="path">/api/v1/templates/{{ item.url_path }}/&lt;pk&gt;/</span>
-              <span class="pill">{{ item.source }}</span>
-              {% if item.model %}<span class="pill">{{ item.model }}</span>{% endif %}
+          <article class="card">
+            <div class="card-header">
+              <div class="endpoint-path">/api/v1/templates/{{ item.url_path }}/&lt;pk&gt;/</div>
+              <div class="pills">
+                <span class="pill">{{ item.source }}</span>
+                {% if item.model %}
+                <span class="pill pill-model">{{ item.model }}</span>
+                {% endif %}
+              </div>
             </div>
-            <p><strong>{{ item.title }}</strong></p>
+            <div class="card-title">{{ item.title }}</div>
           </article>
         {% empty %}
-          <article class="row">
-            <p>No templates available for this account.</p>
-          </article>
+          <div class="empty-state">
+            <p>Aucun modèle PDF n'est disponible pour votre compte.</p>
+          </div>
         {% endfor %}
       </section>
+
+      <footer>
+        Rail Django &copy; {% now "Y" %} &bull; Système de génération PDF
+      </footer>
     </div>
   </body>
 </html>

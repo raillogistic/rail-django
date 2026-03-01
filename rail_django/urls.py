@@ -15,6 +15,7 @@ from django.urls import include, path
 from .http.urls.health import health_urlpatterns
 from .http.urls.csrf import csrf_urlpatterns
 from .http.urls.audit import audit_urlpatterns
+from .http.urls.control_center import control_center_urlpatterns
 from .http.views.welcome import EndpointGuideView
 from .core.settings import get_test_graphql_endpoint_path
 from .graphql.views import MultiSchemaGraphQLView, SchemaListView
@@ -54,3 +55,4 @@ urlpatterns = [
 urlpatterns += health_urlpatterns
 urlpatterns += csrf_urlpatterns
 urlpatterns += audit_urlpatterns
+urlpatterns += control_center_urlpatterns

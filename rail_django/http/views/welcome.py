@@ -10,6 +10,11 @@ from django.views.generic import TemplateView
 
 QUICK_LINKS = [
     {
+        "label": "Control center",
+        "href": "/control-center/",
+        "description": "Operations cockpit with health, security, logs, jobs, and backups.",
+    },
+    {
         "label": "Django admin",
         "href": "/admin/",
         "description": "Manage users, models, and permissions.",
@@ -57,6 +62,12 @@ QUICK_LINKS = [
 ]
 
 SYSTEM_DASHBOARDS = [
+    {
+        "title": "Control Center",
+        "href": "/control-center/",
+        "badge": "Ops",
+        "description": "Unified operations pages: overview, health, security, logs, jobs, and settings.",
+    },
     {
         "title": "Schema Registry UI",
         "href": "/schemas/",
@@ -388,7 +399,23 @@ class WelcomeView(SuperuserRequiredTemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["quick_links"] = QUICK_LINKS
+
+        # Eliminate redundant URLs between quick links and dashboard cards.
+        dashboard_hrefs = {item.get("href") for item in SYSTEM_DASHBOARDS if item.get("href")}
+        seen_hrefs = set()
+        deduped_quick_links = []
+        for link in QUICK_LINKS:
+            href = link.get("href")
+            if not href:
+                continue
+            if href in dashboard_hrefs:
+                continue
+            if href in seen_hrefs:
+                continue
+            seen_hrefs.add(href)
+            deduped_quick_links.append(link)
+
+        context["quick_links"] = deduped_quick_links
         context["system_dashboards"] = SYSTEM_DASHBOARDS
         context["api_sections"] = _resolve_api_sections()
         return context

@@ -1,3 +1,1 @@
-"""
-URL helper modules for health, audit, and CSRF endpoints.
-"""
+"""URL helper modules for health, audit, CSRF, and control-center endpoints."""

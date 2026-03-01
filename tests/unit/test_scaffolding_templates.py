@@ -336,6 +336,7 @@ def test_root_welcome_view_requires_authenticated_superuser() -> None:
     assert "/api/v1/templates/catalog/" in text
     assert "/audit/dashboard/" in text
     assert "/health/" in text
+    assert "/control-center/" in text
 
 
 def test_welcome_template_uses_package_source() -> None:
@@ -354,6 +355,13 @@ def test_rail_urls_include_endpoint_guide_route() -> None:
 
     assert '"ops/endpoints/<slug:endpoint_key>/"' in text
     assert 'name="rail-endpoint-guide"' in text
+
+
+def test_rail_urls_include_control_center_routes() -> None:
+    text = _rail_django_file("urls.py")
+
+    assert "from .http.urls.control_center import control_center_urlpatterns" in text
+    assert "urlpatterns += control_center_urlpatterns" in text
 
 
 def test_endpoint_guide_template_is_scaffolded() -> None:

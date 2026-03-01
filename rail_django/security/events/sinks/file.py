@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class FileSink(EventSink):
     """Writes events to Python logging (structured JSON)."""
 
-    def __init__(self, logger_name: str = "security.audit"):
+    def __init__(self, logger_name: str = "audit"):
         self.logger = logging.getLogger(logger_name)
 
     def write(self, event: "SecurityEvent") -> None:
