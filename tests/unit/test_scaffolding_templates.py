@@ -67,7 +67,9 @@ def test_entrypoint_defaults_to_asgi_server_with_wsgi_fallback() -> None:
 def test_backup_script_does_not_use_pipeline_success_for_pg_dump() -> None:
     text = _project_template_file("deploy", "backup.sh")
 
-    assert 'pg_dump --dbname="$DATABASE_URL" > "$RAW_FILE"' in text
+    assert '--dbname="$DATABASE_URL"' in text
+    assert '--file="$BACKUP_FILE"' in text
+    assert "--format=custom" in text
     assert "| gzip >" not in text
 
 

@@ -7,6 +7,7 @@ import io
 from typing import Any
 
 from django.apps import apps
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
@@ -252,7 +253,12 @@ class ModelImportTemplateDownloadView(View):
         self, request: HttpRequest, app_label: str, model_name: str, *args, **kwargs
     ) -> HttpResponse:
         user = getattr(request, "user", None)
-        require_import_access(user, app_label=app_label, model_name=model_name)
+        if not user or not getattr(user, "is_authenticated", False):
+            return JsonResponse({"error": "Authentication required"}, status=401)
+        try:
+            require_import_access(user, app_label=app_label, model_name=model_name)
+        except PermissionDenied as exc:
+            return JsonResponse({"error": str(exc)}, status=403)
 
         try:
             descriptor = resolve_template_descriptor(
