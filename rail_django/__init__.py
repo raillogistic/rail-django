@@ -6,7 +6,12 @@ from Django models with advanced features for security, permissions,
 and performance optimization.
 """
 
-__version__ = "0.1.7"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("rail-django")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
 __author__ = "Rail Logistic Team"
 __email__ = "contact@raillogistic.com"
 __title__ = "rail-django"
