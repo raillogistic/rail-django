@@ -1,2 +1,2 @@
 # Install rail-django directly from Git (keep separate for frequent updates).
-git+https://github.com/raillogistic/rail-django.git
+rail-django @ git+https://github.com/raillogistic/rail-django.git@v0.1.7

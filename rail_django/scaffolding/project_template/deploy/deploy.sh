@@ -22,12 +22,15 @@ ENV_FILE="$PROJECT_ROOT/.env.prod"
 CERTS_DIR="$SCRIPT_DIR/nginx/certs"
 CERT_CRT="$CERTS_DIR/server.crt"
 CERT_KEY="$CERTS_DIR/server.key"
+HOST_DIR_HELPER_IMAGE="${DEPLOY_HOST_DIR_HELPER_IMAGE:-busybox:1.36.1}"
 
 CREATE_SUPERUSER=0
 FOLLOW_LOGS=0
 SKIP_MIGRATE=0
 SKIP_COLLECTSTATIC=0
 REFRESH_DEPS=0
+REPAIR_BUILD_CACHE=0
+SKIP_BUILD=0
 
 usage() {
   cat <<'EOF'
@@ -37,6 +40,8 @@ Options:
   --create-superuser   Run Django createsuperuser (interactive).
   --follow-logs        Follow docker logs after deployment.
   --refresh-deps       Rebuild dependency layer (useful for git-based deps).
+  --repair-build-cache Prune Docker builder cache before build (fixes snapshot cache corruption).
+  --skip-build         Skip image build and reuse existing web/nginx images.
   --skip-migrate       Skip running migrations after containers start.
   --skip-collectstatic Skip collectstatic after containers start.
   -h, --help           Show this help message.
@@ -48,6 +53,12 @@ Environment:
                        Requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD.
   DEPLOY_REFRESH_DEPS=1
                        Force dependency layer rebuild on deploy.
+  DEPLOY_REPAIR_BUILD_CACHE=1
+                       Prune Docker builder cache before build.
+  DEPLOY_SKIP_BUILD=1
+                       Skip image build and reuse existing images.
+  DEPLOY_HOST_DIR_HELPER_IMAGE
+                       Helper image used to create absolute bind paths on Docker host.
 EOF
 }
 
@@ -56,6 +67,8 @@ for arg in "$@"; do
     --create-superuser) CREATE_SUPERUSER=1 ;;
     --follow-logs) FOLLOW_LOGS=1 ;;
     --refresh-deps) REFRESH_DEPS=1 ;;
+    --repair-build-cache) REPAIR_BUILD_CACHE=1 ;;
+    --skip-build) SKIP_BUILD=1 ;;
     --skip-migrate) SKIP_MIGRATE=1 ;;
     --skip-collectstatic) SKIP_COLLECTSTATIC=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -93,6 +106,25 @@ ensure_dir() {
     die "Path exists but is not a directory: $path"
   fi
   mkdir -p "$path"
+}
+
+ensure_mount_source_dir() {
+  local path="$1"
+  local mount_label="${2:-mount path}"
+
+  if [[ "$path" != /* ]]; then
+    ensure_dir "$SCRIPT_DIR/docker/$path"
+    return 0
+  fi
+
+  # Absolute paths refer to the Docker daemon host. Create them there so
+  # remote-context deploys do not depend on local filesystem layout.
+  if docker run --rm -v "${path}:/rail_host_path" "$HOST_DIR_HELPER_IMAGE" sh -c "mkdir -p /rail_host_path" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  warn "Could not pre-create ${mount_label} on Docker host: ${path} (helper image: ${HOST_DIR_HELPER_IMAGE})."
+  warn "If deployment fails with mount/permission errors, create it manually on the server and retry."
 }
 
 ensure_runtime_mount_writable() {
@@ -167,6 +199,14 @@ generate_secure_secret() {
   python -c "import secrets; print(secrets.token_urlsafe(64))"
 }
 
+repair_builder_cache() {
+  note "Pruning Docker builder cache to recover from corrupted snapshots..."
+  if docker buildx version >/dev/null 2>&1; then
+    docker buildx prune -af >/dev/null 2>&1 || warn "docker buildx prune failed; continuing."
+  fi
+  docker builder prune -af >/dev/null 2>&1 || warn "docker builder prune failed; continuing."
+}
+
 require_cmd docker
 
 if docker compose version >/dev/null 2>&1; then
@@ -234,50 +274,50 @@ media_path="$(read_env MEDIA_PATH)"
 if [ -z "$media_path" ]; then
   media_path="../../media"
 fi
-if [[ "$media_path" = /* ]]; then
-  ensure_dir "$media_path"
-else
-  ensure_dir "$SCRIPT_DIR/docker/$media_path"
-fi
+ensure_mount_source_dir "$media_path" "MEDIA_PATH"
 
 backup_path="$(read_env BACKUP_PATH)"
 if [ -z "$backup_path" ]; then
   backup_path="../../backups"
 fi
-if [[ "$backup_path" = /* ]]; then
-  ensure_dir "$backup_path"
-else
-  ensure_dir "$SCRIPT_DIR/docker/$backup_path"
-fi
+ensure_mount_source_dir "$backup_path" "BACKUP_PATH"
 
 log_path="$(read_env LOG_PATH)"
 if [ -z "$log_path" ]; then
   log_path="../../logs"
 fi
-if [[ "$log_path" = /* ]]; then
-  ensure_dir "$log_path"
-else
-  ensure_dir "$SCRIPT_DIR/docker/$log_path"
-fi
+ensure_mount_source_dir "$log_path" "LOG_PATH"
 
 cache_path="$(read_env CACHE_PATH)"
 if [ -z "$cache_path" ]; then
   cache_path="../../cache"
 fi
-if [[ "$cache_path" = /* ]]; then
-  ensure_dir "$cache_path"
+ensure_mount_source_dir "$cache_path" "CACHE_PATH"
+
+if [ "$SKIP_BUILD" -eq 1 ] || is_truthy "$(read_env DEPLOY_SKIP_BUILD)"; then
+  if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
+    warn "Skipping build: --refresh-deps / DEPLOY_REFRESH_DEPS has no effect when build is skipped."
+  fi
+  if [ "$REPAIR_BUILD_CACHE" -eq 1 ] || is_truthy "$(read_env DEPLOY_REPAIR_BUILD_CACHE)"; then
+    warn "Skipping build: --repair-build-cache / DEPLOY_REPAIR_BUILD_CACHE has no effect when build is skipped."
+  fi
+  note "Skipping web/nginx image build (DEPLOY_SKIP_BUILD=1 or --skip-build)."
 else
-  ensure_dir "$SCRIPT_DIR/docker/$cache_path"
-fi
+  note "Building web and nginx images..."
+  build_args=()
+  build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
+  if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
+    build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
+  fi
 
-note "Building web and nginx images..."
-build_args=()
-build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
-if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
-  build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
-fi
+  if [ "$REPAIR_BUILD_CACHE" -eq 1 ] || is_truthy "$(read_env DEPLOY_REPAIR_BUILD_CACHE)"; then
+    repair_builder_cache
+  fi
 
-"${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web nginx
+  if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web nginx; then
+    die "Image build failed. If the error includes 'parent snapshot ... does not exist', rerun with --repair-build-cache (or set DEPLOY_REPAIR_BUILD_CACHE=1)."
+  fi
+fi
 
 note "Validating runtime storage permissions..."
 ensure_runtime_mount_writable
