@@ -4,7 +4,6 @@ Caching helpers for Form API configuration.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from typing import Any, Optional
@@ -13,6 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from ..config import get_form_settings
+from ....utils.hashing import short_hash
 
 
 def _is_cache_enabled() -> bool:
@@ -44,7 +44,7 @@ def _make_cache_key(
     if object_id:
         key = f"{key}:obj:{object_id}"
     if user_id:
-        user_hash = hashlib.sha1(str(user_id).encode()).hexdigest()[:8]
+        user_hash = short_hash(str(user_id), length=8)
         key = f"{key}:user:{user_hash}"
     if mode:
         key = f"{key}:mode:{mode}"
@@ -116,4 +116,4 @@ def compute_config_version(payload: dict[str, Any]) -> str:
 
     safe_payload = _strip(payload)
     serialized = json.dumps(safe_payload, sort_keys=True, default=str)
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return short_hash(serialized, length=64)

@@ -11,6 +11,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from ...core.meta import get_model_graphql_meta
 from ...security.field_permissions import field_permission_manager, FieldVisibility
+from ...utils.history_detection import (
+    is_historical_records_attribute,
+    is_historical_relation_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +119,8 @@ class FilterExtractorMixin:
                     for f in current_model._meta.get_fields():
                         if not hasattr(f, "name"):
                             continue
+                        if is_historical_relation_field(f):
+                            continue
                         camel_name = to_camel_case(f.name)
                         if part == camel_name or part.startswith(camel_name + "_"):
                             if f.is_relation and f.related_model:
@@ -198,6 +204,11 @@ class FilterExtractorMixin:
                 best_candidate = candidates[0]
                 model_field = best_candidate[0]
                 matched_field_prefix = best_candidate[2]
+                if (
+                    is_historical_relation_field(model_field)
+                    or is_historical_records_attribute(model, model_field.name)
+                ):
+                    return None
 
             if user and model_field is not None:
                 try:
@@ -463,6 +474,11 @@ class FilterExtractorMixin:
         for field in model._meta.get_fields():
             if not hasattr(field, "name"):
                 continue
+            if (
+                is_historical_relation_field(field)
+                or is_historical_records_attribute(model, field.name)
+            ):
+                continue
             is_fk = isinstance(field, models.ForeignKey)
             is_o2o = isinstance(field, models.OneToOneField)
             is_m2m = isinstance(field, models.ManyToManyField)
@@ -544,6 +560,11 @@ class FilterExtractorMixin:
         fields = []
         for field in model._meta.get_fields():
             if not hasattr(field, "name"):
+                continue
+            if (
+                is_historical_relation_field(field)
+                or is_historical_records_attribute(model, field.name)
+            ):
                 continue
             if field.name.startswith("_") or "polymorphic" in field.name.lower():
                 continue

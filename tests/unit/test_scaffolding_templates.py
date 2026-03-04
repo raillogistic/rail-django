@@ -8,9 +8,11 @@ pytestmark = pytest.mark.unit
 
 
 def _project_template_file(*relative_parts: str) -> str:
-    return resources.files("rail_django").joinpath(
-        "scaffolding", "project_template", *relative_parts
-    ).read_text(encoding="utf-8")
+    return (
+        resources.files("rail_django")
+        .joinpath("scaffolding", "project_template", *relative_parts)
+        .read_text(encoding="utf-8")
+    )
 
 
 def _project_template_path(*relative_parts: str):
@@ -20,8 +22,10 @@ def _project_template_path(*relative_parts: str):
 
 
 def _rail_django_file(*relative_parts: str) -> str:
-    return resources.files("rail_django").joinpath(*relative_parts).read_text(
-        encoding="utf-8"
+    return (
+        resources.files("rail_django")
+        .joinpath(*relative_parts)
+        .read_text(encoding="utf-8")
     )
 
 
@@ -59,7 +63,7 @@ def test_env_prod_exposes_backup_retention_override() -> None:
 def test_entrypoint_defaults_to_asgi_server_with_wsgi_fallback() -> None:
     text = _project_template_file("deploy", "docker", "entrypoint.sh")
 
-    assert 'SERVER_MODE=${DJANGO_SERVER_MODE:-asgi}' in text
+    assert "SERVER_MODE=${DJANGO_SERVER_MODE:-asgi}" in text
     assert 'if [ "$SERVER_MODE" = "wsgi" ]; then' in text
     assert "exec daphne \\" in text
 
@@ -132,10 +136,10 @@ def test_env_dev_uses_development_settings_module() -> None:
 def test_deploy_script_runs_schema_tasks_before_up() -> None:
     text = _project_template_file("deploy", "deploy.sh")
 
-    migrate_cmd = 'run --rm --entrypoint python web manage.py migrate'
+    migrate_cmd = "run --rm --entrypoint python web manage.py migrate"
     up_cmd = '"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d'
     collectstatic_cmd = (
-        'run --rm --entrypoint python web manage.py collectstatic --noinput'
+        "run --rm --entrypoint python web manage.py collectstatic --noinput"
     )
 
     assert migrate_cmd in text
@@ -149,7 +153,7 @@ def test_deploy_script_validates_runtime_storage_before_schema_tasks() -> None:
     text = _project_template_file("deploy", "deploy.sh")
 
     validation_step = 'note "Validating runtime storage permissions..."'
-    migrate_cmd = 'run --rm --entrypoint python web manage.py migrate'
+    migrate_cmd = "run --rm --entrypoint python web manage.py migrate"
 
     assert "ensure_runtime_mount_writable" in text
     assert "/home/app/web/mediafiles" in text
@@ -165,7 +169,10 @@ def test_deploy_script_waits_for_https_readiness_probe_via_nginx() -> None:
     assert "RAIL_READINESS_HOST" in text
     assert '"https://nginx:8000/health/ready/"' in text
     assert 'headers={"Host": host}' in text
-    assert 'candidates = [host] if host == "localhost" else [host, "localhost"]' not in text
+    assert (
+        'candidates = [host] if host == "localhost" else [host, "localhost"]'
+        not in text
+    )
     assert "ssl._create_unverified_context()" in text
     assert "print('ready')" not in text
 
@@ -208,15 +215,15 @@ def test_project_template_gitignore_covers_runtime_artifacts() -> None:
 def test_base_settings_selects_env_file_by_settings_module() -> None:
     text = _project_template_file("root", "settings", "base.py-tpl")
 
-    assert "_env_filename = \".env.prod\"" in text
-    assert "_env_filename = \".env.dev\"" in text
+    assert '_env_filename = ".env.prod"' in text
+    assert '_env_filename = ".env.dev"' in text
     assert "Missing required environment file" in text
 
 
 def test_base_settings_allow_csrf_trusted_origins_override() -> None:
     text = _project_template_file("root", "settings", "base.py-tpl")
 
-    assert 'CSRF_TRUSTED_ORIGINS = env.list(' in text
+    assert "CSRF_TRUSTED_ORIGINS = env.list(" in text
     assert '"CSRF_TRUSTED_ORIGINS"' in text
     assert "default=CORS_ALLOWED_ORIGINS" in text
 
@@ -310,7 +317,10 @@ def test_production_template_adds_graphql_security_middleware_after_auth() -> No
 
     assert "rail_django.middleware.auth.GraphQLAuthenticationMiddleware" in text
     assert "rail_django.middleware.auth.GraphQLRateLimitMiddleware" in text
-    assert '_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"' in text
+    assert (
+        '_auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"'
+        in text
+    )
     assert "MIDDLEWARE.insert(_insert_at, mw)" in text
 
 
@@ -342,7 +352,9 @@ def test_root_welcome_view_requires_authenticated_superuser() -> None:
 
 
 def test_welcome_template_uses_package_source() -> None:
-    project_welcome = _project_template_path("root", "templates", "root", "welcome.html")
+    project_welcome = _project_template_path(
+        "root", "templates", "root", "welcome.html"
+    )
     package_source = _rail_django_file("templates", "root", "welcome.html")
 
     assert not project_welcome.is_file()
@@ -372,3 +384,11 @@ def test_endpoint_guide_template_is_scaffolded() -> None:
     assert "{{ welcome_url }}" in text
     assert "{{ endpoint.path }}" in text
     assert "{{ endpoint.sample_curl }}" in text
+
+
+def test_users_mutation_retries_locked_sqlite_writes_for_table_config_upsert() -> None:
+    text = _project_template_file("apps", "users", "mutations.py")
+
+    assert "def _upsert_table_config_with_retry" in text
+    assert "database is locked" in text
+    assert "Database is busy, please retry in a moment." in text

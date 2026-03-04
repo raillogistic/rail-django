@@ -102,8 +102,85 @@ def _safe_formula_eval(formula: str, context: dict[str, Any]) -> Any:
         if isinstance(node, ast.Name) and node.id not in context:
             context[node.id] = 0
 
-    compiled = compile(tree, "<reporting-formula>", "eval")
-    return eval(compiled, {"__builtins__": {}}, context)
+    def evaluate(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+
+        if isinstance(node, ast.Num):  # pragma: no cover (py<3.8)
+            return node.n
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, ast.Name):
+            return context[node.id]
+
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            return -evaluate(node.operand)
+
+        if isinstance(node, ast.BinOp):
+            left = evaluate(node.left)
+            right = evaluate(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Mod):
+                return left % right
+            if isinstance(node.op, ast.Pow):
+                return left**right
+
+        if isinstance(node, ast.Compare):
+            left = evaluate(node.left)
+            comparisons: list[bool] = []
+            for op, comparator in zip(node.ops, node.comparators):
+                right = evaluate(comparator)
+                if isinstance(op, ast.Eq):
+                    comparisons.append(left == right)
+                elif isinstance(op, ast.NotEq):
+                    comparisons.append(left != right)
+                elif isinstance(op, ast.Lt):
+                    comparisons.append(left < right)
+                elif isinstance(op, ast.LtE):
+                    comparisons.append(left <= right)
+                elif isinstance(op, ast.Gt):
+                    comparisons.append(left > right)
+                elif isinstance(op, ast.GtE):
+                    comparisons.append(left >= right)
+                else:  # pragma: no cover - guarded by SAFE_EXPR_NODES
+                    raise ReportingError(
+                        f"Expression non supportee dans '{formula}': {op.__class__.__name__}"
+                    )
+                left = right
+            return all(comparisons)
+
+        if isinstance(node, ast.BoolOp):
+            values = [evaluate(v) for v in node.values]
+            if not values:
+                return False
+            if isinstance(node.op, ast.And):
+                result = values[0]
+                for value in values[1:]:
+                    if not result:
+                        return result
+                    result = value
+                return result
+            if isinstance(node.op, ast.Or):
+                result = values[0]
+                for value in values[1:]:
+                    if result:
+                        return result
+                    result = value
+                return result
+
+        raise ReportingError(
+            f"Expression non supportee dans '{formula}': {node.__class__.__name__}"
+        )
+
+    return evaluate(tree)
 
 
 def _to_filter_list(

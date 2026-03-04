@@ -2,18 +2,135 @@
 Helper functions for Metadata V2.
 """
 
-import hashlib
 import time
 from typing import Any, Optional
 
 from django.core.cache import cache
 from django.conf import settings
 from django.db import models
+from ...utils.hashing import short_hash
 
 # Cache management
 
 DYNAMIC_SCHEMA_KEYS = ("permissions", "mutations", "templates")
 OVERLAY_CACHE_TIMEOUT_SECONDS = 3600
+
+
+def _default_filter_config(model: Optional[str] = None) -> dict[str, Any]:
+    model_name = str(model or "").strip()
+    input_type_name = f"{model_name}WhereInput" if model_name else "WhereInput"
+    return {
+        "style": "NESTED",
+        "argument_name": "where",
+        "input_type_name": input_type_name,
+        "supports_and": True,
+        "supports_or": True,
+        "supports_not": True,
+        "dual_mode_enabled": False,
+        "supports_quick": False,
+        "supports_fts": False,
+        "supports_aggregation": True,
+        "presets": [],
+        "computed_filters": [],
+    }
+
+
+def _pick_filter_config_value(
+    config: dict[str, Any],
+    *keys: str,
+    default: Any = None,
+) -> Any:
+    for key in keys:
+        if key in config and config[key] is not None:
+            return config[key]
+    return default
+
+
+def _normalize_filter_config_payload(data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(data)
+    config = normalized.get("filter_config")
+    defaults = _default_filter_config(normalized.get("model"))
+
+    if not isinstance(config, dict):
+        normalized["filter_config"] = defaults
+        return normalized
+
+    resolved = dict(defaults)
+    resolved["style"] = str(
+        _pick_filter_config_value(config, "style", default=defaults["style"])
+    )
+    resolved["argument_name"] = str(
+        _pick_filter_config_value(
+            config,
+            "argument_name",
+            "argumentName",
+            default=defaults["argument_name"],
+        )
+    )
+    resolved["input_type_name"] = str(
+        _pick_filter_config_value(
+            config,
+            "input_type_name",
+            "inputTypeName",
+            default=defaults["input_type_name"],
+        )
+    )
+    resolved["supports_and"] = bool(
+        _pick_filter_config_value(
+            config, "supports_and", "supportsAnd", default=defaults["supports_and"]
+        )
+    )
+    resolved["supports_or"] = bool(
+        _pick_filter_config_value(
+            config, "supports_or", "supportsOr", default=defaults["supports_or"]
+        )
+    )
+    resolved["supports_not"] = bool(
+        _pick_filter_config_value(
+            config, "supports_not", "supportsNot", default=defaults["supports_not"]
+        )
+    )
+    resolved["dual_mode_enabled"] = bool(
+        _pick_filter_config_value(
+            config,
+            "dual_mode_enabled",
+            "dualModeEnabled",
+            default=defaults["dual_mode_enabled"],
+        )
+    )
+    resolved["supports_quick"] = bool(
+        _pick_filter_config_value(
+            config,
+            "supports_quick",
+            "supportsQuick",
+            default=defaults["supports_quick"],
+        )
+    )
+    resolved["supports_fts"] = bool(
+        _pick_filter_config_value(
+            config, "supports_fts", "supportsFts", default=defaults["supports_fts"]
+        )
+    )
+    resolved["supports_aggregation"] = bool(
+        _pick_filter_config_value(
+            config,
+            "supports_aggregation",
+            "supportsAggregation",
+            default=defaults["supports_aggregation"],
+        )
+    )
+    presets = _pick_filter_config_value(config, "presets", default=defaults["presets"])
+    resolved["presets"] = presets if isinstance(presets, list) else []
+    computed = _pick_filter_config_value(
+        config,
+        "computed_filters",
+        "computedFilters",
+        default=defaults["computed_filters"],
+    )
+    resolved["computed_filters"] = computed if isinstance(computed, list) else []
+
+    normalized["filter_config"] = resolved
+    return normalized
 
 
 def get_model_version(app: str, model: str) -> str:
@@ -46,7 +163,7 @@ def _get_overlay_cache_key(
     resolved_version = version or get_model_version(app, model)
     audience = "public"
     if user_id:
-        audience = hashlib.sha1(str(user_id).encode()).hexdigest()[:8]
+        audience = short_hash(str(user_id), length=8)
 
     key = f"metadata_overlay:{resolved_version}:{app}:{model}:aud:{audience}"
 
@@ -68,8 +185,10 @@ def _get_cache_key(
     return _get_overlay_cache_key(app, model, user_id=user_id, object_id=object_id)
 
 
-def _split_schema_payload(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    static_payload = dict(data)
+def _split_schema_payload(
+    data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    static_payload = _normalize_filter_config_payload(data)
     overlay_payload: dict[str, Any] = {}
     for key in DYNAMIC_SCHEMA_KEYS:
         if key in static_payload:
@@ -103,7 +222,7 @@ def _merge_schema_payload(
         merged.setdefault("permissions", _build_denied_permissions())
         merged.setdefault("mutations", [])
         merged.setdefault("templates", [])
-    return merged
+    return _normalize_filter_config_payload(merged)
 
 
 def get_cached_schema(
@@ -136,7 +255,7 @@ def set_cached_schema(
     model: str,
     data: dict[str, Any],
     user_id: Optional[str] = None,
-    object_id: Optional[str] = None
+    object_id: Optional[str] = None,
 ) -> None:
     """Store schema in cache."""
     if getattr(settings, "DEBUG", False):
@@ -171,6 +290,7 @@ def invalidate_metadata_cache(app: str = None, model: str = None) -> None:
         # Or we could iterate/broadcast if we had a registry of models.
         # For now, let's just support app/model specific invalidation as that's the primary use case (signals).
         pass
+
 
 # Backward compatibility for imports
 _cache_version = str(int(time.time() * 1000))
@@ -229,9 +349,11 @@ def _get_fsm_transitions(
                             {
                                 "name": attr_name,
                                 "source": [source] if source != "*" else ["*"],
-                                "target": target.target
-                                if hasattr(target, "target")
-                                else str(target),
+                                "target": (
+                                    target.target
+                                    if hasattr(target, "target")
+                                    else str(target)
+                                ),
                                 "label": getattr(
                                     attr, "label", attr_name.replace("_", " ").title()
                                 ),
@@ -270,7 +392,6 @@ def _classify_field(field: models.Field) -> dict[str, bool]:
         ),
         "is_boolean": field_type in ("BooleanField", "NullBooleanField"),
         # NullBooleanField removed in Django 4.0; kept for compatibility
-
         "is_text": field_type
         in ("CharField", "TextField", "SlugField", "URLField", "EmailField"),
         "is_rich_text": field_type == "TextField",

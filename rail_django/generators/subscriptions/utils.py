@@ -3,7 +3,6 @@ Internal utility functions for subscription generation.
 """
 
 import copy
-import hashlib
 import re
 import logging
 from datetime import date, datetime
@@ -15,6 +14,7 @@ from django.db import models
 from django.utils import timezone
 
 from ...security.field_permissions import mask_sensitive_fields
+from ...utils.hashing import short_hash
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def _sanitize_group_name(value: str, max_length: int = 90) -> str:
     safe = _GROUP_NAME_SAFE_RE.sub("_", value)
     if len(safe) <= max_length:
         return safe
-    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:10]
+    digest = short_hash(safe, length=10)
     trimmed = safe[: max_length - 11]
     return f"{trimmed}-{digest}"
 

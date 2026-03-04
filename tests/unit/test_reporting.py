@@ -21,6 +21,16 @@ def test_safe_formula_eval_supports_arithmetic():
     assert result == 8
 
 
+def test_safe_formula_eval_supports_boolean_and_compare():
+    result = _safe_formula_eval("(a + b) > 4 and c == 1", {"a": 2, "b": 3, "c": 1})
+    assert result is True
+
+
+def test_safe_formula_eval_defaults_missing_names_to_zero():
+    result = _safe_formula_eval("known + missing", {"known": 5})
+    assert result == 5
+
+
 def test_safe_formula_eval_rejects_unsafe_nodes():
     with pytest.raises(ReportingError):
         _safe_formula_eval("__import__('os').system('echo bad')", {})

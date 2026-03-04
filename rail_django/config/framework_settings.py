@@ -9,6 +9,7 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.signals import connection_created
 
 from rail_django.config.defaults import LIBRARY_DEFAULTS
@@ -20,12 +21,13 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Default fallback key - projects MUST override this or set env var.
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY", "django-insecure-framework-default-key-change-me"
-)
+DEFAULT_INSECURE_SECRET_KEY = "django-insecure-framework-default-key-change-me"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", DEFAULT_INSECURE_SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "").strip().lower()
+IS_PRODUCTION_ENV = ENVIRONMENT in {"prod", "production"}
 
 def _split_env_list(raw_value: str) -> list[str]:
     if not raw_value:
@@ -190,6 +192,25 @@ CORS_ALLOW_ALL_ORIGINS = (
     os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 )
 CORS_ALLOWED_ORIGINS = _split_env_list(os.environ.get("CORS_ALLOWED_ORIGINS", ""))
+
+
+def _validate_production_safety() -> None:
+    """Fail fast on insecure defaults when running in production mode."""
+    if not IS_PRODUCTION_ENV:
+        return
+    if DEBUG:
+        raise ImproperlyConfigured("DJANGO_DEBUG must be False in production.")
+    if SECRET_KEY == DEFAULT_INSECURE_SECRET_KEY:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY must be set to a strong secret in production."
+        )
+    if CORS_ALLOW_ALL_ORIGINS:
+        raise ImproperlyConfigured(
+            "CORS_ALLOW_ALL_ORIGINS cannot be enabled in production."
+        )
+
+
+_validate_production_safety()
 
 # Load library defaults into Django settings
 RAIL_DJANGO_GRAPHQL = copy.deepcopy(LIBRARY_DEFAULTS)

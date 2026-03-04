@@ -3,10 +3,10 @@ Generator for unified relation input types.
 """
 
 from typing import Type, Optional, Dict
-import hashlib
 import graphene
 from django.db import models
 from .relation_config import FieldRelationConfig
+from ...utils.hashing import short_hash
 
 
 class RelationInputTypeGenerator:
@@ -148,7 +148,7 @@ class RelationInputTypeGenerator:
         if remote_field_name:
             type_name += f"Exclude{remote_field_name.title()}"
         if config_signature != "unified:1:1:1:1:1":
-            token = hashlib.md5(config_signature.encode("utf-8")).hexdigest()[:8]
+            token = short_hash(config_signature, length=8)
             type_name += f"Cfg{token}"
         
         if depth > 0:

@@ -14,6 +14,7 @@ from uuid import UUID
 from django.db import models
 
 from ....security.field_permissions import FieldVisibility, field_permission_manager
+from ....utils.history_detection import is_historical_records_attribute
 from ..utils.type_mapping import map_field_input_type, map_graphql_type, map_python_type
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,8 @@ class FieldExtractorMixin:
             if field.is_relation:
                 continue
             if not hasattr(field, "name"):
+                continue
+            if is_historical_records_attribute(model, field.name):
                 continue
             if graphql_meta is not None:
                 try:

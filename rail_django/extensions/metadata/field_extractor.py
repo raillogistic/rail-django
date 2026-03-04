@@ -13,6 +13,10 @@ from django.db import models
 from ...security.field_permissions import field_permission_manager, FieldVisibility
 from ...core.settings import MutationGeneratorSettings
 from ...generators.introspector import ModelIntrospector
+from ...utils.history_detection import (
+    is_historical_records_attribute,
+    is_historical_relation_field,
+)
 from .utils import _classify_field, _get_fsm_transitions
 from .mapping import registry
 
@@ -21,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 class FieldExtractorMixin:
     """Mixin for extracting fields and relationships."""
+
+    _IGNORED_PROPERTY_NAMES: set[str] = {"pk"}
 
     _PROPERTY_PYTHON_TO_GRAPHQL: dict[type, str] = {
         str: "String",
@@ -138,6 +144,8 @@ class FieldExtractorMixin:
                 continue
             if not hasattr(field, "name"):
                 continue
+            if is_historical_records_attribute(model, field.name):
+                continue
             if not self._is_field_exposed(graphql_meta, field.name):
                 continue
 
@@ -191,6 +199,10 @@ class FieldExtractorMixin:
         property_fields: list[dict] = []
 
         for prop_name, prop_info in introspector.get_model_properties().items():
+            if str(prop_name).lower() in self._IGNORED_PROPERTY_NAMES:
+                continue
+            if is_historical_records_attribute(model, str(prop_name)):
+                continue
             if prop_name in existing_field_names:
                 continue
             if not self._is_field_exposed(graphql_meta, prop_name):
@@ -521,6 +533,8 @@ class FieldExtractorMixin:
         relationships = []
         for field in model._meta.get_fields():
             if not field.is_relation:
+                continue
+            if is_historical_relation_field(field):
                 continue
 
             field_key = (

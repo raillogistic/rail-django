@@ -1,4 +1,6 @@
 import pytest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 
@@ -83,3 +85,47 @@ def test_relation_operation_permissions_resolve_with_rbac_permission_checks():
     assert allowed["can_set"] is True
     assert allowed["connect_reason"] is None
     assert allowed["set_reason"] is None
+
+
+def test_extract_relations_ignores_historical_records_relations():
+    extractor = FormConfigExtractor(schema_name="default")
+
+    history_related_model = type(
+        "HistoricalProduct",
+        (),
+        {"_meta": SimpleNamespace(app_label="test_app", verbose_name="history")},
+    )
+    normal_related_model = type(
+        "Category",
+        (),
+        {"_meta": SimpleNamespace(app_label="test_app", verbose_name="category")},
+    )
+
+    history_relation = SimpleNamespace(
+        name="history",
+        is_relation=True,
+        related_model=history_related_model,
+        many_to_many=True,
+        one_to_many=False,
+    )
+    normal_relation = SimpleNamespace(
+        name="category",
+        is_relation=True,
+        related_model=normal_related_model,
+        many_to_many=False,
+        one_to_many=False,
+    )
+
+    with patch.object(
+        Product._meta,
+        "get_fields",
+        return_value=[history_relation, normal_relation],
+    ):
+        extractor._extract_relation = MagicMock(
+            side_effect=lambda _model, field, _user, **_kwargs: {
+                "field_name": field.name,
+            }
+        )
+        relations = extractor._extract_relations(Product, user=None, graphql_meta=None)
+
+    assert [item["field_name"] for item in relations] == ["category"]

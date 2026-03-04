@@ -50,6 +50,7 @@ from .normalization import (
     normalize_filter_value,
     normalize_ordering,
 )
+from .hashing import short_hash
 
 __all__ = [
     # Coercion
@@ -92,4 +93,6 @@ __all__ = [
     "normalize_dict_keys",
     "normalize_filter_value",
     "normalize_ordering",
+    # Hashing
+    "short_hash",
 ]

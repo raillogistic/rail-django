@@ -9,7 +9,6 @@ This module provides comprehensive performance monitoring including:
 - Real-time performance analytics
 """
 
-import hashlib
 import logging
 import statistics
 import time
@@ -26,6 +25,7 @@ from graphql import parse
 from graphql.language.ast import FieldNode, OperationDefinitionNode
 
 from ..core.performance import QueryComplexityAnalyzer
+from ..utils.hashing import short_hash
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +271,7 @@ class PerformanceMetricsCollector:
         """Génère un hash pour identifier une requête."""
         # Normaliser la requête (supprimer les espaces, etc.)
         normalized = ' '.join(query_text.split())
-        return hashlib.md5(normalized.encode()).hexdigest()[:12]
+        return short_hash(normalized, length=12)
 
     def _extract_query_name(self, query_text: str) -> str:
         """Extrait le nom de la requête."""

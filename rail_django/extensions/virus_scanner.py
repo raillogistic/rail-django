@@ -8,7 +8,6 @@ Ce module fournit des fonctionnalités de sécurité avancées pour :
 - Logging des menaces détectées
 """
 
-import hashlib
 import logging
 import os
 import subprocess
@@ -21,6 +20,7 @@ from django.conf import settings
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 
 from ..core.settings import GraphQLAutoConfig
+from ..utils.hashing import short_hash
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +369,7 @@ class VirusScanner:
 
             # Génération d'un nom unique pour le fichier en quarantaine
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_hash = hashlib.md5(file.read()).hexdigest()[:8]
+            file_hash = short_hash(file.read(), length=8)
             file.seek(0)
 
             quarantine_filename = f"{timestamp}_{file_hash}_{file.name}"

@@ -2,6 +2,7 @@
 from django.db import models
 from django.test import TestCase
 from django.core.cache import cache
+from types import SimpleNamespace
 import unittest.mock
 from unittest.mock import MagicMock
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
@@ -45,6 +46,109 @@ class TestMetadataFieldNames(TestCase):
         self.assertIsNotNone(profile_rel)
         self.assertEqual(profile_rel['name'], 'userProfile')
         self.assertEqual(profile_rel['field_name'], 'user_profile')
+
+    def test_property_extraction_ignores_pk(self):
+        """Property extraction should always ignore reserved pk alias."""
+        property_info = MagicMock(return_type=str, verbose_name="Display Name")
+        mock_introspector = MagicMock()
+        mock_introspector.get_model_properties.return_value = {
+            "pk": property_info,
+            "display_name": property_info,
+        }
+
+        with unittest.mock.patch(
+            "rail_django.extensions.metadata.field_extractor.ModelIntrospector.for_model",
+            return_value=mock_introspector,
+        ):
+            property_fields = self.extractor._extract_property_fields(
+                FieldNameTestModel,
+                user=None,
+                graphql_meta=None,
+                existing_field_names=set(),
+                field_metadata={},
+            )
+
+        property_names = {field["field_name"] for field in property_fields}
+        self.assertNotIn("pk", property_names)
+        self.assertIn("display_name", property_names)
+
+    def test_relationship_extraction_ignores_historical_records_relations(self):
+        """History relations should not be included in metadata relationships."""
+        history_related_model = type(
+            "HistoricalFieldNameTestModel",
+            (),
+            {"_meta": SimpleNamespace(app_label="test_metadata_field_names")},
+        )
+        normal_related_model = type(
+            "Category",
+            (),
+            {"_meta": SimpleNamespace(app_label="test_metadata_field_names")},
+        )
+
+        history_relation = SimpleNamespace(
+            name="history",
+            is_relation=True,
+            related_model=history_related_model,
+        )
+        normal_relation = SimpleNamespace(
+            name="category",
+            is_relation=True,
+            related_model=normal_related_model,
+        )
+
+        with unittest.mock.patch.object(
+            FieldNameTestModel._meta,
+            "get_fields",
+            return_value=[history_relation, normal_relation],
+        ):
+            self.extractor._extract_relationship = MagicMock(
+                side_effect=lambda _model, field, _user, **_kwargs: {
+                    "field_name": field.name,
+                    "readable": True,
+                }
+            )
+            relationships = self.extractor._extract_relationships(
+                FieldNameTestModel, self.user
+            )
+
+        self.assertEqual([r["field_name"] for r in relationships], ["category"])
+
+    def test_relation_filter_extraction_ignores_historical_records_relations(self):
+        """History relations should not be exposed via metadata relation filters."""
+        history_related_model = type(
+            "HistoricalFieldNameTestModel",
+            (),
+            {"_meta": SimpleNamespace(app_label="test_metadata_field_names")},
+        )
+        normal_related_model = type(
+            "Tag",
+            (),
+            {"_meta": SimpleNamespace(app_label="test_metadata_field_names")},
+        )
+
+        history_relation = SimpleNamespace(
+            name="history",
+            many_to_many=True,
+            one_to_many=False,
+            related_model=history_related_model,
+            verbose_name="History",
+        )
+        normal_relation = SimpleNamespace(
+            name="tags",
+            many_to_many=True,
+            one_to_many=False,
+            related_model=normal_related_model,
+            verbose_name="Tags",
+        )
+
+        with unittest.mock.patch.object(
+            FieldNameTestModel._meta,
+            "get_fields",
+            return_value=[history_relation, normal_relation],
+        ):
+            relation_filters = self.extractor._extract_relation_filters(FieldNameTestModel)
+
+        self.assertEqual([f["field_name"] for f in relation_filters], ["tags"])
 
     def test_field_groups_camelcase(self):
         """Test that field groups fields are converted to camelCase."""

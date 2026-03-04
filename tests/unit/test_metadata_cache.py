@@ -1,15 +1,16 @@
-
 from unittest.mock import MagicMock, patch
 from django.db import models
 from django.test import TestCase, override_settings
 from rail_django.extensions.metadata import utils
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
 
+
 class CacheTestModel(models.Model):
     name = models.CharField(max_length=100)
 
     class Meta:
-        app_label = 'test_metadata_v2_cache'
+        app_label = "test_metadata_v2_cache"
+
 
 class TestMetadataCaching(TestCase):
     def setUp(self):
@@ -20,7 +21,7 @@ class TestMetadataCaching(TestCase):
         # Reset cache-related mocks if needed, but we'll patch them per test
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
+    @patch("rail_django.extensions.metadata.utils.cache")
     def test_get_cached_schema_debug_false(self, mock_cache):
         """Test retrieving from cache when DEBUG is False."""
         # Setup mock returns: version, static payload, dynamic overlay
@@ -38,7 +39,7 @@ class TestMetadataCaching(TestCase):
         self.assertEqual(mock_cache.get.call_count, 3)
 
     @override_settings(DEBUG=True)
-    @patch('rail_django.extensions.metadata.utils.cache')
+    @patch("rail_django.extensions.metadata.utils.cache")
     def test_get_cached_schema_debug_true(self, mock_cache):
         """Test retrieving from cache is skipped when DEBUG is True."""
         result = utils.get_cached_schema("app", "model", user_id="123")
@@ -47,7 +48,7 @@ class TestMetadataCaching(TestCase):
         mock_cache.get.assert_not_called()
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
+    @patch("rail_django.extensions.metadata.utils.cache")
     def test_set_cached_schema(self, mock_cache):
         """Test setting cache."""
         # Setup mock for version retrieval
@@ -61,16 +62,30 @@ class TestMetadataCaching(TestCase):
 
         # We look for the calls that set static + overlay payloads
         set_calls = mock_cache.set.call_args_list
-        static_call = next((call for call in set_calls if "metadata_static:12345:app:model" in call[0][0]), None)
-        overlay_call = next((call for call in set_calls if "metadata_overlay:12345:app:model" in call[0][0]), None)
+        static_call = next(
+            (
+                call
+                for call in set_calls
+                if "metadata_static:12345:app:model" in call[0][0]
+            ),
+            None,
+        )
+        overlay_call = next(
+            (
+                call
+                for call in set_calls
+                if "metadata_overlay:12345:app:model" in call[0][0]
+            ),
+            None,
+        )
 
         self.assertIsNotNone(static_call)
         self.assertIsNotNone(overlay_call)
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
-    @patch('rail_django.extensions.metadata.extractor.apps.get_model')
-    @patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta')
+    @patch("rail_django.extensions.metadata.utils.cache")
+    @patch("rail_django.extensions.metadata.extractor.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractor.get_model_graphql_meta")
     def test_extractor_uses_cache(self, mock_get_meta, mock_get_model, mock_cache):
         """Test that extractor uses the cache."""
         mock_cache.get.side_effect = [
@@ -89,12 +104,12 @@ class TestMetadataCaching(TestCase):
         mock_get_model.assert_not_called()
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
-    @patch('rail_django.extensions.metadata.extractor.apps.get_model')
-    @patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta')
+    @patch("rail_django.extensions.metadata.utils.cache")
+    @patch("rail_django.extensions.metadata.extractor.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractor.get_model_graphql_meta")
     def test_extractor_populates_cache(self, mock_get_meta, mock_get_model, mock_cache):
         """Test that extractor populates cache on miss."""
-        mock_cache.get.return_value = None # Cache miss
+        mock_cache.get.return_value = None  # Cache miss
 
         mock_model = CacheTestModel
         mock_get_model.return_value = mock_model
@@ -116,19 +131,21 @@ class TestMetadataCaching(TestCase):
         extractor._extract_field_groups = MagicMock(return_value=[])
         extractor._extract_templates = MagicMock(return_value=[])
 
-        result = extractor.extract("test_metadata_v2_cache", "CacheTestModel", user=self.user)
+        result = extractor.extract(
+            "test_metadata_v2_cache", "CacheTestModel", user=self.user
+        )
 
-        self.assertEqual(result['model'], "CacheTestModel")
+        self.assertEqual(result["model"], "CacheTestModel")
 
         # Verify cache.set was called
         mock_cache.set.assert_called()
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
+    @patch("rail_django.extensions.metadata.utils.cache")
     def test_invalidate_cache(self, mock_cache):
         """Test cache invalidation bumps version."""
         # Setup initial version
-        mock_cache.get.side_effect = ["1000", None] # get version, get schema
+        mock_cache.get.side_effect = ["1000", None]  # get version, get schema
 
         utils.invalidate_metadata_cache("app", "model")
 
@@ -138,16 +155,20 @@ class TestMetadataCaching(TestCase):
         self.assertIn("metadata_version:app:model", args[0])
 
     @override_settings(DEBUG=False)
-    @patch('rail_django.extensions.metadata.utils.cache')
-    @patch('rail_django.extensions.metadata.extractor.apps.get_model')
-    @patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta')
-    def test_extractor_returns_dynamic_version(self, mock_get_meta, mock_get_model, mock_cache):
+    @patch("rail_django.extensions.metadata.utils.cache")
+    @patch("rail_django.extensions.metadata.extractor.apps.get_model")
+    @patch("rail_django.extensions.metadata.extractor.get_model_graphql_meta")
+    def test_extractor_returns_dynamic_version(
+        self, mock_get_meta, mock_get_model, mock_cache
+    ):
         """Test that extractor returns the dynamic version from cache."""
+
         # Mock cache to return a specific version
         def get_side_effect(key):
             if "metadata_version" in key:
                 return "dynamic_version_123"
             return None
+
         mock_cache.get.side_effect = get_side_effect
 
         mock_model = CacheTestModel
@@ -168,4 +189,38 @@ class TestMetadataCaching(TestCase):
 
         result = extractor.extract("app", "model", user=self.user)
 
-        self.assertEqual(result['metadata_version'], "dynamic_version_123")
+        self.assertEqual(result["metadata_version"], "dynamic_version_123")
+
+    @override_settings(DEBUG=False)
+    @patch("rail_django.extensions.metadata.utils.cache")
+    def test_get_cached_schema_normalizes_sparse_filter_config(self, mock_cache):
+        """Cached legacy filter config should be normalized to full required shape."""
+        mock_cache.get.side_effect = [
+            "12345",
+            {
+                "app": "app",
+                "model": "Decharge",
+                "fields": [],
+                "filter_config": {
+                    "inputTypeName": "DechargeWhereInput",
+                    "supportsQuick": True,
+                },
+            },
+            {"permissions": {"can_list": True}, "mutations": [], "templates": []},
+        ]
+
+        result = utils.get_cached_schema("app", "model", user_id="123")
+        filter_config = result["filter_config"]
+
+        self.assertEqual(filter_config["input_type_name"], "DechargeWhereInput")
+        self.assertTrue(filter_config["supports_quick"])
+        self.assertIn("style", filter_config)
+        self.assertIn("argument_name", filter_config)
+        self.assertIn("supports_and", filter_config)
+        self.assertIn("supports_or", filter_config)
+        self.assertIn("supports_not", filter_config)
+        self.assertIn("dual_mode_enabled", filter_config)
+        self.assertIn("supports_fts", filter_config)
+        self.assertIn("supports_aggregation", filter_config)
+        self.assertIsInstance(filter_config["presets"], list)
+        self.assertIsInstance(filter_config["computed_filters"], list)

@@ -26,6 +26,10 @@ from ..utils.cache import (
 )
 from ..config import get_form_settings
 from ..utils.graphql_meta import get_graphql_meta
+from ....utils.history_detection import (
+    is_historical_records_attribute,
+    is_historical_relation_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +229,10 @@ class FormConfigExtractor(
         data: dict[str, Any] = {}
         for field in model._meta.get_fields():
             field_name = getattr(field, "name", None)
+            if field_name and is_historical_records_attribute(model, field_name):
+                continue
+            if is_historical_relation_field(field):
+                continue
             if field_name and graphql_meta is not None:
                 try:
                     if not graphql_meta.should_expose_field(field_name, for_input=True):
@@ -336,6 +344,10 @@ class FormConfigExtractor(
         excluded_relations = {str(name) for name in (exclude_relation_fields or set())}
         for field in instance._meta.get_fields():
             if not hasattr(field, "name"):
+                continue
+            if is_historical_records_attribute(instance.__class__, field.name):
+                continue
+            if is_historical_relation_field(field):
                 continue
             if field.is_relation and field.name in excluded_relations:
                 continue

@@ -12,6 +12,10 @@ from django.db import models
 
 from ....security.field_permissions import FieldVisibility, field_permission_manager
 from ....security.rbac import PermissionContext, role_manager
+from ....utils.history_detection import (
+    is_historical_records_attribute,
+    is_historical_relation_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +96,12 @@ class RelationExtractorMixin:
             field_key = (
                 field.name if hasattr(field, "name") else field.get_accessor_name()
             )
+            if is_historical_relation_field(field):
+                continue
+            if hasattr(field, "name") and is_historical_records_attribute(
+                model, field.name
+            ):
+                continue
 
             # Keep relation exposure consistent with GraphQLMeta field policies.
             # This lets include/exclude/read_only rules hide unsupported reverse

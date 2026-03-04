@@ -1,6 +1,7 @@
 import importlib
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 
 from rail_django.config.defaults import LIBRARY_DEFAULTS
 import rail_django.config.framework_settings as framework_settings
@@ -14,6 +15,9 @@ def _reload_framework_settings(monkeypatch, env):
         "CORS_ALLOWED_ORIGINS",
         "CORS_ALLOW_ALL_ORIGINS",
         "RAIL_MAX_FILTER_DEPTH",
+        "ENVIRONMENT",
+        "DJANGO_SECRET_KEY",
+        "DJANGO_DEBUG",
     ):
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
@@ -49,3 +53,36 @@ def test_invalid_rail_max_filter_depth_does_not_override(monkeypatch):
 def test_valid_rail_max_filter_depth_overrides(monkeypatch):
     module = _reload_framework_settings(monkeypatch, {"RAIL_MAX_FILTER_DEPTH": "12"})
     assert module.RAIL_DJANGO_GRAPHQL["filtering_settings"]["max_filter_depth"] == 12
+
+
+def test_production_requires_non_default_secret(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="DJANGO_SECRET_KEY"):
+        _reload_framework_settings(
+            monkeypatch,
+            {"ENVIRONMENT": "production", "DJANGO_DEBUG": "False"},
+        )
+
+
+def test_production_rejects_debug_mode(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="DJANGO_DEBUG"):
+        _reload_framework_settings(
+            monkeypatch,
+            {
+                "ENVIRONMENT": "production",
+                "DJANGO_DEBUG": "True",
+                "DJANGO_SECRET_KEY": "x" * 48,
+            },
+        )
+
+
+def test_production_rejects_wildcard_cors(monkeypatch):
+    with pytest.raises(ImproperlyConfigured, match="CORS_ALLOW_ALL_ORIGINS"):
+        _reload_framework_settings(
+            monkeypatch,
+            {
+                "ENVIRONMENT": "production",
+                "DJANGO_DEBUG": "False",
+                "DJANGO_SECRET_KEY": "x" * 48,
+                "CORS_ALLOW_ALL_ORIGINS": "True",
+            },
+        )

@@ -1,11 +1,13 @@
 import graphene
 import json
+import time
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.db import OperationalError, transaction
 from graphene.types.generic import GenericScalar
 from .models import PasswordResetOTP, UserSettings
 from django.conf import settings
@@ -47,6 +49,41 @@ def _decode_json_object(value, field_name):
         raise ValueError(f"{field_name} must be a JSON object.")
 
     return decoded
+
+
+def _is_sqlite_lock_error(error):
+    return "database is locked" in str(error).lower()
+
+
+def _upsert_table_config_with_retry(user, table_key, parsed_config):
+    max_attempts = 3
+
+    for attempt in range(max_attempts):
+        try:
+            with transaction.atomic():
+                settings_obj, _ = (
+                    UserSettings.objects.select_for_update().get_or_create(user=user)
+                )
+
+                try:
+                    current_configs = _decode_json_object(
+                        settings_obj.table_configs, "tableConfigs"
+                    )
+                except ValueError:
+                    current_configs = {}
+
+                current_configs[table_key] = parsed_config
+                settings_obj.table_configs = current_configs
+                settings_obj.save(update_fields=["table_configs"])
+
+            return settings_obj, current_configs
+        except OperationalError as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= max_attempts - 1:
+                raise
+            # Exponential backoff for transient SQLite write locks.
+            time.sleep(0.05 * (2**attempt))
+
+    raise OperationalError("database is locked")
 
 
 class ChangePasswordMutation(graphene.Mutation):
@@ -210,18 +247,17 @@ class UpsertUserTableConfigMutation(graphene.Mutation):
         except ValueError as exc:
             return UpsertUserTableConfigPayload(ok=False, errors=[str(exc)])
 
-        settings_obj, _ = UserSettings.objects.get_or_create(user=user)
-
         try:
-            current_configs = _decode_json_object(
-                settings_obj.table_configs, "tableConfigs"
+            settings_obj, current_configs = _upsert_table_config_with_retry(
+                user, table_key, parsed_config
             )
-        except ValueError:
-            current_configs = {}
-
-        current_configs[table_key] = parsed_config
-        settings_obj.table_configs = current_configs
-        settings_obj.save(update_fields=["table_configs"])
+        except OperationalError as exc:
+            if _is_sqlite_lock_error(exc):
+                return UpsertUserTableConfigPayload(
+                    ok=False,
+                    errors=["Database is busy, please retry in a moment."],
+                )
+            raise
 
         return UpsertUserTableConfigPayload(
             ok=True,

@@ -2,9 +2,9 @@
 ErrorTracker implementation.
 """
 
-import hashlib
 import json
 import logging
+import re
 import threading
 import traceback
 from collections import defaultdict, deque
@@ -20,6 +20,7 @@ from .types import (
     ErrorSeverity,
     ErrorTrend,
 )
+from rail_django.utils.hashing import short_hash
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,11 @@ class ErrorTracker:
         self._error_counts: dict[ErrorCategory, deque] = defaultdict(lambda: deque(maxlen=1000))
 
         self._alert_thresholds = {
-            ErrorCategory.CRITICAL: {'rate_per_minute': 5.0, 'count_per_hour': 50},
-            ErrorCategory.HIGH: {'rate_per_minute': 10.0, 'count_per_hour': 100},
-            ErrorCategory.MEDIUM: {'rate_per_minute': 20.0, 'count_per_hour': 200}
+            ErrorCategory.DATABASE_ERROR: {'rate_per_minute': 5.0, 'count_per_hour': 50},
+            ErrorCategory.AUTHENTICATION_ERROR: {'rate_per_minute': 10.0, 'count_per_hour': 100},
+            ErrorCategory.AUTHORIZATION_ERROR: {'rate_per_minute': 10.0, 'count_per_hour': 100},
+            ErrorCategory.VALIDATION_ERROR: {'rate_per_minute': 20.0, 'count_per_hour': 200},
+            ErrorCategory.RATE_LIMIT_ERROR: {'rate_per_minute': 20.0, 'count_per_hour': 200},
         }
 
         self._lock = threading.RLock()
@@ -190,7 +193,7 @@ class ErrorTracker:
         if context:
             if context.operation_name: inp += f"|{context.operation_name}"
             if context.field_path: inp += f"|{context.field_path}"
-        return hashlib.md5(inp.encode()).hexdigest()[:12]
+        return short_hash(inp, length=12)
 
     def _categorize_error(self, error: Exception, context: ErrorContext = None) -> ErrorCategory:
         e_type, e_msg = type(error).__name__, str(error).lower()
@@ -227,7 +230,7 @@ class ErrorTracker:
 
     def _create_pattern_key(self, message: str) -> str:
         norm = re.sub(r'[a-f0-9]{8,}', 'ID', re.sub(r'\d+', 'N', message.lower()))
-        return hashlib.md5(norm.encode()).hexdigest()[:8]
+        return short_hash(norm, length=8)
 
     def _check_alert_thresholds(self, occurrence: ErrorOccurrence):
         cat = occurrence.category
