@@ -7,7 +7,9 @@ from typing import Optional
 
 import graphene
 from django.apps import apps
+from graphene.utils.str_converters import to_snake_case
 from graphql import GraphQLError
+from graphql.language import ast
 
 from .extractor import ModelSchemaExtractor
 from .detail_extractor import DetailContractExtractor
@@ -70,6 +72,84 @@ def _user_can_discover_model(model, user) -> bool:
         return False
 
     return has_view_perm or guarded_allows
+
+
+def _collect_requested_subfields(info) -> set[str]:
+    """Return requested top-level subfields for the current GraphQL field."""
+
+    requested: set[str] = set()
+    fragments = getattr(info, "fragments", {}) or {}
+
+    def visit_selection_set(selection_set) -> None:
+        if not selection_set:
+            return
+        for selection in selection_set.selections:
+            if isinstance(selection, ast.FieldNode):
+                field_name = selection.name.value
+                if field_name and field_name != "__typename":
+                    requested.add(to_snake_case(field_name))
+            elif isinstance(selection, ast.InlineFragmentNode):
+                visit_selection_set(selection.selection_set)
+            elif isinstance(selection, ast.FragmentSpreadNode):
+                fragment = fragments.get(selection.name.value)
+                if fragment:
+                    visit_selection_set(fragment.selection_set)
+
+    for field_node in getattr(info, "field_nodes", []) or []:
+        visit_selection_set(field_node.selection_set)
+
+    return requested
+
+
+def _collect_requested_section_subfields(info) -> dict[str, set[str]]:
+    """
+    Return requested nested subfields per top-level section.
+
+    Example output:
+      {
+          "fields": {"name", "field_name", "visibility"},
+          "relationships": {"name", "related_model"}
+      }
+    """
+
+    requested: dict[str, set[str]] = {}
+    fragments = getattr(info, "fragments", {}) or {}
+
+    def record(section: str, field_name: str) -> None:
+        if not section or not field_name or field_name == "__typename":
+            return
+        requested.setdefault(section, set()).add(to_snake_case(field_name))
+
+    def visit_selection_set(selection_set, active_section: Optional[str] = None) -> None:
+        if not selection_set:
+            return
+        for selection in selection_set.selections:
+            if isinstance(selection, ast.FieldNode):
+                field_name = selection.name.value
+                if field_name == "__typename":
+                    continue
+
+                if active_section is None:
+                    section_name = to_snake_case(field_name)
+                    if selection.selection_set:
+                        visit_selection_set(selection.selection_set, section_name)
+                    continue
+
+                record(active_section, field_name)
+                if selection.selection_set:
+                    # Keep collecting under the same top-level section.
+                    visit_selection_set(selection.selection_set, active_section)
+            elif isinstance(selection, ast.InlineFragmentNode):
+                visit_selection_set(selection.selection_set, active_section)
+            elif isinstance(selection, ast.FragmentSpreadNode):
+                fragment = fragments.get(selection.name.value)
+                if fragment:
+                    visit_selection_set(fragment.selection_set, active_section)
+
+    for field_node in getattr(info, "field_nodes", []) or []:
+        visit_selection_set(field_node.selection_set)
+
+    return requested
 
 
 class ModelSchemaQuery(graphene.ObjectType):
@@ -160,7 +240,16 @@ class ModelSchemaQuery(graphene.ObjectType):
         extractor = ModelSchemaExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
-        return extractor.extract(app, model, user=user, object_id=objectId)
+        requested_sections = _collect_requested_subfields(info)
+        requested_section_subfields = _collect_requested_section_subfields(info)
+        return extractor.extract(
+            app,
+            model,
+            user=user,
+            object_id=objectId,
+            include_sections=requested_sections,
+            include_section_subfields=requested_section_subfields,
+        )
 
     def resolve_modelDetailContract(self, info, input: dict) -> dict:
         user = getattr(info.context, "user", None)

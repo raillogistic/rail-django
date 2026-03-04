@@ -42,6 +42,11 @@ class FieldExtractorMixin:
     }
 
     @staticmethod
+    def _wants(include_keys: Optional[set[str]], key: str) -> bool:
+        """Return True when a response key should be included."""
+        return not include_keys or key in include_keys
+
+    @staticmethod
     def _split_relation_verbose_name(raw_value: Any) -> tuple[Optional[str], Optional[str]]:
         text = str(raw_value or "").strip()
         if "/" not in text:
@@ -135,6 +140,7 @@ class FieldExtractorMixin:
         user: Any,
         instance: Optional[models.Model] = None,
         graphql_meta: Optional[Any] = None,
+        include_keys: Optional[set[str]] = None,
     ) -> list[dict]:
         """Extract all field schemas."""
         field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
@@ -155,6 +161,7 @@ class FieldExtractorMixin:
                 user,
                 instance,
                 field_metadata=field_metadata.get(field.name),
+                include_keys=include_keys,
             )
             if field_schema and field_schema.get("readable", True):
                 fields.append(field_schema)
@@ -170,6 +177,7 @@ class FieldExtractorMixin:
                     if isinstance(f, dict) and f.get("field_name")
                 },
                 field_metadata=field_metadata,
+                include_keys=include_keys,
             )
         )
         return fields
@@ -194,6 +202,7 @@ class FieldExtractorMixin:
         graphql_meta: Optional[Any],
         existing_field_names: set[str],
         field_metadata: dict[str, Any],
+        include_keys: Optional[set[str]] = None,
     ) -> list[dict]:
         introspector = ModelIntrospector.for_model(model)
         property_fields: list[dict] = []
@@ -214,6 +223,7 @@ class FieldExtractorMixin:
                 prop_info,
                 user,
                 field_metadata=field_metadata.get(prop_name),
+                include_keys=include_keys,
             )
             if property_schema and property_schema.get("readable", True):
                 property_fields.append(property_schema)
@@ -229,85 +239,155 @@ class FieldExtractorMixin:
         user: Any,
         *,
         field_metadata: Optional[dict[str, Any]] = None,
+        include_keys: Optional[set[str]] = None,
     ) -> Optional[dict]:
         try:
             from graphene.utils.str_converters import to_camel_case
 
+            wants = lambda key: self._wants(include_keys, key)
+
             readable, writable, visibility = True, False, "VISIBLE"
-            if user:
-                try:
-                    perm = field_permission_manager.check_field_permission(
-                        user, model, property_name, instance=None
-                    )
-                    readable = perm.visibility != FieldVisibility.HIDDEN
-                    writable = False
-                    visibility = (
-                        perm.visibility.name
-                        if hasattr(perm.visibility, "name")
-                        else "VISIBLE"
-                    )
-                except Exception:
-                    readable, writable, visibility = False, False, "HIDDEN"
+            if wants("readable") or wants("writable") or wants("visibility"):
+                if user:
+                    try:
+                        perm = field_permission_manager.check_field_permission(
+                            user, model, property_name, instance=None
+                        )
+                        readable = perm.visibility != FieldVisibility.HIDDEN
+                        writable = False
+                        visibility = (
+                            perm.visibility.name
+                            if hasattr(perm.visibility, "name")
+                            else "VISIBLE"
+                        )
+                    except Exception:
+                        readable, writable, visibility = False, False, "HIDDEN"
 
             return_type = getattr(property_info, "return_type", Any)
-            graphql_type = self._map_property_graphql_type(return_type)
-            python_type = self._map_property_python_type(return_type)
-            custom_metadata = (
-                self._to_json_value(field_metadata)
-                if field_metadata is not None
-                else None
+            graphql_type: Optional[str] = None
+            if any(
+                wants(key)
+                for key in (
+                    "graphql_type",
+                    "is_json",
+                    "is_date",
+                    "is_datetime",
+                    "is_numeric",
+                    "is_boolean",
+                    "is_text",
+                )
+            ):
+                graphql_type = self._map_property_graphql_type(return_type)
+
+            python_type: Optional[str] = None
+            if wants("python_type"):
+                python_type = self._map_property_python_type(return_type)
+
+            custom_metadata = None
+            if wants("custom_metadata"):
+                custom_metadata = (
+                    self._to_json_value(field_metadata)
+                    if field_metadata is not None
+                    else None
+                )
+
+            verbose_name = str(
+                getattr(property_info, "verbose_name", None)
+                or property_name.replace("_", " ").strip()
+                or property_name
             )
 
-            return {
-                "name": to_camel_case(property_name),
-                "field_name": property_name,
-                "verbose_name": str(
-                    getattr(property_info, "verbose_name", None)
-                    or property_name.replace("_", " ").strip()
-                    or property_name
-                ),
-                "help_text": "",
-                "field_type": "Property",
-                "graphql_type": graphql_type,
-                "python_type": python_type,
-                "required": False,
-                "nullable": True,
-                "blank": True,
-                "editable": False,
-                "unique": False,
-                "max_length": None,
-                "min_length": None,
-                "max_value": None,
-                "min_value": None,
-                "decimal_places": None,
-                "max_digits": None,
-                "choices": None,
-                "default_value": None,
-                "has_default": False,
-                "auto_now": False,
-                "auto_now_add": False,
-                "validators": [],
-                "regex_pattern": None,
-                "readable": readable,
-                "writable": writable,
-                "visibility": visibility,
-                "is_primary_key": False,
-                "is_indexed": False,
-                "is_relation": False,
-                "is_computed": True,
-                "is_file": False,
-                "is_image": False,
-                "is_json": graphql_type == "JSONString",
-                "is_date": graphql_type == "Date",
-                "is_datetime": graphql_type == "DateTime",
-                "is_numeric": graphql_type in {"Int", "Float", "Decimal"},
-                "is_boolean": graphql_type == "Boolean",
-                "is_text": graphql_type in {"String", "ID"},
-                "is_rich_text": False,
-                "is_fsm_field": False,
-                "fsm_transitions": [],
-                "custom_metadata": custom_metadata,
-            }
+            result: dict[str, Any] = {}
+            if wants("name"):
+                result["name"] = to_camel_case(property_name)
+            if wants("field_name"):
+                result["field_name"] = property_name
+            if wants("verbose_name"):
+                result["verbose_name"] = verbose_name
+            if wants("help_text"):
+                result["help_text"] = ""
+            if wants("field_type"):
+                result["field_type"] = "Property"
+            if wants("graphql_type"):
+                result["graphql_type"] = graphql_type
+            if wants("python_type"):
+                result["python_type"] = python_type
+
+            if wants("required"):
+                result["required"] = False
+            if wants("nullable"):
+                result["nullable"] = True
+            if wants("blank"):
+                result["blank"] = True
+            if wants("editable"):
+                result["editable"] = False
+            if wants("unique"):
+                result["unique"] = False
+            if wants("max_length"):
+                result["max_length"] = None
+            if wants("min_length"):
+                result["min_length"] = None
+            if wants("max_value"):
+                result["max_value"] = None
+            if wants("min_value"):
+                result["min_value"] = None
+            if wants("decimal_places"):
+                result["decimal_places"] = None
+            if wants("max_digits"):
+                result["max_digits"] = None
+            if wants("choices"):
+                result["choices"] = None
+            if wants("default_value"):
+                result["default_value"] = None
+            if wants("has_default"):
+                result["has_default"] = False
+            if wants("auto_now"):
+                result["auto_now"] = False
+            if wants("auto_now_add"):
+                result["auto_now_add"] = False
+            if wants("validators"):
+                result["validators"] = []
+            if wants("regex_pattern"):
+                result["regex_pattern"] = None
+            if wants("readable"):
+                result["readable"] = readable
+            if wants("writable"):
+                result["writable"] = writable
+            if wants("visibility"):
+                result["visibility"] = visibility
+            if wants("is_primary_key"):
+                result["is_primary_key"] = False
+            if wants("is_indexed"):
+                result["is_indexed"] = False
+            if wants("is_relation"):
+                result["is_relation"] = False
+            if wants("is_computed"):
+                result["is_computed"] = True
+            if wants("is_file"):
+                result["is_file"] = False
+            if wants("is_image"):
+                result["is_image"] = False
+            if wants("is_json"):
+                result["is_json"] = graphql_type == "JSONString"
+            if wants("is_date"):
+                result["is_date"] = graphql_type == "Date"
+            if wants("is_datetime"):
+                result["is_datetime"] = graphql_type == "DateTime"
+            if wants("is_numeric"):
+                result["is_numeric"] = graphql_type in {"Int", "Float", "Decimal"}
+            if wants("is_boolean"):
+                result["is_boolean"] = graphql_type == "Boolean"
+            if wants("is_text"):
+                result["is_text"] = graphql_type in {"String", "ID"}
+            if wants("is_rich_text"):
+                result["is_rich_text"] = False
+            if wants("is_fsm_field"):
+                result["is_fsm_field"] = False
+            if wants("fsm_transitions"):
+                result["fsm_transitions"] = []
+            if wants("custom_metadata"):
+                result["custom_metadata"] = custom_metadata
+            return result
         except Exception as e:
             logger.warning("Error extracting property field %s: %s", property_name, e)
             return None
@@ -379,127 +459,186 @@ class FieldExtractorMixin:
         user: Any,
         instance: Optional[models.Model] = None,
         field_metadata: Optional[dict[str, Any]] = None,
+        include_keys: Optional[set[str]] = None,
     ) -> Optional[dict]:
         """Extract schema for a single field."""
         try:
+            wants = lambda key: self._wants(include_keys, key)
             field_type = type(field).__name__
-            classification = _classify_field(field)
-
-            # Permission check
             readable, writable, visibility = True, True, "VISIBLE"
-            if user:
-                try:
-                    perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=None
-                    )
-                    readable = perm.visibility != FieldVisibility.HIDDEN
-                    writable = perm.can_write
-                    visibility = (
-                        perm.visibility.name
-                        if hasattr(perm.visibility, "name")
-                        else "VISIBLE"
-                    )
-                except Exception:
-                    readable, writable, visibility = False, False, "HIDDEN"
-
-            # Choices
             choices = None
-            if hasattr(field, "choices") and field.choices:
+            default_value = None
+            has_default = False
+            validators: list[dict[str, Any]] = []
+            fsm_transitions = []
+
+            if wants("readable") or wants("writable") or wants("visibility"):
+                if user:
+                    try:
+                        perm = field_permission_manager.check_field_permission(
+                            user, model, field.name, instance=None
+                        )
+                        readable = perm.visibility != FieldVisibility.HIDDEN
+                        writable = perm.can_write
+                        visibility = (
+                            perm.visibility.name
+                            if hasattr(perm.visibility, "name")
+                            else "VISIBLE"
+                        )
+                    except Exception:
+                        readable, writable, visibility = False, False, "HIDDEN"
+
+            if wants("choices") and hasattr(field, "choices") and field.choices:
                 choices = [
                     {"value": str(c[0]), "label": str(c[1])} for c in field.choices
                 ]
 
-            # Default value
-            default_value = None
-            has_default = field.has_default()
-            if has_default and not callable(field.default):
-                try:
-                    default_value = self._to_json_value(field.default)
-                except Exception:
-                    default_value = str(field.default)
+            if wants("default_value") or wants("has_default"):
+                has_default = field.has_default()
+                if has_default and not callable(field.default) and wants("default_value"):
+                    try:
+                        default_value = self._to_json_value(field.default)
+                    except Exception:
+                        default_value = str(field.default)
 
-            # Validators
-            validators = []
-            for v in getattr(field, "validators", []):
-                v_type = type(v).__name__
-                params = {}
+            if wants("validators"):
+                for v in getattr(field, "validators", []):
+                    v_type = type(v).__name__
+                    params = {}
 
-                # Extract limits
-                if hasattr(v, "limit_value"):
-                    params["limit_value"] = self._to_json_value(v.limit_value)
+                    if hasattr(v, "limit_value"):
+                        params["limit_value"] = self._to_json_value(v.limit_value)
 
-                # Extract regex patterns
-                if hasattr(v, "regex"):
-                    if hasattr(v.regex, "pattern"):
-                        params["pattern"] = v.regex.pattern
-                    elif isinstance(v.regex, str):
-                        params["pattern"] = v.regex
+                    if hasattr(v, "regex"):
+                        if hasattr(v.regex, "pattern"):
+                            params["pattern"] = v.regex.pattern
+                        elif isinstance(v.regex, str):
+                            params["pattern"] = v.regex
 
-                    if hasattr(v, "inverse_match"):
-                        params["inverse_match"] = v.inverse_match
-                    if hasattr(v, "flags"):
-                        params["flags"] = v.flags
+                        if hasattr(v, "inverse_match"):
+                            params["inverse_match"] = v.inverse_match
+                        if hasattr(v, "flags"):
+                            params["flags"] = v.flags
 
-                # Extract error messages if available
-                message = getattr(v, "message", None)
-                if hasattr(v, "code"):
-                    params["code"] = v.code
+                    message = getattr(v, "message", None)
+                    if hasattr(v, "code"):
+                        params["code"] = v.code
 
-                validators.append({
-                    "type": v_type,
-                    "params": params if params else None,
-                    "message": str(message) if message else None
-                })
+                    validators.append(
+                        {
+                            "type": v_type,
+                            "params": params if params else None,
+                            "message": str(message) if message else None,
+                        }
+                    )
 
-            # FSM transitions
-            fsm_transitions = []
-            if classification["is_fsm_field"]:
+            classification_keys = (
+                "is_primary_key",
+                "is_indexed",
+                "is_relation",
+                "is_computed",
+                "is_file",
+                "is_image",
+                "is_json",
+                "is_date",
+                "is_datetime",
+                "is_numeric",
+                "is_boolean",
+                "is_text",
+                "is_rich_text",
+                "is_fsm_field",
+            )
+            classification = (
+                _classify_field(field)
+                if any(wants(key) for key in classification_keys) or wants("fsm_transitions")
+                else {}
+            )
+
+            if wants("fsm_transitions") and classification.get("is_fsm_field"):
                 fsm_transitions = _get_fsm_transitions(
                     model, field.name, instance=instance
                 )
 
-            # GraphQL type mapping
-            graphql_type = self._map_to_graphql_type(field_type, field)
-
-            from graphene.utils.str_converters import to_camel_case
-            camel_name = to_camel_case(field.name)
-            custom_metadata = (
-                self._to_json_value(field_metadata)
-                if field_metadata is not None
+            graphql_type = (
+                self._map_to_graphql_type(field_type, field)
+                if wants("graphql_type")
                 else None
             )
 
-            return {
-                "name": camel_name,
-                "field_name": field.name,
-                "verbose_name": str(getattr(field, "verbose_name", field.name)),
-                "help_text": str(getattr(field, "help_text", "") or ""),
-                "field_type": field_type,
-                "graphql_type": graphql_type,
-                "python_type": self._get_python_type(field),
-                "required": not field.blank and not field.null,
-                "nullable": field.null,
-                "blank": field.blank,
-                "editable": field.editable,
-                "unique": field.unique,
-                "max_length": getattr(field, "max_length", None),
-                "min_length": getattr(field, "min_length", None),
-                "max_value": getattr(field, "max_value", None),
-                "min_value": getattr(field, "min_value", None),
-                "decimal_places": getattr(field, "decimal_places", None),
-                "max_digits": getattr(field, "max_digits", None),
-                "choices": choices,
-                "default_value": default_value,
-                "has_default": has_default,
-                "auto_now": getattr(field, "auto_now", False),
-                "auto_now_add": getattr(field, "auto_now_add", False),
-                "validators": validators,
-                "regex_pattern": None,
-                "readable": readable,
-                "writable": writable,
-                "visibility": visibility,
-                **classification,
-                "fsm_transitions": [
+            from graphene.utils.str_converters import to_camel_case
+            camel_name = to_camel_case(field.name)
+            custom_metadata = None
+            if wants("custom_metadata"):
+                custom_metadata = (
+                    self._to_json_value(field_metadata)
+                    if field_metadata is not None
+                    else None
+                )
+
+            result: dict[str, Any] = {}
+            if wants("name"):
+                result["name"] = camel_name
+            if wants("field_name"):
+                result["field_name"] = field.name
+            if wants("verbose_name"):
+                result["verbose_name"] = str(getattr(field, "verbose_name", field.name))
+            if wants("help_text"):
+                result["help_text"] = str(getattr(field, "help_text", "") or "")
+            if wants("field_type"):
+                result["field_type"] = field_type
+            if wants("graphql_type"):
+                result["graphql_type"] = graphql_type
+            if wants("python_type"):
+                result["python_type"] = self._get_python_type(field)
+            if wants("required"):
+                result["required"] = not field.blank and not field.null
+            if wants("nullable"):
+                result["nullable"] = field.null
+            if wants("blank"):
+                result["blank"] = field.blank
+            if wants("editable"):
+                result["editable"] = field.editable
+            if wants("unique"):
+                result["unique"] = field.unique
+            if wants("max_length"):
+                result["max_length"] = getattr(field, "max_length", None)
+            if wants("min_length"):
+                result["min_length"] = getattr(field, "min_length", None)
+            if wants("max_value"):
+                result["max_value"] = getattr(field, "max_value", None)
+            if wants("min_value"):
+                result["min_value"] = getattr(field, "min_value", None)
+            if wants("decimal_places"):
+                result["decimal_places"] = getattr(field, "decimal_places", None)
+            if wants("max_digits"):
+                result["max_digits"] = getattr(field, "max_digits", None)
+            if wants("choices"):
+                result["choices"] = choices
+            if wants("default_value"):
+                result["default_value"] = default_value
+            if wants("has_default"):
+                result["has_default"] = has_default
+            if wants("auto_now"):
+                result["auto_now"] = getattr(field, "auto_now", False)
+            if wants("auto_now_add"):
+                result["auto_now_add"] = getattr(field, "auto_now_add", False)
+            if wants("validators"):
+                result["validators"] = validators
+            if wants("regex_pattern"):
+                result["regex_pattern"] = None
+            if wants("readable"):
+                result["readable"] = readable
+            if wants("writable"):
+                result["writable"] = writable
+            if wants("visibility"):
+                result["visibility"] = visibility
+
+            for key in classification_keys:
+                if wants(key):
+                    result[key] = classification.get(key)
+
+            if wants("fsm_transitions"):
+                result["fsm_transitions"] = [
                     {
                         "name": t["name"],
                         "source": t["source"],
@@ -510,9 +649,10 @@ class FieldExtractorMixin:
                         "allowed": t.get("allowed", True),
                     }
                     for t in fsm_transitions
-                ],
-                "custom_metadata": custom_metadata,
-            }
+                ]
+            if wants("custom_metadata"):
+                result["custom_metadata"] = custom_metadata
+            return result
         except Exception as e:
             logger.warning(f"Error extracting field {field.name}: {e}")
             return None
@@ -526,7 +666,11 @@ class FieldExtractorMixin:
         return registry.get_python_type(field)
 
     def _extract_relationships(
-        self, model: type[models.Model], user: Any, graphql_meta: Optional[Any] = None
+        self,
+        model: type[models.Model],
+        user: Any,
+        graphql_meta: Optional[Any] = None,
+        include_keys: Optional[set[str]] = None,
     ) -> list[dict]:
         """Extract relationship schemas."""
         field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
@@ -548,6 +692,7 @@ class FieldExtractorMixin:
                 user,
                 field_metadata=field_metadata.get(field_key),
                 graphql_meta=graphql_meta,
+                include_keys=include_keys,
             )
             if rel_schema and rel_schema.get("readable", True):
                 relationships.append(rel_schema)
@@ -560,10 +705,12 @@ class FieldExtractorMixin:
         user: Any,
         field_metadata: Optional[dict[str, Any]] = None,
         graphql_meta: Optional[Any] = None,
+        include_keys: Optional[set[str]] = None,
     ) -> Optional[dict]:
         """Extract schema for a relationship."""
         try:
             from graphene.utils.str_converters import to_camel_case
+            wants = lambda key: self._wants(include_keys, key)
             is_reverse = not hasattr(field, "remote_field") or field.auto_created
             field_key = field.name if hasattr(field, "name") else field.get_accessor_name()
 
@@ -584,34 +731,38 @@ class FieldExtractorMixin:
 
             # Permission check
             readable, writable = True, True
-            if user and hasattr(field, "name"):
-                try:
-                    perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=None
-                    )
-                    readable = perm.visibility != FieldVisibility.HIDDEN
-                    writable = perm.can_write
-                except Exception:
-                    readable, writable = False, False
+            if wants("readable") or wants("writable"):
+                if user and hasattr(field, "name"):
+                    try:
+                        perm = field_permission_manager.check_field_permission(
+                            user, model, field.name, instance=None
+                        )
+                        readable = perm.visibility != FieldVisibility.HIDDEN
+                        writable = perm.can_write
+                    except Exception:
+                        readable, writable = False, False
 
             if related_model is None:
                 # Skip relationships without a concrete related model (e.g. generic relations).
                 return None
 
             on_delete_name = None
-            if getattr(field, "remote_field", None) and getattr(
-                field.remote_field, "on_delete", None
-            ):
-                on_delete_name = field.remote_field.on_delete.__name__
+            if wants("on_delete"):
+                if getattr(field, "remote_field", None) and getattr(
+                    field.remote_field, "on_delete", None
+                ):
+                    on_delete_name = field.remote_field.on_delete.__name__
 
-            custom_metadata = (
-                self._to_json_value(field_metadata)
-                if field_metadata is not None
-                else None
-            )
+            custom_metadata = None
+            if wants("custom_metadata"):
+                custom_metadata = (
+                    self._to_json_value(field_metadata)
+                    if field_metadata is not None
+                    else None
+                )
 
             related_query_name = None
-            if hasattr(field, "related_query_name"):
+            if wants("related_name") and hasattr(field, "related_query_name"):
                 candidate = field.related_query_name
                 if callable(candidate):
                     try:
@@ -621,47 +772,81 @@ class FieldExtractorMixin:
                 elif isinstance(candidate, str):
                     related_query_name = candidate
 
-            relation_operations = self._extract_relation_operations(
-                model, field_key, graphql_meta=graphql_meta
-            )
+            relation_operations = None
+            if wants("relation_operations"):
+                relation_operations = self._extract_relation_operations(
+                    model, field_key, graphql_meta=graphql_meta
+                )
 
-            relationship_label = self._get_relationship_label(
-                field=field,
-                related_model=related_model,
-                is_reverse=is_reverse,
-            )
+            relationship_label = None
+            if wants("verbose_name"):
+                relationship_label = self._get_relationship_label(
+                    field=field,
+                    related_model=related_model,
+                    is_reverse=is_reverse,
+                )
 
-            return {
-                "name": to_camel_case(field.name) if hasattr(field, "name") else to_camel_case(field.get_accessor_name()),
-                "field_name": field.name
-                if hasattr(field, "name")
-                else field.get_accessor_name(),
-                "verbose_name": relationship_label,
-                "help_text": str(getattr(field, "help_text", "") or ""),
-                "related_app": related_model._meta.app_label,
-                "related_model": related_model.__name__,
-                "related_model_verbose": str(related_model._meta.verbose_name),
-                "relation_type": relation_type,
-                "is_reverse": is_reverse,
-                "is_to_one": is_to_one,
-                "is_to_many": is_to_many,
-                "on_delete": on_delete_name,
-                "related_name": related_query_name,
-                "through_model": field.remote_field.through._meta.label
-                if hasattr(field, "remote_field")
-                and hasattr(field.remote_field, "through")
-                else None,
-                "required": not is_reverse and not getattr(field, "null", True),
-                "nullable": getattr(field, "null", True),
-                "editable": getattr(field, "editable", True),
-                "lookup_field": "__str__",
-                "search_fields": [],
-                "readable": readable,
-                "writable": writable,
-                "can_create_inline": not is_reverse,
-                "relation_operations": relation_operations,
-                "custom_metadata": custom_metadata,
-            }
+            result: dict[str, Any] = {}
+            if wants("name"):
+                result["name"] = (
+                    to_camel_case(field.name)
+                    if hasattr(field, "name")
+                    else to_camel_case(field.get_accessor_name())
+                )
+            if wants("field_name"):
+                result["field_name"] = (
+                    field.name if hasattr(field, "name") else field.get_accessor_name()
+                )
+            if wants("verbose_name"):
+                result["verbose_name"] = relationship_label
+            if wants("help_text"):
+                result["help_text"] = str(getattr(field, "help_text", "") or "")
+            if wants("related_app"):
+                result["related_app"] = related_model._meta.app_label
+            if wants("related_model"):
+                result["related_model"] = related_model.__name__
+            if wants("related_model_verbose"):
+                result["related_model_verbose"] = str(related_model._meta.verbose_name)
+            if wants("relation_type"):
+                result["relation_type"] = relation_type
+            if wants("is_reverse"):
+                result["is_reverse"] = is_reverse
+            if wants("is_to_one"):
+                result["is_to_one"] = is_to_one
+            if wants("is_to_many"):
+                result["is_to_many"] = is_to_many
+            if wants("on_delete"):
+                result["on_delete"] = on_delete_name
+            if wants("related_name"):
+                result["related_name"] = related_query_name
+            if wants("through_model"):
+                result["through_model"] = (
+                    field.remote_field.through._meta.label
+                    if hasattr(field, "remote_field")
+                    and hasattr(field.remote_field, "through")
+                    else None
+                )
+            if wants("required"):
+                result["required"] = not is_reverse and not getattr(field, "null", True)
+            if wants("nullable"):
+                result["nullable"] = getattr(field, "null", True)
+            if wants("editable"):
+                result["editable"] = getattr(field, "editable", True)
+            if wants("lookup_field"):
+                result["lookup_field"] = "__str__"
+            if wants("search_fields"):
+                result["search_fields"] = []
+            if wants("readable"):
+                result["readable"] = readable
+            if wants("writable"):
+                result["writable"] = writable
+            if wants("can_create_inline"):
+                result["can_create_inline"] = not is_reverse
+            if wants("relation_operations"):
+                result["relation_operations"] = relation_operations
+            if wants("custom_metadata"):
+                result["custom_metadata"] = custom_metadata
+            return result
         except Exception as e:
             logger.warning(f"Error extracting relationship: {e}")
             return None

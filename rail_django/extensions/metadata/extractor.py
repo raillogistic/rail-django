@@ -43,13 +43,23 @@ class ModelSchemaExtractor(
         model_name: str,
         user: Any = None,
         object_id: Optional[str] = None,
+        include_sections: Optional[set[str]] = None,
+        include_section_subfields: Optional[dict[str, set[str]]] = None,
     ) -> dict[str, Any]:
-        """Extract complete schema for a model."""
+        """Extract schema for a model, optionally limited to requested sections."""
+        include = set(include_sections or [])
+        section_subfields = include_section_subfields or {}
+
+        def wants(section: str) -> bool:
+            return not include or section in include
+
         # Try cache first
+        can_use_cache = not include
         user_id = str(user.pk) if user and hasattr(user, "pk") else None
-        cached = get_cached_schema(app_name, model_name, user_id, object_id)
-        if cached:
-            return cached
+        if can_use_cache:
+            cached = get_cached_schema(app_name, model_name, user_id, object_id)
+            if cached:
+                return cached
 
         try:
             model = apps.get_model(app_name, model_name)
@@ -69,42 +79,70 @@ class ModelSchemaExtractor(
 
         from graphene.utils.str_converters import to_camel_case
 
-        result = {
+        result: dict[str, Any] = {
             "app": app_name,
             "model": model_name,
-            "verbose_name": str(meta.verbose_name),
-            "verbose_name_plural": str(meta.verbose_name_plural),
-            "primary_key": to_camel_case(meta.pk.name) if meta.pk else "id",
-            "ordering": [
-                ("-" + to_camel_case(o[1:])) if o.startswith("-") else to_camel_case(o)
-                for o in meta.ordering
-            ]
-            if meta.ordering
-            else [],
-            "unique_together": [
-                [to_camel_case(f) for f in ut] for ut in meta.unique_together
-            ]
-            if meta.unique_together
-            else [],
-            "fields": self._extract_fields(
-                model, user, instance=instance, graphql_meta=graphql_meta
-            ),
-            "relationships": self._extract_relationships(
-                model, user, graphql_meta=graphql_meta
-            ),
-            "filters": self._extract_filters(model, user=user),
-            "filter_config": self._extract_filter_config(model),
-            "relation_filters": self._extract_relation_filters(model, user=user),
-            "mutations": self._extract_mutations(model, user, instance=instance),
-            "permissions": self._extract_permissions(model, user),
-            "field_groups": self._extract_field_groups(model, graphql_meta),
-            "templates": self._extract_templates(model, user, instance=instance),
             "metadata_version": get_model_version(app_name, model_name),
-            "custom_metadata": getattr(graphql_meta, "custom_metadata", None),
         }
 
+        if wants("verbose_name"):
+            result["verbose_name"] = str(meta.verbose_name)
+        if wants("verbose_name_plural"):
+            result["verbose_name_plural"] = str(meta.verbose_name_plural)
+        if wants("primary_key"):
+            result["primary_key"] = to_camel_case(meta.pk.name) if meta.pk else "id"
+        if wants("ordering"):
+            result["ordering"] = (
+                [
+                    ("-" + to_camel_case(o[1:]))
+                    if o.startswith("-")
+                    else to_camel_case(o)
+                    for o in meta.ordering
+                ]
+                if meta.ordering
+                else []
+            )
+        if wants("unique_together"):
+            result["unique_together"] = (
+                [[to_camel_case(f) for f in ut] for ut in meta.unique_together]
+                if meta.unique_together
+                else []
+            )
+        if wants("fields"):
+            result["fields"] = self._extract_fields(
+                model,
+                user,
+                instance=instance,
+                graphql_meta=graphql_meta,
+                include_keys=section_subfields.get("fields"),
+            )
+        if wants("relationships"):
+            result["relationships"] = self._extract_relationships(
+                model,
+                user,
+                graphql_meta=graphql_meta,
+                include_keys=section_subfields.get("relationships"),
+            )
+        if wants("filters"):
+            result["filters"] = self._extract_filters(model, user=user)
+        if wants("filter_config"):
+            result["filter_config"] = self._extract_filter_config(model)
+        if wants("relation_filters"):
+            result["relation_filters"] = self._extract_relation_filters(model, user=user)
+        if wants("mutations"):
+            result["mutations"] = self._extract_mutations(model, user, instance=instance)
+        if wants("permissions"):
+            result["permissions"] = self._extract_permissions(model, user)
+        if wants("field_groups"):
+            result["field_groups"] = self._extract_field_groups(model, graphql_meta)
+        if wants("templates"):
+            result["templates"] = self._extract_templates(model, user, instance=instance)
+        if wants("custom_metadata"):
+            result["custom_metadata"] = getattr(graphql_meta, "custom_metadata", None)
+
         # Cache result
-        set_cached_schema(app_name, model_name, result, user_id, object_id)
+        if can_use_cache:
+            set_cached_schema(app_name, model_name, result, user_id, object_id)
 
         return result
 
