@@ -58,6 +58,7 @@ def test_model_form_contract_and_pages_queries(gql_client):
         id
         appLabel
         modelName
+        order
         relations {
           name
           path
@@ -86,6 +87,8 @@ def test_model_form_contract_and_pages_queries(gql_client):
     contract = result["data"]["contract"]
     assert contract["appLabel"] == "test_app"
     assert contract["modelName"] == "Product"
+    assert isinstance(contract["order"], list)
+    assert "name" in contract["order"]
     assert contract["mutationBindings"]["createOperation"] == "createProduct"
     order_items_relation = next(
         (item for item in contract["relations"] if item["path"] == "order_items"),

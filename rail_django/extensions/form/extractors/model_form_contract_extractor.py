@@ -77,6 +77,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             model=model,
             relations=relations,
         )
+        order = self._build_order(sections)
 
         contract: dict[str, Any] = {
             "id": f"{app_name}.{model_name}.{str(mode).upper()}",
@@ -88,6 +89,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             "generated_at": config.get("generated_at") or timezone.now(),
             "fields": fields,
             "sections": sections,
+            "order": order,
             "relations": relations,
             "permissions": permissions,
             "mutation_bindings": get_model_form_mutation_bindings(model),
@@ -320,6 +322,21 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 }
             )
         return normalized_sections
+
+    def _build_order(self, sections: list[dict[str, Any]]) -> list[str]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for section in sections or []:
+            for path in section.get("field_paths") or []:
+                normalized = normalize_path(path)
+                if not normalized:
+                    continue
+                camel_path = to_camel_case(normalized)
+                if camel_path in seen:
+                    continue
+                seen.add(camel_path)
+                ordered.append(camel_path)
+        return ordered
 
     def _build_default_section_paths(
         self,

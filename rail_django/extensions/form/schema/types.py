@@ -661,6 +661,7 @@ class ModelFormContractType(graphene.ObjectType):
     generated_at = graphene.DateTime(required=True)
     fields = graphene.List(ModelFormFieldType, required=True)
     sections = graphene.List(ModelFormSectionType, required=True)
+    order = graphene.List(graphene.String, required=True)
     relations = graphene.List(ModelFormRelationType, required=True)
     permissions = graphene.Field(ModelFormPermissionsType, required=True)
     mutation_bindings = graphene.Field(ModelFormMutationBindingsType, required=True)

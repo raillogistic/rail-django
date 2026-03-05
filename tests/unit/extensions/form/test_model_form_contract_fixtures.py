@@ -57,6 +57,7 @@ def test_model_form_contract_extractor_builds_mutation_bindings():
     bindings = contract["mutation_bindings"]
     assert bindings["create_operation"] == "createProduct"
     assert bindings["update_target_policy"] == "PRIMARY_KEY_ONLY"
+    assert isinstance(contract["order"], list)
 
 
 def test_model_form_contract_extractor_includes_field_choices_in_constraints():
@@ -141,9 +142,12 @@ def test_default_sections_include_forward_relations_in_declared_order():
 
     default_section = contract["sections"][0]
     field_paths = default_section["field_paths"]
+    order = contract["order"]
 
     assert field_paths.index("title") < field_paths.index("category")
     assert field_paths.index("category") < field_paths.index("tags")
+    assert order.index("title") < order.index("category")
+    assert order.index("category") < order.index("tags")
 
 
 def test_extract_contract_page_extracts_only_paginated_refs(monkeypatch):
