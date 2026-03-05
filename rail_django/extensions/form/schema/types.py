@@ -586,6 +586,7 @@ class ModelFormRelationType(graphene.ObjectType):
     to_many = graphene.Boolean(required=True)
     required = graphene.Boolean(required=True)
     nullable = graphene.Boolean(required=True)
+    read_only = graphene.Boolean(required=True)
     related_app_label = graphene.String(required=True)
     related_model_name = graphene.String(required=True)
     policy = graphene.Field(ModelFormRelationActionPolicyType, required=True)

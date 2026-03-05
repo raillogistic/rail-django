@@ -112,6 +112,7 @@ def test_model_form_contract_extractor_relations_include_required_and_nullable()
                     "is_to_many": False,
                     "required": True,
                     "nullable": False,
+                    "read_only": True,
                     "related_app": "test_app",
                     "related_model": "Category",
                     "operations": {"can_connect": True, "can_set": True},
@@ -126,6 +127,7 @@ def test_model_form_contract_extractor_relations_include_required_and_nullable()
     assert relations[0]["name"] == "category"
     assert relations[0]["required"] is True
     assert relations[0]["nullable"] is False
+    assert relations[0]["read_only"] is True
 
 
 def test_default_sections_include_forward_relations_in_declared_order():
@@ -197,3 +199,68 @@ def test_extract_contract_page_extracts_only_paginated_refs(monkeypatch):
     assert result["total"] == 3
     assert len(result["results"]) == 1
     assert extracted_refs == [("app_two", "Beta")]
+
+
+def test_model_form_contract_field_read_only_not_forced_by_permission_writable():
+    extractor = ModelFormContractExtractor(schema_name="default")
+    fields = extractor._build_fields(
+        {
+            "fields": [
+                {
+                    "name": "title",
+                    "field_name": "title",
+                    "label": "Title",
+                    "input_type": "TEXT",
+                    "graphql_type": "String",
+                    "python_type": "str",
+                    "required": True,
+                    "nullable": False,
+                    "read_only": False,
+                    "hidden": False,
+                    "validators": [],
+                }
+            ]
+        },
+        mode="CREATE",
+        contract_permissions={
+            "field_permissions": [
+                {
+                    "field": "title",
+                    "can_read": True,
+                    "can_write": False,
+                    "visibility": "VISIBLE",
+                }
+            ]
+        },
+    )
+
+    assert fields[0]["writable"] is False
+    assert fields[0]["read_only"] is False
+
+
+def test_model_form_contract_field_read_only_when_non_editable():
+    extractor = ModelFormContractExtractor(schema_name="default")
+    fields = extractor._build_fields(
+        {
+            "fields": [
+                {
+                    "name": "externalId",
+                    "field_name": "external_id",
+                    "label": "External ID",
+                    "input_type": "TEXT",
+                    "graphql_type": "String",
+                    "python_type": "str",
+                    "required": False,
+                    "nullable": False,
+                    "editable": False,
+                    "read_only": False,
+                    "hidden": False,
+                    "validators": [],
+                }
+            ]
+        },
+        mode="CREATE",
+        contract_permissions={"field_permissions": []},
+    )
+
+    assert fields[0]["read_only"] is True

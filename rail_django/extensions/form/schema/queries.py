@@ -69,6 +69,7 @@ class FormQuery(graphene.ObjectType):
         model_name=graphene.String(required=True, name="modelName"),
         mode=ModelFormModeEnum(default_value="CREATE"),
         include_nested=graphene.Boolean(default_value=False, name="includeNested"),
+        read_only=graphene.Boolean(default_value=False, name="readOnly"),
         description="Get generated model-form contract for one model.",
     )
 
@@ -194,12 +195,13 @@ class FormQuery(graphene.ObjectType):
         model_name: str,
         mode: str = "CREATE",
         include_nested: bool = False,
+        read_only: bool = False,
     ) -> dict[str, Any]:
         extractor = ModelFormContractExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
         user = getattr(info.context, "user", None)
-        return extractor.extract_contract(
+        contract = extractor.extract_contract(
             app_label,
             model_name,
             user=user,
@@ -207,6 +209,13 @@ class FormQuery(graphene.ObjectType):
             include_nested=include_nested,
             enforce_opt_in=True,
         )
+        if not read_only:
+            contract["fields"] = [
+                field
+                for field in (contract.get("fields") or [])
+                if not bool(field.get("hidden", False))
+            ]
+        return contract
 
     def resolve_model_form_submit_contract(
         self,

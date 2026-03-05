@@ -61,6 +61,7 @@ def test_model_form_contract_and_pages_queries(gql_client):
         relations {
           name
           path
+          readOnly
         }
         mutationBindings {
           createOperation
@@ -92,6 +93,7 @@ def test_model_form_contract_and_pages_queries(gql_client):
     )
     assert order_items_relation is not None
     assert order_items_relation["name"] == "orderItems"
+    assert order_items_relation["readOnly"] is False
 
     page = result["data"]["page"]
     assert page["page"] == 1

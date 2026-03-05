@@ -187,6 +187,12 @@ class RelationExtractorMixin:
                 related_model=related_model,
                 is_reverse=is_reverse,
             )
+            source_field = getattr(field, "field", None) if is_reverse else None
+            relation_editable = (
+                getattr(source_field, "editable", True)
+                if source_field is not None
+                else getattr(field, "editable", True)
+            )
 
             return {
                 "name": to_camel_case(field.name)
@@ -204,7 +210,7 @@ class RelationExtractorMixin:
                 "is_to_many": bool(is_to_many),
                 "required": not is_reverse and not getattr(field, "null", True),
                 "nullable": bool(getattr(field, "null", True)),
-                "read_only": not bool(getattr(field, "editable", True)),
+                "read_only": not bool(relation_editable),
                 "disabled": False,
                 "hidden": False,
                 "operations": operations,

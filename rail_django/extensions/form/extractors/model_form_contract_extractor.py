@@ -234,10 +234,12 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 or not readable
                 or visibility == "HIDDEN"
             )
+            editable = field.get("editable")
+            is_non_editable = editable is not None and not bool(editable)
             read_only = bool(
                 field.get("read_only", False)
+                or is_non_editable
                 or is_primary_key
-                or not writable
                 or is_view_mode
             )
             raw_constraints = field.get("constraints") or {}
@@ -425,6 +427,10 @@ class ModelFormContractExtractor(FormConfigExtractor):
                 for action in all_actions
                 if action not in set(allowed_actions)
             ]
+            relation_read_only = bool(
+                relation.get("read_only", False)
+                or is_view_mode
+            )
             relations.append(
                 {
                     "name": relation_name,
@@ -434,6 +440,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
                     "to_many": bool(relation.get("is_to_many", False)),
                     "required": bool(relation.get("required", False)),
                     "nullable": bool(relation.get("nullable", True)),
+                    "read_only": relation_read_only,
                     "related_app_label": relation.get("related_app"),
                     "related_model_name": relation.get("related_model"),
                     "policy": {
