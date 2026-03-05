@@ -7,7 +7,7 @@ from typing import Optional
 
 import graphene
 from django.apps import apps
-from graphene.utils.str_converters import to_snake_case
+from graphene.utils.str_converters import to_camel_case, to_snake_case
 from graphql import GraphQLError
 from graphql.language import ast
 
@@ -20,6 +20,8 @@ from .types import (
     FilterSchemaType,
     ModelInfoType,
     ModelSchemaType,
+    MutationSchemaType,
+    TemplateInfoType,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,7 +122,9 @@ def _collect_requested_section_subfields(info) -> dict[str, set[str]]:
             return
         requested.setdefault(section, set()).add(to_snake_case(field_name))
 
-    def visit_selection_set(selection_set, active_section: Optional[str] = None) -> None:
+    def visit_selection_set(
+        selection_set, active_section: Optional[str] = None
+    ) -> None:
         if not selection_set:
             return
         for selection in selection_set.selections:
@@ -169,6 +173,32 @@ class ModelSchemaQuery(graphene.ObjectType):
         description="Get complete schema information for a model.",
     )
 
+    customMutation = graphene.Field(
+        MutationSchemaType,
+        app=graphene.String(required=True, description="Django app label"),
+        model=graphene.String(required=True, description="Model name"),
+        function_name=graphene.String(
+            required=True, description="Custom mutation function name"
+        ),
+        objectId=graphene.ID(
+            description="Instance ID for instance-specific permissions"
+        ),
+        description="Get metadata for one custom model mutation.",
+    )
+
+    modelTemplate = graphene.Field(
+        TemplateInfoType,
+        app=graphene.String(required=True, description="Django app label"),
+        model=graphene.String(required=True, description="Model name"),
+        function_name=graphene.String(
+            required=True, description="Model template function name"
+        ),
+        objectId=graphene.ID(
+            description="Instance ID for instance-specific permissions"
+        ),
+        description="Get metadata for one model template.",
+    )
+
     modelDetailContract = graphene.Field(
         DetailContractResultType,
         input=DetailContractInputType(required=True),
@@ -209,6 +239,61 @@ class ModelSchemaQuery(graphene.ObjectType):
         key=graphene.String(description="Deployment version key"),
         description="Deployment-level metadata version for cache invalidation.",
     )
+
+    @staticmethod
+    def _identifier_matches(target: str, *candidates: Optional[str]) -> bool:
+        def _forms(value: Optional[str]) -> set[str]:
+            raw = str(value or "").strip()
+            if not raw:
+                return set()
+            snake = to_snake_case(raw)
+            camel = to_camel_case(snake)
+            compact = snake.replace("_", "").lower()
+            return {
+                raw.lower(),
+                snake.lower(),
+                camel.lower(),
+                compact,
+            }
+
+        wanted = _forms(target)
+        if not wanted:
+            return False
+
+        for candidate in candidates:
+            if wanted & _forms(candidate):
+                return True
+        return False
+
+    @staticmethod
+    def _template_method_index(model_cls: type) -> dict[str, set[str]]:
+        method_index: dict[str, set[str]] = {}
+
+        from ..templating.registry import template_registry
+
+        for url_path, definition in template_registry.all().items():
+            if getattr(definition, "model", None) != model_cls:
+                continue
+            method_name = getattr(definition, "method_name", None)
+            if not method_name:
+                continue
+            method_index.setdefault(str(url_path), set()).add(str(method_name))
+
+        try:
+            from ..excel.exporter import excel_template_registry
+        except Exception:
+            excel_template_registry = None
+
+        if excel_template_registry:
+            for url_path, definition in excel_template_registry.all().items():
+                if getattr(definition, "model", None) != model_cls:
+                    continue
+                method_name = getattr(definition, "method_name", None)
+                if not method_name:
+                    continue
+                method_index.setdefault(str(url_path), set()).add(str(method_name))
+
+        return method_index
 
     def resolve_modelSchema(
         self,
@@ -251,6 +336,91 @@ class ModelSchemaQuery(graphene.ObjectType):
             include_section_subfields=requested_section_subfields,
         )
 
+    def resolve_customMutation(
+        self,
+        info,
+        app: str,
+        model: str,
+        function_name: str,
+        objectId: Optional[str] = None,
+    ) -> Optional[dict]:
+        user = getattr(info.context, "user", None)
+        try:
+            model_cls = apps.get_model(app, model)
+        except LookupError:
+            raise GraphQLError(f"Model '{app}.{model}' not found.")
+        if not _user_can_discover_model(model_cls, user):
+            raise GraphQLError("Access denied")
+
+        extractor = ModelSchemaExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        schema = extractor.extract(
+            app,
+            model,
+            user=user,
+            object_id=objectId,
+            include_sections={"mutations"},
+        )
+
+        for mutation in schema.get("mutations", []):
+            if not isinstance(mutation, dict):
+                continue
+            if mutation.get("operation") != "custom":
+                continue
+            if self._identifier_matches(
+                function_name,
+                mutation.get("method_name"),
+                mutation.get("name"),
+            ):
+                return mutation
+        return None
+
+    def resolve_modelTemplate(
+        self,
+        info,
+        app: str,
+        model: str,
+        function_name: str,
+        objectId: Optional[str] = None,
+    ) -> Optional[dict]:
+        user = getattr(info.context, "user", None)
+        try:
+            model_cls = apps.get_model(app, model)
+        except LookupError:
+            raise GraphQLError(f"Model '{app}.{model}' not found.")
+        if not _user_can_discover_model(model_cls, user):
+            raise GraphQLError("Access denied")
+
+        extractor = ModelSchemaExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        schema = extractor.extract(
+            app,
+            model,
+            user=user,
+            object_id=objectId,
+            include_sections={"templates"},
+        )
+        template_methods = self._template_method_index(model_cls)
+
+        for template in schema.get("templates", []):
+            if not isinstance(template, dict):
+                continue
+            key = str(template.get("key") or "")
+            url_path = str(template.get("url_path") or "")
+            candidates = [
+                key,
+                url_path,
+                key.rsplit("/", 1)[-1] if key else "",
+                url_path.rsplit("/", 1)[-1] if url_path else "",
+            ]
+            candidates.extend(template_methods.get(key, ()))
+            candidates.extend(template_methods.get(url_path, ()))
+            if self._identifier_matches(function_name, *candidates):
+                return template
+        return None
+
     def resolve_modelDetailContract(self, info, input: dict) -> dict:
         user = getattr(info.context, "user", None)
         app = str(input.get("app") or "")
@@ -275,11 +445,9 @@ class ModelSchemaQuery(graphene.ObjectType):
             return {"ok": False, "reason": str(exc), "contract": None}
 
         model_readable = bool(
-            (
-                contract.get("permissions", {})
-                if isinstance(contract, dict)
-                else {}
-            ).get("model_readable", False)
+            (contract.get("permissions", {}) if isinstance(contract, dict) else {}).get(
+                "model_readable", False
+            )
         )
         if not model_readable:
             return {
@@ -289,9 +457,7 @@ class ModelSchemaQuery(graphene.ObjectType):
             }
         return {"ok": True, "reason": None, "contract": contract}
 
-    def resolve_filterSchema(
-        self, info, app: str, model: str
-    ) -> list[dict]:
+    def resolve_filterSchema(self, info, app: str, model: str) -> list[dict]:
         """Resolve available filters for a model."""
         user = getattr(info.context, "user", None)
         extractor = ModelSchemaExtractor(
