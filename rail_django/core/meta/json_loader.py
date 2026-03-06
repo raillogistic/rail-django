@@ -1,5 +1,5 @@
 """
-Load GraphQLMeta configuration from app-level meta.yaml or meta.json files.
+Load GraphQLMeta configuration from app-level meta.json files.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from django.utils.module_loading import import_string
 logger = logging.getLogger(__name__)
 
 try:
-    import yaml
-except Exception:  # pragma: no cover - optional dependency
-    yaml = None
+    from ...security.frontend_routes import load_frontend_route_access_from_payload
+except Exception:  # pragma: no cover - avoid hard import failure during setup
+    load_frontend_route_access_from_payload = None
 
 _META_CONFIGS: dict[str, object] = {}
 _META_CONFIGS_LOADED = False
@@ -38,7 +38,7 @@ def load_app_meta_configs(
     app_configs: Optional[Iterable[object]] = None,
 ) -> int:
     """
-    Load meta.yaml or meta.json files from installed apps.
+    Load meta.json files from installed apps.
 
     Args:
         app_configs: Optional iterable of Django app configs. Defaults to all
@@ -65,6 +65,7 @@ def load_app_meta_configs(
             continue
 
         _register_roles(payload, meta_path)
+        _register_frontend_route_access(payload, meta_path)
         model_configs = _extract_model_configs(payload, meta_path)
         for model_key, config in model_configs.items():
             model_label = _normalize_model_label(model_key, app_config, meta_path)
@@ -152,6 +153,19 @@ def _register_roles(payload: object, meta_path: Path) -> None:
         if role_definition is None:
             continue
         role_manager.register_role(role_definition)
+
+
+def _register_frontend_route_access(payload: object, meta_path: Path) -> None:
+    if load_frontend_route_access_from_payload is None:
+        return
+    try:
+        load_frontend_route_access_from_payload(payload, source=str(meta_path))
+    except Exception as exc:
+        logger.warning(
+            "Could not load frontend route access config from %s: %s",
+            meta_path,
+            exc,
+        )
 
 
 def _extract_roles(payload: object, meta_path: Path) -> list[dict[str, object]]:
@@ -344,15 +358,7 @@ def _resolve_callable(value: object, meta_path: Path) -> object:
 
 def _find_meta_path(app_path: str) -> Optional[Path]:
     base_path = Path(app_path)
-    yaml_path = base_path / "meta.yaml"
     json_path = base_path / "meta.json"
-    if yaml_path.exists():
-        if json_path.exists():
-            logger.warning(
-                "Both meta.yaml and meta.json found in %s; using meta.yaml",
-                base_path,
-            )
-        return yaml_path
     if json_path.exists():
         return json_path
     return None
@@ -372,19 +378,6 @@ def _load_meta_payload(meta_path: Path) -> Optional[object]:
             payload = json.loads(content)
         except json.JSONDecodeError as exc:
             logger.warning("Invalid JSON in meta file %s: %s", meta_path, exc)
-            return None
-        return payload
-    if meta_path.suffix == ".yaml":
-        if yaml is None:
-            logger.warning("PyYAML is required to parse %s", meta_path)
-            return None
-        try:
-            payload = yaml.safe_load(content)
-        except Exception as exc:
-            logger.warning("Invalid YAML in meta file %s: %s", meta_path, exc)
-            return None
-        if payload is None:
-            logger.debug("Skipping empty meta file %s", meta_path)
             return None
         return payload
     logger.warning("Unsupported meta file type for %s", meta_path)

@@ -462,6 +462,27 @@ class DetailContractResultType(graphene.ObjectType):
     contract = graphene.Field(DetailViewContractType)
 
 
+class FrontendRouteAccessRuleType(graphene.ObjectType):
+    """Resolved frontend route access rule."""
+
+    target_type = graphene.String(required=True)
+    target = graphene.String(required=True)
+    require_authentication = graphene.Boolean(required=True)
+    any_permissions = graphene.List(graphene.String, required=True)
+    all_permissions = graphene.List(graphene.String, required=True)
+    any_roles = graphene.List(graphene.String, required=True)
+    all_roles = graphene.List(graphene.String, required=True)
+    allowed = graphene.Boolean()
+    denial_reason = graphene.String()
+
+
+class FrontendRouteAccessManifestType(graphene.ObjectType):
+    """Frontend route access manifest snapshot."""
+
+    version = graphene.String(required=True)
+    rules = graphene.List(FrontendRouteAccessRuleType, required=True)
+
+
 class ModelInfoType(graphene.ObjectType):
     """Basic model info."""
 

@@ -18,11 +18,13 @@ from .types import (
     DetailContractInputType,
     DetailContractResultType,
     FilterSchemaType,
+    FrontendRouteAccessManifestType,
     ModelInfoType,
     ModelSchemaType,
     MutationSchemaType,
     TemplateInfoType,
 )
+from ...security.frontend_routes import frontend_route_access_registry
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +240,14 @@ class ModelSchemaQuery(graphene.ObjectType):
     metadataDeployVersion = graphene.String(
         key=graphene.String(description="Deployment version key"),
         description="Deployment-level metadata version for cache invalidation.",
+    )
+
+    frontendRouteAccess = graphene.Field(
+        FrontendRouteAccessManifestType,
+        description=(
+            "Resolved frontend route access rules for the current user. "
+            "Intended for route and navigation visibility only."
+        ),
     )
 
     @staticmethod
@@ -491,6 +501,15 @@ class ModelSchemaQuery(graphene.ObjectType):
         from .deploy_version import get_deploy_version
 
         return get_deploy_version(key)
+
+    def resolve_frontendRouteAccess(self, info) -> dict:
+        from .deploy_version import get_deploy_version
+
+        user = getattr(info.context, "user", None)
+        return {
+            "version": get_deploy_version("frontend_route_access"),
+            "rules": frontend_route_access_registry.snapshot_for_user(user),
+        }
 
     def resolve_availableModels(self, info, app: Optional[str] = None) -> list[dict]:
         """

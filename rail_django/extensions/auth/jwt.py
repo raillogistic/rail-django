@@ -324,7 +324,7 @@ class JWTManager:
             - permissions: List of user permissions
         """
         # Import here to avoid circular imports
-        from .utils import _get_effective_permissions
+        from .utils import _get_effective_permissions, _get_user_roles
 
         now = timezone.now()
         access_lifetime = cls.get_jwt_expiration()
@@ -338,12 +338,14 @@ class JWTManager:
             now + timedelta(seconds=refresh_lifetime) if include_refresh else None
         )
         permission_snapshot = _get_effective_permissions(user)
+        role_snapshot = _get_user_roles(user)
 
         payload = {
             "user_id": user.id,
             "username": user.username,
             "iat": now,
             "type": "access",
+            "roles": role_snapshot,
             "permissions": permission_snapshot,
         }
         # Only include 'exp' if token should expire
@@ -375,6 +377,7 @@ class JWTManager:
             "token": token,
             "refresh_token": refresh_token,
             "expires_at": expiration,
+            "roles": role_snapshot,
             "permissions": permission_snapshot,
         }
 

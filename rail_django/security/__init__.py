@@ -45,6 +45,14 @@ from .graphql import (
     require_introspection_permission,
     security_analyzer,
 )
+from .frontend_routes import (
+    ALLOWED_TARGET_TYPES,
+    FrontendRouteAccessRegistry,
+    FrontendRouteAccessRule,
+    build_frontend_route_access_rule,
+    frontend_route_access_registry,
+    load_frontend_route_access_from_payload,
+)
 from .validation import (
     GraphQLInputSanitizer,
     InputValidator,
@@ -130,6 +138,12 @@ __all__ = [
     'role_manager',
     'require_role',
     'require_permission',
+    'ALLOWED_TARGET_TYPES',
+    'FrontendRouteAccessRule',
+    'FrontendRouteAccessRegistry',
+    'frontend_route_access_registry',
+    'build_frontend_route_access_rule',
+    'load_frontend_route_access_from_payload',
 
     # Field Permissions
     'FieldAccessLevel',
