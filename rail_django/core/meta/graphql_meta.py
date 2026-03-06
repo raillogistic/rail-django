@@ -188,21 +188,8 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         return True
 
     def _resolve_meta_class(self, model_class: type[models.Model]) -> Any:
-        """Return the declared GraphQL meta configuration class if it exists."""
-        meta_decl = getattr(model_class, "GraphQLMeta", None)
-        if meta_decl is not None:
-            return meta_decl
-        try:
-            from .json_loader import get_model_meta_config
-
-            return get_model_meta_config(model_class)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Could not load JSON GraphQLMeta for %s: %s",
-                model_class.__name__,
-                exc,
-            )
-            return None
+        """Return the declared GraphQLMeta class if it exists."""
+        return getattr(model_class, "GraphQLMeta", None)
 
     def _index_operation_guards(self) -> dict[str, OperationGuardConfig]:
         guards: dict[str, OperationGuardConfig] = {}
