@@ -75,6 +75,31 @@ def can_update_own_user(**kwargs) -> bool:
     return False
 
 
+def can_update_own_settings(*args, **kwargs) -> bool:
+    """Allow authenticated users to update only their own UserSettings record."""
+    if args and not kwargs:
+        context = args[0]
+        user = getattr(context, "user", None)
+        instance = getattr(context, "instance", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if instance is None:
+            return False
+        return str(getattr(instance, "user_id", "") or "") == str(
+            getattr(user, "pk", "") or ""
+        )
+
+    user = kwargs.get("user")
+    instance = kwargs.get("instance")
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if instance is None:
+        return False
+    return str(getattr(instance, "user_id", "") or "") == str(
+        getattr(user, "pk", "") or ""
+    )
+
+
 def user_operations():
     """Operations to control User objects."""
 
@@ -110,6 +135,13 @@ def settings_operations():
     return build_operation_guards(
         read_roles=USER_READ_ROLES,
         create_roles=USER_MANAGER_ROLES,
-        update_roles=USER_MANAGER_ROLES,
         delete_roles=USER_MANAGER_ROLES,
+        extra={
+            "update": GraphQLMeta.OperationGuard(
+                roles=USER_MANAGER_ROLES,
+                condition=can_update_own_settings,
+                match="any",
+                deny_message="Operation 'update' is not permitted on UserSettings.",
+            )
+        },
     )

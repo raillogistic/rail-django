@@ -228,6 +228,24 @@ def test_base_settings_allow_csrf_trusted_origins_override() -> None:
     assert "default=CORS_ALLOWED_ORIGINS" in text
 
 
+def test_users_settings_template_allows_owner_updates_without_model_permissions() -> None:
+    text = _project_template_file("apps", "users", "models.py")
+
+    assert "class GraphQLMeta(GraphQLMetaBase):" in text
+    assert 'skip_steps=["model_permission", "abac_permission"]' in text
+    assert 'fields = GraphQLMetaBase.Fields(read_only=["user"])' in text
+    assert 'field="theme"' in text
+    assert "condition=can_update_own_settings" in text
+
+
+def test_users_access_control_template_has_own_settings_update_guard() -> None:
+    text = _project_template_file("apps", "users", "access_control.py")
+
+    assert "def can_update_own_settings" in text
+    assert 'deny_message="Operation \'update\' is not permitted on UserSettings."' in text
+    assert "condition=can_update_own_settings" in text
+
+
 def test_project_template_dockerignore_keeps_nginx_tls_assets_for_build() -> None:
     text = _project_template_file(".dockerignore")
 

@@ -63,7 +63,13 @@ class MutationStep(ABC):
         Returns:
             True if step should execute, False to skip
         """
-        return not ctx.should_abort
+        if ctx.should_abort:
+            return False
+
+        graphql_meta = getattr(ctx, "graphql_meta", None)
+        pipeline_config = getattr(graphql_meta, "pipeline_config", None)
+        skip_steps = getattr(pipeline_config, "skip_steps", None) or []
+        return self.name not in set(skip_steps)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} order={self.order} name={self.name}>"

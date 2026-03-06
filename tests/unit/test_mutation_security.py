@@ -196,6 +196,45 @@ def test_create_mutation_requires_model_permission():
 
 
 @pytest.mark.django_db
+def test_update_mutation_can_skip_model_permission_via_pipeline_config():
+    class SkipPermissionMeta(GraphQLMetaConfig):
+        access = GraphQLMetaConfig.AccessControl(
+            operations={
+                "update": GraphQLMetaConfig.OperationGuard(
+                    condition=lambda **kwargs: True
+                )
+            }
+        )
+        pipeline = GraphQLMetaConfig.Pipeline(
+            skip_steps=["model_permission", "abac_permission"]
+        )
+
+    original_meta = _set_graphql_meta(Category, SkipPermissionMeta)
+    try:
+        category = Category.objects.create(name="before", description="")
+        user = User.objects.create_user(
+            username="skip_model_permission_user",
+            password="pass12345",
+        )
+        generator = MutationGenerator(TypeGenerator())
+        update_mutation = generator.generate_update_mutation(Category)
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        result = update_mutation.mutate(
+            None,
+            info,
+            id=category.id,
+            input={"name": "after", "description": ""},
+        )
+
+        assert result.ok is True
+        assert result.object is not None
+        assert result.object.name == "after"
+    finally:
+        _restore_graphql_meta(Category, original_meta)
+
+
+@pytest.mark.django_db
 def test_create_mutation_uses_restricted_default_for_missing_price():
     generator = MutationGenerator(TypeGenerator())
     create_mutation = generator.generate_create_mutation(Product)

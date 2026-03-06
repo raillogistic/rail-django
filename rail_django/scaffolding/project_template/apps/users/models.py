@@ -10,6 +10,7 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
 
 from .access_control import (
     USER_ROLES,
+    can_update_own_settings,
     profile_operations,
     user_operations,
     settings_operations,
@@ -95,11 +96,59 @@ class UserSettings(models.Model):
         verbose_name = "User Settings"
         verbose_name_plural = "User Settings"
 
-    # class GraphQLMeta(GraphQLMetaBase):
-    #     access = GraphQLMetaBase.AccessControl(
-    #         roles=USER_ROLES,
-    #         operations=settings_operations(),
-    #     )
+    class GraphQLMeta(GraphQLMetaBase):
+        fields = GraphQLMetaBase.Fields(read_only=["user"])
+        access = GraphQLMetaBase.AccessControl(
+            roles=USER_ROLES,
+            operations=settings_operations(),
+            fields=[
+                GraphQLMetaBase.FieldGuard(
+                    field="theme",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="mode",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="layout",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="sidebar_collapse_mode",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="font_size",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="font_family",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+                GraphQLMetaBase.FieldGuard(
+                    field="table_configs",
+                    access="write",
+                    visibility="visible",
+                    condition=can_update_own_settings,
+                ),
+            ],
+        )
+        pipeline = GraphQLMetaBase.Pipeline(
+            skip_steps=["model_permission", "abac_permission"]
+        )
 
     def __str__(self) -> str:
         return f"Settings for {self.user.username}"
