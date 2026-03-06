@@ -19,6 +19,44 @@ from ..utils.network import is_trusted_proxy
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_SCOPES = {"user", "ip", "user_or_ip", "user_ip", "global"}
+_DEFAULT_RATE_LIMIT_CONFIG = {
+    "enabled": True,
+    "contexts": {
+        "graphql": {
+            "enabled": True,
+            "rules": [
+                {
+                    "name": "graphql_default",
+                    "scope": "user_or_ip",
+                    "limit": 300,
+                    "window_seconds": 60,
+                }
+            ],
+        },
+        "schema_api": {
+            "enabled": True,
+            "rules": [
+                {
+                    "name": "schema_api_default",
+                    "scope": "user_or_ip",
+                    "limit": 120,
+                    "window_seconds": 60,
+                }
+            ],
+        },
+        "graphql_login": {
+            "enabled": True,
+            "rules": [
+                {
+                    "name": "graphql_login_default",
+                    "scope": "user_or_ip",
+                    "limit": 20,
+                    "window_seconds": 60,
+                }
+            ],
+        },
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -104,7 +142,7 @@ def _load_rate_limit_config(schema_name: Optional[str]) -> dict[str, Any]:
             override_normalized = _normalize_config(schema_overrides)
             return _merge_configs(base, override_normalized)
         return base
-    return {"enabled": False, "contexts": {}}
+    return _normalize_config(_DEFAULT_RATE_LIMIT_CONFIG)
 
 
 def _resolve_user(user: Any, request: Any) -> Optional[Any]:

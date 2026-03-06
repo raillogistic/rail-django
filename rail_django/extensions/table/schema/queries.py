@@ -26,13 +26,24 @@ class TableQuery(graphene.ObjectType):
     )
 
     def resolve_tableBootstrap(self, info, app: str, model: str, view=None, objectId=None):
-        payload = build_table_bootstrap_payload(app, model)
-        payload["firstPage"] = resolve_table_rows({"app": app, "model": model})
+        payload = build_table_bootstrap_payload(
+            app,
+            model,
+            user=getattr(info.context, "user", None),
+        )
+        payload["firstPage"] = resolve_table_rows(
+            {"app": app, "model": model},
+            info=info,
+        )
         return payload
 
     def resolve_tableRows(self, info, input):
-        return resolve_table_rows(input)
+        return resolve_table_rows(input, info=info)
 
     def resolve_tableBootstrapMinimal(self, info, app: str, model: str):
-        payload = build_table_bootstrap_payload(app, model)
+        payload = build_table_bootstrap_payload(
+            app,
+            model,
+            user=getattr(info.context, "user", None),
+        )
         return build_minimal_bootstrap(payload)

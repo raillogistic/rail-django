@@ -8,6 +8,7 @@ and their metadata in either JSON or HTML format.
 import logging
 from typing import Any, Optional
 
+from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import render
 from django.views.generic import View
@@ -105,6 +106,10 @@ class SchemaListView(View):
             List of serialized schema dictionaries
         """
         schemas = []
+        user = _get_authenticated_user(request) if request is not None else None
+        include_sensitive = bool(
+            user and getattr(user, "is_authenticated", False)
+        ) or bool(getattr(settings, "RAIL_DJANGO_PUBLIC_SCHEMA_LIST_INCLUDE_SENSITIVE", False))
         for schema_info in schema_list:
             if not schema_info:
                 continue
@@ -124,16 +129,17 @@ class SchemaListView(View):
                 "description": getattr(schema_info, "description", ""),
                 "version": getattr(schema_info, "version", "1.0.0"),
                 "enabled": getattr(schema_info, "enabled", True),
-                "graphiql_enabled": schema_settings.get(
+            }
+            if include_sensitive:
+                public_info["graphiql_enabled"] = schema_settings.get(
                     "enable_graphiql",
                     settings_dict.get("enable_graphiql", True),
-                ),
-                "authentication_required": schema_settings.get(
+                )
+                public_info["authentication_required"] = schema_settings.get(
                     "authentication_required",
                     settings_dict.get("authentication_required", False),
-                ),
-                "models": models,
-            }
+                )
+                public_info["models"] = models
             schemas.append(public_info)
         return schemas
 

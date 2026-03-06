@@ -17,6 +17,7 @@ from django.http.request import RawPostDataException
 from django.utils.datastructures import MultiValueDict
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from graphql import ExecutionResult, OperationDefinitionNode, OperationType, parse
 
 try:
     from graphene_django.views import GraphQLView, HttpError, HttpResponseBadRequest
@@ -24,8 +25,6 @@ except ImportError:
     raise ImportError(
         "graphene-django is required for GraphQL views. Install it with: pip install graphene-django"
     )
-
-from graphql import ExecutionResult
 
 from ..utils import (
     _get_effective_schema_settings,
@@ -36,6 +35,7 @@ from ..utils import (
 from .authentication import AuthenticationMixin
 from .introspection import IntrospectionMixin
 from .responses import ResponseMixin
+from ....utils.csrf import enforce_csrf_for_session_auth
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,12 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
             if not hasattr(request, "COOKIES") or not isinstance(request.COOKIES, dict): request.COOKIES = {}
             if _is_test_graphql_endpoint_request(request) and not _is_test_graphql_endpoint_enabled():
                 return self._test_endpoint_blocked_response(schema_name)
+            csrf_response = enforce_csrf_for_session_auth(
+                request,
+                failure_message="CSRF validation failed for session-authenticated GraphQL request.",
+            )
+            if csrf_response is not None:
+                return csrf_response
 
             request_is_batch = None
             if request.method == "POST":
@@ -106,6 +112,20 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
                     if persisted_response is not None: return persisted_response
                 elif content_type == "application/graphql":
                     request_is_batch = False
+            elif request.method == "GET":
+                get_query = request.GET.get("query")
+                if get_query and not self._document_allows_get(str(get_query)):
+                    return JsonResponse(
+                        {
+                            "errors": [
+                                {
+                                    "message": "Only query operations may be executed with GET.",
+                                    "extensions": {"code": "GET_QUERY_ONLY"},
+                                }
+                            ]
+                        },
+                        status=405,
+                    )
 
             schema_info = self._get_schema_info(schema_name)
             if not schema_info: return self._schema_not_found_response(schema_name)
@@ -158,6 +178,18 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
             return request.body
         except RawPostDataException:
             return None
+
+    def _document_allows_get(self, query: str) -> bool:
+        try:
+            document = parse(query)
+        except Exception:
+            return False
+        for definition in getattr(document, "definitions", []) or []:
+            if not isinstance(definition, OperationDefinitionNode):
+                continue
+            if definition.operation != OperationType.QUERY:
+                return False
+        return True
 
     def execute_graphql_request(self, request, data, query, variables, operation_name, show_graphiql=False):
         if not query: return super().execute_graphql_request(request, data, query, variables, operation_name, show_graphiql)
@@ -322,7 +354,6 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
     def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
         try:
             from ....core.registry import schema_registry
-            schema_registry.discover_schemas()
             return schema_registry.get_schema(schema_name)
         except ImportError as exc:
             logger.warning("Schema registry not available"); raise SchemaRegistryUnavailable(str(exc))
@@ -354,8 +385,10 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
             core_middleware = get_middleware_stack(schema_name)
             self.middleware = builder_middleware + core_middleware
         except Exception as e:
-            logger.warning(f"Failed to configure middleware for '{schema_name}': {e}")
-            self.middleware = []
+            logger.exception("Failed to configure middleware for '%s': %s", schema_name, e)
+            raise RuntimeError(
+                f"Failed to configure middleware for '{schema_name}'."
+            ) from e
 
     def _configure_for_schema(self, schema_info: dict[str, Any]):
         schema_settings = _get_effective_schema_settings(schema_info)

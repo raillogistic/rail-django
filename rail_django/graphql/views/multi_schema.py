@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponseNotAllowed, JsonResponse
 from django.http.multipartparser import MultiPartParserError
+from django.http.request import RawPostDataException
 from django.utils.datastructures import MultiValueDict
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -27,7 +28,7 @@ except ImportError:
         "Install it with: pip install graphene-django"
     )
 
-from graphql import ExecutionResult
+from graphql import ExecutionResult, OperationDefinitionNode, OperationType, parse
 
 from .mixins import (
     AuthenticationMixin,
@@ -37,6 +38,7 @@ from .mixins import (
     SchemaMixin,
 )
 from .utils import SchemaRegistryUnavailable
+from ...utils.csrf import enforce_csrf_for_session_auth
 
 logger = logging.getLogger(__name__)
 
@@ -106,13 +108,22 @@ class MultiSchemaGraphQLView(
 
         try:
             self._normalize_request(request)
+            csrf_response = enforce_csrf_for_session_auth(
+                request,
+                failure_message="CSRF validation failed for session-authenticated GraphQL request.",
+            )
+            if csrf_response is not None:
+                return csrf_response
 
             request_is_batch = None
-            if request.method == "POST" and request.body:
+            if request.method == "POST":
+                raw_body = self._safe_request_body(request)
                 content_type = request.META.get("CONTENT_TYPE", "").lower()
-                if not content_type or content_type.startswith("application/json"):
+                if raw_body and (
+                    not content_type or content_type.startswith("application/json")
+                ):
                     try:
-                        parsed_body = json.loads(request.body.decode("utf-8"))
+                        parsed_body = json.loads(raw_body.decode("utf-8"))
                         request_is_batch = isinstance(parsed_body, list)
                     except Exception:
                         return JsonResponse(
@@ -121,6 +132,20 @@ class MultiSchemaGraphQLView(
                     persisted_response = self._apply_persisted_query(request, schema_name)
                     if persisted_response is not None:
                         return persisted_response
+            elif request.method == "GET":
+                get_query = request.GET.get("query")
+                if get_query and not self._document_allows_get(str(get_query)):
+                    return JsonResponse(
+                        {
+                            "errors": [
+                                {
+                                    "message": "Only query operations may be executed with GET.",
+                                    "extensions": {"code": "GET_QUERY_ONLY"},
+                                }
+                            ]
+                        },
+                        status=405,
+                    )
 
             schema_info = self._get_schema_info(schema_name)
             if not schema_info:
@@ -163,6 +188,24 @@ class MultiSchemaGraphQLView(
             logger.error(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
 
+    def _safe_request_body(self, request: HttpRequest) -> bytes | None:
+        try:
+            return request.body
+        except RawPostDataException:
+            return None
+
+    def _document_allows_get(self, query: str) -> bool:
+        try:
+            document = parse(query)
+        except Exception:
+            return False
+        for definition in getattr(document, "definitions", []) or []:
+            if not isinstance(definition, OperationDefinitionNode):
+                continue
+            if definition.operation != OperationType.QUERY:
+                return False
+        return True
+
     def _normalize_request(self, request: HttpRequest) -> None:
         """Ensure the request object has all required attributes."""
         if not hasattr(request, "META") or not isinstance(request.META, dict):
@@ -172,10 +215,12 @@ class MultiSchemaGraphQLView(
 
         if not hasattr(request, "GET") or not isinstance(request.GET, (dict, MultiValueDict)):
             request.GET = {}
-        if not hasattr(request, "POST") or not isinstance(request.POST, (dict, MultiValueDict)):
-            request.POST = {}
-        if not hasattr(request, "FILES") or not isinstance(request.FILES, (dict, MultiValueDict)):
-            request.FILES = {}
+        request_post = request.__dict__.get("POST")
+        request_files = request.__dict__.get("FILES")
+        if request_post is not None and not isinstance(request_post, (dict, MultiValueDict)):
+            request.__dict__["POST"] = MultiValueDict()
+        if request_files is not None and not isinstance(request_files, (dict, MultiValueDict)):
+            request.__dict__["FILES"] = MultiValueDict()
         if not hasattr(request, "COOKIES") or not isinstance(request.COOKIES, dict):
             request.COOKIES = {}
 
@@ -242,11 +287,17 @@ class MultiSchemaGraphQLView(
         content_type = self.get_content_type(request)
 
         if content_type == "application/graphql":
-            return {"query": request.body.decode()}
+            raw_body = self._safe_request_body(request)
+            if raw_body is None:
+                raise HttpError(HttpResponseBadRequest("Request body is unavailable."))
+            return {"query": raw_body.decode()}
 
         if content_type == "application/json":
             try:
-                body = request.body.decode("utf-8")
+                raw_body = self._safe_request_body(request)
+                if raw_body is None:
+                    raise HttpError(HttpResponseBadRequest("Request body is unavailable."))
+                body = raw_body.decode("utf-8")
             except Exception as exc:
                 raise HttpError(HttpResponseBadRequest(str(exc)))
 

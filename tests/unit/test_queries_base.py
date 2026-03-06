@@ -380,6 +380,32 @@ class TestQueryOrderingHelper:
         assert has_prop is True
         assert total == 50
 
+    def test_property_ordering_skip_count_avoids_count_query(self):
+        """Property ordering should not count when caller skips totals."""
+        helper = self._create_helper()
+        mock_queryset = Mock()
+        mock_queryset.order_by = Mock(return_value=mock_queryset)
+        mock_queryset.count = Mock(side_effect=AssertionError("count should not run"))
+        mock_queryset.__iter__ = Mock(return_value=iter([Mock(), Mock()]))
+        mock_queryset.__getitem__ = Mock(return_value=mock_queryset)
+
+        helper.qg._apply_count_annotations_for_ordering.return_value = (
+            mock_queryset, ["-custom_property"]
+        )
+        helper.qg._split_order_specs.return_value = ([], ["-custom_property"])
+
+        queryset, items, has_prop, total = helper.apply(
+            mock_queryset,
+            ["-custom_property"],
+            None,
+            skip_count=True,
+        )
+
+        assert queryset == mock_queryset
+        assert has_prop is True
+        assert total is None
+        assert items is not None
+
     def test_apply_with_distinct_on(self):
         """Should apply distinct_on when specified."""
         helper = self._create_helper()

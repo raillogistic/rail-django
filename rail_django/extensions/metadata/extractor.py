@@ -2,10 +2,12 @@
 ModelSchemaExtractor implementation.
 """
 
+import copy
 import logging
 from typing import Any, Optional
 
 from django.apps import apps
+from django.conf import settings
 from graphql import GraphQLError
 
 from ...core.meta import get_model_graphql_meta
@@ -25,6 +27,56 @@ from ..templating.registry import template_registry
 from ..templating.access import evaluate_template_access
 
 logger = logging.getLogger(__name__)
+
+
+def _project_section_value(value: Any, allowed_keys: set[str] | None) -> Any:
+    if not allowed_keys:
+        return copy.deepcopy(value)
+    if isinstance(value, dict):
+        return {
+            key: copy.deepcopy(item)
+            for key, item in value.items()
+            if key in allowed_keys
+        }
+    if isinstance(value, list):
+        projected: list[Any] = []
+        for entry in value:
+            if isinstance(entry, dict):
+                projected.append(
+                    {
+                        key: copy.deepcopy(item)
+                        for key, item in entry.items()
+                        if key in allowed_keys
+                    }
+                )
+            else:
+                projected.append(copy.deepcopy(entry))
+        return projected
+    return copy.deepcopy(value)
+
+
+def _project_schema_payload(
+    payload: dict[str, Any],
+    include_sections: set[str],
+    include_section_subfields: dict[str, set[str]],
+) -> dict[str, Any]:
+    if not include_sections:
+        return copy.deepcopy(payload)
+
+    result: dict[str, Any] = {}
+    for key in ("app", "model", "metadata_version"):
+        if key in payload:
+            result[key] = copy.deepcopy(payload[key])
+
+    for section in include_sections:
+        if section not in payload:
+            continue
+        result[section] = _project_section_value(
+            payload[section],
+            include_section_subfields.get(section),
+        )
+
+    return result
 
 
 class ModelSchemaExtractor(
@@ -53,13 +105,10 @@ class ModelSchemaExtractor(
         def wants(section: str) -> bool:
             return not include or section in include
 
-        # Try cache first
-        can_use_cache = not include
         user_id = str(user.pk) if user and hasattr(user, "pk") else None
-        if can_use_cache:
-            cached = get_cached_schema(app_name, model_name, user_id, object_id)
-            if cached:
-                return cached
+        cached = get_cached_schema(app_name, model_name, user_id, object_id)
+        if cached:
+            return _project_schema_payload(cached, include, section_subfields)
 
         try:
             model = apps.get_model(app_name, model_name)
@@ -79,19 +128,20 @@ class ModelSchemaExtractor(
 
         from graphene.utils.str_converters import to_camel_case
 
+        should_cache_full_payload = not getattr(settings, "DEBUG", False)
         result: dict[str, Any] = {
             "app": app_name,
             "model": model_name,
             "metadata_version": get_model_version(app_name, model_name),
         }
 
-        if wants("verbose_name"):
+        if should_cache_full_payload or wants("verbose_name"):
             result["verbose_name"] = str(meta.verbose_name)
-        if wants("verbose_name_plural"):
+        if should_cache_full_payload or wants("verbose_name_plural"):
             result["verbose_name_plural"] = str(meta.verbose_name_plural)
-        if wants("primary_key"):
+        if should_cache_full_payload or wants("primary_key"):
             result["primary_key"] = to_camel_case(meta.pk.name) if meta.pk else "id"
-        if wants("ordering"):
+        if should_cache_full_payload or wants("ordering"):
             result["ordering"] = (
                 [
                     ("-" + to_camel_case(o[1:]))
@@ -102,49 +152,53 @@ class ModelSchemaExtractor(
                 if meta.ordering
                 else []
             )
-        if wants("unique_together"):
+        if should_cache_full_payload or wants("unique_together"):
             result["unique_together"] = (
                 [[to_camel_case(f) for f in ut] for ut in meta.unique_together]
                 if meta.unique_together
                 else []
             )
-        if wants("fields"):
+        if should_cache_full_payload or wants("fields"):
             result["fields"] = self._extract_fields(
                 model,
                 user,
                 instance=instance,
                 graphql_meta=graphql_meta,
-                include_keys=section_subfields.get("fields"),
+                include_keys=None
+                if should_cache_full_payload
+                else section_subfields.get("fields"),
             )
-        if wants("relationships"):
+        if should_cache_full_payload or wants("relationships"):
             result["relationships"] = self._extract_relationships(
                 model,
                 user,
                 graphql_meta=graphql_meta,
-                include_keys=section_subfields.get("relationships"),
+                include_keys=None
+                if should_cache_full_payload
+                else section_subfields.get("relationships"),
             )
-        if wants("filters"):
+        if should_cache_full_payload or wants("filters"):
             result["filters"] = self._extract_filters(model, user=user)
-        if wants("filter_config"):
+        if should_cache_full_payload or wants("filter_config"):
             result["filter_config"] = self._extract_filter_config(model)
-        if wants("relation_filters"):
+        if should_cache_full_payload or wants("relation_filters"):
             result["relation_filters"] = self._extract_relation_filters(model, user=user)
-        if wants("mutations"):
+        if should_cache_full_payload or wants("mutations"):
             result["mutations"] = self._extract_mutations(model, user, instance=instance)
-        if wants("permissions"):
+        if should_cache_full_payload or wants("permissions"):
             result["permissions"] = self._extract_permissions(model, user)
-        if wants("field_groups"):
+        if should_cache_full_payload or wants("field_groups"):
             result["field_groups"] = self._extract_field_groups(model, graphql_meta)
-        if wants("templates"):
+        if should_cache_full_payload or wants("templates"):
             result["templates"] = self._extract_templates(model, user, instance=instance)
-        if wants("custom_metadata"):
+        if should_cache_full_payload or wants("custom_metadata"):
             result["custom_metadata"] = getattr(graphql_meta, "custom_metadata", None)
 
         # Cache result
-        if can_use_cache:
+        if should_cache_full_payload:
             set_cached_schema(app_name, model_name, result, user_id, object_id)
 
-        return result
+        return _project_schema_payload(result, include, section_subfields)
 
     def _extract_field_groups(self, model: Any, graphql_meta: Any) -> list[dict]:
         """Extract field grouping information."""

@@ -1,11 +1,26 @@
-﻿"""Field-level masking utilities."""
+"""Field masking helpers for table v3 payloads."""
+
+from __future__ import annotations
+
+from typing import Any, Mapping
 
 
-def mask_value(value: object, mask: str = "***") -> object:
-    if value in (None, ""):
-        return value
-    return mask
+def apply_field_masking(
+    row: Mapping[str, Any],
+    masked_fields: set[str] | dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a copy of ``row`` with masked fields replaced."""
+    payload = dict(row)
+    if not masked_fields:
+        return payload
 
+    if isinstance(masked_fields, dict):
+        for field_name, mask_value in masked_fields.items():
+            if field_name in payload:
+                payload[field_name] = mask_value
+        return payload
 
-def apply_field_masking(row: dict, masked_fields: set[str]) -> dict:
-    return {key: (mask_value(value) if key in masked_fields else value) for key, value in row.items()}
+    for field_name in masked_fields:
+        if field_name in payload:
+            payload[field_name] = "***"
+    return payload

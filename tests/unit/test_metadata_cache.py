@@ -106,6 +106,41 @@ class TestMetadataCaching(TestCase):
     @override_settings(DEBUG=False)
     @patch("rail_django.extensions.metadata.utils.cache")
     @patch("rail_django.extensions.metadata.extractor.apps.get_model")
+    def test_extractor_projects_requested_sections_from_cache(
+        self,
+        mock_get_model,
+        mock_cache,
+    ):
+        mock_cache.get.side_effect = [
+            "12345",
+            {
+                "app": "app",
+                "model": "model",
+                "metadata_version": "12345",
+                "fields": [{"name": "name", "field_name": "name"}],
+                "filter_config": {"supports_quick": True, "style": "NESTED"},
+            },
+            {"permissions": {}, "mutations": [], "templates": []},
+        ]
+
+        extractor = ModelSchemaExtractor()
+        result = extractor.extract(
+            "app",
+            "model",
+            user=self.user,
+            include_sections={"fields"},
+            include_section_subfields={"fields": {"name"}},
+        )
+
+        self.assertEqual(result["app"], "app")
+        self.assertEqual(result["model"], "model")
+        self.assertEqual(result["fields"], [{"name": "name"}])
+        self.assertNotIn("filter_config", result)
+        mock_get_model.assert_not_called()
+
+    @override_settings(DEBUG=False)
+    @patch("rail_django.extensions.metadata.utils.cache")
+    @patch("rail_django.extensions.metadata.extractor.apps.get_model")
     @patch("rail_django.extensions.metadata.extractor.get_model_graphql_meta")
     def test_extractor_populates_cache(self, mock_get_meta, mock_get_model, mock_cache):
         """Test that extractor populates cache on miss."""

@@ -82,6 +82,15 @@ class AuthenticationMixin:
                 pass
         return user
 
+    def _is_session_authenticated_request(self, request: HttpRequest) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        auth_header = (request.META.get("HTTP_AUTHORIZATION", "") or "").strip().lower()
+        return not (
+            auth_header.startswith("bearer ") or auth_header.startswith("token ")
+        )
+
     def _check_authentication(self, request: HttpRequest, schema_info: dict[str, Any]) -> bool:
         """Check if the request meets authentication requirements for the schema."""
         schema_settings = self._get_effective_schema_settings(schema_info)
@@ -155,7 +164,6 @@ class SchemaMixin:
         from .utils import SchemaRegistryUnavailable
         try:
             from ...core.registry import schema_registry
-            schema_registry.discover_schemas()
             return schema_registry.get_schema(schema_name)
         except ImportError as exc:
             logger.warning("Schema registry not available")
@@ -199,8 +207,10 @@ class SchemaMixin:
             core_middleware = get_middleware_stack(schema_name)
             self.middleware = builder_middleware + core_middleware
         except Exception as e:
-            logger.warning(f"Failed to configure middleware for '{schema_name}': {e}")
-            self.middleware = []
+            logger.exception("Failed to configure middleware for '%s': %s", schema_name, e)
+            raise RuntimeError(
+                f"Failed to configure middleware for '{schema_name}'."
+            ) from e
 
     def _configure_for_schema(self, schema_info: dict[str, Any]) -> None:
         """Configure the view for the specific schema."""

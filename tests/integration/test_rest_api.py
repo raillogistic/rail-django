@@ -379,6 +379,29 @@ class SchemaManagementAPIViewTest(SchemaAPITestCase):
         self.assertIn("Unknown action: unknown_action", data["data"]["message"])
 
 
+@override_settings(GRAPHQL_SCHEMA_API_AUTH_REQUIRED=True)
+class SchemaManagementCSRFApiViewTest(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=True)
+        self.user = User.objects.create_user(
+            username="schema_admin",
+            password="testpass123",
+            is_staff=True,
+        )
+        self.client.force_login(self.user)
+
+    def test_management_post_requires_csrf_for_session_auth(self):
+        response = self.client.post(
+            "/api/v1/management/",
+            data=json.dumps({"action": "clear_all"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        data = response.json()
+        self.assertIn("CSRF validation failed", data["errors"][0]["message"])
+
+
 class SchemaDiscoveryAPIViewTest(SchemaAPITestCase):
     """Tests for SchemaDiscoveryAPIView."""
 

@@ -167,6 +167,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
         include_nested: bool = False,
         nested_fields: list[str] | None = None,
         runtime_overrides: list[dict[str, Any]] | None = None,
+        instance: Any = None,
     ) -> dict[str, Any]:
         values = self.extract_initial_values(
             app_name,
@@ -175,6 +176,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             user=user,
             include_nested=include_nested,
             nested_fields=nested_fields,
+            instance=instance,
         )
         values = self._apply_runtime_overrides(values, runtime_overrides or [])
         return {

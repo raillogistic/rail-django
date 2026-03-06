@@ -369,6 +369,7 @@ class QueryOrderingHelper:
         queryset: models.QuerySet,
         order_by: Optional[List[str]],
         distinct_on: Optional[List[str]] = None,
+        skip_count: bool = False,
     ) -> Tuple[models.QuerySet, Optional[List[Any]], bool, Optional[int]]:
         """
         Apply ordering to queryset.
@@ -409,7 +410,7 @@ class QueryOrderingHelper:
             if prop_specs:
                 has_prop_ordering = True
                 queryset, items, uncapped_total = self._apply_property_ordering(
-                    queryset, prop_specs
+                    queryset, prop_specs, skip_count=skip_count
                 )
         elif distinct_on:
             # Distinct on without explicit ordering
@@ -421,6 +422,8 @@ class QueryOrderingHelper:
         self,
         queryset: models.QuerySet,
         prop_specs: List[str],
+        *,
+        skip_count: bool = False,
     ) -> Tuple[models.QuerySet, List[Any], Optional[int]]:
         """
         Apply property-based ordering (requires list materialization).
@@ -433,20 +436,22 @@ class QueryOrderingHelper:
             Tuple of (queryset, items, uncapped_total)
         """
         # Get true count before capping
-        uncapped_total = queryset.count()
+        uncapped_total = None if skip_count else queryset.count()
 
         prop_limit = getattr(self.settings, "max_property_ordering_results", None)
         warn_on_cap = bool(
             getattr(self.settings, "property_ordering_warn_on_cap", True)
         )
 
-        if prop_limit and uncapped_total > prop_limit:
+        if prop_limit and (
+            uncapped_total is None or uncapped_total > prop_limit
+        ):
             if warn_on_cap:
                 logger.warning(
                     "Property ordering on %s capped at %s results (total: %s).",
                     self.model.__name__,
                     prop_limit,
-                    uncapped_total,
+                    uncapped_total if uncapped_total is not None else "unknown",
                 )
             queryset = queryset[:prop_limit]
 

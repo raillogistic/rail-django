@@ -1,22 +1,39 @@
 """Action execution service for table v3."""
 
-from django.apps import apps
-
 from ..errors.handlers import to_error
 from ..errors.taxonomy import TableErrorCode
-from ..security.audit_logger import log_audit
+from ..security.access import (
+    get_table_permissions,
+    resolve_table_model,
+    table_mutations_enabled,
+)
 from ..security.anomaly_detector import detect_action_anomaly
+from ..security.audit_logger import log_audit
 from ..security.input_validator import validate_payload
 from ..security.rate_limiter import is_rate_limited
 
 
-def execute_table_action(input_data: dict) -> dict:
+def execute_table_action(input_data: dict, *, user=None) -> dict:
     app = input_data["app"]
     model = input_data["model"]
     action_id = input_data["actionId"]
     row_ids = input_data.get("rowIds") or []
     payload = input_data.get("payload") or {}
     user_id = input_data.get("userId")
+
+    if not table_mutations_enabled():
+        return {
+            "ok": False,
+            "actionId": action_id,
+            "affectedIds": [],
+            "errors": [
+                to_error(
+                    TableErrorCode.PERMISSION,
+                    "Table mutations are disabled",
+                    retryable=False,
+                )
+            ],
+        }
 
     if is_rate_limited(f"{app}:{model}:{user_id or 'anonymous'}"):
         return {
@@ -59,7 +76,32 @@ def execute_table_action(input_data: dict) -> dict:
             ],
         }
 
-    model_cls = apps.get_model(app, model)
+    try:
+        model_cls = resolve_table_model(app, model)
+    except LookupError:
+        return {
+            "ok": False,
+            "actionId": action_id,
+            "affectedIds": [],
+            "errors": [
+                to_error(TableErrorCode.VALIDATION, "Unknown model", retryable=False)
+            ],
+        }
+
+    permissions = get_table_permissions(user, model_cls)
+    if not permissions.can_delete:
+        return {
+            "ok": False,
+            "actionId": action_id,
+            "affectedIds": [],
+            "errors": [
+                to_error(
+                    TableErrorCode.PERMISSION,
+                    "Delete permission required",
+                    retryable=False,
+                )
+            ],
+        }
 
     if action_id != "delete":
         return {

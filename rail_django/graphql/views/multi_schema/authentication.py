@@ -26,6 +26,15 @@ class AuthenticationMixin:
             except Exception: pass
         return user
 
+    def _is_session_authenticated_request(self, request: HttpRequest) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        auth_header = (request.META.get("HTTP_AUTHORIZATION", "") or "").strip().lower()
+        return not (
+            auth_header.startswith("bearer ") or auth_header.startswith("token ")
+        )
+
     def _check_authentication(
         self, request: HttpRequest, schema_info: dict[str, Any]
     ) -> bool:
@@ -37,8 +46,6 @@ class AuthenticationMixin:
             and str(getattr(schema_info, "name", "")).lower() == "graphiql"
         )
 
-        # Dedicated integration endpoint must stay open in non-production:
-        # tests authenticate explicitly via login() to attach identity context.
         if (
             _is_test_graphql_endpoint_request(request)
             and _is_test_graphql_endpoint_enabled()

@@ -14,6 +14,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from rail_django.core.services import get_rate_limiter
+from rail_django.utils.csrf import enforce_csrf_for_session_auth
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,13 @@ class BaseAPIView(View):
             if auth_response is not None:
                 self._audit_request(request, auth_response, path_params=kwargs, extra_data={"auth_failed": True})
                 return auth_response
+
+        csrf_response = enforce_csrf_for_session_auth(
+            request,
+            failure_message="CSRF validation failed for session-authenticated API request.",
+        )
+        if csrf_response is not None:
+            return csrf_response
 
         if self.rate_limit_enabled and request.method != "OPTIONS":
             rate_limit_response = self._check_rate_limit(request)

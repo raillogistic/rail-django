@@ -42,12 +42,12 @@ def _is_test_graphql_endpoint_enabled() -> bool:
     Decide whether the dedicated test endpoint should be exposed.
 
     Explicit setting `RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT` overrides defaults.
-    Without override, endpoint is enabled for non-production environments only.
+    Without override, endpoint stays disabled.
     """
     explicit = getattr(settings, "RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT", None)
     if explicit is not None:
         return bool(explicit)
-    return not _is_production_environment()
+    return False
 
 
 def _is_test_graphql_endpoint_request(request: HttpRequest) -> bool:

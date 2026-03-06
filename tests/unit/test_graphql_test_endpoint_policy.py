@@ -19,7 +19,7 @@ class TestGraphQLTestEndpointPolicy(SimpleTestCase):
     @override_settings(DEBUG=True, ENVIRONMENT=None)
     def test_debug_defaults_to_non_production(self):
         assert _is_production_environment() is False
-        assert _is_test_graphql_endpoint_enabled() is True
+        assert _is_test_graphql_endpoint_enabled() is False
 
     @override_settings(ENVIRONMENT="production")
     def test_explicit_production_environment_blocks_test_endpoint(self):
@@ -29,7 +29,7 @@ class TestGraphQLTestEndpointPolicy(SimpleTestCase):
     @override_settings(ENVIRONMENT="development")
     def test_non_production_environment_enables_test_endpoint(self):
         assert _is_production_environment() is False
-        assert _is_test_graphql_endpoint_enabled() is True
+        assert _is_test_graphql_endpoint_enabled() is False
 
     @override_settings(
         ENVIRONMENT="production",

@@ -17,6 +17,13 @@ class AppConfig(AppConfig):
             _configure_sqlite_connection,
             dispatch_uid="rail_django.sqlite_connection_configuration",
         )
+        if getattr(settings, "RAIL_DJANGO_DISCOVER_SCHEMAS_ON_STARTUP", True):
+            try:
+                from rail_django.core.registry import schema_registry
+
+                schema_registry.discover_schemas()
+            except Exception as exc:
+                logger.debug("Deferred schema discovery at startup: %s", exc)
         mode = getattr(settings, "RAIL_METADATA_DEPLOY_VERSION", {}).get(
             "mode", "command"
         )

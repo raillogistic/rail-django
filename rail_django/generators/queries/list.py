@@ -160,7 +160,6 @@ def generate_list_query(
             queryset = self._apply_tenant_scope(
                 queryset, info, model, operation="list"
             )
-            queryset = self.optimizer.optimize_queryset(queryset, info, model)
             return queryset
 
         return DjangoFilterConnectionField(
@@ -219,6 +218,7 @@ def generate_list_query(
             queryset,
             kwargs.get("order_by"),
             kwargs.get("distinct_on"),
+            skip_count=False,
         )
 
         # Apply pagination

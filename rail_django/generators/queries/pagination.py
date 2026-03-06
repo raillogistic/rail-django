@@ -406,6 +406,7 @@ def generate_paginated_query(
             queryset,
             kwargs.get("order_by"),
             kwargs.get("distinct_on"),
+            skip_count=skip_count,
         )
 
         if skip_count:

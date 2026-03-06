@@ -19,6 +19,7 @@ from rail_django.extensions.templating import (
     model_pdf_template,
     pdf_template,
     render_pdf,
+    render_pdf_from_html,
     template_registry,
     _register_model_templates,
 )
@@ -211,6 +212,47 @@ class TestTemplatingRendering(TestCase):
         body = response.content.decode("utf-8")
         self.assertIn("Header", body)
         self.assertIn("Content", body)
+
+    @patch("rail_django.extensions.templating.rendering.renderers.shutil.which")
+    def test_wkhtmltopdf_is_blocked_without_explicit_unsafe_opt_in(
+        self,
+        mock_which,
+    ):
+        mock_which.return_value = "wkhtmltopdf"
+
+        with self.assertRaises(RuntimeError) as exc:
+            render_pdf_from_html(
+                "<html><body>Hello</body></html>",
+                renderer="wkhtmltopdf",
+            )
+
+        self.assertIn("cannot enforce Rail Django URL fetch allowlists", str(exc.exception))
+
+    @patch("rail_django.extensions.templating.rendering.renderers.subprocess.run")
+    @patch("rail_django.extensions.templating.rendering.renderers.shutil.which")
+    def test_wkhtmltopdf_allows_explicit_unrestricted_fetch_opt_in(
+        self,
+        mock_which,
+        mock_run,
+    ):
+        mock_which.return_value = "wkhtmltopdf"
+
+        def _fake_run(args, check, stdout, stderr):
+            pdf_path = args[-1]
+            with open(pdf_path, "wb") as handle:
+                handle.write(b"%PDF-1.4\n%mock\n")
+            return None
+
+        mock_run.side_effect = _fake_run
+
+        pdf_bytes = render_pdf_from_html(
+            "<html><body>Hello</body></html>",
+            renderer="wkhtmltopdf",
+            config={"wkhtmltopdf_allow_unrestricted_fetch": True},
+        )
+
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        mock_run.assert_called_once()
 
 
 class TestTemplateCatalogView(TestCase):

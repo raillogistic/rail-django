@@ -13,7 +13,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.http.request import RawPostDataException
 from django.http import JsonResponse
-from django.test import Client, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.datastructures import MultiValueDict
 from django.urls import include, path, reverse
@@ -632,6 +632,35 @@ class TestMultiSchemaErrorHandling(TestCase):
         parsed = view.parse_body(request)
         self.assertIsInstance(parsed, dict)
         self.assertIs(parsed["variables"]["file"], uploaded_file)
+
+
+class TestMultiSchemaSecurityBoundaries(TestCase):
+    @override_settings(ROOT_URLCONF="rail_django.urls")
+    def test_get_rejects_mutation_operations(self):
+        response = self.client.get(
+            "/graphql/",
+            {"query": "mutation { ping }"},
+        )
+
+        self.assertEqual(response.status_code, 405)
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(payload["errors"][0]["extensions"]["code"], "GET_QUERY_ONLY")
+
+    @override_settings(ROOT_URLCONF="rail_django.urls")
+    def test_session_authenticated_post_requires_csrf(self):
+        user = User.objects.create_user(username="csrf_user", password="pass12345")
+        request = RequestFactory().post(
+            "/graphql/",
+            data=json.dumps({"query": "query { __typename }"}),
+            content_type="application/json",
+        )
+        request.user = user
+
+        response = MultiSchemaGraphQLView().dispatch(request, schema_name="gql")
+
+        self.assertEqual(response.status_code, 403)
+        payload = json.loads(response.content.decode("utf-8"))
+        self.assertIn("CSRF validation failed", payload["errors"][0]["message"])
 
 
 if __name__ == "__main__":

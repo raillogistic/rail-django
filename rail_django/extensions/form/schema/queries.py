@@ -7,14 +7,15 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import graphene
-from django.utils import timezone
 from django.apps import apps
+from django.utils import timezone
 from graphql import GraphQLError
 
 from ..extractors.base import FormConfigExtractor
 from ..extractors.model_form_contract_extractor import ModelFormContractExtractor
 from ..config import DEFAULT_FORM_ERROR_KEY, is_generated_form_enabled
 from ..codegen.typescript_generator import generate_typescript_definitions
+from ..utils.graphql_meta import get_graphql_meta
 from .types import (
     FormConfigType,
     FormDataType,
@@ -132,11 +133,22 @@ class FormQuery(graphene.ObjectType):
         extractor = FormConfigExtractor(
             schema_name=getattr(info.context, "schema_name", "default")
         )
+        model_cls = apps.get_model(app, model)
+        instance = extractor._load_instance(model_cls, object_id=object_id)
         config = extractor.extract(
-            app, model, user=user, object_id=object_id, mode=mode
+            app,
+            model,
+            user=user,
+            object_id=object_id,
+            mode=mode,
+            instance=instance,
         )
         initial_values = extractor.extract_initial_values(
-            app, model, object_id=object_id, user=user
+            app,
+            model,
+            object_id=object_id,
+            user=user,
+            instance=instance,
         )
         return {
             "config": config,
@@ -314,12 +326,25 @@ class FormQuery(graphene.ObjectType):
                 f"Generated form contract is not enabled for '{app_label}.{model_name}'."
             )
 
+        nested_field_set = {
+            str(item or "").strip()
+            for item in (nested_fields or [])
+            if str(item or "").strip()
+        }
+        instance = extractor._load_instance(
+            model,
+            object_id=object_id,
+            graphql_meta=get_graphql_meta(model),
+            include_nested=include_nested,
+            nested_field_set=nested_field_set,
+        )
         permission_snapshot = extractor.extract(
             app_label,
             model_name,
             user=user,
             object_id=object_id,
             mode="UPDATE",
+            instance=instance,
         )
         permissions = permission_snapshot.get("permissions") or {}
         operation_matrix = permissions.get("operations") or {}
@@ -338,4 +363,5 @@ class FormQuery(graphene.ObjectType):
             include_nested=include_nested,
             nested_fields=nested_fields,
             runtime_overrides=runtime_overrides or [],
+            instance=instance,
         )
