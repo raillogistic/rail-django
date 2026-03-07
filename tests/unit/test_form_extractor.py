@@ -6,6 +6,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django.config.framework_se
 django.setup()
 
 from rail_django.extensions.form.extractors.base import FormConfigExtractor
+from tests.models import TestProject
 
 
 @pytest.mark.django_db
@@ -47,3 +48,20 @@ def test_form_data_includes_initial_values():
     )
     assert values
     assert "name" in values
+
+
+def test_collect_relation_paths_prefetches_descendants_of_reverse_relations():
+    extractor = FormConfigExtractor()
+
+    select_related_paths, prefetch_related_paths = extractor._collect_relation_paths(
+        TestProject,
+        include_nested=False,
+        nested_field_set={"assignments"},
+        max_nested_depth=2,
+    )
+
+    assert "assignments" in prefetch_related_paths
+    assert "assignments__projet" in prefetch_related_paths
+    assert "assignments__employe" in prefetch_related_paths
+    assert "assignments__projet" not in select_related_paths
+    assert "assignments__employe" not in select_related_paths

@@ -392,6 +392,7 @@ class FormConfigExtractor(
         max_nested_depth: int = 2,
         prefix: str = "",
         depth: int = 0,
+        force_prefetch: bool = False,
         visited: Optional[set[tuple[type[models.Model], int]]] = None,
     ) -> tuple[set[str], set[str]]:
         if visited is None:
@@ -425,7 +426,9 @@ class FormConfigExtractor(
                     pass
 
             path = f"{prefix}{field_name}" if prefix else field_name
-            if field.many_to_many or field.one_to_many:
+            is_multi_relation = bool(field.many_to_many or field.one_to_many)
+            should_prefetch = force_prefetch or is_multi_relation
+            if should_prefetch:
                 prefetch_related_paths.add(path)
             else:
                 select_related_paths.add(path)
@@ -451,6 +454,7 @@ class FormConfigExtractor(
                     max_nested_depth=max_nested_depth,
                     prefix=f"{path}__",
                     depth=depth + 1,
+                    force_prefetch=should_prefetch,
                     visited=visited,
                 )
                 select_related_paths.update(child_select)
