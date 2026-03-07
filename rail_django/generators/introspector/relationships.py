@@ -2,7 +2,8 @@
 Relationship discovery logic for ModelIntrospector.
 """
 
-from typing import Dict
+from typing import Any
+
 from django.db import models
 
 class RelationshipDiscoveryMixin:
@@ -18,11 +19,15 @@ class RelationshipDiscoveryMixin:
                     reverse_relations[rel.get_accessor_name()] = rel.related_model
         return reverse_relations
 
-    def get_reverse_relations(self) -> dict[str, type[models.Model]]:
+    def get_reverse_relations(self) -> dict[str, dict[str, Any]]:
         """Get all reverse relationships."""
         reverse_relations = {}
-        if not self._meta: return reverse_relations
+        if not self._meta:
+            return reverse_relations
         if hasattr(self._meta, "related_objects"):
             for rel in self._meta.related_objects:
-                reverse_relations[rel.get_accessor_name()] = rel.related_model
+                reverse_relations[rel.get_accessor_name()] = {
+                    "model": rel.related_model,
+                    "relation": rel,
+                }
         return reverse_relations

@@ -14,9 +14,11 @@ from unittest.mock import MagicMock, Mock, patch
 from dataclasses import asdict
 
 import pytest
+from django.db import models
 from django.test import TestCase
 
 from rail_django.generators.pipeline.context import MutationContext
+from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.pipeline.base import (
     MutationStep,
     MutationPipeline,
@@ -32,8 +34,28 @@ from rail_django.generators.pipeline.utils import (
     auto_populate_created_by,
     decode_global_id,
     get_mandatory_fields,
+    process_relation_operations,
 )
 from test_app.models import Product
+
+
+class PipelineParent(models.Model):
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "tests"
+
+
+class PipelineChild(models.Model):
+    parent = models.ForeignKey(
+        PipelineParent,
+        on_delete=models.CASCADE,
+        related_name="children",
+    )
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        app_label = "tests"
 
 
 @pytest.mark.unit
@@ -325,6 +347,27 @@ class TestConditionalStep:
         mock_ctx.should_abort = False
 
         assert not step.should_run(mock_ctx)
+
+
+@pytest.mark.unit
+class TestProcessRelationOperations:
+    def test_reverse_many_to_one_allows_update_and_create_together(self):
+        introspector = ModelIntrospector(PipelineParent)
+
+        payload = {
+            "children": {
+                "update": [{"id": 1, "name": "Existing child"}],
+                "create": [{"name": "New child"}],
+            }
+        }
+
+        result = process_relation_operations(
+            payload,
+            PipelineParent,
+            introspector=introspector,
+        )
+
+        assert result == payload
 
 
 @pytest.mark.unit

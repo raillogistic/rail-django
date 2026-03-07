@@ -173,6 +173,19 @@ class TestModelIntrospector(TestCase):
         self.assertEqual(auteur_rel.related_model, IntrospectorTestAuthor)
         self.assertEqual(auteur_rel.from_field, "auteur_principal")
 
+    def test_get_reverse_relations_returns_relation_metadata(self):
+        """Test que les relations inverses exposent aussi le descripteur Django."""
+        reverse_relations = self.introspector.get_reverse_relations()
+
+        self.assertIn("articles", reverse_relations)
+        article_relation = reverse_relations["articles"]
+
+        self.assertEqual(article_relation["model"], IntrospectorTestArticle)
+        self.assertEqual(
+            article_relation["relation"].get_accessor_name(),
+            "articles",
+        )
+
     def test_get_model_methods(self):
         """Test l'extraction des méthodes du modèle."""
         methods = self.introspector.methods
