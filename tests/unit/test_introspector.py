@@ -186,6 +186,30 @@ class TestModelIntrospector(TestCase):
         self.assertEqual(method_info.name, "obtenir_nom_complet")
         self.assertIsNotNone(method_info.method)
 
+    def test_get_model_methods_excludes_simple_history_helpers(self):
+        """django-simple-history helper methods should not be exposed."""
+        original_method = getattr(
+            IntrospectorTestAuthor, "save_without_historical_record", None
+        )
+
+        def save_without_historical_record(self, *args, **kwargs):
+            return None
+
+        IntrospectorTestAuthor.save_without_historical_record = (
+            save_without_historical_record
+        )
+        ModelIntrospector.clear_cache()
+
+        try:
+            methods = ModelIntrospector(IntrospectorTestAuthor).methods
+            self.assertNotIn("save_without_historical_record", methods)
+        finally:
+            if original_method is None:
+                delattr(IntrospectorTestAuthor, "save_without_historical_record")
+            else:
+                IntrospectorTestAuthor.save_without_historical_record = original_method
+            ModelIntrospector.clear_cache()
+
     def test_field_validation(self):
         """Test la validation des champs extraits."""
         fields = self.introspector.fields

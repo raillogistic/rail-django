@@ -57,3 +57,32 @@ def is_historical_relation_field(field: Any) -> bool:
         return True
 
     return False
+
+
+def is_historical_helper_method(model: Any, method_name: str, method: Any = None) -> bool:
+    """Return True when a model method is an internal django-simple-history helper."""
+    normalized_name = str(method_name or "").strip().lower()
+    if not normalized_name:
+        return False
+
+    if normalized_name in {
+        "save_without_historical_record",
+        "delete_without_historical_record",
+    }:
+        return True
+
+    if "without_historical_record" in normalized_name:
+        return True
+
+    candidate = method
+    if candidate is None:
+        try:
+            candidate = getattr(model, method_name)
+        except Exception:
+            candidate = None
+
+    candidate_module = str(getattr(candidate, "__module__", "")).lower()
+    if "simple_history" in candidate_module and "histor" in normalized_name:
+        return True
+
+    return False

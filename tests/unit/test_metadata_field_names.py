@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import unittest.mock
 from unittest.mock import MagicMock
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
+from rail_django.generators.introspector import ModelIntrospector
 
 class FieldNameTestModel(models.Model):
     first_name = models.CharField(max_length=100)
@@ -362,3 +363,55 @@ class TestMetadataFieldNames(TestCase):
                         self.assertEqual(
                             do_something['name'], 'doSomethingFieldNameTestModel'
                         )
+
+    def test_custom_mutation_excludes_simple_history_helper(self):
+        """Metadata should not expose django-simple-history helper methods."""
+        with unittest.mock.patch('rail_django.extensions.metadata.extractor.get_model_graphql_meta') as mock_get_meta:
+            mock_get_meta.return_value = MagicMock(custom_metadata=None, field_groups=[])
+
+            with unittest.mock.patch('rail_django.extensions.metadata.extractor.apps.get_model') as mock_get_model:
+                mock_get_model.return_value = FieldNameTestModel
+
+                with unittest.mock.patch('rail_django.extensions.metadata.extractor.MutationGeneratorSettings') as mock_settings_cls:
+                    mock_settings = MagicMock()
+                    mock_settings.enable_create = False
+                    mock_settings.enable_update = False
+                    mock_settings.enable_delete = False
+                    mock_settings_cls.from_schema.return_value = mock_settings
+
+                    original_method = getattr(
+                        FieldNameTestModel, "save_without_historical_record", None
+                    )
+
+                    def save_without_historical_record(self, *args, **kwargs):
+                        return None
+
+                    FieldNameTestModel.save_without_historical_record = (
+                        save_without_historical_record
+                    )
+                    ModelIntrospector.clear_cache()
+
+                    try:
+                        self.extractor._extract_fields = MagicMock(return_value=[])
+                        self.extractor._extract_relationships = MagicMock(return_value=[])
+                        self.extractor._extract_filters = MagicMock(return_value=[])
+                        self.extractor._extract_filter_config = MagicMock(return_value={})
+                        self.extractor._extract_relation_filters = MagicMock(return_value=[])
+                        self.extractor._extract_permissions = MagicMock(return_value={})
+                        self.extractor._extract_field_groups = MagicMock(return_value=[])
+                        self.extractor._extract_templates = MagicMock(return_value=[])
+
+                        result = self.extractor.extract('test_metadata_field_names', 'FieldNameTestModel', self.user)
+
+                        method_names = {
+                            mutation['method_name']
+                            for mutation in result['mutations']
+                            if mutation.get('operation') == 'custom'
+                        }
+                        self.assertNotIn('save_without_historical_record', method_names)
+                    finally:
+                        if original_method is None:
+                            delattr(FieldNameTestModel, 'save_without_historical_record')
+                        else:
+                            FieldNameTestModel.save_without_historical_record = original_method
+                        ModelIntrospector.clear_cache()

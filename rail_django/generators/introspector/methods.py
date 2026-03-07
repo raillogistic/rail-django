@@ -4,11 +4,16 @@ Method analysis logic for ModelIntrospector.
 
 from typing import Any
 
+from ...utils.history_detection import is_historical_helper_method
+
 class MethodAnalyzerMixin:
     """Mixin for analyzing model methods."""
 
     def _is_django_builtin_method(self, method_name: str, method: Any) -> bool:
         """Determines if a method is a Django model built-in method."""
+        if is_historical_helper_method(self.model, method_name, method):
+            return True
+
         django_builtin_methods = {
             "clean", "clean_fields", "full_clean", "validate_unique", "validate_constraints",
             "save", "save_base", "delete", "adelete", "refresh_from_db", "arefresh_from_db",
