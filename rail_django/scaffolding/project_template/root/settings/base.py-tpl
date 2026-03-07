@@ -728,7 +728,7 @@ RAIL_DJANGO_GRAPHQL_TEMPLATING = {
 
     # Base URL for resolving assets. Use "request" to resolve against request base URL.
 
-    "base_url": None,
+    "base_url": "request",
 
     # Expose detailed errors in responses (recommended False in production).
 

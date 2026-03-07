@@ -170,6 +170,61 @@ def test_custom_mutation_query_returns_custom_mutation_metadata(gql_client):
         invalidate_metadata_cache(app="test_app", model="Product")
 
 
+def test_custom_mutations_query_returns_all_custom_mutation_metadata(gql_client):
+    original_featured = getattr(Product, "mark_featured", None)
+    original_archived = getattr(Product, "archive_product", None)
+
+    @mutation(description="Mark this product as featured")
+    def mark_featured(self, note: str = "manual") -> bool:
+        return True
+
+    @mutation(description="Archive this product")
+    def archive_product(self, reason: str = "cleanup") -> bool:
+        return True
+
+    Product.mark_featured = mark_featured
+    Product.archive_product = archive_product
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    query = """
+    query {
+      customMutations(app: "test_app", model: "Product") {
+        name
+        operation
+        methodName
+        description
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        payload = result["data"]["customMutations"]
+        method_names = {item["methodName"] for item in payload}
+        assert "mark_featured" in method_names
+        assert "archive_product" in method_names
+        assert all(item["operation"] == "custom" for item in payload)
+    finally:
+        if original_featured is None and hasattr(Product, "mark_featured"):
+            delattr(Product, "mark_featured")
+        elif original_featured is not None:
+            Product.mark_featured = original_featured
+
+        if original_archived is None and hasattr(Product, "archive_product"):
+            delattr(Product, "archive_product")
+        elif original_archived is not None:
+            Product.archive_product = original_archived
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            del Product._graphql_meta_instance
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
 def test_model_template_query_returns_model_template_metadata(gql_client):
     original_method = getattr(Product, "print_summary", None)
     original_templates = template_registry.all()
@@ -209,6 +264,58 @@ def test_model_template_query_returns_model_template_metadata(gql_client):
             delattr(Product, "print_summary")
         elif original_method is not None:
             Product.print_summary = original_method
+
+        template_registry._templates = dict(original_templates)
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
+def test_model_templates_query_returns_all_model_template_metadata(gql_client):
+    original_summary = getattr(Product, "print_summary", None)
+    original_label = getattr(Product, "print_label", None)
+    original_templates = template_registry.all()
+
+    @model_pdf_template(content="pdf/product_summary.html")
+    def print_summary(self):
+        return {"id": self.pk}
+
+    @model_pdf_template(content="pdf/product_label.html")
+    def print_label(self):
+        return {"id": self.pk}
+
+    Product.print_summary = print_summary
+    Product.print_label = print_label
+    _register_model_templates(Product)
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    query = """
+    query {
+      modelTemplates(app: "test_app", model: "Product") {
+        key
+        templateType
+        endpoint
+        urlPath
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        payload = result["data"]["modelTemplates"]
+        url_paths = {item["urlPath"] for item in payload}
+        assert any(path.endswith("/print_summary") for path in url_paths)
+        assert any(path.endswith("/print_label") for path in url_paths)
+        assert all(item["templateType"] == "pdf" for item in payload)
+    finally:
+        if original_summary is None and hasattr(Product, "print_summary"):
+            delattr(Product, "print_summary")
+        elif original_summary is not None:
+            Product.print_summary = original_summary
+
+        if original_label is None and hasattr(Product, "print_label"):
+            delattr(Product, "print_label")
+        elif original_label is not None:
+            Product.print_label = original_label
 
         template_registry._templates = dict(original_templates)
         invalidate_metadata_cache(app="test_app", model="Product")

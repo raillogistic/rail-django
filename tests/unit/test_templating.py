@@ -24,6 +24,7 @@ from rail_django.extensions.templating import (
     _register_model_templates,
 )
 from rail_django.extensions.auth import JWTManager
+from rail_django.extensions.templating.rendering.html import render_template_html
 
 pytestmark = pytest.mark.unit
 
@@ -212,6 +213,23 @@ class TestTemplatingRendering(TestCase):
         body = response.content.decode("utf-8")
         self.assertIn("Header", body)
         self.assertIn("Content", body)
+
+    def test_render_template_html_pins_header_and_footer_for_each_page(self):
+        html = render_template_html(
+            header_html="<div>Header</div>",
+            content_html="<div>Content</div>",
+            footer_html="<div>Footer</div>",
+            config={},
+        )
+
+        self.assertIn("margin-top: calc(20mm + calc(20mm + 10mm));", html)
+        self.assertIn("margin-bottom: calc(20mm + calc(20mm + 12mm));", html)
+        self.assertIn(".pdf-header { position: fixed;", html)
+        self.assertIn("top: calc(-1 * calc(20mm + 10mm));", html)
+        self.assertIn(".pdf-footer { position: fixed;", html)
+        self.assertIn("bottom: calc(-1 * calc(20mm + 12mm));", html)
+        self.assertIn("<div class='pdf-header'><div>Header</div></div>", html)
+        self.assertIn("<div class='pdf-footer'><div>Footer</div></div>", html)
 
     @patch("rail_django.extensions.templating.rendering.renderers.shutil.which")
     def test_wkhtmltopdf_is_blocked_without_explicit_unsafe_opt_in(

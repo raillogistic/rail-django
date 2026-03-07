@@ -1,19 +1,17 @@
-# Schema Metadata
+# Schema metadata
 
-Rail Django exposes comprehensive schema metadata to enable dynamic user interfaces, automated form generation, and intelligent frontend clients. This extension provides a deep look into your Django models through the GraphQL API.
+Rail Django exposes schema metadata through GraphQL so your frontend can
+discover models, fields, permissions, filters, mutations, and templates
+without hard-coding that information.
 
 ## Overview
 
-The metadata extension allows frontends to:
-- Discover available models and their fields.
-- Understand field types, constraints, and validation rules.
-- Access display information (verbose names, help text, placeholders).
-- Inspect filtering and sorting capabilities.
-- Determine user permissions and field visibility.
+Use the metadata extension when you want to build dynamic forms, tables,
+detail screens, filter builders, or action menus from the server contract.
+The API returns data that already respects model discovery rules, field
+visibility, and per-user access checks.
 
-## Activation
-
-The metadata extension is enabled by default. You can disable it in your settings:
+The extension is enabled by default. You can disable it in your settings:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -23,162 +21,143 @@ RAIL_DJANGO_GRAPHQL = {
 }
 ```
 
-Metadata is protected and requires an authenticated user by default.
+Metadata queries are protected. In practice, callers must pass both model
+discovery checks and any operation-specific permission checks embedded in the
+metadata payload.
 
-## Available Queries
+## Available queries
 
-### modelSchema
+The metadata root adds these GraphQL fields:
 
-Retrieves complete metadata for a specific model.
+- `modelSchema(app, model, objectId)`
+- `availableModels(app)`
+- `appSchemas(app)`
+- `filterSchema(app, model)`
+- `fieldFilterSchema(app, model, field)`
+- `customMutation(app, model, functionName, objectId)`
+- `customMutations(app, model, objectId)`
+- `modelTemplate(app, model, functionName, objectId)`
+- `modelTemplates(app, model, objectId)`
+- `modelDetailContract(input)`
+- `metadataDeployVersion(key)`
+- `frontendRouteAccess`
+
+## modelSchema
+
+`modelSchema` returns the full metadata contract for one model. Use it when
+you need fields, relationships, permissions, filters, generated mutations, and
+registered templates in one request.
 
 ```graphql
-query ModelMetadata($app: String!, $model: String!) {
-  modelSchema(appLabel: $app, modelName: $model) {
-    appLabel
-    modelName
+query ProductSchema {
+  modelSchema(app: "inventory", model: "Product") {
+    app
+    model
     verboseName
     verboseNamePlural
-    description
     fields {
       name
-      verboseName
+      fieldName
       fieldType
       graphqlType
-      isRequired
-      isReadOnly
-      isPrimaryKey
-      isForeignKey
-      relatedModel
-      description
-      defaultValue
-      choices {
-        value
-        label
-      }
-      validators {
-        type
-        params
-        message
-      }
+      required
+      readable
+      writable
     }
-    filtering {
-      quickFields
-      filterFields {
-        field
-        lookups
-      }
-    }
-    ordering {
-      allowedFields
-      defaultOrdering
-    }
-    access {
-      operations {
-        operation
-        roles
-      }
-    }
-  }
-}
-```
-
-### availableModels
-
-Lists all available models with summary information.
-
-```graphql
-query AvailableModels {
-  availableModels {
-    appLabel
-    modelName
-    verboseName
-    verboseNamePlural
-    description
-    fieldCount
-    hasMutations
-    isUserModel
-  }
-}
-```
-
-### Instance-Aware Metadata (FSM)
-
-You can retrieve metadata specific to a model instance (for example, valid state transitions) by providing an `objectId`.
-
-```graphql
-query InstanceMetadata($app: String!, $model: String!, $id: ID!) {
-  modelSchema(appLabel: $app, modelName: $model, objectId: $id) {
-    fields {
+    mutations {
       name
+      operation
+      methodName
+      allowed
+    }
+    templates {
+      key
+      templateType
+      title
+      endpoint
+    }
+    permissions {
+      canList
+      canRetrieve
+      canCreate
+      canUpdate
+      canDelete
+    }
+    metadataVersion
+  }
+}
+```
+
+Pass `objectId` when mutation availability, FSM transitions, or template
+permissions depend on a specific record.
+
+```graphql
+query ProductSchemaForRecord {
+  modelSchema(app: "inventory", model: "Product", objectId: "42") {
+    fields {
+      fieldName
       isFsmField
       fsmTransitions {
         name
-        source
         target
-        label
-        allowed  # True if transition is valid for this instance
+        allowed
       }
     }
-  }
-}
-```
-
-### appSchemas
-
-Retrieves all models for a specific application.
-
-```graphql
-query AppModels($app: String!) {
-  appSchemas(appLabel: $app) {
-    modelName
-    verboseName
-    description
-    fields {
+    mutations {
       name
-      fieldType
-      isRequired
+      allowed
+      reason
+    }
+    templates {
+      key
+      allowed
+      denialReason
     }
   }
 }
 ```
 
-## Filter Metadata
+## availableModels and appSchemas
 
-The metadata extension exposes filter information that reflects the standard nested filter style used in Rail Django.
-
-### Filter Style
-
-Rail Django uses a type-safe nested filter style (Prisma/Hasura style):
-
-| Style | Argument | Type Pattern | Example |
-|-------|----------|--------------|---------|
-| Nested | `where` | `{Model}WhereInput` | `where: { name: { icontains: "x" } }` |
-
-### Nested Filter Operators
-
-Each field type exposes typed operators:
-
-- **String**: `eq`, `neq`, `contains`, `icontains`, `startsWith`, `endsWith`, `in`, `notIn`, `isNull`, `regex`
-- **Numeric**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `between`, `isNull`
-- **Date/DateTime**: All numeric operators plus `year`, `month`, `day`, `today`, `thisWeek`, `thisMonth`, `pastYear`
-- **Boolean**: `eq`, `isNull`
-- **JSON**: `eq`, `isNull`, `hasKey`, `hasKeys`, `hasAnyKeys`
-
-### Dynamic Filtering UI
-
-The metadata API provides specific fields to help build dynamic filtering interfaces automatically:
-
-- **`base_type`**: Hints at the type of UI widget to render for the field (for example, "String", "Number", "Boolean", "Date", "Relationship", "JSON").
-- **`label`** (on filter options): Human-readable, localized label for the operator (for example, "Equals", "Greater than").
-
-Example query for building a filter panel:
+`availableModels` is the lightweight discovery API. `appSchemas` is the
+batched version of `modelSchema` for one Django app.
 
 ```graphql
-query FilterPanelMetadata($app: String!, $model: String!) {
-  filterSchema(app: $app, model: $model) {
+query DiscoverInventory {
+  availableModels(app: "inventory") {
+    app
+    model
+    verboseName
+    verboseNamePlural
+  }
+}
+```
+
+```graphql
+query InventorySchemas {
+  appSchemas(app: "inventory") {
+    model
+    fields {
+      fieldName
+      fieldType
+    }
+  }
+}
+```
+
+## Filter metadata
+
+`filterSchema` returns the filter fields that the current user can use for a
+model. `fieldFilterSchema` returns the definition for one filter field.
+
+```graphql
+query ProductFilters {
+  filterSchema(app: "inventory", model: "Product") {
     fieldName
     fieldLabel
     baseType
+    filterInputType
+    availableOperators
     options {
       lookup
       label
@@ -189,105 +168,258 @@ query FilterPanelMetadata($app: String!, $model: String!) {
 }
 ```
 
-### Relation Filters
-
-Nested style includes relation quantifiers for M2M and reverse relations:
-
-- `{relation}_some`: At least one related object matches
-- `{relation}_every`: All related objects match
-- `{relation}_none`: No related objects match
-- `{relation}_count`: Filter by count of related objects
-
-## Field Classification
-
-### Available Flags
-
-| Flag              | Description               |
-| ----------------- | ------------------------- |
-| `isPrimaryKey`    | Primary identifier        |
-| `isForeignKey`    | Foreign key relationship  |
-| `isManyToMany`    | Many-to-many relationship |
-| `isRequired`      | Mandatory field           |
-| `isReadOnly`      | Read-only field           |
-| `isUnique`        | Unique constraint         |
-| `isIndexed`       | Has database index        |
-| `isSearchable`    | Included in quick search  |
-| `isFilterable`    | Can be filtered           |
-| `isSortable`      | Can be sorted             |
-
-### Classifications
-
-Custom classifications can be used for sensitive or special fields in `GraphQLMeta`:
-
-```python
-class Customer(models.Model):
-    email = models.EmailField()
-    ssn = models.CharField(max_length=11)
-
-    class GraphQLMeta:
-        classifications = {
-            "model": ["crm", "customer_data"],
-            "fields": {
-                "email": ["pii", "contact"],
-                "ssn": ["pii", "sensitive", "gdpr"],
-            },
-        }
-```
-
-## Permissions and Visibility
-
-The metadata respects the security system. You can query visibility levels per role:
-
 ```graphql
-query FieldVisibilityForRole($app: String!, $model: String!, $role: String!) {
-  modelSchemaForRole(appLabel: $app, modelName: $model, role: $role) {
-    fields {
-      name
-      visibility
-      canRead
-      canWrite
+query ProductNameFilter {
+  fieldFilterSchema(app: "inventory", model: "Product", field: "name") {
+    fieldName
+    fieldLabel
+    options {
+      lookup
+      label
     }
   }
 }
 ```
 
-Visibility levels include: `VISIBLE`, `MASKED`, `HIDDEN`, `REDACTED`.
+## customMutation and customMutations
 
-## Customization
+`customMutation` returns one custom model mutation. `customMutations` returns
+every custom mutation exposed for the model. Both fields read from the same
+metadata source as `modelSchema.mutations`, but they filter the result to
+custom operations only.
 
-### Field Type Registry
+Use `customMutation` when you already know the target method and need one
+payload. Use `customMutations` when you want to build an action menu or inspect
+all available custom operations for a record.
 
-You can extend the default type mapping for custom Django fields using the `FieldTypeRegistry`. This is useful if you have custom model fields (like `PhoneNumberField` or `ColorField`) that you want to map to specific GraphQL types.
+### Arguments
 
-```python
-from rail_django.extensions.metadata.mapping import registry
-from my_app.fields import PhoneNumberField
+Both APIs accept:
 
-# Register GraphQL type mapping
-registry.register_graphql_mapping(PhoneNumberField, "String")
-# Or use a custom scalar if available
-# registry.register_graphql_mapping(PhoneNumberField, "PhoneNumber")
+- `app`: Django app label.
+- `model`: Django model class name.
+- `objectId`: Optional record identifier for instance-aware permissions.
 
-# Register Python type mapping (for code generation tools)
-registry.register_python_mapping(PhoneNumberField, "str")
+`customMutation` also requires:
+
+- `functionName`: The decorated mutation method name or its generated GraphQL
+  name. Matching is flexible across snake case and camel case names.
+
+### Return type
+
+Both APIs return `MutationSchemaType` data. Common fields include:
+
+- `name`: GraphQL mutation field name.
+- `operation`: Mutation category. For these APIs, the value is always
+  `custom`.
+- `methodName`: Python method name on the model.
+- `description`: Mutation description.
+- `inputFields`: Input field definitions.
+- `allowed`: Whether the current user can execute the mutation.
+- `requiredPermissions`: Explicit permission codes attached to the mutation.
+- `reason`: Server-provided denial reason when the mutation is unavailable.
+- `mutationType`: Compatibility alias for clients that branch on mutation kind.
+
+### Query one custom mutation
+
+```graphql
+query ProductAction {
+  customMutation(
+    app: "inventory"
+    model: "Product"
+    functionName: "mark_featured"
+    objectId: "42"
+  ) {
+    name
+    operation
+    methodName
+    description
+    allowed
+    reason
+    inputFields {
+      fieldName
+      graphqlType
+      required
+    }
+  }
+}
 ```
 
-### GraphQLMeta
+### Query all custom mutations for a model
 
-Use `GraphQLMeta` to configure how metadata is generated for your models:
+```graphql
+query ProductActions {
+  customMutations(app: "inventory", model: "Product", objectId: "42") {
+    name
+    methodName
+    description
+    allowed
+    reason
+  }
+}
+```
+
+### Typical usage
+
+- Use `customMutation` to lazily fetch one action definition before rendering a
+  modal or submit form.
+- Use `customMutations` to render all record-level actions in a toolbar or
+  context menu.
+- Pass `objectId` whenever action availability depends on the selected record.
+
+## modelTemplate and modelTemplates
+
+`modelTemplate` returns one registered model template. `modelTemplates` returns
+every registered template for the model. These fields read from the same
+metadata source as `modelSchema.templates`.
+
+Templates can come from the PDF templating extension or from Excel export
+registrations. The metadata payload already includes endpoint URLs and access
+evaluation results for the current user.
+
+### Arguments
+
+Both APIs accept:
+
+- `app`: Django app label.
+- `model`: Django model class name.
+- `objectId`: Optional record identifier for instance-aware access checks.
+
+`modelTemplate` also requires:
+
+- `functionName`: The template method name, generated key, or URL path suffix.
+  Matching is flexible across snake case and camel case forms.
+
+### Return type
+
+Both APIs return `TemplateInfoType` data. Common fields include:
+
+- `key`: Stable metadata key for the template entry.
+- `templateType`: Template family, such as `pdf` or `excel`.
+- `title`: Human-readable template title.
+- `description`: Optional description.
+- `endpoint`: Relative API endpoint for rendering or downloading.
+- `urlPath`: Registered template path.
+- `guard`: Access guard used by the template.
+- `allowed`: Whether the current user can use the template.
+- `denialReason`: Server-provided access denial reason.
+- `requireAuthentication`: Whether authentication is required.
+- `roles` and `permissions`: Declared access requirements.
+- `allowClientData`, `clientDataFields`, and `clientDataSchema`: Client payload
+  contract for template rendering.
+
+### Query one model template
+
+```graphql
+query ProductSummaryTemplate {
+  modelTemplate(
+    app: "inventory"
+    model: "Product"
+    functionName: "print_summary"
+    objectId: "42"
+  ) {
+    key
+    templateType
+    title
+    endpoint
+    urlPath
+    allowed
+    denialReason
+  }
+}
+```
+
+### Query all templates for a model
+
+```graphql
+query ProductTemplates {
+  modelTemplates(app: "inventory", model: "Product", objectId: "42") {
+    key
+    templateType
+    title
+    endpoint
+    allowed
+  }
+}
+```
+
+### Typical usage
+
+- Use `modelTemplate` when the UI links to one known template by method name.
+- Use `modelTemplates` to build a print or export menu dynamically.
+- Use `objectId` when access to the template depends on the selected record.
+
+## modelDetailContract
+
+`modelDetailContract` resolves a metadata-driven detail page contract. This is
+the best entry point when you want the server to define layout nodes, actions,
+and relation data sources for a detail screen.
+
+```graphql
+query ProductDetailContract {
+  modelDetailContract(
+    input: {app: "inventory", model: "Product", objectId: "42"}
+  ) {
+    ok
+    reason
+    contract {
+      modelName
+      queryRoot
+      layoutNodes {
+        id
+        type
+        title
+      }
+      actions {
+        key
+        label
+        mutationName
+        allowed
+      }
+    }
+  }
+}
+```
+
+## metadataDeployVersion and frontendRouteAccess
+
+`metadataDeployVersion` exposes the deployment-level version token used for
+metadata cache invalidation. `frontendRouteAccess` returns resolved route
+visibility rules for the current user.
+
+```graphql
+query MetadataVersion {
+  metadataDeployVersion
+}
+```
+
+```graphql
+query RouteAccess {
+  frontendRouteAccess {
+    version
+    rules {
+      targetType
+      target
+      allowed
+      denialReason
+    }
+  }
+}
+```
+
+## GraphQLMeta customization
+
+Use `GraphQLMeta` to add frontend-oriented metadata to your models.
 
 ```python
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
+
 
 class Product(models.Model):
     name = models.CharField("Name", max_length=200)
     sku = models.CharField("SKU", max_length=50, unique=True)
 
     class GraphQLMeta(GraphQLMetaConfig):
-        verbose_name = "Product"
-        description = "Catalog product"
-
-        # Field specific metadata
         field_metadata = {
             "name": {
                 "placeholder": "Enter product name",
@@ -295,45 +427,28 @@ class Product(models.Model):
             }
         }
 
-        # Filtering configuration
-        filtering = GraphQLMetaConfig.Filtering(
-            quick=["name", "sku"],
-            fields={
-                "price": ["eq", "gt", "lt", "between"],
-            },
-        )
+        custom_metadata = {
+            "ui": {
+                "icon": "package",
+            }
+        }
 ```
 
-## Caching
+## Cache invalidation
 
-Metadata generation can be expensive for complex models. The extension uses Django's cache framework to store schema results.
-
-### Versioning Strategy
-
-Each model has a tracked version key (`metadata_version:{app}:{model}`). When metadata is requested:
-1. The current version is retrieved (or initialized).
-2. A cache key is built including the version, app, model, user hash (for permissions), and object ID (if applicable).
-3. If a cached schema exists, it is returned immediately.
-
-### Invalidation
-
-To invalidate metadata for a specific model (for example, after a schema migration or permission change), use:
+Metadata responses are cached. Invalidate one model's cached metadata when
+schema behavior changes outside a normal deploy flow.
 
 ```python
 from rail_django.extensions.metadata.utils import invalidate_metadata_cache
 
-# Invalidate specific model
-invalidate_metadata_cache(app="my_app", model="MyModel")
+invalidate_metadata_cache(app="inventory", model="Product")
 ```
 
-This bumps the version token, effectively invalidating all cached entries for that model without requiring a full cache flush.
+## Next steps
 
-## Internationalization (i18n)
-
-The metadata extension supports internationalization. Field labels, help text, descriptions, and filter operator labels (for example, "At least one", "All") are returned in the active language of the request. Ensure `django.middleware.locale.LocaleMiddleware` is enabled.
-
-## See Also
-
-- [Filtering Guide](../core/filtering.md)
-- [Permissions](../security/permissions.md)
-- [GraphQLMeta Reference](../reference/meta.md)
+- Read [GraphQLMeta reference](../reference/meta.md) to customize model
+  metadata.
+- Read [templating](./templating.md) if you want to register PDF templates.
+- Read [importing](./importing.md) if you want to expose import templates and
+  import workflows.

@@ -188,6 +188,16 @@ class ModelSchemaQuery(graphene.ObjectType):
         description="Get metadata for one custom model mutation.",
     )
 
+    customMutations = graphene.List(
+        MutationSchemaType,
+        app=graphene.String(required=True, description="Django app label"),
+        model=graphene.String(required=True, description="Model name"),
+        objectId=graphene.ID(
+            description="Instance ID for instance-specific permissions"
+        ),
+        description="Get metadata for all custom model mutations.",
+    )
+
     modelTemplate = graphene.Field(
         TemplateInfoType,
         app=graphene.String(required=True, description="Django app label"),
@@ -199,6 +209,16 @@ class ModelSchemaQuery(graphene.ObjectType):
             description="Instance ID for instance-specific permissions"
         ),
         description="Get metadata for one model template.",
+    )
+
+    modelTemplates = graphene.List(
+        TemplateInfoType,
+        app=graphene.String(required=True, description="Django app label"),
+        model=graphene.String(required=True, description="Model name"),
+        objectId=graphene.ID(
+            description="Instance ID for instance-specific permissions"
+        ),
+        description="Get metadata for all model templates.",
     )
 
     modelDetailContract = graphene.Field(
@@ -354,6 +374,26 @@ class ModelSchemaQuery(graphene.ObjectType):
         function_name: str,
         objectId: Optional[str] = None,
     ) -> Optional[dict]:
+        for mutation in self.resolve_customMutations(
+            info, app=app, model=model, objectId=objectId
+        ):
+            if not isinstance(mutation, dict):
+                continue
+            if self._identifier_matches(
+                function_name,
+                mutation.get("method_name"),
+                mutation.get("name"),
+            ):
+                return mutation
+        return None
+
+    def resolve_customMutations(
+        self,
+        info,
+        app: str,
+        model: str,
+        objectId: Optional[str] = None,
+    ) -> list[dict]:
         user = getattr(info.context, "user", None)
         try:
             model_cls = apps.get_model(app, model)
@@ -373,18 +413,11 @@ class ModelSchemaQuery(graphene.ObjectType):
             include_sections={"mutations"},
         )
 
-        for mutation in schema.get("mutations", []):
-            if not isinstance(mutation, dict):
-                continue
-            if mutation.get("operation") != "custom":
-                continue
-            if self._identifier_matches(
-                function_name,
-                mutation.get("method_name"),
-                mutation.get("name"),
-            ):
-                return mutation
-        return None
+        return [
+            mutation
+            for mutation in schema.get("mutations", [])
+            if isinstance(mutation, dict) and mutation.get("operation") == "custom"
+        ]
 
     def resolve_modelTemplate(
         self,
@@ -394,29 +427,12 @@ class ModelSchemaQuery(graphene.ObjectType):
         function_name: str,
         objectId: Optional[str] = None,
     ) -> Optional[dict]:
-        user = getattr(info.context, "user", None)
-        try:
-            model_cls = apps.get_model(app, model)
-        except LookupError:
-            raise GraphQLError(f"Model '{app}.{model}' not found.")
-        if not _user_can_discover_model(model_cls, user):
-            raise GraphQLError("Access denied")
-
-        extractor = ModelSchemaExtractor(
-            schema_name=getattr(info.context, "schema_name", "default")
-        )
-        schema = extractor.extract(
-            app,
-            model,
-            user=user,
-            object_id=objectId,
-            include_sections={"templates"},
-        )
+        model_cls = self._resolve_model_class(info, app, model)
         template_methods = self._template_method_index(model_cls)
 
-        for template in schema.get("templates", []):
-            if not isinstance(template, dict):
-                continue
+        for template in self.resolve_modelTemplates(
+            info, app=app, model=model, objectId=objectId
+        ):
             key = str(template.get("key") or "")
             url_path = str(template.get("url_path") or "")
             candidates = [
@@ -430,6 +446,40 @@ class ModelSchemaQuery(graphene.ObjectType):
             if self._identifier_matches(function_name, *candidates):
                 return template
         return None
+
+    def resolve_modelTemplates(
+        self,
+        info,
+        app: str,
+        model: str,
+        objectId: Optional[str] = None,
+    ) -> list[dict]:
+        self._resolve_model_class(info, app, model)
+        extractor = ModelSchemaExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        schema = extractor.extract(
+            app,
+            model,
+            user=getattr(info.context, "user", None),
+            object_id=objectId,
+            include_sections={"templates"},
+        )
+        return [
+            template
+            for template in schema.get("templates", [])
+            if isinstance(template, dict)
+        ]
+
+    def _resolve_model_class(self, info, app: str, model: str):
+        user = getattr(info.context, "user", None)
+        try:
+            model_cls = apps.get_model(app, model)
+        except LookupError:
+            raise GraphQLError(f"Model '{app}.{model}' not found.")
+        if not _user_can_discover_model(model_cls, user):
+            raise GraphQLError("Access denied")
+        return model_cls
 
     def resolve_modelDetailContract(self, info, input: dict) -> dict:
         user = getattr(info.context, "user", None)

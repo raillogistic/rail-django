@@ -81,6 +81,84 @@ def _build_style_block(
     return "\n".join(css_chunks)
 
 
+def _expand_box_shorthand(value: Any) -> tuple[str, str, str, str]:
+    raw = str(value or "0").split()
+    if len(raw) == 1:
+        return raw[0], raw[0], raw[0], raw[0]
+    if len(raw) == 2:
+        return raw[0], raw[1], raw[0], raw[1]
+    if len(raw) == 3:
+        return raw[0], raw[1], raw[2], raw[1]
+    return raw[0], raw[1], raw[2], raw[3]
+
+
+def _build_pinned_layout_css(
+    *, has_header: bool, has_footer: bool, config: dict[str, Any]
+) -> str:
+    """
+    Build CSS that pins header/footer on every page.
+
+    WeasyPrint uses running elements and page margin boxes so headers/footers
+    repeat without participating in normal flow. Other renderers fall back to
+    fixed positioning.
+    """
+    margin_top, margin_right, margin_bottom, margin_left = _expand_box_shorthand(
+        config.get("margin", "20mm")
+    )
+    header_spacing = config.get("header_spacing", "10mm")
+    footer_spacing = config.get("footer_spacing", "12mm")
+    header_height = config.get("header_height", "20mm")
+    footer_height = config.get("footer_height", "20mm")
+    content_spacing = config.get("content_spacing", "8mm")
+    reserved_header_space = f"calc({header_height} + {header_spacing})"
+    reserved_footer_space = f"calc({footer_height} + {footer_spacing})"
+
+    css_chunks = [
+        "@page {"
+        f" margin-top: calc({margin_top} + {reserved_header_space if has_header else '0mm'});"
+        f" margin-right: {margin_right};"
+        f" margin-bottom: calc({margin_bottom} + {reserved_footer_space if has_footer else '0mm'});"
+        f" margin-left: {margin_left};"
+        " }",
+        "html, body { margin: 0; }",
+        "* { box-sizing: border-box; }",
+        ".pdf-content {"
+        " position: relative;"
+        f" margin-bottom: {content_spacing};"
+        " }",
+    ]
+
+    if has_header:
+        css_chunks.extend(
+            [
+                ".pdf-header {"
+                " position: fixed;"
+                f" top: calc(-1 * {reserved_header_space});"
+                " left: 0;"
+                " right: 0;"
+                " width: 100%;"
+                f" min-height: {header_height};"
+                " }",
+            ]
+        )
+
+    if has_footer:
+        css_chunks.extend(
+            [
+                ".pdf-footer {"
+                " position: fixed;"
+                f" bottom: calc(-1 * {reserved_footer_space});"
+                " left: 0;"
+                " right: 0;"
+                " width: 100%;"
+                f" min-height: {footer_height};"
+                " }",
+            ]
+        )
+
+    return "\n".join(css_chunks)
+
+
 def _css_escape(value: str) -> str:
     """
     Escape a string for safe inclusion in CSS content property.
@@ -229,24 +307,31 @@ def render_template_html(
         (postprocess_config.get("watermark") if postprocess_enabled else None)
         or config.get("watermark")
     )
+    has_header = bool(header_html and header_html.strip())
+    has_footer = bool(footer_html and footer_html.strip())
 
     page_stamp_css = _build_page_stamp_css(page_stamps)
     watermark_html, watermark_css = _build_watermark_assets(watermark)
+    pinned_layout_css = _build_pinned_layout_css(
+        has_header=has_header, has_footer=has_footer, config=config
+    )
     if watermark_css:
         watermark_css += (
             ".pdf-header,.pdf-content,.pdf-footer{position:relative;z-index:1;}"
         )
 
     style_block = _build_style_block(
-        config, extra_css_chunks=[page_stamp_css, watermark_css]
+        config, extra_css_chunks=[pinned_layout_css, page_stamp_css, watermark_css]
     )
+    header_block = f"<div class='pdf-header'>{header_html}</div>" if has_header else ""
+    footer_block = f"<div class='pdf-footer'>{footer_html}</div>" if has_footer else ""
     return (
         "<html><head><meta charset='utf-8'><style>"
         f"{style_block}"
         "</style></head><body>"
         f"{watermark_html}"
-        f"<div class='pdf-header'>{header_html}</div>"
+        f"{header_block}"
         f"<div class='pdf-content'>{content_html}</div>"
-        f"<div class='pdf-footer'>{footer_html}</div>"
+        f"{footer_block}"
         "</body></html>"
     )
