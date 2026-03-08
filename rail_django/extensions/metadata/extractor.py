@@ -144,9 +144,11 @@ class ModelSchemaExtractor(
         if should_cache_full_payload or wants("ordering"):
             result["ordering"] = (
                 [
-                    ("-" + to_camel_case(o[1:]))
-                    if o.startswith("-")
-                    else to_camel_case(o)
+                    (
+                        ("-" + to_camel_case(o[1:]))
+                        if o.startswith("-")
+                        else to_camel_case(o)
+                    )
                     for o in meta.ordering
                 ]
                 if meta.ordering
@@ -164,33 +166,43 @@ class ModelSchemaExtractor(
                 user,
                 instance=instance,
                 graphql_meta=graphql_meta,
-                include_keys=None
-                if should_cache_full_payload
-                else section_subfields.get("fields"),
+                include_keys=(
+                    None
+                    if should_cache_full_payload
+                    else section_subfields.get("fields")
+                ),
             )
         if should_cache_full_payload or wants("relationships"):
             result["relationships"] = self._extract_relationships(
                 model,
                 user,
                 graphql_meta=graphql_meta,
-                include_keys=None
-                if should_cache_full_payload
-                else section_subfields.get("relationships"),
+                include_keys=(
+                    None
+                    if should_cache_full_payload
+                    else section_subfields.get("relationships")
+                ),
             )
         if should_cache_full_payload or wants("filters"):
             result["filters"] = self._extract_filters(model, user=user)
         if should_cache_full_payload or wants("filter_config"):
             result["filter_config"] = self._extract_filter_config(model)
         if should_cache_full_payload or wants("relation_filters"):
-            result["relation_filters"] = self._extract_relation_filters(model, user=user)
+            result["relation_filters"] = self._extract_relation_filters(
+                model, user=user
+            )
         if should_cache_full_payload or wants("mutations"):
-            result["mutations"] = self._extract_mutations(model, user, instance=instance)
+            result["mutations"] = self._extract_mutations(
+                model, user, instance=instance
+            )
         if should_cache_full_payload or wants("permissions"):
             result["permissions"] = self._extract_permissions(model, user)
         if should_cache_full_payload or wants("field_groups"):
             result["field_groups"] = self._extract_field_groups(model, graphql_meta)
         if should_cache_full_payload or wants("templates"):
-            result["templates"] = self._extract_templates(model, user, instance=instance)
+            result["templates"] = self._extract_templates(
+                model, user, instance=instance
+            )
         if should_cache_full_payload or wants("custom_metadata"):
             result["custom_metadata"] = getattr(graphql_meta, "custom_metadata", None)
 
@@ -332,9 +344,7 @@ class ModelSchemaExtractor(
                         getattr(definition, "require_authentication", True)
                     ),
                     "roles": list(getattr(definition, "roles", ()) or ()),
-                    "permissions": list(
-                        getattr(definition, "permissions", ()) or ()
-                    ),
+                    "permissions": list(getattr(definition, "permissions", ()) or ()),
                     "allowed": access.allowed,
                     "denial_reason": access.reason,
                     "allow_client_data": bool(
@@ -342,7 +352,9 @@ class ModelSchemaExtractor(
                     ),
                     "client_data_fields": [
                         to_camel_case(field)
-                        for field in (getattr(definition, "client_data_fields", ()) or ())
+                        for field in (
+                            getattr(definition, "client_data_fields", ()) or ()
+                        )
                     ],
                     "client_data_schema": client_schema,
                 }
@@ -385,7 +397,9 @@ class ModelSchemaExtractor(
                         ),
                         "client_data_fields": [
                             to_camel_case(field)
-                            for field in (getattr(definition, "client_data_fields", ()) or ())
+                            for field in (
+                                getattr(definition, "client_data_fields", ()) or ()
+                            )
                         ],
                         "client_data_schema": client_schema,
                     }
@@ -649,7 +663,9 @@ class ModelSchemaExtractor(
                 output[str(key)] = value
             return output
 
-        def _resolve_signature_input_fields(method_info: Any, method: Any) -> list[dict]:
+        def _resolve_signature_input_fields(
+            method_info: Any, method: Any
+        ) -> list[dict]:
             fields_overrides = _action_field_overrides(method)
             entries: list[dict[str, Any]] = []
 
@@ -832,7 +848,8 @@ class ModelSchemaExtractor(
                 action_payload.setdefault("cancel_label", "Annuler")
             else:
                 action_payload.setdefault(
-                    "description", description or "Renseignez les informations requises."
+                    "description",
+                    description or "Renseignez les informations requises.",
                 )
                 action_payload.setdefault("submit_label", "Executer")
                 action_payload.setdefault("cancel_label", "Annuler")
@@ -1020,7 +1037,12 @@ class ModelSchemaExtractor(
                 return "create"
             return "update"
 
-        def _resolve_method_mutation_field_name(method_name: str) -> str:
+        def _resolve_method_mutation_field_name(method_name: str, method: Any) -> str:
+            custom_name = str(
+                getattr(method, "_custom_mutation_name", "") or ""
+            ).strip()
+            if custom_name:
+                return custom_name
             method_token = to_camel_case(to_snake_case(str(method_name or "")))
             if not method_token:
                 method_token = to_camel_case(str(method_name or ""))
@@ -1076,7 +1098,7 @@ class ModelSchemaExtractor(
 
             results.append(
                 {
-                    "name": _resolve_method_mutation_field_name(name),
+                    "name": _resolve_method_mutation_field_name(name, method),
                     "operation": "custom",
                     "description": description,
                     "method_name": name,

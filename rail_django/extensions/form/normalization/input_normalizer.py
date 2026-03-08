@@ -34,13 +34,11 @@ def normalize_values(values: Dict[str, Any], config: Dict[str, Any]) -> Dict[str
     for key, value in (values or {}).items():
         relation = relations.get(key)
         if relation:
-            relation_input = normalize_relation_input(value)
+            relation_input = normalize_relation_input(value, relation=relation)
             for action_name in relation_input.keys():
                 enforce_action_allowed(
                     relation_policies,
-                    path=relation.get("field_name")
-                    or relation.get("path")
-                    or key,
+                    path=relation.get("field_name") or relation.get("path") or key,
                     action=action_name,
                 )
             normalized[key] = relation_input

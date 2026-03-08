@@ -236,6 +236,38 @@ class TestProcessRelationInput:
         assert result["price"] == 10.0
 
 
+class TestNestedDataValidation:
+    """Tests for recursive nested validation."""
+
+    def test_validate_nested_data_handles_reverse_nested_create(self):
+        from test_app.models import Category
+        from rail_django.generators.nested import NestedOperationHandler
+
+        handler = NestedOperationHandler()
+
+        errors = handler.validate_nested_data(
+            Category,
+            {"name": "Blog", "posts": {"create": [{"title": "Child"}]}},
+            operation="create",
+        )
+
+        assert errors == []
+
+    def test_validate_nested_data_reports_missing_required_child_fields(self):
+        from test_app.models import Category
+        from rail_django.generators.nested import NestedOperationHandler
+
+        handler = NestedOperationHandler()
+
+        errors = handler.validate_nested_data(
+            Category,
+            {"name": "Blog", "posts": {"create": [{}]}},
+            operation="create",
+        )
+
+        assert "Required field 'title' is missing" in errors
+
+
 class TestHasNestedPayload:
     """Tests for unified operation payload detection."""
 
@@ -315,4 +347,3 @@ class TestHasNestedPayload:
         assert handler._has_nested_payload("123") is False
         assert handler._has_nested_payload(123) is False
         assert handler._has_nested_payload(None) is False
-

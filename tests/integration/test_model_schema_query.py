@@ -1,7 +1,7 @@
 import pytest
 from django.contrib.auth import get_user_model
 
-from rail_django.core.decorators import mutation
+from rail_django.core.decorators import custom_mutation_name, mutation
 from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
 from rail_django.extensions.templating import model_pdf_template
 from rail_django.extensions.templating.registry import (
@@ -122,6 +122,7 @@ def test_custom_mutation_query_returns_custom_mutation_metadata(gql_client):
     original_method = getattr(Product, "mark_featured", None)
 
     @mutation(description="Mark this product as featured")
+    @custom_mutation_name("publishProduct")
     def mark_featured(self, note: str = "manual") -> bool:
         return True
 
@@ -153,6 +154,7 @@ def test_custom_mutation_query_returns_custom_mutation_metadata(gql_client):
         assert result.get("errors") is None
         payload = result["data"]["customMutation"]
         assert payload is not None
+        assert payload["name"] == "publishProduct"
         assert payload["operation"] == "custom"
         assert payload["methodName"] == "mark_featured"
         assert payload["mutationType"] == "custom"

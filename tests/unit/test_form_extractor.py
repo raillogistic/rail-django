@@ -7,6 +7,7 @@ django.setup()
 
 from rail_django.extensions.form.extractors.base import FormConfigExtractor
 from tests.models import TestProject
+from test_app.models import Product
 
 
 @pytest.mark.django_db
@@ -65,3 +66,18 @@ def test_collect_relation_paths_prefetches_descendants_of_reverse_relations():
     assert "assignments__employe" in prefetch_related_paths
     assert "assignments__projet" not in select_related_paths
     assert "assignments__employe" not in select_related_paths
+
+
+def test_collect_relation_paths_accepts_camel_case_nested_fields():
+    extractor = FormConfigExtractor()
+
+    select_related_paths, prefetch_related_paths = extractor._collect_relation_paths(
+        Product,
+        include_nested=False,
+        nested_field_set={"orderItems"},
+        max_nested_depth=2,
+    )
+
+    assert "order_items" in prefetch_related_paths
+    assert "order_items__product" in prefetch_related_paths
+    assert "order_items__product" not in select_related_paths

@@ -40,7 +40,11 @@ def test_evaluate_condition_supports_single_and_grouped_rules():
 
 
 def test_compute_field_supports_path_template_and_expression_modes():
-    values = {"price": 10, "qty": 3, "profile": {"first_name": "Ada", "last_name": "Lovelace"}}
+    values = {
+        "price": 10,
+        "qty": 3,
+        "profile": {"first_name": "Ada", "last_name": "Lovelace"},
+    }
 
     assert compute_field("price", values) == 10
     assert compute_field("price * qty", values) == 30
@@ -82,18 +86,44 @@ def test_normalize_values_supports_relation_aliases_and_policy_checks():
                 "name": "category",
                 "field_name": "category",
                 "path": "category",
-            }
+                "is_to_many": False,
+            },
+            {
+                "name": "tags",
+                "field_name": "tags",
+                "path": "tags",
+                "is_to_many": True,
+            },
         ],
         "relation_policies": {
             "category": {"blocked_actions": ["DELETE"]},
         },
     }
-    assert normalize_values({"category": [1, 2]}, config) == {
-        "category": {"connect": [1, 2]}
+    assert normalize_values({"category": 7}, config) == {"category": {"connect": 7}}
+    assert normalize_values({"tags": [1, 2]}, config) == {"tags": {"connect": [1, 2]}}
+    assert normalize_values(
+        {"category": {"id": 7, "name": "Updated"}},
+        config,
+    ) == {"category": {"update": {"id": 7, "name": "Updated"}}}
+    assert normalize_values(
+        {"tags": [{"id": 1, "name": "Tagged"}, {"name": "Fresh"}]},
+        config,
+    ) == {
+        "tags": {
+            "connect": [1],
+            "update": [{"id": 1, "name": "Tagged"}],
+            "create": [{"name": "Fresh"}],
+        }
     }
 
     with pytest.raises(GraphQLError):
         normalize_values(
             {"category": {"delete": [1]}},
+            config,
+        )
+
+    with pytest.raises(GraphQLError):
+        normalize_values(
+            {"category": [1, 2]},
             config,
         )

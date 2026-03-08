@@ -21,9 +21,7 @@ from .errors import (
 )
 
 
-def _wrap_with_audit(
-    model: type[models.Model], operation: str, func
-):
+def _wrap_with_audit(model: type[models.Model], operation: str, func):
     try:
         from ...security.audit_logging import audit_data_modification
     except Exception:
@@ -39,7 +37,9 @@ def _infer_audit_operation(name: Optional[str]) -> str:
         return "create"
     if lowered.startswith(("delete", "remove", "archive", "purge", "clear")):
         return "delete"
-    if lowered.startswith(("update", "set", "edit", "patch", "upsert", "enable", "disable")):
+    if lowered.startswith(
+        ("update", "set", "edit", "patch", "upsert", "enable", "disable")
+    ):
         return "update"
     if "delete" in lowered or "remove" in lowered:
         return "delete"
@@ -54,6 +54,36 @@ def _infer_guard_operation(
     if action_kind == "confirm":
         return "update"
     return _infer_audit_operation(name)
+
+
+def _validate_required_permissions(
+    info: graphene.ResolveInfo,
+    permissions: Optional[list[str]] = None,
+) -> Optional[list[MutationError]]:
+    required_permissions = [
+        str(permission).strip()
+        for permission in (permissions or [])
+        if str(permission or "").strip()
+    ]
+    if not required_permissions:
+        return None
+
+    user = getattr(getattr(info, "context", None), "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return [build_mutation_error("Authentication required")]
+
+    has_perm = getattr(user, "has_perm", None)
+    if not callable(has_perm):
+        return [build_mutation_error("Authentication required")]
+
+    missing = [
+        permission for permission in required_permissions if not has_perm(permission)
+    ]
+    if missing:
+        return [
+            build_mutation_error(message=f"Permission denied ({', '.join(missing)})")
+        ]
+    return None
 
 
 def convert_method_to_mutation(
@@ -95,9 +125,7 @@ def convert_method_to_mutation(
                 continue
 
             param_type = (
-                param.annotation
-                if param.annotation != inspect.Parameter.empty
-                else Any
+                param.annotation if param.annotation != inspect.Parameter.empty else Any
             )
             graphql_type = self._convert_python_type_to_graphql(param_type)
 
@@ -148,21 +176,15 @@ def convert_method_to_mutation(
             try:
                 # Check permissions if required
                 if hasattr(method, "_requires_permission"):
-                    permission = method._requires_permission
-                    if hasattr(info, "context") and hasattr(info.context, "user"):
-                        if not info.context.user.has_perm(permission):
-                            return cls(
-                                ok=False,
-                                result=None,
-                                errors=[build_mutation_error("Permission denied")],
-                            )
-                    else:
+                    permission_errors = _validate_required_permissions(
+                        info,
+                        [method._requires_permission],
+                    )
+                    if permission_errors:
                         return cls(
                             ok=False,
                             result=None,
-                            errors=[
-                                build_mutation_error("Authentication required")
-                            ],
+                            errors=permission_errors,
                         )
 
                 scoped = self._apply_tenant_scope(
@@ -316,9 +338,7 @@ def generate_method_mutation(
                 continue
 
             param_type = (
-                param.annotation
-                if param.annotation != inspect.Parameter.empty
-                else Any
+                param.annotation if param.annotation != inspect.Parameter.empty else Any
             )
             graphql_type = self._convert_python_type_to_graphql(param_type)
 
@@ -369,24 +389,16 @@ def generate_method_mutation(
             input: dict[str, Any] = None,
         ):
             # Permission check if required
-            if requires_permissions and hasattr(info.context, "user"):
-                user = info.context.user
-                missing = [
-                    perm for perm in requires_permissions if not user.has_perm(perm)
-                ]
-                if missing:
-                    return cls(
-                        ok=False,
-                        result=None,
-                        errors=[
-                            build_mutation_error(
-                                message=(
-                                    f"Permission refusÇ¸e ({', '.join(missing)})"
-                                )
-                            )
-                        ],
-                    )
-
+            permission_errors = _validate_required_permissions(
+                info,
+                requires_permissions,
+            )
+            if permission_errors:
+                return cls(
+                    ok=False,
+                    result=None,
+                    errors=permission_errors,
+                )
             # Wrap in transaction if atomic is True
             if atomic:
                 return cls._atomic_mutate(model, method_name, id, input, info)

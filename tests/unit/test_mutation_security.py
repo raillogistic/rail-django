@@ -13,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
 from graphql import GraphQLError
 
+from rail_django.core.decorators import business_logic
 from rail_django.core.exceptions import ValidationError as GraphQLValidationError
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 from rail_django.core.middleware import FieldPermissionMiddleware
@@ -27,7 +28,7 @@ from rail_django.security.field_permissions import (
     FieldPermissionRule,
     field_permission_manager,
 )
-from test_app.models import Category, Post, Product
+from test_app.models import Category, Post, Product, Tag
 
 pytestmark = pytest.mark.unit
 
@@ -63,9 +64,7 @@ def _info_stub(user, *, model_class, field_name):
 
 def test_update_input_id_is_optional():
     type_generator = TypeGenerator()
-    update_input = type_generator.generate_input_type(
-        Category, "update", partial=True
-    )
+    update_input = type_generator.generate_input_type(Category, "update", partial=True)
     fields = update_input._meta.fields
     assert "id" in fields
     id_field = fields["id"]
@@ -148,6 +147,155 @@ def test_method_mutation_enforces_operation_guard():
         else:
             Category.activate = original_method
         _restore_graphql_meta(Category, original_meta)
+
+
+@pytest.mark.django_db
+def test_method_mutation_requires_user_context_for_explicit_permissions():
+    @business_logic(requires_permission="test_app.change_category")
+    def secure_action(self):
+        return True
+
+    original_method = getattr(Category, "secure_action", None)
+    Category.secure_action = secure_action
+    if hasattr(Category, "_graphql_meta_instance"):
+        delattr(Category, "_graphql_meta_instance")
+
+    try:
+        category = Category.objects.create(name="alpha", description="")
+        generator = MutationGenerator(TypeGenerator())
+        method_info = ModelIntrospector(Category).get_model_methods()["secure_action"]
+        mutation_class = generator.generate_method_mutation(Category, method_info)
+        info = SimpleNamespace(context=SimpleNamespace())
+
+        result = mutation_class.mutate(None, info, id=category.id)
+
+        assert result.ok is False
+        assert result.errors
+        assert "Authentication required" in result.errors[0].message
+    finally:
+        if original_method is None:
+            delattr(Category, "secure_action")
+        else:
+            Category.secure_action = original_method
+        if hasattr(Category, "_graphql_meta_instance"):
+            delattr(Category, "_graphql_meta_instance")
+        ModelIntrospector.clear_cache()
+
+
+@pytest.mark.django_db
+def test_unified_m2m_connect_requires_related_retrieve_permission():
+    class GuardedMeta(GraphQLMetaConfig):
+        access = GraphQLMetaConfig.AccessControl(
+            operations={
+                "retrieve": GraphQLMetaConfig.OperationGuard(
+                    condition=lambda **_kwargs: False
+                )
+            }
+        )
+
+    category = Category.objects.create(name="cat", description="")
+    tag = Tag.objects.create(name="secure-tag")
+    user = User.objects.create_user(username="post_creator", password="pass12345")
+    original_meta = _set_graphql_meta(Tag, GuardedMeta)
+
+    try:
+        for codename, model in (
+            ("add_post", Post),
+            ("view_category", Category),
+        ):
+            content_type = ContentType.objects.get_for_model(model)
+            permission = Permission.objects.get(
+                codename=codename,
+                content_type=content_type,
+            )
+            user.user_permissions.add(permission)
+
+        generator = MutationGenerator(TypeGenerator())
+        create_mutation = generator.generate_create_mutation(Post)
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        result = create_mutation.mutate(
+            None,
+            info,
+            input={
+                "title": "locked",
+                "category": {"connect": str(category.id)},
+                "tags": {"connect": [str(tag.id)]},
+            },
+        )
+
+        assert result.ok is False
+        assert result.errors
+        assert "not permitted" in result.errors[0].message.lower()
+    finally:
+        _restore_graphql_meta(Tag, original_meta)
+
+
+@pytest.mark.django_db
+def test_unified_reverse_connect_requires_related_update_permission():
+    source = Category.objects.create(name="source", description="")
+    target = Category.objects.create(name="target", description="")
+    post = Post.objects.create(title="orphan", category=source)
+    user = User.objects.create_user(username="category_editor", password="pass12345")
+
+    content_type = ContentType.objects.get_for_model(Category)
+    user.user_permissions.add(
+        Permission.objects.get(
+            codename="change_category",
+            content_type=content_type,
+        )
+    )
+
+    generator = MutationGenerator(TypeGenerator())
+    update_mutation = generator.generate_update_mutation(Category)
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+    result = update_mutation.mutate(
+        None,
+        info,
+        id=target.id,
+        input={"posts": {"connect": [str(post.id)]}},
+    )
+
+    assert result.ok is False
+    assert result.errors
+    assert "test_app.change_post" in result.errors[0].message
+
+
+@pytest.mark.django_db
+def test_unified_m2m_connect_invalid_id_returns_field_error():
+    category = Category.objects.create(name="cat", description="")
+    user = User.objects.create_user(username="post_creator_2", password="pass12345")
+
+    for codename, model in (
+        ("add_post", Post),
+        ("view_category", Category),
+        ("view_tag", Tag),
+    ):
+        content_type = ContentType.objects.get_for_model(model)
+        permission = Permission.objects.get(
+            codename=codename,
+            content_type=content_type,
+        )
+        user.user_permissions.add(permission)
+
+    generator = MutationGenerator(TypeGenerator())
+    create_mutation = generator.generate_create_mutation(Post)
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+    result = create_mutation.mutate(
+        None,
+        info,
+        input={
+            "title": "broken",
+            "category": {"connect": str(category.id)},
+            "tags": {"connect": ["999999"]},
+        },
+    )
+
+    assert result.ok is False
+    assert result.errors
+    assert result.errors[0].field == "tags"
 
 
 @pytest.mark.django_db
@@ -343,9 +491,7 @@ def test_full_clean_runs_for_create_mutation():
     try:
         generator = MutationGenerator(TypeGenerator())
         create_mutation = generator.generate_create_mutation(Category)
-        info = SimpleNamespace(
-            context=SimpleNamespace(user=User(is_superuser=True))
-        )
+        info = SimpleNamespace(context=SimpleNamespace(user=User(is_superuser=True)))
         result = create_mutation.mutate(
             None,
             info,
@@ -370,9 +516,7 @@ def test_input_validator_errors_surface_in_mutations():
     generator = MutationGenerator(TypeGenerator())
     generator.input_validator = _StubValidator()
     create_mutation = generator.generate_create_mutation(Category)
-    info = SimpleNamespace(
-        context=SimpleNamespace(user=User(is_superuser=True))
-    )
+    info = SimpleNamespace(context=SimpleNamespace(user=User(is_superuser=True)))
     result = create_mutation.mutate(
         None,
         info,
@@ -385,9 +529,13 @@ def test_input_validator_errors_surface_in_mutations():
 
 @pytest.mark.django_db
 def test_field_permission_middleware_masks_decimal_output_as_null():
-    user = User.objects.create_user(username="masked_decimal_user", password="pass12345")
+    user = User.objects.create_user(
+        username="masked_decimal_user", password="pass12345"
+    )
     category = Category.objects.create(name="masked-cat", description="")
-    product = Product.objects.create(name="masked-product", price=10.50, category=category)
+    product = Product.objects.create(
+        name="masked-product", price=10.50, category=category
+    )
 
     snapshot = {
         "field_rules": copy.deepcopy(field_permission_manager._field_rules),
@@ -425,4 +573,3 @@ def test_field_permission_middleware_masks_decimal_output_as_null():
         field_permission_manager._pattern_rules = snapshot["pattern_rules"]
         field_permission_manager._global_rules = snapshot["global_rules"]
         field_permission_manager._rule_signatures = snapshot["rule_signatures"]
-

@@ -125,9 +125,19 @@ class NestedDeleteMixin:
                     field.name
                     for field in model._meta.get_fields()
                     if (
-                        hasattr(field, "null")
+                        hasattr(field, "name")
+                        and hasattr(field, "null")
                         and not field.null
-                        and not hasattr(field, "default")
+                        and not getattr(field, "blank", False)
+                        and not getattr(field, "primary_key", False)
+                        and not getattr(field, "auto_created", False)
+                        and not getattr(field, "many_to_many", False)
+                        and not getattr(field, "one_to_many", False)
+                        and field.name != "created_by"
+                        and not (
+                            callable(getattr(field, "has_default", None))
+                            and field.has_default()
+                        )
                         and not getattr(field, "auto_now", False)
                         and not getattr(field, "auto_now_add", False)
                     )
@@ -139,12 +149,15 @@ class NestedDeleteMixin:
 
             # Validate field types and constraints
             for field_name, value in input_data.items():
-                if not hasattr(model, field_name):
-                    continue
-
                 try:
                     field = model._meta.get_field(field_name)
-                    field_errors = self._validate_field_value(field, value)
+                    field_errors = self._validate_relation_payload(
+                        field_name,
+                        field,
+                        value,
+                    )
+                    if not field_errors:
+                        field_errors = self._validate_field_value(field, value)
                     errors.extend(field_errors)
                 except Exception:
                     continue  # Skip non-model fields
@@ -153,6 +166,53 @@ class NestedDeleteMixin:
 
         except Exception as e:
             return [f"Validation error: {str(e)}"]
+
+    def _validate_relation_payload(
+        self,
+        field_name: str,
+        field: models.Field,
+        value: Any,
+    ) -> list[str]:
+        if not getattr(field, "is_relation", False):
+            return []
+        if not isinstance(value, dict):
+            return []
+
+        related_model = getattr(field, "related_model", None)
+        if related_model is None:
+            return []
+
+        errors: list[str] = []
+        implicit_relation_field = None
+        if getattr(field, "auto_created", False):
+            implicit_relation_field = getattr(
+                getattr(field, "field", None), "name", None
+            )
+
+        def _collect_items(payload: Any) -> list[dict[str, Any]]:
+            if isinstance(payload, list):
+                return [item for item in payload if isinstance(item, dict)]
+            if isinstance(payload, dict):
+                return [payload]
+            return []
+
+        for item in _collect_items(value.get("create")):
+            nested_item = dict(item)
+            if implicit_relation_field and implicit_relation_field not in nested_item:
+                nested_item[implicit_relation_field] = True
+            errors.extend(
+                self.validate_nested_data(related_model, nested_item, "create")
+            )
+
+        for item in _collect_items(value.get("update")):
+            nested_item = dict(item)
+            if implicit_relation_field and implicit_relation_field not in nested_item:
+                nested_item[implicit_relation_field] = True
+            errors.extend(
+                self.validate_nested_data(related_model, nested_item, "update")
+            )
+
+        return errors
 
     def _has_circular_reference(
         self,

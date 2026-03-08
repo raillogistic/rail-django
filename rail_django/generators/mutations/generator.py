@@ -171,7 +171,7 @@ class MutationGenerator:
             from ...extensions.multitenancy import apply_tenant_queryset
         except ImportError:
             return queryset
-        
+
         try:
             return apply_tenant_queryset(
                 queryset,
@@ -232,19 +232,25 @@ class MutationGenerator:
         self._tenant_applicator = TenantApplicator(self.schema_name)
 
         # Configure builder based on settings
-        if not getattr(self.authorization_manager.settings, "enable_authorization", True):
+        if not getattr(
+            self.authorization_manager.settings, "enable_authorization", True
+        ):
             self._pipeline_builder.require_model_permissions(False)
         if not getattr(self.settings, "require_model_permissions", True):
             self._pipeline_builder.require_model_permissions(False)
 
-    def generate_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_create_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         """
         Generate a create mutation for a model using the pipeline backend.
         """
         from ..pipeline.factories import create_mutation_factory
 
         model_type = self.type_generator.generate_object_type(model)
-        input_type = self.type_generator.generate_input_type(model, mutation_type="create")
+        input_type = self.type_generator.generate_input_type(
+            model, mutation_type="create"
+        )
         graphql_meta = get_model_graphql_meta(model)
 
         return create_mutation_factory(
@@ -258,7 +264,9 @@ class MutationGenerator:
             tenant_applicator=self._tenant_applicator,
         )
 
-    def generate_update_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_update_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         """
         Generate an update mutation for a model using the pipeline backend.
         """
@@ -281,7 +289,9 @@ class MutationGenerator:
             tenant_applicator=self._tenant_applicator,
         )
 
-    def generate_delete_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_delete_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         """
         Generate a delete mutation for a model using the pipeline backend.
         """
@@ -298,13 +308,19 @@ class MutationGenerator:
             tenant_applicator=self._tenant_applicator,
         )
 
-    def generate_bulk_create_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_bulk_create_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         return _generate_bulk_create_mutation(self, model)
 
-    def generate_bulk_update_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_bulk_update_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         return _generate_bulk_update_mutation(self, model)
 
-    def generate_bulk_delete_mutation(self, model: type[models.Model]) -> type[graphene.Mutation]:
+    def generate_bulk_delete_mutation(
+        self, model: type[models.Model]
+    ) -> type[graphene.Mutation]:
         return _generate_bulk_delete_mutation(self, model)
 
     def convert_method_to_mutation(
@@ -450,6 +466,18 @@ class MutationGenerator:
             if method_info.is_mutation and not method_info.is_private:
                 mutation = self.generate_method_mutation(model, method_info)
                 if mutation:
-                    method_token = to_camel_case(to_snake_case(method_name))
-                    mutations[f"{method_token}{model_class_name}"] = mutation.Field()
+                    custom_name = str(
+                        getattr(
+                            getattr(method_info, "method", None),
+                            "_custom_mutation_name",
+                            "",
+                        )
+                        or ""
+                    ).strip()
+                    if custom_name:
+                        field_name = custom_name
+                    else:
+                        method_token = to_camel_case(to_snake_case(method_name))
+                        field_name = f"{method_token}{model_class_name}"
+                    mutations[field_name] = mutation.Field()
         return mutations

@@ -124,7 +124,9 @@ class FormConfigExtractor(
                 "operation": "CREATE",
                 "description": f"Create {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": bool(create_access.get("allowed", permissions.get("can_create", True))),
+                "allowed": bool(
+                    create_access.get("allowed", permissions.get("can_create", True))
+                ),
                 "permission": ", ".join(create_access.get("required_permissions", []))
                 or None,
                 "denial_reason": create_access.get("reason"),
@@ -137,22 +139,28 @@ class FormConfigExtractor(
                 "operation": "UPDATE",
                 "description": f"Update {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": bool(update_access.get("allowed", permissions.get("can_update", True))),
+                "allowed": bool(
+                    update_access.get("allowed", permissions.get("can_update", True))
+                ),
                 "permission": ", ".join(update_access.get("required_permissions", []))
                 or None,
                 "denial_reason": update_access.get("reason"),
                 "success_message": None,
                 "requires_optimistic_lock": True,
-                "optimistic_lock_field": to_camel_case("updated_at")
-                if hasattr(model, "updated_at")
-                else None,
+                "optimistic_lock_field": (
+                    to_camel_case("updated_at")
+                    if hasattr(model, "updated_at")
+                    else None
+                ),
             },
             "delete_mutation": {
                 "name": f"delete{model_name}",
                 "operation": "DELETE",
                 "description": f"Delete {model._meta.verbose_name}",
                 "input_fields": [],
-                "allowed": bool(delete_access.get("allowed", permissions.get("can_delete", True))),
+                "allowed": bool(
+                    delete_access.get("allowed", permissions.get("can_delete", True))
+                ),
                 "permission": ", ".join(delete_access.get("required_permissions", []))
                 or None,
                 "denial_reason": delete_access.get("reason"),
@@ -253,7 +261,12 @@ class FormConfigExtractor(
                 # For relations, return ids
                 if not hasattr(field, "name"):
                     continue
-                if field.one_to_many or field.many_to_many or field.one_to_one or field.many_to_one:
+                if (
+                    field.one_to_many
+                    or field.many_to_many
+                    or field.one_to_one
+                    or field.many_to_one
+                ):
                     include_this_relation_nested = should_include_nested_relation(
                         field.name
                     )
@@ -395,6 +408,8 @@ class FormConfigExtractor(
         force_prefetch: bool = False,
         visited: Optional[set[tuple[type[models.Model], int]]] = None,
     ) -> tuple[set[str], set[str]]:
+        from graphene.utils.str_converters import to_camel_case
+
         if visited is None:
             visited = set()
         visit_key = (model, depth)
@@ -438,6 +453,8 @@ class FormConfigExtractor(
                 include_relation = (
                     field_name in normalized_nested
                     or path in normalized_nested
+                    or to_camel_case(field_name) in normalized_nested
+                    or to_camel_case(path) in normalized_nested
                 )
             related_model = getattr(field, "related_model", None)
             if (
@@ -517,10 +534,7 @@ class FormConfigExtractor(
                 if depth >= max_depth:
                     continue
                 try:
-                    if (
-                        field.many_to_many
-                        or field.one_to_many
-                    ):
+                    if field.many_to_many or field.one_to_many:
                         related_manager = getattr(instance, field.name, None)
                         if related_manager is None:
                             payload[to_camel_case(field.name)] = []

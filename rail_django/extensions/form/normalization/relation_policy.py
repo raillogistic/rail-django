@@ -49,12 +49,12 @@ def is_action_allowed(
     allowed_actions = {str(item).lower() for item in allowed_source}
     default_allow = bool(policy.get("default_allow", policy.get("defaultAllow", True)))
 
+    if action_name not in DEFAULT_ACTIONS:
+        return False
     if action_name in blocked_actions:
         return False
     if allowed_actions:
         return action_name in allowed_actions
-    if action_name not in DEFAULT_ACTIONS:
-        return default_allow
     return default_allow
 
 

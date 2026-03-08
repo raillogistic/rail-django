@@ -4,6 +4,7 @@ from django.db import models
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from rail_django.core.decorators import custom_mutation_name, mutation
 from rail_django.core.schema.query_builder import QueryBuilderMixin
 from rail_django.generators.mutations.generator import MutationGenerator
 from rail_django.generators.types.generator import TypeGenerator
@@ -29,6 +30,18 @@ class MethodNamingModel(models.Model):
         app_label = "test_naming_contract"
 
     def approve_item(self):
+        return True
+
+
+class CustomNamedMethodModel(models.Model):
+    name = models.CharField(max_length=64)
+
+    class Meta:
+        app_label = "test_naming_contract"
+
+    @mutation()
+    @custom_mutation_name("publishCustomNamedMethod")
+    def publish(self):
         return True
 
 
@@ -99,7 +112,9 @@ def test_mutation_naming_contract_uses_camel_contract_for_crud_bulk_and_methods(
     generator.settings.generate_bulk = True
     generator.settings.enable_method_mutations = True
 
-    with patch.object(generator, "generate_create_mutation", return_value=DummyMutation):
+    with patch.object(
+        generator, "generate_create_mutation", return_value=DummyMutation
+    ):
         with patch.object(
             generator, "generate_update_mutation", return_value=DummyMutation
         ):
@@ -137,3 +152,23 @@ def test_mutation_naming_contract_uses_camel_contract_for_crud_bulk_and_methods(
     assert "bulkUpdateMethodNamingModel" in mutations
     assert "bulkDeleteMethodNamingModel" in mutations
     assert "approveItemMethodNamingModel" in mutations
+
+
+@pytest.mark.unit
+def test_mutation_naming_contract_uses_custom_mutation_name_when_declared():
+    generator = MutationGenerator(type_generator=Mock(spec=TypeGenerator))
+    generator.settings.enable_create = False
+    generator.settings.enable_update = False
+    generator.settings.enable_delete = False
+    generator.settings.enable_bulk_operations = False
+    generator.settings.enable_method_mutations = True
+
+    with patch.object(
+        generator,
+        "generate_method_mutation",
+        return_value=DummyMutation,
+    ):
+        mutations = generator.generate_all_mutations(CustomNamedMethodModel)
+
+    assert "publishCustomNamedMethod" in mutations
+    assert "publishCustomNamedMethodModel" not in mutations
