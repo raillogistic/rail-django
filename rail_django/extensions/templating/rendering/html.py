@@ -31,6 +31,45 @@ def _render_template(template_path: Optional[str], context: dict[str, Any]) -> s
     return template.render(context)
 
 
+def _normalize_html_fragment(fragment: str) -> tuple[str, list[str]]:
+    """
+    Extract body markup and inline CSS from a possibly full HTML document fragment.
+
+    This lets wrapper-generated CSS remain the final authority for page geometry
+    while still preserving user-defined component styling.
+    """
+    raw = str(fragment or "")
+    css_chunks = [
+        match.strip()
+        for match in re.findall(
+            r"<style\b[^>]*>(.*?)</style>",
+            raw,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if match.strip()
+    ]
+    normalized = re.sub(
+        r"<style\b[^>]*>.*?</style>",
+        "",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    body_match = re.search(
+        r"<body\b[^>]*>(.*?)</body>",
+        normalized,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if body_match:
+        normalized = body_match.group(1)
+    normalized = re.sub(
+        r"</?(?:html|head|body|title|meta|link)\b[^>]*>",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    return normalized.strip(), css_chunks
+
+
 def _build_style_block(
     config: dict[str, Any], *, extra_css_chunks: Optional[Iterable[str]] = None
 ) -> str:
@@ -52,8 +91,6 @@ def _build_style_block(
     font_size = config.get("font_size", "12pt")
     text_color = config.get("text_color", "#222222")
     background_color = config.get("background_color", "#ffffff")
-    header_spacing = config.get("header_spacing", "10mm")
-    footer_spacing = config.get("footer_spacing", "12mm")
     content_spacing = config.get("content_spacing", "8mm")
     extra_css = config.get("extra_css", "")
 
@@ -66,9 +103,7 @@ def _build_style_block(
         f" color: {text_color};"
         f" background: {background_color};"
         " }",
-        f".pdf-header {{ margin-bottom: {header_spacing}; }}",
         f".pdf-content {{ margin-bottom: {content_spacing}; }}",
-        f".pdf-footer {{ margin-top: {footer_spacing}; }}",
     ]
 
     if extra_css:
@@ -93,31 +128,32 @@ def _expand_box_shorthand(value: Any) -> tuple[str, str, str, str]:
 
 
 def _build_pinned_layout_css(
-    *, has_header: bool, has_footer: bool, config: dict[str, Any]
+    *,
+    has_header: bool,
+    has_footer: bool,
+    repeat_header: bool,
+    repeat_footer: bool,
+    config: dict[str, Any],
 ) -> str:
     """
-    Build CSS that pins header/footer on every page.
-
-    WeasyPrint uses running elements and page margin boxes so headers/footers
-    repeat without participating in normal flow. Other renderers fall back to
-    fixed positioning.
+    Build CSS for repeated or first-page-only header/footer layout.
     """
     margin_top, margin_right, margin_bottom, margin_left = _expand_box_shorthand(
         config.get("margin", "20mm")
     )
-    header_spacing = config.get("header_spacing", "10mm")
-    footer_spacing = config.get("footer_spacing", "12mm")
-    header_height = config.get("header_height", "20mm")
-    footer_height = config.get("footer_height", "20mm")
+    header_spacing = config.get("header_spacing", "0mm")
+    footer_spacing = config.get("footer_spacing", "0mm")
+    header_height = config.get("header_height", "0mm")
+    footer_height = config.get("footer_height", "0mm")
     content_spacing = config.get("content_spacing", "8mm")
     reserved_header_space = f"calc({header_height} + {header_spacing})"
     reserved_footer_space = f"calc({footer_height} + {footer_spacing})"
 
     css_chunks = [
         "@page {"
-        f" margin-top: calc({margin_top} + {reserved_header_space if has_header else '0mm'});"
+        f" margin-top: calc({margin_top} + {reserved_header_space if has_header and repeat_header else '0mm'});"
         f" margin-right: {margin_right};"
-        f" margin-bottom: calc({margin_bottom} + {reserved_footer_space if has_footer else '0mm'});"
+        f" margin-bottom: calc({margin_bottom} + {reserved_footer_space if has_footer and repeat_footer else '0mm'});"
         f" margin-left: {margin_left};"
         " }",
         "html, body { margin: 0; }",
@@ -129,29 +165,69 @@ def _build_pinned_layout_css(
     ]
 
     if has_header:
+        header_rules = [".pdf-header {"]
+        if repeat_header:
+            header_rules.extend(
+                [
+                    " position: fixed;",
+                    f" top: calc(-1 * {reserved_header_space});",
+                    " left: 0;",
+                    " right: 0;",
+                    " width: 100%;",
+                ]
+            )
+        else:
+            header_rules.extend(
+                [
+                    " position: running(pdf-header);",
+                    " height: 0;",
+                    " min-height: 0;",
+                    " margin: 0;",
+                    " padding: 0;",
+                    " overflow: visible;",
+                ]
+            )
+        header_rules.append(" }")
         css_chunks.extend(
             [
-                ".pdf-header {"
-                " position: fixed;"
-                f" top: calc(-1 * {reserved_header_space});"
-                " left: 0;"
-                " right: 0;"
-                " width: 100%;"
-                f" min-height: {header_height};"
+                "".join(header_rules),
+                "@page :first {"
+                f" margin-top: calc({margin_top} + {reserved_header_space});"
+                " @top-center { content: element(pdf-header); vertical-align: top; margin: 0; padding: 0; }"
                 " }",
             ]
         )
 
     if has_footer:
+        footer_rules = [".pdf-footer {"]
+        if repeat_footer:
+            footer_rules.extend(
+                [
+                    " position: fixed;",
+                    f" bottom: calc(-1 * {reserved_footer_space});",
+                    " left: 0;",
+                    " right: 0;",
+                    " width: 100%;",
+                ]
+            )
+        else:
+            footer_rules.extend(
+                [
+                    " position: running(pdf-footer);",
+                    " height: 0;",
+                    " min-height: 0;",
+                    " margin: 0;",
+                    " padding: 0;",
+                    " overflow: visible;",
+                ]
+            )
+        footer_rules.append(" }")
         css_chunks.extend(
             [
-                ".pdf-footer {"
-                " position: fixed;"
-                f" bottom: calc(-1 * {reserved_footer_space});"
-                " left: 0;"
-                " right: 0;"
-                " width: 100%;"
-                f" min-height: {footer_height};"
+                "".join(footer_rules),
+                "@page :first {"
+                f" margin-bottom: calc({margin_bottom} + {reserved_footer_space});"
+                " @bottom-center { content: element(pdf-footer); vertical-align: bottom; margin: 0; padding: 0; }"
                 " }",
             ]
         )
@@ -281,6 +357,8 @@ def render_template_html(
     header_html: str,
     content_html: str,
     footer_html: str,
+    repeat_header: Optional[bool] = True,
+    repeat_footer: Optional[bool] = True,
     config: dict[str, Any],
     postprocess: Optional[dict[str, Any]] = None,
 ) -> str:
@@ -291,6 +369,8 @@ def render_template_html(
         header_html: Rendered header HTML.
         content_html: Rendered content HTML.
         footer_html: Rendered footer HTML.
+        repeat_header: When True, render the header on every page. Any other value limits it to the first page.
+        repeat_footer: When True, render the footer on every page. Any other value limits it to the first page.
         config: Style configuration.
         postprocess: Optional postprocessing configuration.
 
@@ -307,13 +387,20 @@ def render_template_html(
         (postprocess_config.get("watermark") if postprocess_enabled else None)
         or config.get("watermark")
     )
+    header_html, header_css_chunks = _normalize_html_fragment(header_html)
+    content_html, content_css_chunks = _normalize_html_fragment(content_html)
+    footer_html, footer_css_chunks = _normalize_html_fragment(footer_html)
     has_header = bool(header_html and header_html.strip())
     has_footer = bool(footer_html and footer_html.strip())
 
     page_stamp_css = _build_page_stamp_css(page_stamps)
     watermark_html, watermark_css = _build_watermark_assets(watermark)
     pinned_layout_css = _build_pinned_layout_css(
-        has_header=has_header, has_footer=has_footer, config=config
+        has_header=has_header,
+        has_footer=has_footer,
+        repeat_header=repeat_header is True,
+        repeat_footer=repeat_footer is True,
+        config=config,
     )
     if watermark_css:
         watermark_css += (
@@ -321,7 +408,15 @@ def render_template_html(
         )
 
     style_block = _build_style_block(
-        config, extra_css_chunks=[pinned_layout_css, page_stamp_css, watermark_css]
+        config,
+        extra_css_chunks=[
+            *header_css_chunks,
+            *content_css_chunks,
+            *footer_css_chunks,
+            pinned_layout_css,
+            page_stamp_css,
+            watermark_css,
+        ],
     )
     header_block = f"<div class='pdf-header'>{header_html}</div>" if has_header else ""
     footer_block = f"<div class='pdf-footer'>{footer_html}</div>" if has_footer else ""

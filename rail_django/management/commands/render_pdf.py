@@ -75,6 +75,8 @@ class Command(BaseCommand):
                 header_html=header_html,
                 content_html=content_html,
                 footer_html=footer_html,
+                repeat_header=template_def.repeat_header,
+                repeat_footer=template_def.repeat_footer,
                 config=template_def.config,
             )
             default_filename = f"{_sanitize_filename(base_name)}.html"
@@ -87,6 +89,8 @@ class Command(BaseCommand):
                 config=template_def.config,
                 header_template=template_def.header_template,
                 footer_template=template_def.footer_template,
+                repeat_header=template_def.repeat_header,
+                repeat_footer=template_def.repeat_footer,
             )
             default_filename = f"{_sanitize_filename(base_name)}.pdf"
             mode = "wb"

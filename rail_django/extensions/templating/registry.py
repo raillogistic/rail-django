@@ -37,6 +37,8 @@ class TemplateMeta:
     content_template: str
     footer_template: Optional[str]
     url_path: Optional[str]
+    repeat_header: Optional[bool] = True
+    repeat_footer: Optional[bool] = True
     config: dict[str, Any] = field(default_factory=dict)
     roles: Sequence[str] = field(default_factory=tuple)
     permissions: Sequence[str] = field(default_factory=tuple)
@@ -69,6 +71,8 @@ class TemplateDefinition:
     allow_client_data: bool
     client_data_fields: Sequence[str]
     client_data_schema: Sequence[dict[str, Any]]
+    repeat_header: Optional[bool]
+    repeat_footer: Optional[bool]
 
 
 @dataclass
@@ -195,6 +199,8 @@ class TemplateRegistry:
             header_template=header,
             content_template=meta.content_template,
             footer_template=footer,
+            repeat_header=meta.repeat_header,
+            repeat_footer=meta.repeat_footer,
             url_path=url_path,
             config=merged_config,
             roles=tuple(meta.roles or ()),
@@ -246,6 +252,8 @@ class TemplateRegistry:
             header_template=header,
             content_template=meta.content_template,
             footer_template=footer,
+            repeat_header=meta.repeat_header,
+            repeat_footer=meta.repeat_footer,
             url_path=url_path,
             config=merged_config,
             roles=tuple(meta.roles or ()),
@@ -289,6 +297,8 @@ def model_pdf_template(
     content: str,
     header: Optional[str] = None,
     footer: Optional[str] = None,
+    repeat_header: Optional[bool] = True,
+    repeat_footer: Optional[bool] = True,
     url: Optional[str] = None,
     config: Optional[dict[str, Any]] = None,
     roles: Optional[Iterable[str]] = None,
@@ -307,6 +317,8 @@ def model_pdf_template(
         content: Path to the main content template (required).
         header: Path to the header template. Uses default from settings when omitted.
         footer: Path to the footer template. Uses default from settings when omitted.
+        repeat_header: When True, render the header on every page. Any other value limits it to the first page.
+        repeat_footer: When True, render the footer on every page. Any other value limits it to the first page.
         url: Relative URL (under /api/<prefix>/) for the PDF endpoint. Defaults to
              <app_label>/<model_name>/<function_name>.
         config: Optional style overrides (margin, padding, fonts, page_size, etc.).
@@ -328,6 +340,8 @@ def model_pdf_template(
             header_template=header,
             content_template=content,
             footer_template=footer,
+            repeat_header=repeat_header,
+            repeat_footer=repeat_footer,
             url_path=url,
             config=config or {},
             roles=tuple(roles or ()),
@@ -349,6 +363,8 @@ def pdf_template(
     content: str,
     header: Optional[str] = None,
     footer: Optional[str] = None,
+    repeat_header: Optional[bool] = True,
+    repeat_footer: Optional[bool] = True,
     url: Optional[str] = None,
     config: Optional[dict[str, Any]] = None,
     roles: Optional[Iterable[str]] = None,
@@ -367,6 +383,8 @@ def pdf_template(
         content: Path to the main content template (required).
         header: Path to the header template. Uses default from settings when omitted.
         footer: Path to the footer template. Uses default from settings when omitted.
+        repeat_header: When True, render the header on every page. Any other value limits it to the first page.
+        repeat_footer: When True, render the footer on every page. Any other value limits it to the first page.
         url: Relative URL (under /api/<prefix>/) for the PDF endpoint. Defaults to
              <module>/<function_name>.
         config: Optional style overrides (margin, padding, fonts, page_size, etc.).
@@ -385,6 +403,8 @@ def pdf_template(
             header_template=header,
             content_template=content,
             footer_template=footer,
+            repeat_header=repeat_header,
+            repeat_footer=repeat_footer,
             url_path=url,
             config=config or {},
             roles=tuple(roles or ()),

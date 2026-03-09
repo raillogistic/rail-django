@@ -90,6 +90,8 @@ class TestTemplateAccess(TestCase):
             allow_client_data=False,
             client_data_fields=(),
             client_data_schema=(),
+            repeat_header=True,
+            repeat_footer=True,
         )
         user = DummyUser(is_authenticated=True, perms=[])
         decision = evaluate_template_access(template_def, user=user, instance=None)
@@ -114,6 +116,8 @@ class TestTemplateAccess(TestCase):
             allow_client_data=False,
             client_data_fields=(),
             client_data_schema=(),
+            repeat_header=True,
+            repeat_footer=True,
         )
         user = DummyUser(is_authenticated=True)
         decision = evaluate_template_access(template_def, user=user, instance=None)
@@ -219,17 +223,133 @@ class TestTemplatingRendering(TestCase):
             header_html="<div>Header</div>",
             content_html="<div>Content</div>",
             footer_html="<div>Footer</div>",
-            config={},
+            config={
+                "header_height": "20mm",
+                "footer_height": "20mm",
+                "header_spacing": "10mm",
+                "footer_spacing": "12mm",
+            },
         )
 
         self.assertIn("margin-top: calc(20mm + calc(20mm + 10mm));", html)
         self.assertIn("margin-bottom: calc(20mm + calc(20mm + 12mm));", html)
         self.assertIn(".pdf-header { position: fixed;", html)
         self.assertIn("top: calc(-1 * calc(20mm + 10mm));", html)
+        self.assertIn("left: 0;", html)
         self.assertIn(".pdf-footer { position: fixed;", html)
         self.assertIn("bottom: calc(-1 * calc(20mm + 12mm));", html)
+        self.assertNotIn(".pdf-header { margin-bottom:", html)
+        self.assertNotIn(".pdf-footer { margin-top:", html)
+        self.assertNotIn("min-height: 20mm;", html)
         self.assertIn("<div class='pdf-header'><div>Header</div></div>", html)
         self.assertIn("<div class='pdf-footer'><div>Footer</div></div>", html)
+
+    def test_render_template_html_does_not_reserve_header_footer_space_by_default(self):
+        html = render_template_html(
+            header_html="<div>Header</div>",
+            content_html="<div>Content</div>",
+            footer_html="<div>Footer</div>",
+            config={},
+        )
+
+        self.assertIn("margin-top: calc(20mm + calc(0mm + 0mm));", html)
+        self.assertIn("margin-bottom: calc(20mm + calc(0mm + 0mm));", html)
+        self.assertIn("top: calc(-1 * calc(0mm + 0mm));", html)
+        self.assertIn("bottom: calc(-1 * calc(0mm + 0mm));", html)
+
+    def test_render_template_html_can_limit_header_and_footer_to_first_page(self):
+        html = render_template_html(
+            header_html="<div>Header</div>",
+            content_html="<div>Content</div>",
+            footer_html="<div>Footer</div>",
+            repeat_header=None,
+            repeat_footer=None,
+            config={
+                "header_height": "20mm",
+                "footer_height": "20mm",
+                "header_spacing": "10mm",
+                "footer_spacing": "12mm",
+            },
+        )
+
+        self.assertIn(
+            "@page { margin-top: calc(20mm + 0mm); margin-right: 20mm; margin-bottom: calc(20mm + 0mm); margin-left: 20mm; }",
+            html,
+        )
+        self.assertIn(
+            "@page :first { margin-top: calc(20mm + calc(20mm + 10mm)); @top-center { content: element(pdf-header); vertical-align: top; margin: 0; padding: 0; } }",
+            html,
+        )
+        self.assertIn(
+            "@page :first { margin-bottom: calc(20mm + calc(20mm + 12mm)); @bottom-center { content: element(pdf-footer); vertical-align: bottom; margin: 0; padding: 0; } }",
+            html,
+        )
+        self.assertIn(
+            ".pdf-header { position: running(pdf-header); height: 0; min-height: 0; margin: 0; padding: 0; overflow: visible; }",
+            html,
+        )
+        self.assertIn(
+            ".pdf-footer { position: running(pdf-footer); height: 0; min-height: 0; margin: 0; padding: 0; overflow: visible; }",
+            html,
+        )
+        self.assertIn("<div class='pdf-header'><div>Header</div></div>", html)
+        self.assertIn("<div class='pdf-footer'><div>Footer</div></div>", html)
+
+    def test_render_template_html_extracts_fragment_styles_before_wrapper_css(self):
+        html = render_template_html(
+            header_html="<div>Header</div>",
+            content_html="""
+                <!doctype html>
+                <html>
+                  <head>
+                    <style>
+                      @page {
+                        margin-top: 3.5cm;
+                        margin-bottom: 3.5cm;
+                        margin-left: 1cm;
+                        margin-right: 1cm;
+                      }
+                      .document { padding-top: 10px; }
+                    </style>
+                  </head>
+                  <body><div class="document">Content</div></body>
+                </html>
+            """,
+            footer_html="<div>Footer</div>",
+            repeat_header=None,
+            repeat_footer=None,
+            config={
+                "header_height": "20mm",
+                "footer_height": "20mm",
+                "header_spacing": "10mm",
+                "footer_spacing": "12mm",
+            },
+        )
+
+        self.assertIn(".document { padding-top: 10px; }", html)
+        self.assertIn(
+            "@page { margin-top: calc(20mm + 0mm); margin-right: 20mm; margin-bottom: calc(20mm + 0mm); margin-left: 20mm; }",
+            html,
+        )
+        self.assertIn(
+            "@page :first { margin-top: calc(20mm + calc(20mm + 10mm)); @top-center { content: element(pdf-header); vertical-align: top; margin: 0; padding: 0; } }",
+            html,
+        )
+        self.assertNotIn("<div class='pdf-content'><html>", html)
+        self.assertNotIn("<div class='pdf-content'><body>", html)
+
+    def test_model_pdf_template_stores_repeat_flags(self):
+        @model_pdf_template(
+            content="pdf/base.html",
+            repeat_header=None,
+            repeat_footer=None,
+        )
+        def printable_base(self):
+            return {"ok": True}
+
+        meta = printable_base._pdf_template_meta
+        self.assertIsNone(meta.repeat_header)
+        self.assertIsNone(meta.repeat_footer)
 
     @patch("rail_django.extensions.templating.rendering.renderers.shutil.which")
     def test_wkhtmltopdf_is_blocked_without_explicit_unsafe_opt_in(
@@ -300,6 +420,8 @@ class TestTemplateCatalogView(TestCase):
                 allow_client_data=False,
                 client_data_fields=(),
                 client_data_schema=(),
+                repeat_header=True,
+                repeat_footer=True,
             )
         }
 

@@ -72,6 +72,8 @@ def render_pdf(
     *,
     header_template: Optional[str] = None,
     footer_template: Optional[str] = None,
+    repeat_header: Optional[bool] = True,
+    repeat_footer: Optional[bool] = True,
     base_url: Optional[str] = None,
     url_fetcher: Optional[Callable] = None,
     renderer: Optional[str] = None,
@@ -86,6 +88,8 @@ def render_pdf(
         config: Style configuration.
         header_template: Path to header template. Uses default when None.
         footer_template: Path to footer template. Uses default when None.
+        repeat_header: When True, render the header on every page. Any other value limits it to the first page.
+        repeat_footer: When True, render the footer on every page. Any other value limits it to the first page.
         base_url: Base URL for resolving relative URLs.
         url_fetcher: Custom URL fetcher callable.
         renderer: Name of the renderer to use.
@@ -104,6 +108,8 @@ def render_pdf(
         header_html=header_html,
         content_html=content_html,
         footer_html=footer_html,
+        repeat_header=repeat_header,
+        repeat_footer=repeat_footer,
         config=config,
         postprocess=postprocess,
     )
@@ -127,6 +133,8 @@ class PdfBuilder:
         self._header_html: Optional[str] = None
         self._content_html: Optional[str] = None
         self._footer_html: Optional[str] = None
+        self._repeat_header: Optional[bool] = True
+        self._repeat_footer: Optional[bool] = True
         self._context: dict[str, Any] = {}
         self._config: dict[str, Any] = {}
 
@@ -152,6 +160,14 @@ class PdfBuilder:
 
     def footer_html(self, html_content: str) -> "PdfBuilder":
         self._footer_html = html_content
+        return self
+
+    def repeat_header(self, repeat: Optional[bool]) -> "PdfBuilder":
+        self._repeat_header = repeat
+        return self
+
+    def repeat_footer(self, repeat: Optional[bool]) -> "PdfBuilder":
+        self._repeat_footer = repeat
         return self
 
     def context(self, **kwargs: Any) -> "PdfBuilder":
@@ -213,6 +229,8 @@ class PdfBuilder:
             header_html=header_html,
             content_html=content_html,
             footer_html=footer_html,
+            repeat_header=self._repeat_header,
+            repeat_footer=self._repeat_footer,
             config=config,
             postprocess=postprocess,
         )

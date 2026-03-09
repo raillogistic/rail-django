@@ -365,6 +365,8 @@ class PdfTemplateView(View):
             template_def.content_template, context, config=template_def.config,
             header_template=template_def.header_template,
             footer_template=template_def.footer_template,
+            repeat_header=template_def.repeat_header,
+            repeat_footer=template_def.repeat_footer,
             base_url=base_url, renderer=renderer_name,
         )
 
@@ -410,6 +412,8 @@ class PdfTemplateView(View):
             header_html=header_html,
             content_html="".join(rendered_contents),
             footer_html=footer_html,
+            repeat_header=template_def.repeat_header,
+            repeat_footer=template_def.repeat_footer,
             config=template_def.config,
         )
         return render_pdf_from_html(
@@ -477,7 +481,10 @@ class PdfTemplatePreviewView(View):
         footer_html = _render_template(template_def.footer_template, context)
         html_content = render_template_html(
             header_html=header_html, content_html=content_html,
-            footer_html=footer_html, config=template_def.config,
+            footer_html=footer_html,
+            repeat_header=template_def.repeat_header,
+            repeat_footer=template_def.repeat_footer,
+            config=template_def.config,
         )
         return HttpResponse(html_content, content_type="text/html")
 

@@ -172,8 +172,10 @@ def _default_template_config() -> dict[str, str]:
         "font_size": "12pt",
         "text_color": "#222222",
         "background_color": "#ffffff",
-        "header_spacing": "10mm",
-        "footer_spacing": "12mm",
+        "header_spacing": "0mm",
+        "footer_spacing": "0mm",
+        "header_height": "0mm",
+        "footer_height": "0mm",
         "content_spacing": "8mm",
         "extra_css": "",
     }
