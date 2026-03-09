@@ -37,12 +37,7 @@ class MethodAnalyzerMixin:
 
     def _is_mutation_method(self, method_name: str, method: Any) -> bool:
         """Determines if a method is a mutation."""
-        if hasattr(method, "_is_mutation"): return method._is_mutation
-        if hasattr(method, "_is_business_logic"): return method._is_business_logic
-        mutation_patterns = ["create", "update", "delete", "remove", "add", "set", "clear", "activate", "deactivate", "enable", "disable", "toggle", "approve", "reject", "publish", "unpublish", "archive", "process", "execute", "perform", "handle", "trigger", "send", "notify", "calculate", "generate", "sync"]
-        method_lower = method_name.lower()
-        if any(pattern in method_lower for pattern in mutation_patterns): return True
-        if method.__doc__:
-            doc_lower = method.__doc__.lower()
-            if any(kw in doc_lower for kw in ["modify", "change", "update", "create", "delete", "save", "process", "execute"]): return True
-        return False
+        return bool(
+            getattr(method, "_is_mutation", False)
+            or getattr(method, "_is_business_logic", False)
+        )

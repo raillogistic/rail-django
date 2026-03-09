@@ -13,7 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
 from graphql import GraphQLError
 
-from rail_django.core.decorators import business_logic
+from rail_django.core.decorators import business_logic, mutation
 from rail_django.core.exceptions import ValidationError as GraphQLValidationError
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaConfig
 from rail_django.core.middleware import FieldPermissionMiddleware
@@ -121,6 +121,7 @@ def test_method_mutation_enforces_operation_guard():
             operations={"update": GraphQLMetaConfig.OperationGuard()}
         )
 
+    @mutation()
     def _activate(self):
         return True
 

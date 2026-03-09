@@ -227,6 +227,57 @@ def test_custom_mutations_query_returns_all_custom_mutation_metadata(gql_client)
         invalidate_metadata_cache(app="test_app", model="Product")
 
 
+def test_custom_mutations_query_ignores_undecorated_helper_methods(gql_client):
+    original_helper = getattr(Product, "recalculate_inventory", None)
+    original_action = getattr(Product, "mark_featured", None)
+
+    def recalculate_inventory(self, factor: int = 1) -> int:
+        return factor
+
+    @mutation(description="Mark this product as featured")
+    def mark_featured(self, note: str = "manual") -> bool:
+        return True
+
+    Product.recalculate_inventory = recalculate_inventory
+    Product.mark_featured = mark_featured
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    query = """
+    query {
+      customMutations(app: "test_app", model: "Product") {
+        name
+        methodName
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        payload = result["data"]["customMutations"]
+        method_names = {item["methodName"] for item in payload}
+        assert "mark_featured" in method_names
+        assert "recalculate_inventory" not in method_names
+    finally:
+        if original_helper is None and hasattr(Product, "recalculate_inventory"):
+            delattr(Product, "recalculate_inventory")
+        elif original_helper is not None:
+            Product.recalculate_inventory = original_helper
+
+        if original_action is None and hasattr(Product, "mark_featured"):
+            delattr(Product, "mark_featured")
+        elif original_action is not None:
+            Product.mark_featured = original_action
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            del Product._graphql_meta_instance
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
 def test_model_template_query_returns_model_template_metadata(gql_client):
     original_method = getattr(Product, "print_summary", None)
     original_templates = template_registry.all()

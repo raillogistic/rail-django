@@ -223,6 +223,43 @@ class TestModelIntrospector(TestCase):
                 IntrospectorTestAuthor.save_without_historical_record = original_method
             ModelIntrospector.clear_cache()
 
+    def test_get_model_methods_marks_only_explicit_mutations(self):
+        """Only explicitly decorated methods should be flagged as mutations."""
+        from rail_django.core.decorators import mutation
+
+        original_helper = getattr(IntrospectorTestAuthor, "calculate_score", None)
+        original_action = getattr(IntrospectorTestAuthor, "approve_author", None)
+
+        def calculate_score(self):
+            return 1
+
+        @mutation()
+        def approve_author(self):
+            return True
+
+        IntrospectorTestAuthor.calculate_score = calculate_score
+        IntrospectorTestAuthor.approve_author = approve_author
+        ModelIntrospector.clear_cache()
+
+        try:
+            methods = ModelIntrospector(IntrospectorTestAuthor).methods
+            self.assertIn("calculate_score", methods)
+            self.assertFalse(methods["calculate_score"].is_mutation)
+            self.assertIn("approve_author", methods)
+            self.assertTrue(methods["approve_author"].is_mutation)
+        finally:
+            if original_helper is None:
+                delattr(IntrospectorTestAuthor, "calculate_score")
+            else:
+                IntrospectorTestAuthor.calculate_score = original_helper
+
+            if original_action is None:
+                delattr(IntrospectorTestAuthor, "approve_author")
+            else:
+                IntrospectorTestAuthor.approve_author = original_action
+
+            ModelIntrospector.clear_cache()
+
     def test_field_validation(self):
         """Test la validation des champs extraits."""
         fields = self.introspector.fields

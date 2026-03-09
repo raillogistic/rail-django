@@ -29,6 +29,7 @@ class MethodNamingModel(models.Model):
     class Meta:
         app_label = "test_naming_contract"
 
+    @mutation()
     def approve_item(self):
         return True
 
