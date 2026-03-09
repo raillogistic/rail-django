@@ -47,7 +47,7 @@ from .objects import (
     generate_object_type as _generate_object_type,
 )
 
-from .constants import FIELD_TYPE_MAP, PYTHON_TYPE_MAP
+from .constants import FIELD_TYPE_MAP, INPUT_FIELD_TYPE_MAP, PYTHON_TYPE_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ class TypeGenerator:
     """
 
     FIELD_TYPE_MAP = FIELD_TYPE_MAP.copy()
+    INPUT_FIELD_TYPE_MAP = INPUT_FIELD_TYPE_MAP.copy()
     PYTHON_TYPE_MAP = PYTHON_TYPE_MAP.copy()
 
     def __init__(
@@ -110,27 +111,42 @@ class TypeGenerator:
                     custom_scalar = get_custom_scalar(graphql_type)
                     if custom_scalar:
                         self.FIELD_TYPE_MAP[django_field] = custom_scalar
+                        self.INPUT_FIELD_TYPE_MAP[django_field] = custom_scalar
                 else:
                     self.FIELD_TYPE_MAP[django_field] = graphql_type
+                    self.INPUT_FIELD_TYPE_MAP[django_field] = graphql_type
 
         if "Email" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.EmailField] = self.custom_scalars["Email"]
+            self.INPUT_FIELD_TYPE_MAP[models.EmailField] = self.custom_scalars["Email"]
         if "URL" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.URLField] = self.custom_scalars["URL"]
+            self.INPUT_FIELD_TYPE_MAP[models.URLField] = self.custom_scalars["URL"]
         if "UUID" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.UUIDField] = self.custom_scalars["UUID"]
+            self.INPUT_FIELD_TYPE_MAP[models.UUIDField] = self.custom_scalars["UUID"]
         if "DateTime" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.DateTimeField] = self.custom_scalars["DateTime"]
+            self.INPUT_FIELD_TYPE_MAP[models.DateTimeField] = self.custom_scalars["DateTime"]
         if "Date" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.DateField] = self.custom_scalars["Date"]
+            self.INPUT_FIELD_TYPE_MAP[models.DateField] = self.custom_scalars["Date"]
         if "Time" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.TimeField] = self.custom_scalars["Time"]
+            self.INPUT_FIELD_TYPE_MAP[models.TimeField] = self.custom_scalars["Time"]
         if "JSON" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.JSONField] = self.custom_scalars["JSON"]
+            self.INPUT_FIELD_TYPE_MAP[models.JSONField] = self.custom_scalars["JSON"]
         if "Decimal" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars["Decimal"]
+            self.INPUT_FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars["Decimal"]
         if "Binary" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.BinaryField] = self.custom_scalars["Binary"]
+            self.INPUT_FIELD_TYPE_MAP[models.BinaryField] = self.custom_scalars["Binary"]
+
+        # File inputs must always accept Upload payloads even when output fields serialize as strings.
+        self.INPUT_FIELD_TYPE_MAP[models.FileField] = INPUT_FIELD_TYPE_MAP[models.FileField]
+        self.INPUT_FIELD_TYPE_MAP[models.ImageField] = INPUT_FIELD_TYPE_MAP[models.ImageField]
 
     def _get_excluded_fields(self, model: type[models.Model]) -> list[str]:
         """Get excluded fields for a specific model."""
@@ -373,7 +389,7 @@ class TypeGenerator:
         return filter_class
 
     def _get_input_field_type(self, django_field_type: type[Field]) -> Optional[type[graphene.Scalar]]:
-        return self.FIELD_TYPE_MAP.get(django_field_type)
+        return self.INPUT_FIELD_TYPE_MAP.get(django_field_type)
 
     def _get_filter_field_type(self, django_field_type: type[Field]) -> list[str]:
         base_filters = ["exact", "in", "isnull"]

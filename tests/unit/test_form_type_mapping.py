@@ -23,6 +23,11 @@ def test_map_graphql_type_supports_common_numeric_and_ip_fields():
     assert map_graphql_type(models.GenericIPAddressField()) == "String"
 
 
+def test_map_graphql_type_uses_upload_for_file_inputs():
+    assert map_graphql_type(models.FileField()) == "Upload"
+    assert map_graphql_type(models.ImageField()) == "Upload"
+
+
 def test_map_python_type_supports_common_numeric_and_ip_fields():
     assert map_python_type(models.PositiveBigIntegerField()) == "int"
     assert map_python_type(models.BigAutoField()) == "int"

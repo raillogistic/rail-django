@@ -90,9 +90,9 @@ def map_graphql_type(field: models.Field) -> str:
         "TimeField": "Time",
         "DurationField": "String",
         "JSONField": "JSONString",
-        "FileField": "String",
+        "FileField": "Upload",
         "FilePathField": "String",
-        "ImageField": "String",
+        "ImageField": "Upload",
         "BinaryField": "String",
     }
     return mapping.get(field_type, "String")

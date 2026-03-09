@@ -2,11 +2,16 @@
 Integration tests for unified relation input mutations.
 """
 
+import shutil
+import tempfile
+
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.test.utils import override_settings
 from unittest.mock import Mock
 
-from test_app.models import Category, Product, Tag, Post, Comment
+from test_app.models import Category, Comment, Document, Post, Product, Tag
 
 
 def grant_permissions(user, model_perms):
@@ -45,12 +50,19 @@ class TestUnifiedMutations(TestCase):
             self.user,
             {
                 Category: ["add_category", "change_category", "delete_category"],
+                Document: ["add_document", "change_document", "delete_document"],
                 Product: ["add_product", "change_product", "delete_product"],
                 Tag: ["add_tag", "change_tag", "delete_tag"],
                 Post: ["add_post", "change_post", "delete_post"],
                 Comment: ["add_comment", "change_comment", "delete_comment"],
             },
         )
+
+        self.media_root = tempfile.mkdtemp(prefix="rail-django-upload-tests-")
+        self.media_override = override_settings(MEDIA_ROOT=self.media_root)
+        self.media_override.enable()
+        self.addCleanup(shutil.rmtree, self.media_root, True)
+        self.addCleanup(self.media_override.disable)
 
         self.settings = MutationGeneratorSettings()
         self.type_gen = TypeGenerator(mutation_settings=self.settings)
@@ -335,6 +347,55 @@ class TestUnifiedMutations(TestCase):
 
         self.assertFalse(res.ok)
         self.assertIsNotNone(res.errors)
+
+    def test_generated_input_type_uses_upload_for_file_fields(self):
+        """Generated mutation inputs should expose Upload for file fields."""
+        input_type = self.type_gen.generate_input_type(Document, mutation_type="create")
+
+        self.assertEqual(str(input_type._meta.fields["attachment"].type), "Upload")
+
+    def test_create_mutation_persists_uploaded_file(self):
+        """Generated create mutations should accept uploaded files directly."""
+        mutation = self.mut_gen.generate_create_mutation(Document)
+        upload = SimpleUploadedFile("mission.txt", b"ordre de mission")
+
+        info = create_info(self.user)
+        res = mutation.mutate(
+            None,
+            info,
+            input={"title": "Mission Attachment", "attachment": upload},
+        )
+
+        if res.errors:
+            print(res.errors)
+        self.assertTrue(res.ok)
+        self.assertEqual(res.object.title, "Mission Attachment")
+        self.assertTrue(res.object.attachment.name.endswith("mission.txt"))
+        self.assertTrue(res.object.attachment.storage.exists(res.object.attachment.name))
+
+    def test_update_mutation_replaces_uploaded_file(self):
+        """Generated update mutations should preserve uploaded file objects through validation."""
+        document = Document.objects.create(
+            title="Mission Attachment",
+            attachment=SimpleUploadedFile("initial.txt", b"initial"),
+        )
+        mutation = self.mut_gen.generate_update_mutation(Document)
+        upload = SimpleUploadedFile("updated.txt", b"updated")
+
+        info = create_info(self.user)
+        res = mutation.mutate(
+            None,
+            info,
+            id=str(document.id),
+            input={"attachment": upload},
+        )
+
+        if res.errors:
+            print(res.errors)
+        self.assertTrue(res.ok)
+        document.refresh_from_db()
+        self.assertTrue(document.attachment.name.endswith("updated.txt"))
+        self.assertTrue(document.attachment.storage.exists(document.attachment.name))
 
 
 @pytest.mark.integration

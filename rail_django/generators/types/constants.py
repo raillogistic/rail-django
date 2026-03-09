@@ -6,6 +6,24 @@ from datetime import date
 import graphene
 from django.db import models
 
+try:  # pragma: no cover - optional dependency
+    from graphene_file_upload.scalars import Upload
+except Exception:  # pragma: no cover - fallback when package is not installed
+    class Upload(graphene.Scalar):
+        """Fallback Upload scalar accepting raw values in tests."""
+
+        @staticmethod
+        def serialize(value):
+            return value
+
+        @staticmethod
+        def parse_literal(node):
+            return getattr(node, "value", None)
+
+        @staticmethod
+        def parse_value(value):
+            return value
+
 
 # Mapping of Django field types to GraphQL scalar types
 FIELD_TYPE_MAP = {
@@ -38,6 +56,14 @@ FIELD_TYPE_MAP = {
     models.URLField: graphene.String,
     models.UUIDField: graphene.UUID,
 }
+
+INPUT_FIELD_TYPE_MAP = FIELD_TYPE_MAP.copy()
+INPUT_FIELD_TYPE_MAP.update(
+    {
+        models.FileField: Upload,
+        models.ImageField: Upload,
+    }
+)
 
 # Mapping of Python types to GraphQL scalar types for @property methods
 PYTHON_TYPE_MAP = {

@@ -33,6 +33,15 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
+def _is_uploaded_file_like(value: Any) -> bool:
+    return (
+        value is not None
+        and not isinstance(value, (str, bytes, bytearray, dict, list, tuple, set))
+        and hasattr(value, "read")
+        and hasattr(value, "name")
+    )
+
+
 class FieldValidator:
     """Common field-level validators built on the sanitizer."""
 
@@ -342,6 +351,9 @@ class InputValidator:
         """Recursively sanitize a value."""
         if isinstance(value, Enum):
             return value.value
+
+        if _is_uploaded_file_like(value):
+            return value
 
         # Handle graphene InputObjectType instances
         # These have _meta.fields and store values as instance attributes

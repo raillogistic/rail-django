@@ -105,3 +105,12 @@ class OrderItem(models.Model):
     class Meta:
         app_label = "test_app"
         verbose_name_plural = "order items"
+
+
+class Document(models.Model):
+    title = models.CharField(max_length=120)
+    attachment = models.FileField(upload_to="attachments/", blank=True, null=True)
+
+    class Meta:
+        app_label = "test_app"
+        verbose_name_plural = "documents"
