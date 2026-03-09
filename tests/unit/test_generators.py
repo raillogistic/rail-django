@@ -106,6 +106,30 @@ class TestTypeGenerator(TestCase):
         self.assertIn("category", fields)
         self.assertIn("tags", fields)
 
+    def test_property_list_string_annotation_generates_graphene_list(self):
+        """List[str] properties should produce Graphene List(String)."""
+        original_property = getattr(Product, "objet_list", None)
+
+        @property
+        def objet_list(self) -> List[str]:
+            return ["a", "b"]
+
+        Product.objet_list = objet_list
+        ModelIntrospector.clear_cache()
+
+        try:
+            product_type = self.type_generator.generate_object_type(Product)
+            field = product_type._meta.fields.get("objet_list")
+
+            self.assertIsNotNone(field)
+            self.assertEqual(field.type.of_type, graphene.String)
+        finally:
+            if original_property is None:
+                delattr(Product, "objet_list")
+            else:
+                Product.objet_list = original_property
+            ModelIntrospector.clear_cache()
+
     def test_generate_type_caching(self):
         """Test le système de cache pour la génération de types."""
         # Premier appel - doit créer le type

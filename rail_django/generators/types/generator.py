@@ -3,11 +3,13 @@ TypeGenerator implementation.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Type, Union
+from types import UnionType
+from typing import Any, Dict, List, Optional, Type, Union, get_args, get_origin
 
 import graphene
 from django.db import models
 from django.db.models.fields import Field
+from graphene.types.unmountedtype import UnmountedType
 from graphene_django import DjangoObjectType
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
 from graphene_django.converter import convert_django_field
@@ -278,31 +280,40 @@ class TypeGenerator:
             return False
         return True
 
-    def _get_graphql_type_for_property(self, return_type: Any) -> graphene.Field:
-        """Convert a Python return type annotation to a GraphQL field type."""
+    def _resolve_property_inner_graphql_type(self, return_type: Any) -> Any:
+        """Resolve property annotations to unmounted Graphene types for nested usage."""
         if return_type is Any or return_type is None:
-            return graphene.String()
+            return graphene.String
+        if isinstance(return_type, UnmountedType):
+            return return_type.__class__
+        if isinstance(return_type, type) and issubclass(return_type, UnmountedType):
+            return return_type
         if return_type in self.PYTHON_TYPE_MAP:
             graphql_type = self.PYTHON_TYPE_MAP[return_type]
             if graphql_type == graphene.List:
-                return graphene.List(graphene.String)
+                return graphene.String
+            return graphql_type
+
+        origin = get_origin(return_type)
+        if origin in (list, List):
+            args = get_args(return_type)
+            inner_type = self._resolve_property_inner_graphql_type(args[0] if args else str)
+            return graphene.List(inner_type)
+        if origin in (Union, UnionType):
+            args = tuple(arg for arg in get_args(return_type) if arg is not type(None))
+            if len(args) == 1:
+                return self._resolve_property_inner_graphql_type(args[0])
+
+        return graphene.String
+
+    def _get_graphql_type_for_property(self, return_type: Any) -> graphene.Field:
+        """Convert a Python return type annotation to a GraphQL field type."""
+        graphql_type = self._resolve_property_inner_graphql_type(return_type)
+        if isinstance(graphql_type, UnmountedType):
+            return graphql_type
+        if isinstance(graphql_type, type) and issubclass(graphql_type, UnmountedType):
             return graphql_type()
-        origin = getattr(return_type, "__origin__", None)
-        if origin is not None:
-            if origin is list or origin is list:
-                args = getattr(return_type, "__args__", ())
-                if args:
-                    inner_type = self._get_graphql_type_for_property(args[0])
-                    if hasattr(inner_type, "_type"):
-                        return graphene.List(inner_type._type)
-                    return graphene.List(inner_type)
-                return graphene.List(graphene.String)
-            elif origin is Union:
-                args = getattr(return_type, "__args__", ())
-                if len(args) == 2 and type(None) in args:
-                    non_none_type = args[0] if args[1] is type(None) else args[1]
-                    return self._get_graphql_type_for_property(non_none_type)
-        return graphene.String()
+        return graphql_type
 
     def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
         return _generate_object_type(self, model)
