@@ -6,6 +6,12 @@ from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
 User = get_user_model()
 
 
+class ImportChoiceStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    ACTIVE = "active", "Active"
+    ARCHIVED = "archived", "Archived"
+
+
 class Category(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -114,3 +120,16 @@ class Document(models.Model):
     class Meta:
         app_label = "test_app"
         verbose_name_plural = "documents"
+
+
+class ImportChoiceSample(models.Model):
+    name = models.CharField(max_length=120)
+    status = models.CharField(
+        max_length=20,
+        choices=ImportChoiceStatus.choices,
+        default=ImportChoiceStatus.DRAFT,
+    )
+
+    class Meta:
+        app_label = "test_app"
+        verbose_name_plural = "import choice samples"

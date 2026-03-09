@@ -150,7 +150,45 @@ def _foreign_key_choices(field: models.Field) -> list[str]:
     return choices
 
 
-def _apply_fk_validations(
+def _field_validation_choices(field: models.Field) -> list[str]:
+    if _is_fk_field(field):
+        return _foreign_key_choices(field)
+
+    raw_choices = getattr(field, "choices", None) or ()
+    if not raw_choices:
+        return []
+
+    flattened_choices: list[str] = []
+    for choice in raw_choices:
+        if not isinstance(choice, (tuple, list)) or not choice:
+            continue
+        value = choice[0]
+        if isinstance(value, (tuple, list)):
+            for nested_choice in value:
+                if not isinstance(nested_choice, (tuple, list)) or not nested_choice:
+                    continue
+                nested_value = nested_choice[0]
+                if nested_value not in (None, ""):
+                    flattened_choices.append(str(nested_value))
+            continue
+        if value not in (None, ""):
+            flattened_choices.append(str(value))
+    return flattened_choices
+
+
+def _build_validation_prompt(field: models.Field, choices: list[str]) -> str:
+    field_label = str(getattr(field, "verbose_name", field.name) or field.name)
+    preview = ", ".join(choices[:8])
+    if len(choices) > 8:
+        preview = f"{preview}, ..."
+    if _is_fk_field(field):
+        return (
+            f"Choose an existing value ({FK_CHOICE_SEPARATOR.join(['id', 'label'])}): {preview}"
+        )[:255]
+    return f"Choose one of: {preview}"[:255]
+
+
+def _apply_field_validations(
     *,
     workbook,
     worksheet,
@@ -165,17 +203,17 @@ def _apply_fk_validations(
         return
 
     model_fields = {field.name: field for field in model._meta.fields}
-    fk_columns: list[tuple[int, models.Field, list[str]]] = []
+    validated_columns: list[tuple[int, models.Field, list[str]]] = []
     for column_index, column in enumerate(columns, start=1):
         field_name = str(column["name"]).strip()
         field = model_fields.get(field_name)
-        if field is None or not _is_fk_field(field):
+        if field is None:
             continue
-        choices = _foreign_key_choices(field)
+        choices = _field_validation_choices(field)
         if choices:
-            fk_columns.append((column_index, field, choices))
+            validated_columns.append((column_index, field, choices))
 
-    if not fk_columns:
+    if not validated_columns:
         return
 
     choices_sheet_name = "_choices"
@@ -185,7 +223,7 @@ def _apply_fk_validations(
     choices_sheet.sheet_state = "hidden"
 
     for choice_col_index, (column_index, field, choices) in enumerate(
-        fk_columns, start=1
+        validated_columns, start=1
     ):
         choice_letter = get_column_letter(choice_col_index)
         choices_sheet.cell(row=1, column=choice_col_index, value=str(field.name))
@@ -199,12 +237,7 @@ def _apply_fk_validations(
         validation.showErrorMessage = True
         field_label = str(getattr(field, "verbose_name", field.name) or field.name)
         validation.promptTitle = f"Select {field_label}"
-        preview = ", ".join(choices[:8])
-        if len(choices) > 8:
-            preview = f"{preview}, ..."
-        validation.prompt = (
-            f"Choose an existing value ({FK_CHOICE_SEPARATOR.join(['id', 'label'])}): {preview}"
-        )[:255]
+        validation.prompt = _build_validation_prompt(field, choices)
         worksheet.add_data_validation(validation)
 
         target_letter = get_column_letter(column_index)
@@ -225,7 +258,7 @@ def _render_xlsx_template(
     workbook = load_workbook(io.BytesIO(content))
     worksheet = workbook.active
     model = apps.get_model(app_label, model_name)
-    _apply_fk_validations(
+    _apply_field_validations(
         workbook=workbook,
         worksheet=worksheet,
         model=model,

@@ -10,7 +10,7 @@ from rail_django.extensions.importing.views import (
     ModelImportTemplateDownloadView,
     TEMPLATE_PREFILLED_ROWS,
 )
-from test_app.models import Category
+from test_app.models import Category, ImportChoiceStatus
 
 try:  # pragma: no cover - optional dependency
     from openpyxl import load_workbook
@@ -144,6 +144,57 @@ def test_model_import_template_download_returns_xlsx():
     )
     assert "_choices" in workbook.sheetnames
     assert workbook["_choices"].sheet_state == "hidden"
+
+
+@pytest.mark.skipif(not OPENPYXL_AVAILABLE, reason="openpyxl is required for xlsx rendering")
+def test_model_import_template_download_adds_xlsx_dropdown_for_charfield_choices():
+    user = get_user_model().objects.create_superuser(
+        username="import_template_download_choices_admin",
+        email="import_template_download_choices_admin@example.com",
+        password="pass",
+    )
+    token = _bearer_token_for_user(user)
+
+    request = RequestFactory().get(
+        "/api/v1/import/templates/test_app/importchoicesample/",
+        {"format": "xlsx"},
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    response = ModelImportTemplateDownloadView.as_view()(
+        request,
+        app_label="test_app",
+        model_name="importchoicesample",
+    )
+
+    assert response.status_code == 200
+
+    workbook = load_workbook(BytesIO(response.content))
+    sheet = workbook.active
+    headers = [cell.value for cell in sheet[1]]
+    expected_max_row = TEMPLATE_PREFILLED_ROWS + 1
+
+    status_col = headers.index("status") + 1
+    status_letter = get_column_letter(status_col)
+    validations = list(sheet.data_validations.dataValidation)
+    assert any(
+        str(validation.formula1).startswith("'_choices'!")
+        and f"{status_letter}2:{status_letter}{expected_max_row}" in str(validation.sqref)
+        for validation in validations
+    )
+
+    choices_sheet = workbook["_choices"]
+    status_choice_column = None
+    for column_index, cell in enumerate(choices_sheet[1], start=1):
+        if cell.value == "status":
+            status_choice_column = column_index
+            break
+
+    assert status_choice_column is not None
+    stored_choices = [
+        choices_sheet.cell(row=row_index, column=status_choice_column).value
+        for row_index in range(2, 5)
+    ]
+    assert stored_choices == [choice for choice, _label in ImportChoiceStatus.choices]
 
 
 def test_model_import_template_download_requires_authentication():
