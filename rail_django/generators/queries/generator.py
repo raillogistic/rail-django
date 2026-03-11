@@ -90,6 +90,20 @@ class QueryGenerator:
         self.optimizer = get_optimizer(schema_name)
         self.performance_monitor = get_performance_monitor(schema_name)
 
+    def _get_or_create_query_field(
+        self,
+        model: type[models.Model],
+        cache_key: tuple[Any, ...],
+        factory,
+    ) -> graphene.Field:
+        """Return a cached query field for this generator instance."""
+        model_cache = self._query_registry.setdefault(model, {})
+        query_field = model_cache.get(cache_key)
+        if query_field is None:
+            query_field = factory()
+            model_cache[cache_key] = query_field
+        return query_field
+
     def generate_introspection_queries(self) -> Dict[str, graphene.Field]:
         """
         Introspection root queries are now provided by metadata extensions.
@@ -394,12 +408,20 @@ class QueryGenerator:
     def generate_single_query(
         self, model: type[models.Model], manager_name: str = "objects"
     ) -> graphene.Field:
-        return _generate_single_query(self, model, manager_name)
+        return self._get_or_create_query_field(
+            model,
+            ("single", manager_name),
+            lambda: _generate_single_query(self, model, manager_name),
+        )
 
     def generate_list_query(
         self, model: type[models.Model], manager_name: str = "objects"
     ) -> Any:
-        return _generate_list_query(self, model, manager_name)
+        return self._get_or_create_query_field(
+            model,
+            ("list", manager_name),
+            lambda: _generate_list_query(self, model, manager_name),
+        )
 
     def generate_paginated_query(
         self,
@@ -408,12 +430,16 @@ class QueryGenerator:
         result_model: Optional[type[models.Model]] = None,
         operation_name: str = "paginated",
     ) -> graphene.Field:
-        return _generate_paginated_query(
-            self,
+        return self._get_or_create_query_field(
             model,
-            manager_name=manager_name,
-            result_model=result_model,
-            operation_name=operation_name,
+            ("paginated", manager_name, result_model or model, operation_name),
+            lambda: _generate_paginated_query(
+                self,
+                model,
+                manager_name=manager_name,
+                result_model=result_model,
+                operation_name=operation_name,
+            ),
         )
 
     def add_filtering_support(
@@ -449,4 +475,8 @@ class QueryGenerator:
     def generate_grouping_query(
         self, model: type[models.Model], manager_name: str = "objects"
     ) -> graphene.Field:
-        return _generate_grouping_query(self, model, manager_name)
+        return self._get_or_create_query_field(
+            model,
+            ("grouping", manager_name),
+            lambda: _generate_grouping_query(self, model, manager_name),
+        )

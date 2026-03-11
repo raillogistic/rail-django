@@ -92,9 +92,22 @@ class SchemaBuilderCore:
         self._subscription_fields: dict[str, graphene.Field] = {}
         self._registered_models: set[type[models.Model]] = set()
         self._schema_version = 0
-        
-        # Instance-level lock for thread-safe operations
-        self._lock = threading.Lock()
+
+        # Instance-level lock for thread-safe operations. This must be re-entrant
+        # because some registration helpers call back into rebuild methods.
+        self._lock = threading.RLock()
+        self._signal_dispatch_uids = {
+            "post_migrate": f"rail_django:{self.schema_name}:{id(self)}:post_migrate",
+            "post_save": f"rail_django:{self.schema_name}:{id(self)}:post_save",
+            "post_delete": f"rail_django:{self.schema_name}:{id(self)}:post_delete",
+        }
+        self._signals_connected = False
+        self._model_validation_cache: dict[
+            tuple[type[models.Model], tuple[str, ...], tuple[str, ...]], bool
+        ] = {}
+        self._validation_settings_key: Optional[
+            tuple[tuple[str, ...], tuple[str, ...]]
+        ] = None
 
         self._initialized = True
         self._connect_signals()
@@ -116,6 +129,8 @@ class SchemaBuilderCore:
                 SchemaSettings(**settings_dict) if settings_dict else SchemaSettings()
             )
             self._raw_settings = settings_dict or {}
+            self._model_validation_cache.clear()
+            self._validation_settings_key = None
             self._schema = None
 
     @property
@@ -191,12 +206,54 @@ class SchemaBuilderCore:
 
     def _connect_signals(self) -> None:
         """Connects Django signals for automatic schema rebuilding."""
+        if self._signals_connected:
+            return
         # Only rebuild after migrations if enabled in schema settings
         if self._get_schema_setting("auto_refresh_on_migration", True):
-            post_migrate.connect(self._handle_post_migrate)
+            post_migrate.connect(
+                self._handle_post_migrate,
+                dispatch_uid=self._signal_dispatch_uids["post_migrate"],
+            )
         if self._get_schema_setting("auto_refresh_on_model_change", False):
-            post_save.connect(self._handle_model_change)
-            post_delete.connect(self._handle_model_change)
+            post_save.connect(
+                self._handle_model_change,
+                dispatch_uid=self._signal_dispatch_uids["post_save"],
+            )
+            post_delete.connect(
+                self._handle_model_change,
+                dispatch_uid=self._signal_dispatch_uids["post_delete"],
+            )
+        self._signals_connected = True
+
+    def disconnect_signals(self) -> None:
+        """Disconnects any schema rebuild signal handlers registered by this builder."""
+        if not self._signals_connected:
+            return
+        post_migrate.disconnect(
+            dispatch_uid=self._signal_dispatch_uids["post_migrate"]
+        )
+        post_save.disconnect(dispatch_uid=self._signal_dispatch_uids["post_save"])
+        post_delete.disconnect(dispatch_uid=self._signal_dispatch_uids["post_delete"])
+        self._signals_connected = False
+
+    def _get_validation_settings(
+        self,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], set[str], set[str]]:
+        """Return cached exclusion settings used during model validation."""
+        excluded_apps = tuple(
+            sorted(str(app) for app in (self._get_schema_setting("excluded_apps", []) or []))
+        )
+        excluded_models = tuple(
+            sorted(
+                str(model_name)
+                for model_name in (self._get_schema_setting("excluded_models", []) or [])
+            )
+        )
+        settings_key = (excluded_apps, excluded_models)
+        if settings_key != self._validation_settings_key:
+            self._validation_settings_key = settings_key
+            self._model_validation_cache.clear()
+        return settings_key[0], settings_key[1], set(excluded_apps), set(excluded_models)
 
     def _handle_post_migrate(self, sender, **kwargs) -> None:
         """Handles post-migrate signal to rebuild schema after migrations."""
@@ -227,6 +284,13 @@ class SchemaBuilderCore:
         app_label = model._meta.app_label
         model_name = model.__name__
         model_label = model._meta.model_name
+        excluded_apps_key, excluded_models_key, excluded_apps, excluded_models = (
+            self._get_validation_settings()
+        )
+        cache_key = (model, excluded_apps_key, excluded_models_key)
+        cached = self._model_validation_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         if app_label in _SYSTEM_EXCLUDED_APPS:
             logger.debug(
@@ -234,27 +298,25 @@ class SchemaBuilderCore:
                 model_name,
                 app_label,
             )
+            self._model_validation_cache[cache_key] = False
             return False
 
         if model_label in _SYSTEM_EXCLUDED_MODEL_NAMES:
             logger.debug("Excluding model %s (system model excluded)", model_name)
+            self._model_validation_cache[cache_key] = False
             return False
-
-        # Check app exclusions from schema_settings
-        excluded_apps = self._get_schema_setting("excluded_apps", [])
 
         if app_label in excluded_apps:
             logger.debug(
                 f"Excluding model {model_name} from app {app_label} (app excluded)"
             )
+            self._model_validation_cache[cache_key] = False
             return False
-
-        # Check model exclusions from schema_settings
-        excluded_models = self._get_schema_setting("excluded_models", [])
 
         # Check model name exclusions
         if model_name in excluded_models:
             logger.debug(f"Excluding model {model_name} (model name excluded)")
+            self._model_validation_cache[cache_key] = False
             return False
 
         # Check app.model exclusions
@@ -263,6 +325,7 @@ class SchemaBuilderCore:
             logger.debug(
                 f"Excluding model {full_model_name} (full model name excluded)"
             )
+            self._model_validation_cache[cache_key] = False
             return False
 
         # Ignore Django Simple History generated models (Historical*).
@@ -275,10 +338,12 @@ class SchemaBuilderCore:
                 logger.debug(
                     f"Excluding historical model {full_model_name} (Simple History)"
                 )
+                self._model_validation_cache[cache_key] = False
                 return False
         except Exception:
             pass
 
+        self._model_validation_cache[cache_key] = True
         return True
 
     def _discover_models(self) -> list[type[models.Model]]:

@@ -8,6 +8,7 @@ from explicit model lists with basic caching support.
 import itertools
 import logging
 import threading
+from collections import OrderedDict
 from typing import Any, Optional, Type
 
 import graphene
@@ -32,6 +33,7 @@ class AutoSchemaGenerator:
         settings: Optional[Any] = None,
         schema_name: Optional[str] = None,
         registry=None,
+        max_cached_builders: int = 32,
     ) -> None:
         """
         Initialize the AutoSchemaGenerator.
@@ -48,9 +50,28 @@ class AutoSchemaGenerator:
         self._registry = registry
         self._registered_models: set[type[models.Model]] = set()
         self._query_extensions: list[type[graphene.ObjectType]] = []
-        self._schema_cache: dict[tuple[str, ...], graphene.Schema] = {}
-        self._builders: dict[tuple[str, ...], "SchemaBuilder"] = {}
+        self._schema_cache: "OrderedDict[tuple[str, ...], graphene.Schema]" = (
+            OrderedDict()
+        )
+        self._builders: "OrderedDict[tuple[str, ...], SchemaBuilder]" = OrderedDict()
+        self._max_cached_builders = max(1, int(max_cached_builders))
         self._lock = threading.Lock()
+
+    def _dispose_builder(self, builder: "SchemaBuilder") -> None:
+        """Dispose of a cached builder that is no longer retained."""
+        disconnect = getattr(builder, "disconnect_signals", None)
+        if callable(disconnect):
+            try:
+                disconnect()
+            except Exception as exc:
+                logger.warning("Failed to disconnect auto schema builder: %s", exc)
+
+    def _evict_oldest_builder_if_needed(self) -> None:
+        """Bound builder growth across many distinct model-set combinations."""
+        while len(self._builders) > self._max_cached_builders:
+            cache_key, builder = self._builders.popitem(last=False)
+            self._schema_cache.pop(cache_key, None)
+            self._dispose_builder(builder)
 
     def register_model(self, model: type[models.Model]) -> None:
         """
@@ -129,6 +150,9 @@ class AutoSchemaGenerator:
                 registry=self._registry,
             )
             self._builders[cache_key] = builder
+            self._evict_oldest_builder_if_needed()
+        else:
+            self._builders.move_to_end(cache_key)
         return builder
 
     def get_schema(
@@ -152,9 +176,12 @@ class AutoSchemaGenerator:
         with self._lock:
             cached = self._schema_cache.get(cache_key)
             if cached is not None:
+                self._schema_cache.move_to_end(cache_key)
                 return cached
 
             builder = self._get_builder(cache_key)
+            original_discover = getattr(builder, "_discover_models", None)
+            original_load_query_extensions = getattr(builder, "_load_query_extensions", None)
 
             if models_list is not None:
                 valid_models = [
@@ -167,17 +194,10 @@ class AutoSchemaGenerator:
                 builder._discover_models = _discover_models_override
 
             if self._query_extensions:
-                original_load = getattr(
-                    builder, "_auto_schema_original_load_query_extensions", None
-                )
-                if original_load is None:
-                    original_load = builder._load_query_extensions
-                    builder._auto_schema_original_load_query_extensions = original_load
-
                 def _load_query_extensions_override() -> (
                     list[type[graphene.ObjectType]]
                 ):
-                    loaded = list(original_load())
+                    loaded = list(original_load_query_extensions())
                     for extension in self._query_extensions:
                         if extension not in loaded:
                             loaded.append(extension)
@@ -185,6 +205,18 @@ class AutoSchemaGenerator:
 
                 builder._load_query_extensions = _load_query_extensions_override
 
-            schema = builder.get_schema()
+            try:
+                schema = builder.get_schema()
+            finally:
+                if models_list is not None and original_discover is not None:
+                    builder._discover_models = original_discover
+                if (
+                    self._query_extensions
+                    and original_load_query_extensions is not None
+                ):
+                    builder._load_query_extensions = original_load_query_extensions
             self._schema_cache[cache_key] = schema
+            self._schema_cache.move_to_end(cache_key)
+            while len(self._schema_cache) > self._max_cached_builders:
+                self._schema_cache.popitem(last=False)
             return schema

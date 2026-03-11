@@ -89,7 +89,8 @@ class MutationGenerator:
 
         # Pass mutation settings to type generator for nested relations configuration
         self.type_generator.mutation_settings = self.settings
-        self._mutation_classes: dict[str, type[graphene.Mutation]] = {}
+        self._mutation_classes: dict[tuple[Any, ...], type[graphene.Mutation]] = {}
+        self._mutation_field_cache: dict[tuple[Any, ...], graphene.Field] = {}
         self.nested_handler = NestedOperationHandler(
             self.settings, schema_name=self.schema_name
         )
@@ -239,6 +240,31 @@ class MutationGenerator:
         if not getattr(self.settings, "require_model_permissions", True):
             self._pipeline_builder.require_model_permissions(False)
 
+    def _get_or_create_mutation_class(
+        self,
+        cache_key: tuple[Any, ...],
+        factory,
+    ) -> type[graphene.Mutation]:
+        """Return a cached mutation class for this generator instance."""
+        mutation_class = self._mutation_classes.get(cache_key)
+        if mutation_class is None:
+            mutation_class = factory()
+            self._mutation_classes[cache_key] = mutation_class
+        return mutation_class
+
+    def _get_or_create_mutation_field(
+        self,
+        cache_key: tuple[Any, ...],
+        class_factory,
+    ) -> graphene.Field:
+        """Return a cached Graphene field wrapper for a mutation class."""
+        field = self._mutation_field_cache.get(cache_key)
+        if field is None:
+            mutation_class = self._get_or_create_mutation_class(cache_key, class_factory)
+            field = mutation_class.Field()
+            self._mutation_field_cache[cache_key] = field
+        return field
+
     def generate_create_mutation(
         self, model: type[models.Model]
     ) -> type[graphene.Mutation]:
@@ -246,22 +272,21 @@ class MutationGenerator:
         Generate a create mutation for a model using the pipeline backend.
         """
         from ..pipeline.factories import create_mutation_factory
-
-        model_type = self.type_generator.generate_object_type(model)
-        input_type = self.type_generator.generate_input_type(
-            model, mutation_type="create"
-        )
-        graphql_meta = get_model_graphql_meta(model)
-
-        return create_mutation_factory(
-            model=model,
-            model_type=model_type,
-            input_type=input_type,
-            graphql_meta=graphql_meta,
-            pipeline_builder=self._pipeline_builder,
-            nested_handler=self.nested_handler,
-            input_validator=self.input_validator,
-            tenant_applicator=self._tenant_applicator,
+        cache_key = ("create", model)
+        return self._get_or_create_mutation_class(
+            cache_key,
+            lambda: create_mutation_factory(
+                model=model,
+                model_type=self.type_generator.generate_object_type(model),
+                input_type=self.type_generator.generate_input_type(
+                    model, mutation_type="create"
+                ),
+                graphql_meta=get_model_graphql_meta(model),
+                pipeline_builder=self._pipeline_builder,
+                nested_handler=self.nested_handler,
+                input_validator=self.input_validator,
+                tenant_applicator=self._tenant_applicator,
+            ),
         )
 
     def generate_update_mutation(
@@ -271,22 +296,21 @@ class MutationGenerator:
         Generate an update mutation for a model using the pipeline backend.
         """
         from ..pipeline.factories import update_mutation_factory
-
-        model_type = self.type_generator.generate_object_type(model)
-        input_type = self.type_generator.generate_input_type(
-            model, partial=True, mutation_type="update"
-        )
-        graphql_meta = get_model_graphql_meta(model)
-
-        return update_mutation_factory(
-            model=model,
-            model_type=model_type,
-            input_type=input_type,
-            graphql_meta=graphql_meta,
-            pipeline_builder=self._pipeline_builder,
-            nested_handler=self.nested_handler,
-            input_validator=self.input_validator,
-            tenant_applicator=self._tenant_applicator,
+        cache_key = ("update", model)
+        return self._get_or_create_mutation_class(
+            cache_key,
+            lambda: update_mutation_factory(
+                model=model,
+                model_type=self.type_generator.generate_object_type(model),
+                input_type=self.type_generator.generate_input_type(
+                    model, partial=True, mutation_type="update"
+                ),
+                graphql_meta=get_model_graphql_meta(model),
+                pipeline_builder=self._pipeline_builder,
+                nested_handler=self.nested_handler,
+                input_validator=self.input_validator,
+                tenant_applicator=self._tenant_applicator,
+            ),
         )
 
     def generate_delete_mutation(
@@ -296,32 +320,41 @@ class MutationGenerator:
         Generate a delete mutation for a model using the pipeline backend.
         """
         from ..pipeline.factories import delete_mutation_factory
-
-        model_type = self.type_generator.generate_object_type(model)
-        graphql_meta = get_model_graphql_meta(model)
-
-        return delete_mutation_factory(
-            model=model,
-            model_type=model_type,
-            graphql_meta=graphql_meta,
-            pipeline_builder=self._pipeline_builder,
-            tenant_applicator=self._tenant_applicator,
+        cache_key = ("delete", model)
+        return self._get_or_create_mutation_class(
+            cache_key,
+            lambda: delete_mutation_factory(
+                model=model,
+                model_type=self.type_generator.generate_object_type(model),
+                graphql_meta=get_model_graphql_meta(model),
+                pipeline_builder=self._pipeline_builder,
+                tenant_applicator=self._tenant_applicator,
+            ),
         )
 
     def generate_bulk_create_mutation(
         self, model: type[models.Model]
     ) -> type[graphene.Mutation]:
-        return _generate_bulk_create_mutation(self, model)
+        return self._get_or_create_mutation_class(
+            ("bulk_create", model),
+            lambda: _generate_bulk_create_mutation(self, model),
+        )
 
     def generate_bulk_update_mutation(
         self, model: type[models.Model]
     ) -> type[graphene.Mutation]:
-        return _generate_bulk_update_mutation(self, model)
+        return self._get_or_create_mutation_class(
+            ("bulk_update", model),
+            lambda: _generate_bulk_update_mutation(self, model),
+        )
 
     def generate_bulk_delete_mutation(
         self, model: type[models.Model]
     ) -> type[graphene.Mutation]:
-        return _generate_bulk_delete_mutation(self, model)
+        return self._get_or_create_mutation_class(
+            ("bulk_delete", model),
+            lambda: _generate_bulk_delete_mutation(self, model),
+        )
 
     def convert_method_to_mutation(
         self,
@@ -408,7 +441,16 @@ class MutationGenerator:
     def generate_method_mutation(
         self, model: type[models.Model], method_info: MethodInfo
     ) -> Optional[type[graphene.Mutation]]:
-        return _generate_method_mutation(self, model, method_info)
+        cache_key = (
+            "method",
+            model,
+            method_info.name,
+            getattr(getattr(method_info, "method", None), "_custom_mutation_name", ""),
+        )
+        return self._get_or_create_mutation_class(
+            cache_key,
+            lambda: _generate_method_mutation(self, model, method_info),
+        )
 
     def generate_all_mutations(
         self, model: type[models.Model]
@@ -424,16 +466,22 @@ class MutationGenerator:
 
         # Generate CRUD mutations if enabled and model is managed
         if is_managed and self.settings.enable_create:
-            mutation_class = self.generate_create_mutation(model)
-            mutations[f"create{model_class_name}"] = mutation_class.Field()
+            mutations[f"create{model_class_name}"] = self._get_or_create_mutation_field(
+                ("create", model),
+                lambda: self.generate_create_mutation(model),
+            )
 
         if is_managed and self.settings.enable_update:
-            mutation_class = self.generate_update_mutation(model)
-            mutations[f"update{model_class_name}"] = mutation_class.Field()
+            mutations[f"update{model_class_name}"] = self._get_or_create_mutation_field(
+                ("update", model),
+                lambda: self.generate_update_mutation(model),
+            )
 
         if is_managed and self.settings.enable_delete:
-            mutation_class = self.generate_delete_mutation(model)
-            mutations[f"delete{model_class_name}"] = mutation_class.Field()
+            mutations[f"delete{model_class_name}"] = self._get_or_create_mutation_field(
+                ("delete", model),
+                lambda: self.generate_delete_mutation(model),
+            )
 
         # Generate bulk mutations if enabled and model is managed
         if is_managed and self.settings.enable_bulk_operations:
@@ -450,14 +498,26 @@ class MutationGenerator:
                 should_generate = True
 
             if should_generate:
-                bulk_create_class = self.generate_bulk_create_mutation(model)
-                mutations[f"bulkCreate{model_class_name}"] = bulk_create_class.Field()
+                mutations[f"bulkCreate{model_class_name}"] = (
+                    self._get_or_create_mutation_field(
+                        ("bulk_create", model),
+                        lambda: self.generate_bulk_create_mutation(model),
+                    )
+                )
 
-                bulk_update_class = self.generate_bulk_update_mutation(model)
-                mutations[f"bulkUpdate{model_class_name}"] = bulk_update_class.Field()
+                mutations[f"bulkUpdate{model_class_name}"] = (
+                    self._get_or_create_mutation_field(
+                        ("bulk_update", model),
+                        lambda: self.generate_bulk_update_mutation(model),
+                    )
+                )
 
-                bulk_delete_class = self.generate_bulk_delete_mutation(model)
-                mutations[f"bulkDelete{model_class_name}"] = bulk_delete_class.Field()
+                mutations[f"bulkDelete{model_class_name}"] = (
+                    self._get_or_create_mutation_field(
+                        ("bulk_delete", model),
+                        lambda: self.generate_bulk_delete_mutation(model),
+                    )
+                )
 
         # Generate method mutations if enabled
 
@@ -479,5 +539,8 @@ class MutationGenerator:
                     else:
                         method_token = to_camel_case(to_snake_case(method_name))
                         field_name = f"{method_token}{model_class_name}"
-                    mutations[field_name] = mutation.Field()
+                    mutations[field_name] = self._get_or_create_mutation_field(
+                        ("method", model, method_info.name, custom_name),
+                        lambda: mutation,
+                    )
         return mutations

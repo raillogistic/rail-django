@@ -17,7 +17,7 @@ class AppConfig(AppConfig):
             _configure_sqlite_connection,
             dispatch_uid="rail_django.sqlite_connection_configuration",
         )
-        if getattr(settings, "RAIL_DJANGO_DISCOVER_SCHEMAS_ON_STARTUP", True):
+        if getattr(settings, "RAIL_DJANGO_DISCOVER_SCHEMAS_ON_STARTUP", False):
             try:
                 from rail_django.core.registry import schema_registry
 
@@ -29,7 +29,11 @@ class AppConfig(AppConfig):
         )
 
         if mode == "migration":
-            post_migrate.connect(_bump_on_migrate, sender=self)
+            post_migrate.connect(
+                _bump_on_migrate,
+                sender=self,
+                dispatch_uid="rail_django.metadata_deploy_version_on_migrate",
+            )
         elif mode == "startup":
             try:
                 from rail_django.extensions.metadata.deploy_version import (

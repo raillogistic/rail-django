@@ -63,11 +63,48 @@ class ModelIntrospector(MethodAnalyzerMixin, RelationshipDiscoveryMixin):
     def managers(self) -> dict[str, ManagerInfo]:
         """Discovers model managers."""
         manager_info = {}
-        for name in dir(self.model):
-            attr = getattr(self.model, name)
-            if hasattr(attr, "model") and hasattr(attr, "get_queryset") and callable(getattr(attr, "get_queryset")) and not name.startswith("_"):
-                custom_methods = {m: getattr(attr, m) for m in dir(attr) if not m.startswith("_") and m not in ["model", "get_queryset", "all", "filter", "exclude", "get", "create", "update", "delete"] and callable(getattr(attr, m))}
-                manager_info[name] = ManagerInfo(name=name, manager_class=type(attr), is_default=(name == "objects"), custom_methods=custom_methods)
+        manager_map = getattr(self._meta, "managers_map", None) or {}
+        default_manager_name = getattr(self._meta, "default_manager_name", "objects")
+        if manager_map:
+            manager_items = manager_map.items()
+        else:
+            manager_items = (
+                (name, getattr(self.model, name))
+                for name in dir(self.model)
+                if not name.startswith("_")
+            )
+
+        ignored_methods = {
+            "model",
+            "get_queryset",
+            "all",
+            "filter",
+            "exclude",
+            "get",
+            "create",
+            "update",
+            "delete",
+        }
+
+        for name, attr in manager_items:
+            if not hasattr(attr, "model") or not hasattr(attr, "get_queryset"):
+                continue
+            get_queryset = getattr(attr, "get_queryset", None)
+            if not callable(get_queryset):
+                continue
+            custom_methods = {}
+            for method_name in dir(attr):
+                if method_name.startswith("_") or method_name in ignored_methods:
+                    continue
+                method = getattr(attr, method_name, None)
+                if callable(method):
+                    custom_methods[method_name] = method
+            manager_info[name] = ManagerInfo(
+                name=name,
+                manager_class=type(attr),
+                is_default=(name == default_manager_name),
+                custom_methods=custom_methods,
+            )
         return manager_info
 
     @cached_property

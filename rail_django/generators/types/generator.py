@@ -96,7 +96,15 @@ class TypeGenerator:
         ] = {}
         self._enum_registry: dict[str, type[graphene.Enum]] = {}
         self._meta_cache: dict[type[models.Model], Any] = {}
-        
+        self._excluded_fields_cache: dict[type[models.Model], tuple[str, ...]] = {}
+        self._included_fields_cache: dict[
+            type[models.Model], Optional[tuple[str, ...]]
+        ] = {}
+        self._maskable_fields_cache: dict[type[models.Model], frozenset[str]] = {}
+        self._field_visibility_cache: dict[
+            tuple[type[models.Model], bool], dict[str, bool]
+        ] = {}
+
         self.relation_input_generator = RelationInputTypeGenerator(self)
 
     def _update_field_type_map(self) -> None:
@@ -152,6 +160,10 @@ class TypeGenerator:
 
     def _get_excluded_fields(self, model: type[models.Model]) -> list[str]:
         """Get excluded fields for a specific model."""
+        cached = self._excluded_fields_cache.get(model)
+        if cached is not None:
+            return list(cached)
+
         model_name = model.__name__
         excluded: set[str] = set()
 
@@ -189,22 +201,36 @@ class TypeGenerator:
                 for name in getattr(meta, "exclude_fields", []) or []
                 if name in valid_field_names
             )
-        return list(sorted(excluded))
+        excluded_fields = tuple(sorted(excluded))
+        self._excluded_fields_cache[model] = excluded_fields
+        return list(excluded_fields)
 
     def _get_included_fields(self, model: type[models.Model]) -> Optional[list[str]]:
         """Get included fields for a specific model."""
+        if model in self._included_fields_cache:
+            cached = self._included_fields_cache[model]
+            return list(cached) if cached is not None else None
+
         meta = self._get_model_meta(model)
         if meta and meta.include_fields is not None:
             valid_field_names = {
                 f.name for f in model._meta.get_fields() if hasattr(f, "name")
             }
-            return [name for name in meta.include_fields if name in valid_field_names]
+            included_fields = tuple(
+                name for name in meta.include_fields if name in valid_field_names
+            )
+            self._included_fields_cache[model] = included_fields
+            return list(included_fields)
         if self.settings.include_fields is None:
+            self._included_fields_cache[model] = None
             return None
         include_list = self.settings.include_fields.get(model.__name__, None)
         if include_list is None:
+            self._included_fields_cache[model] = None
             return None
-        return list(include_list)
+        included_fields = tuple(include_list)
+        self._included_fields_cache[model] = included_fields
+        return list(included_fields)
 
     def _get_model_meta(self, model: type[models.Model]) -> Any:
         """Retrieve (and cache) the GraphQL meta helper for a model."""
@@ -216,6 +242,9 @@ class TypeGenerator:
         return self._meta_cache[model]
 
     def _get_maskable_fields(self, model: type[models.Model]) -> set:
+        cached = self._maskable_fields_cache.get(model)
+        if cached is not None:
+            return set(cached)
         meta = self._get_model_meta(model)
         if not meta or not getattr(meta, "access_config", None):
             return set()
@@ -227,7 +256,8 @@ class TypeGenerator:
                 access
             ).lower() not in {"read", "all"}:
                 maskable.add(rule.field)
-        return maskable
+        self._maskable_fields_cache[model] = frozenset(maskable)
+        return set(maskable)
 
     def _should_field_be_required_for_create(
         self,
@@ -266,18 +296,30 @@ class TypeGenerator:
     def _should_include_field(
         self, model: type[models.Model], field_name: str, *, for_input: bool = False
     ) -> bool:
+        cache_key = (model, for_input)
+        model_cache = self._field_visibility_cache.setdefault(cache_key, {})
+        cached = model_cache.get(field_name)
+        if cached is not None:
+            return cached
+
         polymorphic_fields = {"polymorphic_ctype"}
         if field_name in polymorphic_fields or field_name.endswith("_ptr"):
+            model_cache[field_name] = False
             return False
         excluded_fields = self._get_excluded_fields(model)
         if field_name in excluded_fields:
+            model_cache[field_name] = False
             return False
         included_fields = self._get_included_fields(model)
         if included_fields is not None:
-            return field_name in included_fields
+            result = field_name in included_fields
+            model_cache[field_name] = result
+            return result
         meta = self._get_model_meta(model)
         if meta and not meta.should_expose_field(field_name, for_input=for_input):
+            model_cache[field_name] = False
             return False
+        model_cache[field_name] = True
         return True
 
     def _resolve_property_inner_graphql_type(self, return_type: Any) -> Any:

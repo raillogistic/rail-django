@@ -163,18 +163,48 @@ class RegistrationMixin:
                     models_list = normalized_models
             if models_list is None:
                 models_list = [model._meta.label for model in self._registered_models]
+            version = str(self._schema_version)
+            desired_state = {
+                "description": description,
+                "apps": schema_apps or [],
+                "models": models_list,
+                "exclude_models": exclude_models or [],
+                "settings": settings_payload or {},
+                "auto_discover": auto_discover,
+                "enabled": enabled,
+            }
 
-            register_schema(
-                name=self.schema_name,
-                description=description,
-                version=str(self._schema_version),
-                apps=schema_apps,
-                models=models_list,
-                exclude_models=exclude_models,
-                settings=settings_payload,
-                auto_discover=auto_discover,
-                enabled=enabled,
-            )
+            if existing is None:
+                schema_info = register_schema(
+                    name=self.schema_name,
+                    version=version,
+                    **desired_state,
+                )
+                schema_info.builder = self
+            else:
+                metadata_changed = any(
+                    getattr(existing, key) != value
+                    for key, value in desired_state.items()
+                )
+                if metadata_changed:
+                    schema_info = register_schema(
+                        name=self.schema_name,
+                        version=version,
+                        **desired_state,
+                    )
+                    schema_info.builder = self
+                else:
+                    existing.version = version
+                    existing.builder = self
+                    existing.description = description
+                    existing.apps = list(schema_apps or [])
+                    existing.models = list(models_list)
+                    existing.exclude_models = list(exclude_models or [])
+                    existing.settings = dict(settings_payload or {})
+                    existing.auto_discover = auto_discover
+                    existing.enabled = enabled
+                    if hasattr(schema_registry, "_schema_model_cache"):
+                        schema_registry._schema_model_cache.pop(self.schema_name, None)
             logger.info(
                 f"Schema '{self.schema_name}' registered in schema registry"
             )

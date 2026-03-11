@@ -80,9 +80,14 @@ def get_schema_instance(registry: SchemaRegistry, name: str):
     builder = get_schema_builder(registry, name)
     current_version = getattr(builder, "get_schema_version", lambda: 0)()
     cached = registry._schema_instance_cache.get(name)
-    if cached and cached.get("version") == current_version:
+    if (
+        cached
+        and cached.get("version") == current_version
+        and getattr(builder, "_schema", None) is not None
+    ):
         return cached.get("schema")
     schema_instance = builder.get_schema()
+    current_version = getattr(builder, "get_schema_version", lambda: 0)()
     with registry._lock:
         registry._schema_instance_cache[name] = {
             "version": current_version,

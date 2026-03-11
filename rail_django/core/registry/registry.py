@@ -24,6 +24,7 @@ class SchemaRegistry:
         self._schemas: dict[str, SchemaInfo] = {}
         self._schema_builders: dict[str, Any] = {}
         self._schema_instance_cache: dict[str, dict[str, Any]] = {}
+        self._schema_model_cache: dict[str, list[type[models.Model]]] = {}
         self._discovery_hooks: list[Callable] = []
         self._lock = threading.Lock()
         self._initialized = False
@@ -119,6 +120,8 @@ class SchemaRegistry:
                 enabled=modified_kwargs.get("enabled", enabled),
             )
             self._schemas[name] = schema_info
+            self._schema_model_cache.pop(name, None)
+            self._schema_instance_cache.pop(name, None)
 
             schema_settings = modified_kwargs.get("settings", settings) or {}
             if schema_settings:
@@ -134,10 +137,9 @@ class SchemaRegistry:
         with self._lock:
             if name in self._schemas:
                 del self._schemas[name]
-                if name in self._schema_builders:
-                    del self._schema_builders[name]
-                if name in self._schema_instance_cache:
-                    del self._schema_instance_cache[name]
+                self._schema_model_cache.pop(name, None)
+                self._dispose_builder(name)
+                self._schema_instance_cache.pop(name, None)
 
                 # Clear runtime settings for this schema
                 from ...config_proxy import clear_runtime_settings
@@ -184,19 +186,38 @@ class SchemaRegistry:
         """Check if a schema exists in the registry."""
         return name in self._schemas
 
+    def _dispose_builder(self, name: str) -> None:
+        """Remove a cached builder and disconnect any signal handlers it owns."""
+        builder = self._schema_builders.pop(name, None)
+        if builder is None:
+            return
+        disconnect = getattr(builder, "disconnect_signals", None)
+        if callable(disconnect):
+            try:
+                disconnect()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to disconnect signals for schema builder '%s': %s",
+                    name,
+                    exc,
+                )
+
     def clear_builders(self) -> None:
         """Clear all schema builders."""
         with self._lock:
-            self._schema_builders.clear()
+            for name in list(self._schema_builders.keys()):
+                self._dispose_builder(name)
             self._schema_instance_cache.clear()
             logger.info("Cleared all schema builders from registry")
 
     def clear(self) -> None:
         """Clear all schemas from the registry."""
         with self._lock:
+            for name in list(self._schema_builders.keys()):
+                self._dispose_builder(name)
             self._schemas.clear()
-            self._schema_builders.clear()
             self._schema_instance_cache.clear()
+            self._schema_model_cache.clear()
             self._initialized = False
 
             # Clear all runtime settings
@@ -207,6 +228,10 @@ class SchemaRegistry:
 
     def get_models_for_schema(self, name: str) -> list[type[models.Model]]:
         """Get Django models for a specific schema."""
+        cached = self._schema_model_cache.get(name)
+        if cached is not None:
+            return list(cached)
+
         schema_info = self.get_schema(name)
         if not schema_info:
             return []
@@ -239,7 +264,8 @@ class SchemaRegistry:
                     exclude_names.add(model_spec.lower())
             models_list = [m for m in models_list if m._meta.model_name.lower() not in exclude_names]
 
-        return models_list
+        self._schema_model_cache[name] = list(models_list)
+        return list(models_list)
 
     def validate_schema(self, name: str) -> dict[str, Any]:
         """Validate a schema configuration."""
