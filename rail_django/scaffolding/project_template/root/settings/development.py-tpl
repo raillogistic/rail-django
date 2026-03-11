@@ -10,6 +10,12 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default=env('SECRET_KEY', default='{{ secr
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# Enable the dedicated GraphQL test endpoint in development.
+RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT = env.bool(
+    "RAIL_DJANGO_ENABLE_TEST_GRAPHQL_ENDPOINT",
+    default=True,
+)
+
 ALLOWED_HOSTS = env.list(
     'DJANGO_ALLOWED_HOSTS',
     default=env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '::1']),

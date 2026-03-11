@@ -62,8 +62,55 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
         super().__init__(schema=schema, **kwargs)
         self._schema_cache = {}
 
+    def _get_primary_schema_name(self) -> str:
+        configured_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+        configured_names = (
+            list(configured_schemas.keys())
+            if isinstance(configured_schemas, dict)
+            else []
+        )
+        for candidate in ("gql", "default"):
+            if candidate in configured_names:
+                return candidate
+        if configured_names:
+            return str(configured_names[0])
+
+        try:
+            from ....core.registry import schema_registry
+
+            enabled_names = schema_registry.get_schema_names(enabled_only=True)
+            if not isinstance(enabled_names, list):
+                enabled_names = []
+            for candidate in ("gql", "default"):
+                if candidate in enabled_names:
+                    return candidate
+            if enabled_names:
+                return enabled_names[0]
+
+            all_names = schema_registry.get_schema_names(enabled_only=False)
+            if not isinstance(all_names, list):
+                all_names = []
+            for candidate in ("gql", "default"):
+                if candidate in all_names:
+                    return candidate
+            if all_names:
+                return all_names[0]
+        except ImportError as exc:
+            logger.warning("Schema registry not available")
+            raise SchemaRegistryUnavailable(str(exc))
+        except Exception as exc:
+            logger.error("Error resolving primary schema: %s", exc)
+
+        return "gql"
+
+    def _resolve_schema_name(self, schema_name: Optional[str]) -> str:
+        normalized = str(schema_name or "").strip()
+        if normalized:
+            return normalized
+        return self._get_primary_schema_name()
+
     def dispatch(self, request: HttpRequest, *args, **kwargs):
-        schema_name = kwargs.get("schema_name", "gql")
+        schema_name = self._resolve_schema_name(kwargs.get("schema_name"))
         self._schema_name = schema_name
 
         try:
@@ -226,7 +273,9 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
                     if user and getattr(user, "is_authenticated", False):
                         context.user = user
         schema_match = getattr(request, "resolver_match", None)
-        schema_name = getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
+        schema_name = self._resolve_schema_name(
+            getattr(schema_match, "kwargs", {}).get("schema_name")
+        )
         context.schema_name = schema_name
         return context
 
@@ -337,8 +386,11 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
         schema_name = getattr(self, "_schema_name", None)
         if schema_name: return schema_name
         schema_match = getattr(request, "resolver_match", None)
-        if schema_match: return getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
-        return "gql"
+        if schema_match:
+            return self._resolve_schema_name(
+                getattr(schema_match, "kwargs", {}).get("schema_name")
+            )
+        return self._resolve_schema_name(None)
 
     def _check_graphiql_access(self, request: HttpRequest, schema_name: str, schema_info: dict[str, Any]) -> Optional[JsonResponse]:
         if str(schema_name).lower() != "graphiql": return None
@@ -354,7 +406,17 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
     def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
         try:
             from ....core.registry import schema_registry
-            return schema_registry.get_schema(schema_name)
+            schema_registry.discover_schemas()
+            schema_info = schema_registry.get_schema(schema_name)
+            if schema_info is not None:
+                return schema_info
+
+            configured_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+            if isinstance(configured_schemas, dict) and schema_name in configured_schemas:
+                schema_registry.clear()
+                schema_registry.discover_schemas()
+                return schema_registry.get_schema(schema_name)
+            return None
         except ImportError as exc:
             logger.warning("Schema registry not available"); raise SchemaRegistryUnavailable(str(exc))
         except Exception as e:

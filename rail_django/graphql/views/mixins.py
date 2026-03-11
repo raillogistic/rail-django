@@ -159,12 +159,79 @@ class AuthenticationMixin:
 class SchemaMixin:
     """Mixin providing schema loading and configuration functionality."""
 
+    def _get_primary_schema_name(self) -> str:
+        """Resolve the primary schema used by alias endpoints like /graphql/."""
+        from .utils import SchemaRegistryUnavailable
+        try:
+            configured_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+            configured_names = (
+                list(configured_schemas.keys())
+                if isinstance(configured_schemas, dict)
+                else []
+            )
+            for candidate in ("gql", "default"):
+                if candidate in configured_names:
+                    return candidate
+            if configured_names:
+                return str(configured_names[0])
+
+            from ...core.registry import schema_registry
+
+            enabled_names = schema_registry.get_schema_names(enabled_only=True)
+            if not isinstance(enabled_names, list):
+                enabled_names = []
+            for candidate in ("gql", "default"):
+                if candidate in enabled_names:
+                    return candidate
+            if enabled_names:
+                return enabled_names[0]
+
+            all_names = schema_registry.get_schema_names(enabled_only=False)
+            if not isinstance(all_names, list):
+                all_names = []
+            for candidate in ("gql", "default"):
+                if candidate in all_names:
+                    return candidate
+            if all_names:
+                return all_names[0]
+        except ImportError as exc:
+            logger.warning("Schema registry not available")
+            raise SchemaRegistryUnavailable(str(exc))
+        except Exception as e:
+            logger.error("Error resolving primary schema: %s", e)
+
+        # Preserve legacy behavior when discovery cannot determine a better alias.
+        return "gql"
+
+    def _resolve_schema_name(self, schema_name: Optional[str]) -> str:
+        """Map alias routes to the currently registered primary schema."""
+        normalized = str(schema_name or "").strip()
+        if normalized:
+            return normalized
+        return self._get_primary_schema_name()
+
     def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
         """Get schema information from the registry."""
         from .utils import SchemaRegistryUnavailable
         try:
             from ...core.registry import schema_registry
-            return schema_registry.get_schema(schema_name)
+            schema_registry.discover_schemas()
+            schema_info = schema_registry.get_schema(schema_name)
+            if schema_info is not None:
+                return schema_info
+
+            configured_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+            if (
+                isinstance(configured_schemas, dict)
+                and schema_name in configured_schemas
+            ):
+                # Test suites and dynamic settings overrides can change schema config
+                # after startup; refresh the registry to reflect the active settings.
+                schema_registry.clear()
+                schema_registry.discover_schemas()
+                return schema_registry.get_schema(schema_name)
+
+            return None
         except ImportError as exc:
             logger.warning("Schema registry not available")
             raise SchemaRegistryUnavailable(str(exc))
@@ -264,8 +331,10 @@ class IntrospectionMixin:
             return schema_name
         schema_match = getattr(request, "resolver_match", None)
         if schema_match:
-            return getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
-        return "gql"
+            return self._resolve_schema_name(
+                getattr(schema_match, "kwargs", {}).get("schema_name")
+            )
+        return self._resolve_schema_name(None)
 
     def _is_introspection_query(self, query: str) -> bool:
         """Check if a query is an introspection query."""

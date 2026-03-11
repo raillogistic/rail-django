@@ -103,7 +103,7 @@ class MultiSchemaGraphQLView(
         Returns:
             HttpResponse with GraphQL result or error
         """
-        schema_name = kwargs.get("schema_name", "gql")
+        schema_name = self._resolve_schema_name(kwargs.get("schema_name"))
         self._schema_name = schema_name
 
         try:
@@ -277,7 +277,9 @@ class MultiSchemaGraphQLView(
                         context.user = user
 
         schema_match = getattr(request, "resolver_match", None)
-        schema_name = getattr(schema_match, "kwargs", {}).get("schema_name", "gql")
+        schema_name = self._resolve_schema_name(
+            getattr(schema_match, "kwargs", {}).get("schema_name")
+        )
         context.schema_name = schema_name
 
         return context

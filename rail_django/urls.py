@@ -29,7 +29,6 @@ urlpatterns = [
     path(
         f"{_test_graphql_endpoint_path}/",
         MultiSchemaGraphQLView.as_view(),
-        {"schema_name": "gql"},
         name="graphql-test",
     ),
     path(
