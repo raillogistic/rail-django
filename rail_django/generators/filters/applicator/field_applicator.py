@@ -33,18 +33,24 @@ class FieldFilterApplicatorMixin:
 
         # Handle relation suffixes
         if field_name.endswith("_rel"):
+            relation_name = field_name[:-4]
+            relation_field = self._get_relation_field(model, relation_name)
+            related_model = getattr(relation_field, "related_model", None)
             return self._build_q_from_where(
                 filter_value,
-                model,
-                f"{full_field_path[:-4]}__",
+                related_model or model,
+                f"{prefix}{relation_name}__",
                 property_context=property_context,
             )
 
         if field_name.endswith("_some"):
+            relation_name = field_name[:-5]
+            relation_field = self._get_relation_field(model, relation_name)
+            related_model = getattr(relation_field, "related_model", None)
             return self._build_q_from_where(
                 filter_value,
-                model,
-                f"{field_name[:-5]}__",
+                related_model or model,
+                f"{prefix}{relation_name}__",
                 property_context=property_context,
             )
 
@@ -70,18 +76,23 @@ class FieldFilterApplicatorMixin:
                             return Q(Exists(has_children)) & ~Q(Exists(non_matching))
             except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
+            relation_field = self._get_relation_field(model, base_field)
+            related_model = getattr(relation_field, "related_model", None)
             return self._build_q_from_where(
                 filter_value,
-                model,
-                f"{base_field}__",
+                related_model or model,
+                f"{prefix}{base_field}__",
                 property_context=property_context,
             )
 
         if field_name.endswith("_none"):
+            relation_name = field_name[:-5]
+            relation_field = self._get_relation_field(model, relation_name)
+            related_model = getattr(relation_field, "related_model", None)
             return ~self._build_q_from_where(
                 filter_value,
-                model,
-                f"{field_name[:-5]}__",
+                related_model or model,
+                f"{prefix}{relation_name}__",
                 property_context=property_context,
             )
 
@@ -124,6 +135,9 @@ class FieldFilterApplicatorMixin:
                 filter_value,
                 property_context=property_context,
             )
+
+        if not self._is_filter_field_allowed(model, field_name):
+            return q
 
         # Regular field filter
         for op, op_value in filter_value.items():
@@ -574,7 +588,13 @@ class FieldFilterApplicatorMixin:
             fields = [fields]
         if not fields:
             fields = self._get_quick_mixin().get_default_quick_filter_fields(model)
-        fields = [f for f in fields if isinstance(f, str) and f]
+        fields = [
+            field_path
+            for field_path in fields
+            if isinstance(field_path, str)
+            and field_path
+            and self._resolve_filter_path(model, field_path)
+        ]
         if not fields:
             return Q(), {}
 
@@ -610,7 +630,11 @@ class FieldFilterApplicatorMixin:
                 fallback_q |= Q(**{f"{field_path}__icontains": query_text})
         return fallback_q, {}
 
-    def _build_field_compare_q(self, compare_filter: Dict[str, Any]) -> Q:
+    def _build_field_compare_q(
+        self,
+        compare_filter: Dict[str, Any],
+        model: Type[models.Model],
+    ) -> Q:
         """Build Q object for F() expression field comparisons."""
         q = Q()
         left_field = compare_filter.get("left")
@@ -621,6 +645,11 @@ class FieldFilterApplicatorMixin:
 
         if hasattr(operator, "value"):
             operator = operator.value
+
+        if not self._resolve_filter_path(model, left_field):
+            return q
+        if not self._resolve_filter_path(model, right_field):
+            return q
 
         right_expr = F(right_field)
         multiplier = compare_filter.get("right_multiplier")

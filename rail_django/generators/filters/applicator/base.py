@@ -52,6 +52,86 @@ class BaseFilterApplicatorMixin:
             self._historical_mixin = HistoricalModelMixin()
         return self._historical_mixin
 
+    def _get_graphql_meta(self, model: Optional[Type[models.Model]]) -> Any:
+        if model is None:
+            return None
+
+        try:
+            from ....core.meta import get_model_graphql_meta
+
+            return get_model_graphql_meta(model)
+        except Exception:
+            return None
+
+    def _get_filter_roots(self, model: Optional[Type[models.Model]]) -> Optional[set[str]]:
+        graphql_meta = self._get_graphql_meta(model)
+        filtering = getattr(graphql_meta, "filtering", None)
+        configured_fields = getattr(filtering, "fields", {}) or {}
+        if not configured_fields:
+            return None
+
+        return {
+            str(field_path).split("__", 1)[0]
+            for field_path in configured_fields.keys()
+            if field_path
+        }
+
+    def _get_field_access_name(self, field: Any, fallback: str) -> str:
+        accessor = getattr(field, "get_accessor_name", None)
+        if callable(accessor):
+            accessor_name = accessor()
+            if accessor_name:
+                return accessor_name
+        return getattr(field, "name", fallback) or fallback
+
+    def _is_filter_field_allowed(
+        self,
+        model: Optional[Type[models.Model]],
+        field_name: str,
+    ) -> bool:
+        if model is None or not field_name:
+            return False
+
+        graphql_meta = self._get_graphql_meta(model)
+        if graphql_meta and not graphql_meta.should_expose_field(field_name):
+            return False
+
+        allowed_roots = self._get_filter_roots(model)
+        if allowed_roots is None:
+            return True
+
+        return field_name in allowed_roots
+
+    def _resolve_filter_path(
+        self,
+        model: Optional[Type[models.Model]],
+        field_path: str,
+    ) -> bool:
+        if model is None or not isinstance(field_path, str) or not field_path:
+            return False
+
+        current_model = model
+        parts = field_path.split("__")
+
+        for index, part in enumerate(parts):
+            field = self._get_relation_field(current_model, part)
+            if field is None:
+                return False
+
+            access_name = self._get_field_access_name(field, part)
+            if not self._is_filter_field_allowed(current_model, access_name):
+                return False
+
+            if index == len(parts) - 1:
+                return True
+
+            related_model = getattr(field, "related_model", None)
+            if related_model is None:
+                return False
+            current_model = related_model
+
+        return True
+
     def apply_presets(
         self,
         where_input: Dict[str, Any],
@@ -204,7 +284,7 @@ class BaseFilterApplicatorMixin:
 
         # Apply field comparison filter
         if compare_filter and self.filtering_settings and getattr(self.filtering_settings, "enable_field_comparison", False):
-            compare_q = self._build_field_compare_q(compare_filter)
+            compare_q = self._build_field_compare_q(compare_filter, model)
             if compare_q:
                 q_object &= compare_q
 

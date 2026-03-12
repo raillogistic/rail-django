@@ -34,15 +34,24 @@ class RelationFilterApplicatorMixin:
 
         partition_by = window_filter.get("partition_by") or []
         order_by_fields = window_filter.get("order_by") or []
+        model = getattr(queryset, "model", None)
 
         order_by_exprs = []
         for field in order_by_fields:
+            if model is not None and not self._resolve_filter_path(
+                model, field[1:] if isinstance(field, str) and field.startswith("-") else field
+            ):
+                continue
             if field.startswith("-"):
                 order_by_exprs.append(F(field[1:]).desc())
             else:
                 order_by_exprs.append(F(field).asc())
 
-        partition_exprs = [F(field) for field in partition_by] if partition_by else None
+        partition_exprs = (
+            [F(field) for field in partition_by if model is None or self._resolve_filter_path(model, field)]
+            if partition_by
+            else None
+        )
 
         window_func_map = {"rank": Rank, "dense_rank": DenseRank, "row_number": RowNumber, "percent_rank": PercentRank}
         func_class = window_func_map.get(function_name, Rank)
@@ -58,11 +67,48 @@ class RelationFilterApplicatorMixin:
             q &= self._build_numeric_q("_window_rank", window_filter["percentile"])
         return q
 
+    def _parse_related_filter_input(self, filter_input: Any) -> Dict[str, Any]:
+        import json
+
+        if not filter_input:
+            return {}
+
+        if isinstance(filter_input, str):
+            parsed = json.loads(filter_input)
+        elif isinstance(filter_input, dict):
+            parsed = filter_input
+        else:
+            raise ValueError("Related filter input must be a dict or JSON string")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Related filter input must decode to a dictionary")
+
+        from ..security import validate_filter_complexity
+
+        max_depth = getattr(self.filtering_settings, "max_filter_depth", 10)
+        max_clauses = getattr(self.filtering_settings, "max_filter_clauses", 100)
+        validate_filter_complexity(parsed, max_depth=max_depth, max_clauses=max_clauses)
+        return parsed
+
+    def _sanitize_order_by_fields(
+        self,
+        model: Type[models.Model],
+        order_by_fields: list[str],
+    ) -> list[str]:
+        sanitized: list[str] = []
+        for raw_field in order_by_fields:
+            if not isinstance(raw_field, str) or not raw_field:
+                continue
+            descending = raw_field.startswith("-")
+            field_path = raw_field[1:] if descending else raw_field
+            if self._resolve_filter_path(model, field_path):
+                sanitized.append(raw_field)
+        return sanitized
+
     def _build_subquery_filter_q(
         self, subquery_filter: Dict[str, Any], model: Type[models.Model]
     ) -> tuple[Q, Dict[str, Any]]:
         """Build Q object and annotations for subquery filter."""
-        import json
         annotations, q = {}, Q()
         relation_name = subquery_filter.get("relation")
         if not relation_name:
@@ -76,32 +122,32 @@ class RelationFilterApplicatorMixin:
             relation_field = self._get_relation_field(model, relation_name)
             if relation_field is None:
                 return q, annotations
+            if not self._is_filter_field_allowed(model, self._get_field_access_name(relation_field, relation_name)):
+                return q, annotations
             related_model = getattr(relation_field, "related_model", None)
             if related_model is None:
                 return q, annotations
             fk_field = self._get_fk_to_parent(related_model, model)
             if not fk_field:
                 return q, annotations
+            if not self._resolve_filter_path(related_model, target_field):
+                return q, annotations
 
             subquery_qs = related_model.objects.filter(**{fk_field: OuterRef("pk")})
 
             if filter_json:
                 try:
-                    filter_dict = json.loads(filter_json) if isinstance(filter_json, str) else filter_json
-                    for k, v in filter_dict.items():
-                        if isinstance(v, dict):
-                            for op, op_val in v.items():
-                                lookup = self._get_lookup_for_operator(op)
-                                if lookup == "neq":
-                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
-                                elif lookup:
-                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
-                        else:
-                            subquery_qs = subquery_qs.filter(**{k: v})
-                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    filter_dict = self._parse_related_filter_input(filter_json)
+                    related_q = self._build_q_from_where(filter_dict, related_model)
+                    if related_q:
+                        subquery_qs = subquery_qs.filter(related_q)
+                except (TypeError, ValueError) as e:
                     logger.debug(f"Failed to parse subquery filter: {e}")
+                    return Q(pk__in=[]), {}
 
-            order_exprs = [f"-{f[1:]}" if f.startswith("-") else f for f in order_by_fields]
+            order_exprs = self._sanitize_order_by_fields(related_model, order_by_fields)
+            if not order_exprs:
+                order_exprs = ["-pk"]
             subquery_qs = subquery_qs.order_by(*order_exprs)
             annotation_name = f"_subquery_{relation_name}_{target_field}"
             annotations[annotation_name] = Subquery(subquery_qs.values(target_field)[:1])
@@ -124,7 +170,6 @@ class RelationFilterApplicatorMixin:
 
     def _build_exists_filter_q(self, exists_filter: Dict[str, Any], model: Type[models.Model]) -> Q:
         """Build Q object for exists filter."""
-        import json
         q = Q()
         relation_name = exists_filter.get("relation")
         if not relation_name:
@@ -137,6 +182,8 @@ class RelationFilterApplicatorMixin:
             relation_field = self._get_relation_field(model, relation_name)
             if relation_field is None:
                 return q
+            if not self._is_filter_field_allowed(model, self._get_field_access_name(relation_field, relation_name)):
+                return q
             related_model = getattr(relation_field, "related_model", None)
             if related_model is None:
                 return q
@@ -148,19 +195,13 @@ class RelationFilterApplicatorMixin:
 
             if filter_json:
                 try:
-                    filter_dict = json.loads(filter_json) if isinstance(filter_json, str) else filter_json
-                    for k, v in filter_dict.items():
-                        if isinstance(v, dict):
-                            for op, op_val in v.items():
-                                lookup = self._get_lookup_for_operator(op)
-                                if lookup == "neq":
-                                    subquery_qs = subquery_qs.exclude(**{f"{k}__exact": op_val})
-                                elif lookup:
-                                    subquery_qs = subquery_qs.filter(**{f"{k}__{lookup}": op_val})
-                        else:
-                            subquery_qs = subquery_qs.filter(**{k: v})
-                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    filter_dict = self._parse_related_filter_input(filter_json)
+                    related_q = self._build_q_from_where(filter_dict, related_model)
+                    if related_q:
+                        subquery_qs = subquery_qs.filter(related_q)
+                except (TypeError, ValueError) as e:
                     logger.debug(f"Failed to parse exists filter: {e}")
+                    return Q(pk__in=[])
 
             exists_expr = Exists(subquery_qs)
             if should_exist:
@@ -286,9 +327,6 @@ class RelationFilterApplicatorMixin:
         for extract_key, filter_value in extract_filter.items():
             if filter_value is None:
                 continue
-            extract_func = extract_functions.get(extract_key)
-            if not extract_func:
-                continue
             annotation_name = f"_{base_field}_extract_{extract_key}"
 
             if extract_key == "day_of_year":
@@ -299,6 +337,9 @@ class RelationFilterApplicatorMixin:
                     output_field = DjIntegerField()
                 annotations[annotation_name] = ExtractDayOfYear(base_field)
             else:
+                extract_func = extract_functions.get(extract_key)
+                if not extract_func:
+                    continue
                 annotations[annotation_name] = extract_func(base_field)
 
             extract_q = self._build_numeric_q(annotation_name, filter_value)

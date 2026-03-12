@@ -9,6 +9,7 @@ checking, and complexity limits.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -212,6 +213,7 @@ def validate_filter_complexity(
 
 _filter_applicator_registry: Dict[str, "NestedFilterApplicator"] = {}
 _filter_generator_registry: Dict[str, "NestedFilterInputGenerator"] = {}
+_registry_lock = threading.RLock()
 
 
 def get_nested_filter_applicator(
@@ -231,9 +233,10 @@ def get_nested_filter_applicator(
     """
     # Import here to avoid circular imports
     from .applicator import NestedFilterApplicator
-    if schema_name not in _filter_applicator_registry:
-        _filter_applicator_registry[schema_name] = NestedFilterApplicator(schema_name)
-    return _filter_applicator_registry[schema_name]
+    with _registry_lock:
+        if schema_name not in _filter_applicator_registry:
+            _filter_applicator_registry[schema_name] = NestedFilterApplicator(schema_name)
+        return _filter_applicator_registry[schema_name]
 
 
 def get_nested_filter_generator(
@@ -254,11 +257,12 @@ def get_nested_filter_generator(
     # Import here to avoid circular imports
     from .generator import NestedFilterInputGenerator
 
-    if schema_name not in _filter_generator_registry:
-        _filter_generator_registry[schema_name] = NestedFilterInputGenerator(
-            schema_name=schema_name
-        )
-    return _filter_generator_registry[schema_name]
+    with _registry_lock:
+        if schema_name not in _filter_generator_registry:
+            _filter_generator_registry[schema_name] = NestedFilterInputGenerator(
+                schema_name=schema_name
+            )
+        return _filter_generator_registry[schema_name]
 
 
 def clear_filter_caches(schema_name: Optional[str] = None) -> None:
@@ -268,19 +272,17 @@ def clear_filter_caches(schema_name: Optional[str] = None) -> None:
     Args:
         schema_name: Specific schema to clear, or None for all schemas
     """
-    if schema_name:
-        # Clear specific schema
-        _filter_applicator_registry.pop(schema_name, None)
-        generator = _filter_generator_registry.pop(schema_name, None)
-        # Clear instance caches if they exist
-        if generator:
-            generator.clear_cache()
-    else:
-        # Clear all schemas
-        for generator in _filter_generator_registry.values():
-            generator.clear_cache()
-        _filter_applicator_registry.clear()
-        _filter_generator_registry.clear()
+    with _registry_lock:
+        if schema_name:
+            _filter_applicator_registry.pop(schema_name, None)
+            generator = _filter_generator_registry.pop(schema_name, None)
+            if generator:
+                generator.clear_cache()
+        else:
+            for generator in _filter_generator_registry.values():
+                generator.clear_cache()
+            _filter_applicator_registry.clear()
+            _filter_generator_registry.clear()
 
 
 __all__ = [

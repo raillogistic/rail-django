@@ -39,6 +39,7 @@ from .types import (
 from .generator_utils import (
     DEFAULT_MAX_NESTED_DEPTH,
     DEFAULT_CACHE_MAX_SIZE,
+    MAX_ALLOWED_NESTED_DEPTH,
     get_filter_input_for_field,
     is_historical_model,
     generate_computed_filters,
@@ -84,6 +85,15 @@ class NestedFilterInputGenerator:
             schema_name: Schema name for multi-schema support.
             cache_max_size: Maximum number of cached filter input types.
         """
+        if max_nested_depth < 0:
+            raise ValueError("max_nested_depth must be >= 0")
+        if max_nested_depth > MAX_ALLOWED_NESTED_DEPTH:
+            raise ValueError(
+                f"max_nested_depth must be <= {MAX_ALLOWED_NESTED_DEPTH}"
+            )
+        if cache_max_size < 1:
+            raise ValueError("cache_max_size must be >= 1")
+
         self.max_nested_depth = max_nested_depth
         self.enable_count_filters = enable_count_filters
         self.schema_name = schema_name or "default"
@@ -103,6 +113,99 @@ class NestedFilterInputGenerator:
             self.filtering_settings = FilteringSettings.from_schema(self.schema_name)
         except (ImportError, AttributeError, KeyError):
             self.filtering_settings = None
+
+    def _get_model_label(self, model: Type[models.Model]) -> str:
+        meta = getattr(model, "_meta", None)
+        label = getattr(meta, "label_lower", None)
+        if label:
+            return str(label)
+
+        app_label = getattr(meta, "app_label", "model")
+        model_name = getattr(model, "__name__", "Model")
+        return f"{app_label}.{model_name}".lower()
+
+    def _get_graphql_meta(self, model: Type[models.Model]) -> Any:
+        try:
+            from ...core.meta import get_model_graphql_meta
+
+            return get_model_graphql_meta(model)
+        except Exception:
+            return None
+
+    def _get_filter_roots(self, model: Type[models.Model]) -> Optional[Set[str]]:
+        graphql_meta = self._get_graphql_meta(model)
+        filtering = getattr(graphql_meta, "filtering", None)
+        configured_fields = getattr(filtering, "fields", {}) or {}
+        if not configured_fields:
+            return None
+
+        return {
+            str(field_path).split("__", 1)[0]
+            for field_path in configured_fields.keys()
+            if field_path
+        }
+
+    def _get_filter_root(self, field_name: str) -> str:
+        for suffix in (
+            "_cond_agg",
+            "_count",
+            "_trunc",
+            "_extract",
+            "_every",
+            "_none",
+            "_some",
+            "_agg",
+            "_rel",
+        ):
+            if field_name.endswith(suffix):
+                return field_name[: -len(suffix)]
+        return field_name
+
+    def _should_generate_filter_for_field(
+        self,
+        model: Type[models.Model],
+        field_name: str,
+    ) -> bool:
+        root_name = self._get_filter_root(field_name)
+        graphql_meta = self._get_graphql_meta(model)
+
+        if graphql_meta and not graphql_meta.should_expose_field(root_name):
+            return False
+
+        allowed_roots = self._get_filter_roots(model)
+        if allowed_roots is None:
+            return True
+
+        return root_name in allowed_roots
+
+    def _filter_generated_fields(
+        self,
+        model: Type[models.Model],
+        fields: Dict[str, graphene.InputField],
+    ) -> Dict[str, graphene.InputField]:
+        return {
+            name: field
+            for name, field in fields.items()
+            if self._should_generate_filter_for_field(model, name)
+        }
+
+    def _get_cache_signature(self) -> str:
+        if not self.filtering_settings:
+            return "defaults"
+
+        return "|".join(
+            str(getattr(self.filtering_settings, setting_name, None))
+            for setting_name in (
+                "enable_full_text_search",
+                "enable_window_filters",
+                "enable_subquery_filters",
+                "enable_array_filters",
+                "enable_field_comparison",
+                "enable_date_trunc_filters",
+                "enable_extract_date_filters",
+                "enable_conditional_aggregation",
+            )
+        )
 
     def clear_cache(self) -> None:
         """Clear the filter input cache for this generator."""
@@ -144,7 +247,11 @@ class NestedFilterInputGenerator:
             GraphQL InputObjectType for filtering the model
         """
         model_name = model.__name__
-        cache_key = f"{self.schema_name}_{model_name}_where_{depth}"
+        cache_key = (
+            f"{self.schema_name}_{self._get_model_label(model)}_where_{depth}_"
+            f"{self.max_nested_depth}_{int(self.enable_count_filters)}_"
+            f"{self._get_cache_signature()}"
+        )
 
         with self._cache_lock:
             if cache_key in self._filter_input_cache:
@@ -226,6 +333,8 @@ class NestedFilterInputGenerator:
                 continue
             if field_name.startswith("_") or "polymorphic" in field_name.lower():
                 continue
+            if not self._should_generate_filter_for_field(model, field_name):
+                continue
 
             if isinstance(field, models.ForeignKey):
                 fields.update(self._generate_fk_filter(field, depth))
@@ -264,8 +373,12 @@ class NestedFilterInputGenerator:
         if is_historical_model(model):
             fields.update(generate_historical_filters(model))
 
-        fields.update(generate_computed_filters(model))
-        fields.update(generate_property_filters(model))
+        fields.update(
+            self._filter_generated_fields(model, generate_computed_filters(model))
+        )
+        fields.update(
+            self._filter_generated_fields(model, generate_property_filters(model))
+        )
 
         return fields
 
@@ -306,7 +419,11 @@ class NestedFilterInputGenerator:
             )
 
         if getattr(self.filtering_settings, "enable_array_filters", False):
-            fields.update(generate_array_field_filters(model))
+            fields.update(
+                self._filter_generated_fields(
+                    model, generate_array_field_filters(model)
+                )
+            )
 
         if getattr(self.filtering_settings, "enable_field_comparison", False):
             fields["_compare"] = graphene.InputField(
@@ -316,14 +433,24 @@ class NestedFilterInputGenerator:
             )
 
         if getattr(self.filtering_settings, "enable_date_trunc_filters", False):
-            fields.update(generate_date_trunc_filters(
-                model, advanced_types["DateTruncFilterInput"]
-            ))
+            fields.update(
+                self._filter_generated_fields(
+                    model,
+                    generate_date_trunc_filters(
+                        model, advanced_types["DateTruncFilterInput"]
+                    ),
+                )
+            )
 
         if getattr(self.filtering_settings, "enable_extract_date_filters", False):
-            fields.update(generate_date_extract_filters(
-                model, advanced_types["ExtractDateFilterInput"]
-            ))
+            fields.update(
+                self._filter_generated_fields(
+                    model,
+                    generate_date_extract_filters(
+                        model, advanced_types["ExtractDateFilterInput"]
+                    ),
+                )
+            )
 
         return fields
 
