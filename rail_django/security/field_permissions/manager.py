@@ -70,6 +70,36 @@ class FieldPermissionManager:
         except Exception:
             return False
 
+    def _safe_has_contextual_permission(
+        self,
+        context: FieldContext,
+        perm_name: str,
+    ) -> bool:
+        """Check permissions through RBAC first, then Django auth as fallback."""
+        user = context.user
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if getattr(user, "pk", None) is None:
+            return False
+
+        try:
+            from ..rbac import PermissionContext, role_manager
+
+            permission_context = PermissionContext(
+                user=user,
+                model_class=context.model_class,
+                object_instance=context.instance,
+                object_id=(
+                    str(getattr(context.instance, "pk", ""))
+                    if context.instance is not None
+                    else None
+                ),
+                operation=context.operation_type,
+            )
+            return bool(role_manager.has_permission(user, perm_name, permission_context))
+        except Exception:
+            return self._safe_has_perm(user, perm_name)
+
     def _safe_signature_value(self, value: Any) -> Any:
         """Convert value to a hashable form for signature computation."""
         try:
@@ -332,10 +362,22 @@ class FieldPermissionManager:
         if target_model is not None and context.user.is_authenticated:
             app_label = target_model._meta.app_label
             model_name_lower = target_model._meta.model_name
-            if context.operation_type in ["create", "update", "delete"]:
-                if self._safe_has_perm(context.user, f"{app_label}.change_{model_name_lower}"):
+            operation_type = str(context.operation_type or "").strip().lower()
+            mutation_codename = {
+                "create": "add",
+                "update": "change",
+                "write": "change",
+                "delete": "delete",
+            }.get(operation_type)
+            if mutation_codename and self._safe_has_contextual_permission(
+                context,
+                f"{app_label}.{mutation_codename}_{model_name_lower}",
+            ):
                     return FieldAccessLevel.WRITE
-            if self._safe_has_perm(context.user, f"{app_label}.view_{model_name_lower}"):
+            if self._safe_has_contextual_permission(
+                context,
+                f"{app_label}.view_{model_name_lower}",
+            ):
                 return FieldAccessLevel.READ
 
         return FieldAccessLevel.READ

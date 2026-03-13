@@ -74,10 +74,18 @@ class FormConfigExtractor(
             instance = self._load_instance(model, object_id=object_id)
 
         fields = self._extract_fields(
-            model, user, instance=instance, graphql_meta=graphql_meta
+            model,
+            user,
+            instance=instance,
+            graphql_meta=graphql_meta,
+            mode=mode,
         )
         relations = self._extract_relations(
-            model, user, instance=instance, graphql_meta=graphql_meta
+            model,
+            user,
+            instance=instance,
+            graphql_meta=graphql_meta,
+            mode=mode,
         )
 
         permissions = self._extract_permissions(

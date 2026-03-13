@@ -20,6 +20,15 @@ from ....utils.history_detection import (
 logger = logging.getLogger(__name__)
 
 
+def _resolve_permission_operation_type(mode: str) -> str:
+    normalized = str(mode or "").strip().upper()
+    if normalized == "CREATE":
+        return "create"
+    if normalized == "VIEW":
+        return "view"
+    return "update"
+
+
 class RelationExtractorMixin:
     """Mixin for extracting relation configurations."""
 
@@ -86,6 +95,7 @@ class RelationExtractorMixin:
         *,
         instance: Optional[models.Model] = None,
         graphql_meta: Optional[Any] = None,
+        mode: str = "CREATE",
     ) -> list[dict[str, Any]]:
         relationships: list[dict[str, Any]] = []
         field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
@@ -122,6 +132,7 @@ class RelationExtractorMixin:
                 instance=instance,
                 field_metadata=field_metadata.get(field_key),
                 graphql_meta=graphql_meta,
+                mode=mode,
             )
             if rel_schema:
                 relationships.append(rel_schema)
@@ -136,6 +147,7 @@ class RelationExtractorMixin:
         instance: Optional[models.Model] = None,
         field_metadata: Optional[dict[str, Any]] = None,
         graphql_meta: Optional[Any] = None,
+        mode: str = "CREATE",
     ) -> Optional[dict[str, Any]]:
         try:
             from graphene.utils.str_converters import to_camel_case
@@ -162,7 +174,11 @@ class RelationExtractorMixin:
             if user and hasattr(field, "name"):
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=instance
+                        user,
+                        model,
+                        field.name,
+                        instance=instance,
+                        operation_type=_resolve_permission_operation_type(mode),
                     )
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write

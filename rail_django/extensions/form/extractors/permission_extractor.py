@@ -15,6 +15,15 @@ from ....security.rbac import PermissionContext, role_manager
 from ..utils.graphql_meta import get_graphql_meta
 
 
+def _resolve_permission_operation_type(mode: str) -> str:
+    normalized = str(mode or "").strip().upper()
+    if normalized == "CREATE":
+        return "create"
+    if normalized == "VIEW":
+        return "view"
+    return "update"
+
+
 class PermissionExtractorMixin:
     """Mixin for extracting model and field permissions."""
 
@@ -272,6 +281,7 @@ class PermissionExtractorMixin:
         }
 
         field_permissions = []
+        field_permission_operation = _resolve_permission_operation_type(mode)
 
         def _append_field_permission(entry: dict[str, Any]) -> None:
             aliases = [
@@ -317,7 +327,11 @@ class PermissionExtractorMixin:
                     continue
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field_name, instance=instance
+                        user,
+                        model,
+                        field_name,
+                        instance=instance,
+                        operation_type=field_permission_operation,
                     )
                     entry["can_read"] = perm.visibility != FieldVisibility.HIDDEN
                     entry["can_write"] = perm.can_write

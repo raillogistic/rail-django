@@ -20,6 +20,15 @@ from ..utils.type_mapping import map_field_input_type, map_graphql_type, map_pyt
 logger = logging.getLogger(__name__)
 
 
+def _resolve_permission_operation_type(mode: str) -> str:
+    normalized = str(mode or "").strip().upper()
+    if normalized == "CREATE":
+        return "create"
+    if normalized == "VIEW":
+        return "view"
+    return "update"
+
+
 class FieldExtractorMixin:
     """Mixin for extracting field configurations."""
 
@@ -61,6 +70,7 @@ class FieldExtractorMixin:
         *,
         instance: Optional[models.Model] = None,
         graphql_meta: Optional[Any] = None,
+        mode: str = "CREATE",
     ) -> list[dict[str, Any]]:
         field_metadata = getattr(graphql_meta, "field_metadata", None) or {}
         fields: list[dict[str, Any]] = []
@@ -89,6 +99,7 @@ class FieldExtractorMixin:
                 user,
                 instance=instance,
                 field_metadata=field_metadata.get(field.name),
+                mode=mode,
             )
             if field_schema:
                 fields.append(field_schema)
@@ -102,6 +113,7 @@ class FieldExtractorMixin:
         *,
         instance: Optional[models.Model] = None,
         field_metadata: Optional[dict[str, Any]] = None,
+        mode: str = "CREATE",
     ) -> Optional[dict[str, Any]]:
         try:
             from graphene.utils.str_converters import to_camel_case
@@ -110,7 +122,11 @@ class FieldExtractorMixin:
             if user:
                 try:
                     perm = field_permission_manager.check_field_permission(
-                        user, model, field.name, instance=instance
+                        user,
+                        model,
+                        field.name,
+                        instance=instance,
+                        operation_type=_resolve_permission_operation_type(mode),
                     )
                     readable = perm.visibility != FieldVisibility.HIDDEN
                     writable = perm.can_write
