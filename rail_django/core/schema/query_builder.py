@@ -79,7 +79,7 @@ class QueryBuilderMixin:
 
     def _manager_suffix(self, manager_name: str, is_default: bool) -> str:
         """Return the manager contract suffix (empty for default manager)."""
-        if is_default:
+        if is_default or str(manager_name or "").strip().lower() == "objects":
             return ""
         manager_token = self._to_pascal_case(manager_name)
         return f"By{manager_token}" if manager_token else ""

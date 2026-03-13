@@ -103,6 +103,39 @@ def test_query_naming_contract_uses_model_list_page_group_and_manager_suffix():
 
 
 @pytest.mark.unit
+def test_query_naming_contract_never_adds_by_objects_suffix():
+    builder = DummyQueryBuilder()
+    introspector = Mock()
+    introspector.get_model_managers.return_value = {
+        "objects": SimpleNamespace(is_default=False),
+        "published": SimpleNamespace(is_default=False),
+    }
+
+    with patch(
+        "rail_django.generators.introspector.ModelIntrospector.for_model",
+        return_value=introspector,
+    ):
+        builder._generate_query_fields([NamingContractModel])
+
+    generated = set(builder._query_fields.keys())
+
+    assert "namingContractModel" in generated
+    assert "namingContractModelList" in generated
+    assert "namingContractModelPage" in generated
+    assert "namingContractModelGroup" in generated
+
+    assert "namingContractModelByObjects" not in generated
+    assert "namingContractModelListByObjects" not in generated
+    assert "namingContractModelPageByObjects" not in generated
+    assert "namingContractModelGroupByObjects" not in generated
+
+    assert "namingContractModelByPublished" in generated
+    assert "namingContractModelListByPublished" in generated
+    assert "namingContractModelPageByPublished" in generated
+    assert "namingContractModelGroupByPublished" in generated
+
+
+@pytest.mark.unit
 def test_mutation_naming_contract_uses_camel_contract_for_crud_bulk_and_methods():
     generator = MutationGenerator(type_generator=Mock(spec=TypeGenerator))
 
