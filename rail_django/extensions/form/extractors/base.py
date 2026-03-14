@@ -26,6 +26,7 @@ from ..utils.cache import (
 )
 from ..config import get_form_settings
 from ..utils.graphql_meta import get_graphql_meta
+from ...metadata.extractor import ModelSchemaExtractor
 from ....utils.history_detection import (
     is_historical_records_attribute,
     is_historical_relation_field,
@@ -111,6 +112,11 @@ class FormConfigExtractor(
         validation_rules = self._extract_validation_rules(
             model, graphql_meta=graphql_meta
         )
+        custom_mutations = self._extract_custom_mutations(
+            model,
+            user=user,
+            instance=instance,
+        )
 
         sections = getattr(graphql_meta, "form_sections", None)
         if sections is None:
@@ -176,7 +182,7 @@ class FormConfigExtractor(
                 "requires_optimistic_lock": False,
                 "optimistic_lock_field": None,
             },
-            "custom_mutations": [],
+            "custom_mutations": custom_mutations,
             "permissions": permissions,
             "conditional_rules": conditional_rules,
             "computed_fields": computed_fields,
@@ -197,6 +203,55 @@ class FormConfigExtractor(
         )
 
         return config
+
+    def _extract_custom_mutations(
+        self,
+        model: type[models.Model],
+        *,
+        user: Any = None,
+        instance: Optional[models.Model] = None,
+    ) -> list[dict[str, Any]]:
+        metadata_extractor = ModelSchemaExtractor(schema_name=self.schema_name)
+        mutations = metadata_extractor._extract_mutations(model, user, instance=instance)
+        entries: list[dict[str, Any]] = []
+        for mutation in mutations:
+            if not isinstance(mutation, dict):
+                continue
+            if mutation.get("operation") != "custom" or not mutation.get("allowed", False):
+                continue
+            input_fields: list[dict[str, Any]] = []
+            for field in mutation.get("input_fields", []) or []:
+                if not isinstance(field, dict):
+                    continue
+                input_fields.append(
+                    {
+                        "name": field.get("name") or field.get("field_name"),
+                        "type": field.get("graphql_type") or field.get("field_type") or "String",
+                        "required": bool(field.get("required", False)),
+                        "default_value": field.get("default_value"),
+                        "description": field.get("description"),
+                    }
+                )
+            entries.append(
+                {
+                    "name": mutation.get("name"),
+                    "operation": "CUSTOM",
+                    "description": mutation.get("description"),
+                    "input_fields": input_fields,
+                    "allowed": True,
+                    "permission": ", ".join(mutation.get("required_permissions") or []) or None,
+                    "roles": [str(role) for role in (mutation.get("required_roles") or []) if str(role or "").strip()],
+                    "access_resolver": mutation.get("access_resolver"),
+                    "denial_reason": mutation.get("reason"),
+                    "success_message": mutation.get("success_message"),
+                    "requires_optimistic_lock": False,
+                    "optimistic_lock_field": None,
+                    "requires_authentication": bool(
+                        mutation.get("requires_authentication", False)
+                    ),
+                }
+            )
+        return entries
 
     def extract_initial_values(
         self,

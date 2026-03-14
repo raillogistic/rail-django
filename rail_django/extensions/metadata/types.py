@@ -179,6 +179,8 @@ class MutationSchemaType(graphene.ObjectType):
     return_type = graphene.String()
     allowed = graphene.Boolean(required=True)
     required_permissions = graphene.List(graphene.String)
+    required_roles = graphene.List(graphene.String)
+    access_resolver = graphene.String()
     reason = graphene.String()
 
     # Extra fields for compatibility/frontend

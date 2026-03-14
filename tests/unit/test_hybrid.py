@@ -12,14 +12,18 @@ from rail_django.security.rbac import RoleDefinition, RoleManager, RoleType
 pytestmark = pytest.mark.unit
 
 
-def _mock_abac_enabled(monkeypatch, strategy: CombinationStrategy):
+def _mock_abac_enabled(
+    monkeypatch,
+    strategy: CombinationStrategy,
+    default_effect: str = "deny",
+):
     def _get_setting(key, default=None, schema_name=None):
         if key == "security_settings.enable_abac":
             return True
         if key == "security_settings.hybrid_strategy":
             return strategy.value
         if key == "security_settings.abac_default_effect":
-            return "deny"
+            return default_effect
         return default
 
     monkeypatch.setattr("rail_django.security.hybrid.engine.get_setting", _get_setting)
@@ -129,3 +133,87 @@ class TestHybridStrategies:
         assert decision.rbac_allowed is True
         assert decision.abac_allowed is None
         assert decision.allowed is True
+        assert decision.reason == "abac_no_decision"
+
+    def test_no_matching_abac_policy_uses_default_deny(self, monkeypatch):
+        rbac, abac_engine, engine = self._setup(
+            CombinationStrategy.RBAC_THEN_ABAC, monkeypatch
+        )
+        user = User.objects.create_user(
+            "hybrid_no_match_deny",
+            password="pass12345",
+        )
+        rbac.register_role(
+            RoleDefinition(
+                name="rbac_default_deny_role",
+                role_type=RoleType.BUSINESS,
+                description="RBAC role",
+                permissions=["test.read"],
+            )
+        )
+        rbac.assign_role_to_user(user, "rbac_default_deny_role")
+        abac_engine.register_policy(
+            ABACPolicy(
+                name="allow_only_inactive_users",
+                effect="allow",
+                subject_conditions={
+                    "authenticated": MatchCondition(
+                        ConditionOperator.EQ,
+                        value=False,
+                    )
+                },
+            )
+        )
+
+        decision = engine.has_permission(user, "test.read")
+        assert decision.rbac_allowed is True
+        assert decision.abac_allowed is False
+        assert decision.allowed is False
+        assert decision.reason == "abac_default_deny"
+
+    def test_no_matching_abac_policy_can_default_allow(self, monkeypatch):
+        _mock_abac_enabled(
+            monkeypatch,
+            CombinationStrategy.RBAC_THEN_ABAC,
+            default_effect="allow",
+        )
+        rbac = RoleManager()
+        abac_engine = ABACEngine()
+        abac = ABACManager(engine=abac_engine)
+        engine = HybridPermissionEngine(
+            rbac=rbac,
+            abac=abac,
+            strategy=CombinationStrategy.RBAC_THEN_ABAC,
+        )
+
+        user = User.objects.create_user(
+            "hybrid_no_policy_allow",
+            password="pass12345",
+        )
+        rbac.register_role(
+            RoleDefinition(
+                name="rbac_default_allow_role",
+                role_type=RoleType.BUSINESS,
+                description="RBAC role",
+                permissions=["test.read"],
+            )
+        )
+        rbac.assign_role_to_user(user, "rbac_default_allow_role")
+        abac_engine.register_policy(
+            ABACPolicy(
+                name="allow_only_inactive_users",
+                effect="allow",
+                subject_conditions={
+                    "authenticated": MatchCondition(
+                        ConditionOperator.EQ,
+                        value=False,
+                    )
+                },
+            )
+        )
+
+        decision = engine.has_permission(user, "test.read")
+        assert decision.rbac_allowed is True
+        assert decision.abac_allowed is True
+        assert decision.allowed is True
+        assert decision.reason == "abac_default_allow"

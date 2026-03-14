@@ -81,6 +81,9 @@ Available `hybrid_strategy` values:
 You can define model-scoped ABAC policies in `GraphQLMeta.abac_policies`.
 See [ABAC system](../library/security/abac.md) for full examples.
 
+`abac_default_effect` applies when ABAC is enabled but no ABAC policy matches.
+Use `deny` to fail closed, or `allow` to keep the RBAC result.
+
 ### Role definitions in `meta.yaml`
 
 Place a `meta.yaml` file in the root of a Django app and define roles under
@@ -150,8 +153,10 @@ policy_manager.register_policy(
 
 ## Permission caching
 
-RBAC permission checks are cached per user/context. Invalidation happens on
-group/role membership changes. Tune behavior with:
+RBAC-only permission checks are cached per user/context. Hybrid ABAC checks
+bypass the RBAC cache because ABAC can depend on request and runtime
+attributes. Invalidation happens on group/role membership changes. Tune
+behavior with:
 
 ```python
 RAIL_DJANGO_GRAPHQL = {

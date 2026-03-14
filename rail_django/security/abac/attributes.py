@@ -52,6 +52,10 @@ class SubjectAttributeProvider(BaseAttributeProvider):
             attrs["roles"] = list(user.groups.values_list("name", flat=True))
         except Exception:
             attrs["roles"] = []
+        if attrs["is_superuser"] and "superadmin" not in attrs["roles"]:
+            attrs["roles"].append("superadmin")
+        elif attrs["is_staff"] and "admin" not in attrs["roles"]:
+            attrs["roles"].append("admin")
 
         profile = getattr(user, "profile", None)
         if profile is not None:

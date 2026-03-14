@@ -128,6 +128,16 @@ class HybridPermissionEngine:
             )
         )
 
+    def _resolve_default_abac_allow(self, schema_name: Optional[str] = None) -> bool:
+        configured = str(
+            get_setting(
+                "security_settings.abac_default_effect",
+                "deny",
+                schema_name=schema_name,
+            )
+        ).lower()
+        return configured == "allow"
+
     def _resolve_schema_name(
         self, *, context: Optional[PermissionContext], request: Any
     ) -> Optional[str]:
@@ -160,6 +170,30 @@ class HybridPermissionEngine:
                 rbac_allowed=rbac,
                 strategy=strategy,
                 reason="abac_no_decision",
+                abac_decision=abac_decision,
+            )
+
+        if (
+            abac_decision is not None
+            and abac_decision.reason == "no_matching_policy"
+        ):
+            abac = self._resolve_default_abac_allow(schema_name=schema_name)
+            if strategy == CombinationStrategy.RBAC_OR_ABAC:
+                allowed = rbac or abac
+            elif strategy == CombinationStrategy.ABAC_OVERRIDE:
+                allowed = abac
+            else:
+                allowed = rbac and abac
+            return HybridDecision(
+                allowed=allowed,
+                rbac_allowed=rbac,
+                abac_allowed=abac,
+                strategy=strategy,
+                reason=(
+                    "abac_default_allow"
+                    if abac
+                    else "abac_default_deny"
+                ),
                 abac_decision=abac_decision,
             )
 

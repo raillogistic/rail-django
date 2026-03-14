@@ -7,6 +7,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Callable, Optional
 
+from django.db import models
 from graphql import GraphQLError
 
 
@@ -39,6 +40,8 @@ def require_attributes(
                 environment_conditions=environment_conditions,
                 action_conditions=action_conditions,
                 user=user,
+                instance=_extract_resource_instance(args, kwargs),
+                model_class=_extract_model_class(args, kwargs),
                 request=request_context,
                 info=info,
                 operation=getattr(getattr(info, "operation", None), "operation", None),
@@ -63,3 +66,31 @@ def _extract_info(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             return arg
     return None
 
+
+def _extract_resource_instance(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Optional[Any]:
+    for key in ("instance", "obj", "object", "resource"):
+        value = kwargs.get(key)
+        if value is not None:
+            return value
+
+    for arg in args:
+        if hasattr(arg, "context"):
+            continue
+        if isinstance(arg, models.Model):
+            return arg
+    return None
+
+
+def _extract_model_class(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Optional[type[models.Model]]:
+    model_class = kwargs.get("model_class")
+    if model_class is not None:
+        return model_class
+
+    instance = _extract_resource_instance(args, kwargs)
+    if isinstance(instance, models.Model):
+        return instance.__class__
+    return None

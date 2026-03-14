@@ -223,6 +223,34 @@ class TestExistingDecorators(TestCase):
         self.assertTrue(hasattr(test_mutation_method, "_is_mutation"))
         self.assertTrue(test_mutation_method._is_mutation)
 
+    def test_mutation_decorator_stores_advanced_access_metadata(self):
+        """Test que @mutation normalise les regles d'acces avancees."""
+
+        def can_execute(**_kwargs):
+            return True
+
+        @mutation(
+            permissions=["test_app.change_category"],
+            roles=["catalog_manager"],
+            access_resolver=can_execute,
+        )
+        def test_mutation_method(self):
+            return True
+
+        self.assertEqual(
+            test_mutation_method._requires_permissions,
+            ["test_app.change_category"],
+        )
+        self.assertEqual(
+            test_mutation_method._mutation_access["roles"],
+            ["catalog_manager"],
+        )
+        self.assertIs(test_mutation_method._mutation_access["resolver"], can_execute)
+        self.assertEqual(
+            test_mutation_method._mutation_access["resolver_name"],
+            "can_execute",
+        )
+
     def test_business_logic_decorator(self):
         """Test que le décorateur @business_logic fonctionne toujours."""
 

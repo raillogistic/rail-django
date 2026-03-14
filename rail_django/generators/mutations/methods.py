@@ -11,6 +11,10 @@ from django.db import IntegrityError, models, transaction
 
 from ...core.exceptions import GraphQLAutoError
 from ...core.meta import get_model_graphql_meta
+from ...core.mutation_permissions import (
+    evaluate_mutation_access,
+    get_mutation_access_config,
+)
 from ..introspector import MethodInfo
 from .errors import (
     MutationError,
@@ -56,33 +60,32 @@ def _infer_guard_operation(
     return _infer_audit_operation(name)
 
 
-def _validate_required_permissions(
+def _validate_mutation_access(
     info: graphene.ResolveInfo,
-    permissions: Optional[list[str]] = None,
+    method: Any,
+    *,
+    instance: Any = None,
+    input_data: Any = None,
+    model: Any = None,
+    root: Any = None,
 ) -> Optional[list[MutationError]]:
-    required_permissions = [
-        str(permission).strip()
-        for permission in (permissions or [])
-        if str(permission or "").strip()
-    ]
-    if not required_permissions:
+    access = get_mutation_access_config(method)
+    if access is None:
         return None
 
     user = getattr(getattr(info, "context", None), "user", None)
-    if not user or not getattr(user, "is_authenticated", False):
-        return [build_mutation_error("Authentication required")]
-
-    has_perm = getattr(user, "has_perm", None)
-    if not callable(has_perm):
-        return [build_mutation_error("Authentication required")]
-
-    missing = [
-        permission for permission in required_permissions if not has_perm(permission)
-    ]
-    if missing:
-        return [
-            build_mutation_error(message=f"Permission denied ({', '.join(missing)})")
-        ]
+    decision = evaluate_mutation_access(
+        access,
+        user=user,
+        info=info,
+        instance=instance,
+        input_data=input_data,
+        model=model,
+        method=method,
+        root=root,
+    )
+    if not decision.get("allowed", False):
+        return [build_mutation_error(decision.get("reason") or "Permission denied")]
     return None
 
 
@@ -174,19 +177,6 @@ def convert_method_to_mutation(
         @transaction.atomic
         def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, **kwargs):
             try:
-                # Check permissions if required
-                if hasattr(method, "_requires_permission"):
-                    permission_errors = _validate_required_permissions(
-                        info,
-                        [method._requires_permission],
-                    )
-                    if permission_errors:
-                        return cls(
-                            ok=False,
-                            result=None,
-                            errors=permission_errors,
-                        )
-
                 scoped = self._apply_tenant_scope(
                     model.objects.all(),
                     info,
@@ -197,6 +187,20 @@ def convert_method_to_mutation(
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )
+                permission_errors = _validate_mutation_access(
+                    info,
+                    method,
+                    instance=instance,
+                    input_data=kwargs,
+                    model=model,
+                    root=root,
+                )
+                if permission_errors:
+                    return cls(
+                        ok=False,
+                        result=None,
+                        errors=permission_errors,
+                    )
                 method_func = getattr(instance, method_name)
 
                 # Filter kwargs to only include method parameters
@@ -317,10 +321,6 @@ def generate_method_mutation(
     custom_name = getattr(method, "_custom_mutation_name", None)
     description = getattr(method, "_mutation_description", method.__doc__)
     is_business_logic = getattr(method, "_is_business_logic", False)
-    requires_permissions = getattr(method, "_requires_permissions", None)
-    if requires_permissions is None:
-        legacy_perm = getattr(method, "_requires_permission", None)
-        requires_permissions = [legacy_perm] if legacy_perm else None
     atomic = getattr(method, "_atomic", True)
     action_kind = getattr(method, "_action_kind", None)
     guard_operation = _infer_guard_operation(method_name, action_kind)
@@ -388,17 +388,6 @@ def generate_method_mutation(
             id: str,
             input: dict[str, Any] = None,
         ):
-            # Permission check if required
-            permission_errors = _validate_required_permissions(
-                info,
-                requires_permissions,
-            )
-            if permission_errors:
-                return cls(
-                    ok=False,
-                    result=None,
-                    errors=permission_errors,
-                )
             # Wrap in transaction if atomic is True
             if atomic:
                 return cls._atomic_mutate(model, method_name, id, input, info)
@@ -426,6 +415,19 @@ def generate_method_mutation(
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )
+                permission_errors = _validate_mutation_access(
+                    info,
+                    method,
+                    instance=instance,
+                    input_data=input,
+                    model=model,
+                )
+                if permission_errors:
+                    return cls(
+                        ok=False,
+                        result=None,
+                        errors=permission_errors,
+                    )
                 method_func = getattr(instance, method_name)
 
                 def _perform_method(info, target, payload):

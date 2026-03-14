@@ -26,14 +26,23 @@ Use one of these strategy values:
 
 ## Configuration
 
+When ABAC is enabled, `abac_default_effect` controls the result when no ABAC
+policy matches. Set it to `deny` to fail closed, or `allow` to let the RBAC
+decision stand.
+
 ```python
 RAIL_DJANGO_GRAPHQL = {
     "security_settings": {
         "enable_abac": True,
         "hybrid_strategy": "rbac_then_abac",
+        "abac_default_effect": "deny",
     }
 }
 ```
+
+Hybrid permission checks do not use the RBAC permission cache. ABAC policies can
+depend on request and runtime attributes, so reusing cached RBAC decisions would
+return stale results.
 
 ## Programmatic usage
 
@@ -65,4 +74,3 @@ if not decision.allowed:
 - [ABAC system](./abac.md)
 - [RBAC system](./rbac.md)
 - [Security reference](../../reference/security.md)
-

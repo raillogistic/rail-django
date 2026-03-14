@@ -4,6 +4,8 @@ import pytest
 from django.contrib.auth.models import User
 
 from rail_django.security.abac import ABACPolicy, ConditionOperator, MatchCondition, abac_engine
+from rail_django.security.hybrid.engine import HybridDecision
+from rail_django.security.hybrid.strategies import CombinationStrategy
 from rail_django.security.rbac import RoleDefinition, RoleManager, RoleType
 
 pytestmark = pytest.mark.unit
@@ -62,3 +64,49 @@ def test_role_manager_has_permission_applies_abac_when_enabled(monkeypatch):
     finally:
         abac_engine.clear_policies()
 
+
+@pytest.mark.django_db
+def test_role_manager_does_not_cache_hybrid_abac_decisions(monkeypatch):
+    _patch_abac_enabled(monkeypatch)
+    manager = RoleManager()
+
+    role_name = "rbac_abac_uncached_role"
+    manager.register_role(
+        RoleDefinition(
+            name=role_name,
+            description="Role with read access",
+            role_type=RoleType.BUSINESS,
+            permissions=["test.read"],
+        )
+    )
+    user = User.objects.create_user(
+        username="rbac_abac_uncached_user",
+        password="pass12345",
+    )
+    manager.assign_role_to_user(user, role_name)
+
+    decisions = iter(
+        [
+            HybridDecision(
+                allowed=False,
+                rbac_allowed=True,
+                abac_allowed=False,
+                strategy=CombinationStrategy.RBAC_AND_ABAC,
+                reason="first",
+            ),
+            HybridDecision(
+                allowed=True,
+                rbac_allowed=True,
+                abac_allowed=True,
+                strategy=CombinationStrategy.RBAC_AND_ABAC,
+                reason="second",
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        "rail_django.security.hybrid.engine.hybrid_engine.has_permission",
+        lambda *args, **kwargs: next(decisions),
+    )
+
+    assert manager.has_permission(user, "test.read") is False
+    assert manager.has_permission(user, "test.read") is True

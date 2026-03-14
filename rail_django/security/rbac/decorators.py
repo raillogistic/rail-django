@@ -146,8 +146,7 @@ def _normalize_permission_context(
     elif not isinstance(context, PermissionContext):
         context = PermissionContext(user=user, additional_context={"value": context})
 
-    if context.user is None:
-        context.user = user
+    context.user = user
     if context.additional_context is None:
         context.additional_context = {}
     if info is not None and isinstance(context.additional_context, dict):

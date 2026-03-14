@@ -151,6 +151,59 @@ mutation {
 }
 ```
 
+### Add mutation-specific access rules
+
+When a model method represents a business action, you can attach explicit
+access rules directly to `@mutation(...)`. This lets you keep the mutation
+permission close to the method instead of scattering the rule across several
+layers.
+
+`@mutation(...)` supports:
+
+- `permissions` for Django permission checks
+- `roles` for RBAC roles or matching Django group names
+- `access_resolver` for runtime checks that depend on the current user,
+  instance, or input payload
+
+Example:
+
+```python
+from rail_django.core.decorators import mutation
+
+
+def can_publish_order(*, user=None, instance=None, **_kwargs):
+    return bool(
+        user
+        and user.is_authenticated
+        and instance
+        and instance.status in {"draft", "pending_review"}
+    )
+
+
+class Order(models.Model):
+    status = models.CharField(max_length=32)
+
+    @mutation(
+        description="Publish the order.",
+        permissions=["store.change_order"],
+        roles=["order_manager"],
+        access_resolver=can_publish_order,
+    )
+    def publish(self) -> bool:
+        self.status = "published"
+        self.save(update_fields=["status"])
+        return True
+```
+
+Rail Django evaluates these categories as alternative grant paths. A matching
+role, a successful permission check, or a successful resolver can grant
+access.
+
+The same access rules also drive metadata and generated form contracts. That
+means `customMutation`, `customMutations`, and generated form
+`customMutations` only return custom model mutations that the current user can
+execute.
+
 ## Custom Validation
 
 Add custom logic to the mutation flow using `clean()` on your models or custom pipeline steps.

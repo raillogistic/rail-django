@@ -377,6 +377,10 @@ class RoleManager(PermissionEvaluationMixin):
                 schema_name=schema_name,
             )
         )
+        if hybrid_enabled:
+            # ABAC decisions can depend on request and runtime attributes, so the
+            # RBAC permission cache is not safe for hybrid evaluations.
+            return None
         hybrid_strategy = str(
             get_setting(
                 "security_settings.hybrid_strategy",

@@ -5,7 +5,11 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import override_settings
 
+from rail_django.core.decorators import mutation
+from rail_django.extensions.form.utils import invalidate_form_cache
 from rail_django.extensions.form.config import get_form_settings
+from rail_django.extensions.metadata.utils import invalidate_metadata_cache
+from rail_django.generators.introspector import ModelIntrospector
 from rail_django.testing import RailGraphQLTestClient, build_schema
 from test_app.models import Category, OrderItem, Product
 
@@ -182,6 +186,83 @@ def test_model_form_contract_resolves_operation_permissions_for_limited_user(gql
     assert permissions["update"]["requiresAuthentication"] is True
     assert permissions["update"]["reason"]
     assert permissions["fieldPermissions"], "Expected field-level permissions snapshot."
+
+
+def test_model_form_contract_returns_only_permitted_custom_mutations(gql_client):
+    original_public = getattr(Product, "mark_featured", None)
+    original_admin = getattr(Product, "admin_publish", None)
+
+    @mutation(description="Mark this product as featured")
+    def mark_featured(self) -> bool:
+        return True
+
+    @mutation(
+        description="Publish product to the storefront",
+        permissions=["test_app.change_product"],
+        roles=["catalog_manager"],
+    )
+    def admin_publish(self) -> bool:
+        return True
+
+    Product.mark_featured = mark_featured
+    Product.admin_publish = admin_publish
+    if hasattr(Product, "_graphql_meta_instance"):
+        delattr(Product, "_graphql_meta_instance")
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+    invalidate_form_cache("test_app", "Product")
+
+    User = get_user_model()
+    limited_user = User.objects.create_user(
+        username="contract_limited",
+        password="pass12345",
+    )
+    limited_user.user_permissions.add(
+        Permission.objects.get(
+            codename="view_product",
+            content_type__app_label="test_app",
+        )
+    )
+
+    query = """
+    query {
+      contract: modelFormContract(
+        appLabel: "test_app"
+        modelName: "Product"
+        mode: UPDATE
+      ) {
+        customMutations {
+          name
+          permission
+          roles
+          accessResolver
+        }
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query, user=limited_user)
+        assert result.get("errors") is None
+
+        custom_mutations = result["data"]["contract"]["customMutations"]
+        assert [item["name"] for item in custom_mutations] == ["markFeaturedProduct"]
+    finally:
+        if original_public is None and hasattr(Product, "mark_featured"):
+            delattr(Product, "mark_featured")
+        elif original_public is not None:
+            Product.mark_featured = original_public
+
+        if original_admin is None and hasattr(Product, "admin_publish"):
+            delattr(Product, "admin_publish")
+        elif original_admin is not None:
+            Product.admin_publish = original_admin
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            delattr(Product, "_graphql_meta_instance")
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+        invalidate_form_cache("test_app", "Product")
 
 
 def test_model_form_initial_data_supports_nested_and_runtime_overrides(gql_client):

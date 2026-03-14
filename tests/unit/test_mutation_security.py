@@ -184,6 +184,49 @@ def test_method_mutation_requires_user_context_for_explicit_permissions():
 
 
 @pytest.mark.django_db
+def test_method_mutation_respects_custom_access_resolver():
+    def can_execute(*, instance=None, **_kwargs):
+        return bool(instance and instance.name == "alpha")
+
+    @mutation(access_resolver=can_execute)
+    def secure_action(self):
+        return True
+
+    original_method = getattr(Category, "secure_action", None)
+    Category.secure_action = secure_action
+    if hasattr(Category, "_graphql_meta_instance"):
+        delattr(Category, "_graphql_meta_instance")
+
+    try:
+        category = Category.objects.create(name="alpha", description="")
+        blocked = Category.objects.create(name="blocked", description="")
+        user = User.objects.create_user(
+            username="resolver_user",
+            password="pass12345",
+        )
+        generator = MutationGenerator(TypeGenerator())
+        method_info = ModelIntrospector(Category).get_model_methods()["secure_action"]
+        mutation_class = generator.generate_method_mutation(Category, method_info)
+
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+        allowed_result = mutation_class.mutate(None, info, id=category.id)
+        denied_result = mutation_class.mutate(None, info, id=blocked.id)
+
+        assert allowed_result.ok is True
+        assert denied_result.ok is False
+        assert denied_result.errors
+        assert "resolver denied" in denied_result.errors[0].message.lower()
+    finally:
+        if original_method is None:
+            delattr(Category, "secure_action")
+        else:
+            Category.secure_action = original_method
+        if hasattr(Category, "_graphql_meta_instance"):
+            delattr(Category, "_graphql_meta_instance")
+        ModelIntrospector.clear_cache()
+
+
+@pytest.mark.django_db
 def test_unified_m2m_connect_requires_related_retrieve_permission():
     class GuardedMeta(GraphQLMetaConfig):
         access = GraphQLMetaConfig.AccessControl(

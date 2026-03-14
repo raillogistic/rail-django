@@ -253,6 +253,44 @@ def test_owner_resolver_override_allows_contextual_access():
     assert manager.has_permission(user, "category.update_own", context) is True
 
 
+@pytest.mark.django_db
+def test_require_permission_uses_authenticated_user_for_context_checks():
+    role_name = "context_user_normalization_role"
+    role_manager.register_role(
+        RoleDefinition(
+            name=role_name,
+            description="Owner-only role for context normalization",
+            role_type=RoleType.BUSINESS,
+            permissions=["category.update_own"],
+        )
+    )
+
+    user = User.objects.create_user(
+        username="context_user_normalization",
+        password="pass12345",
+    )
+    other_user = User.objects.create_user(
+        username="context_user_normalization_other",
+        password="pass12345",
+    )
+    role_manager.assign_role_to_user(user, role_name)
+    info = _InfoStub(user)
+    target = SimpleNamespace(owner=other_user)
+
+    @require_permission(
+        "category.update_own",
+        context_func=lambda *_args, **_kwargs: PermissionContext(
+            user=other_user,
+            object_instance=target,
+        ),
+    )
+    def _secured(_, info):
+        return "ok"
+
+    with pytest.raises(GraphQLError):
+        _secured(None, info)
+
+
 def test_policy_pattern_matching_is_glob_anchored():
     manager = PolicyManager()
 

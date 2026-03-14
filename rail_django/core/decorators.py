@@ -9,6 +9,12 @@ from typing import Any, Callable, Optional
 
 import graphene
 
+from .mutation_permissions import (
+    apply_mutation_access,
+    get_mutation_access_config,
+    normalize_mutation_access,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,6 +23,9 @@ def mutation(
     output_type: Optional[type[graphene.ObjectType]] = None,
     description: Optional[str] = None,
     button_title: Optional[str] = None,
+    permissions: Optional[list[str]] = None,
+    roles: Optional[list[str]] = None,
+    access_resolver: Optional[Callable[..., Any]] = None,
 ):
     """
     Decorator to mark a model method as a GraphQL mutation.
@@ -26,6 +35,9 @@ def mutation(
         output_type: Custom output type for the mutation
         description: Description for the mutation
         button_title: Title shown on action buttons in metadata-driven UIs
+        permissions: Django permissions that can execute the mutation
+        roles: RBAC or Django group roles that can execute the mutation
+        access_resolver: Callable that returns whether the mutation is allowed
 
     Example:
         @mutation(description="Activate user account")
@@ -37,6 +49,8 @@ def mutation(
     """
 
     def decorator(func: Callable) -> Callable:
+        existing_access = get_mutation_access_config(func)
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -46,6 +60,15 @@ def mutation(
         wrapper._mutation_input_type = input_type
         wrapper._mutation_output_type = output_type
         wrapper._mutation_description = description or func.__doc__
+        apply_mutation_access(
+            wrapper,
+            normalize_mutation_access(
+                permissions=permissions,
+                roles=roles,
+                resolver=access_resolver,
+                existing=existing_access,
+            ),
+        )
         action_ui = getattr(func, "_action_ui", None)
         if isinstance(action_ui, dict):
             action_payload = dict(action_ui)
@@ -92,6 +115,8 @@ def confirm_action(
     """
 
     def decorator(func: Callable) -> Callable:
+        existing_access = get_mutation_access_config(func)
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -108,15 +133,12 @@ def confirm_action(
             "icon": icon,
         }
         wrapper._mutation_description = (description or message) or func.__doc__
-        wrapper._requires_permissions = (
-            permissions
-            if permissions is not None
-            else getattr(func, "_requires_permissions", None)
-            or (
-                [getattr(func, "_requires_permission", None)]
-                if getattr(func, "_requires_permission", None)
-                else None
-            )
+        apply_mutation_access(
+            wrapper,
+            normalize_mutation_access(
+                permissions=permissions,
+                existing=existing_access,
+            ),
         )
         # Confirmation mutations are atomic by default
         wrapper._atomic = getattr(func, "_atomic", True)
@@ -153,6 +175,8 @@ def action_form(
     """
 
     def decorator(func: Callable) -> Callable:
+        existing_access = get_mutation_access_config(func)
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -174,15 +198,12 @@ def action_form(
             "on_finish": on_finish,
         }
         wrapper._mutation_description = description or func.__doc__
-        wrapper._requires_permissions = (
-            permissions
-            if permissions is not None
-            else getattr(func, "_requires_permissions", None)
-            or (
-                [getattr(func, "_requires_permission", None)]
-                if getattr(func, "_requires_permission", None)
-                else None
-            )
+        apply_mutation_access(
+            wrapper,
+            normalize_mutation_access(
+                permissions=permissions,
+                existing=existing_access,
+            ),
         )
         wrapper._atomic = getattr(func, "_atomic", True)
         return wrapper
@@ -217,6 +238,8 @@ def business_logic(
     """
 
     def decorator(func: Callable) -> Callable:
+        existing_access = get_mutation_access_config(func)
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -225,7 +248,13 @@ def business_logic(
         wrapper._is_mutation = True
         wrapper._is_business_logic = True
         wrapper._business_logic_category = category
-        wrapper._requires_permission = requires_permission
+        apply_mutation_access(
+            wrapper,
+            normalize_mutation_access(
+                permissions=[requires_permission] if requires_permission else None,
+                existing=existing_access,
+            ),
+        )
         wrapper._atomic = atomic
         action_ui = getattr(func, "_action_ui", None)
         if isinstance(action_ui, dict):

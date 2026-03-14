@@ -11,6 +11,10 @@ from django.conf import settings
 from graphql import GraphQLError
 
 from ...core.meta import get_model_graphql_meta
+from ...core.mutation_permissions import (
+    evaluate_mutation_access,
+    get_mutation_access_config,
+)
 from ...core.security import get_authz_manager
 from .utils import (
     get_cached_schema,
@@ -862,7 +866,9 @@ class ModelSchemaExtractor(
             guard_operation: Optional[str] = None,
             instance: Any = None,
             extra_permissions: Optional[list[str]] = None,
-        ) -> tuple[bool, list[str], bool, Optional[str]]:
+            method_access: Optional[dict[str, Any]] = None,
+            method: Any = None,
+        ) -> tuple[bool, list[str], list[str], bool, Optional[str], Optional[str]]:
             guard_op = guard_operation or operation
             guard = _get_guard(guard_op)
             guard_state = {"guarded": False, "allowed": True, "reason": None}
@@ -902,7 +908,37 @@ class ModelSchemaExtractor(
                         if missing:
                             allowed = False
                             reason = _permission_reason(missing)
-                return allowed, required_permissions, requires_authentication, reason
+                access_decision = evaluate_mutation_access(
+                    method_access,
+                    user=user,
+                    instance=instance,
+                    model=model,
+                    method=method,
+                )
+                allowed = allowed and bool(access_decision.get("allowed", True))
+                if allowed:
+                    reason = None
+                else:
+                    reason = access_decision.get("reason") or reason
+                required_permissions = _dedupe(
+                    required_permissions
+                    + list(access_decision.get("required_permissions") or [])
+                )
+                required_roles = _dedupe(
+                    list(access_decision.get("required_roles") or [])
+                )
+                requires_authentication = bool(
+                    requires_authentication
+                    or access_decision.get("requires_authentication", False)
+                )
+                return (
+                    allowed,
+                    required_permissions,
+                    required_roles,
+                    requires_authentication,
+                    reason,
+                    access_decision.get("resolver_name"),
+                )
 
             if extra_permissions:
                 required_permissions.extend(extra_permissions)
@@ -913,14 +949,49 @@ class ModelSchemaExtractor(
 
             requires_authentication = bool(required_permissions)
             if not required_permissions:
-                return True, required_permissions, requires_authentication, None
+                access_decision = evaluate_mutation_access(
+                    method_access,
+                    user=user,
+                    instance=instance,
+                    model=model,
+                    method=method,
+                )
+                return (
+                    bool(access_decision.get("allowed", True)),
+                    _dedupe(
+                        required_permissions
+                        + list(access_decision.get("required_permissions") or [])
+                    ),
+                    _dedupe(list(access_decision.get("required_roles") or [])),
+                    bool(access_decision.get("requires_authentication", False)),
+                    access_decision.get("reason"),
+                    access_decision.get("resolver_name"),
+                )
 
             if not user or not getattr(user, "is_authenticated", False):
+                access_decision = evaluate_mutation_access(
+                    method_access,
+                    user=user,
+                    instance=instance,
+                    model=model,
+                    method=method,
+                )
+                reason = "Authentication required"
+                if access_decision.get("allowed") is False:
+                    reason = access_decision.get("reason") or reason
                 return (
                     False,
-                    required_permissions,
-                    requires_authentication,
-                    "Authentication required",
+                    _dedupe(
+                        required_permissions
+                        + list(access_decision.get("required_permissions") or [])
+                    ),
+                    _dedupe(list(access_decision.get("required_roles") or [])),
+                    bool(
+                        requires_authentication
+                        or access_decision.get("requires_authentication", False)
+                    ),
+                    reason,
+                    access_decision.get("resolver_name"),
                 )
 
             missing = [
@@ -929,17 +1000,60 @@ class ModelSchemaExtractor(
                 if not _user_has_permissions([perm])
             ]
             if missing:
+                access_decision = evaluate_mutation_access(
+                    method_access,
+                    user=user,
+                    instance=instance,
+                    model=model,
+                    method=method,
+                )
                 return (
                     False,
-                    required_permissions,
-                    requires_authentication,
-                    _permission_reason(missing),
+                    _dedupe(
+                        required_permissions
+                        + list(access_decision.get("required_permissions") or [])
+                    ),
+                    _dedupe(list(access_decision.get("required_roles") or [])),
+                    bool(
+                        requires_authentication
+                        or access_decision.get("requires_authentication", False)
+                    ),
+                    access_decision.get("reason") or _permission_reason(missing),
+                    access_decision.get("resolver_name"),
                 )
-            return True, required_permissions, requires_authentication, None
+            access_decision = evaluate_mutation_access(
+                method_access,
+                user=user,
+                instance=instance,
+                model=model,
+                method=method,
+            )
+            allowed = bool(access_decision.get("allowed", True))
+            return (
+                allowed,
+                _dedupe(
+                    required_permissions
+                    + list(access_decision.get("required_permissions") or [])
+                ),
+                _dedupe(list(access_decision.get("required_roles") or [])),
+                bool(
+                    requires_authentication
+                    or access_decision.get("requires_authentication", False)
+                ),
+                access_decision.get("reason"),
+                access_decision.get("resolver_name"),
+            )
 
         # CRUD
         if settings.enable_create:
-            allowed, required_permissions, requires_authentication, reason = (
+            (
+                allowed,
+                required_permissions,
+                required_roles,
+                requires_authentication,
+                reason,
+                access_resolver,
+            ) = (
                 _evaluate_access(operation="create")
             )
             results.append(
@@ -951,6 +1065,7 @@ class ModelSchemaExtractor(
                     "input_fields": [],
                     "allowed": allowed,
                     "required_permissions": required_permissions,
+                    "required_roles": required_roles,
                     "reason": reason,
                     "mutation_type": "create",
                     "model_name": model_name,
@@ -961,10 +1076,18 @@ class ModelSchemaExtractor(
                     "success_message": None,
                     "error_messages": None,
                     "action": None,
+                    "access_resolver": access_resolver,
                 }
             )
         if settings.enable_update:
-            allowed, required_permissions, requires_authentication, reason = (
+            (
+                allowed,
+                required_permissions,
+                required_roles,
+                requires_authentication,
+                reason,
+                access_resolver,
+            ) = (
                 _evaluate_access(operation="update", instance=instance)
             )
             results.append(
@@ -976,6 +1099,7 @@ class ModelSchemaExtractor(
                     "input_fields": [],
                     "allowed": allowed,
                     "required_permissions": required_permissions,
+                    "required_roles": required_roles,
                     "reason": reason,
                     "mutation_type": "update",
                     "model_name": model_name,
@@ -986,10 +1110,18 @@ class ModelSchemaExtractor(
                     "success_message": None,
                     "error_messages": None,
                     "action": None,
+                    "access_resolver": access_resolver,
                 }
             )
         if settings.enable_delete:
-            allowed, required_permissions, requires_authentication, reason = (
+            (
+                allowed,
+                required_permissions,
+                required_roles,
+                requires_authentication,
+                reason,
+                access_resolver,
+            ) = (
                 _evaluate_access(operation="delete", instance=instance)
             )
             results.append(
@@ -1001,6 +1133,7 @@ class ModelSchemaExtractor(
                     "input_fields": [],
                     "allowed": allowed,
                     "required_permissions": required_permissions,
+                    "required_roles": required_roles,
                     "reason": reason,
                     "mutation_type": "delete",
                     "model_name": model_name,
@@ -1011,6 +1144,7 @@ class ModelSchemaExtractor(
                     "success_message": None,
                     "error_messages": None,
                     "action": None,
+                    "access_resolver": access_resolver,
                 }
             )
 
@@ -1052,21 +1186,28 @@ class ModelSchemaExtractor(
             if not info.is_mutation:
                 continue
             method = info.method
-            requires_permissions = getattr(method, "_requires_permissions", None)
-            if requires_permissions is None:
-                legacy_perm = getattr(method, "_requires_permission", None)
-                requires_permissions = [legacy_perm] if legacy_perm else None
+            method_access = get_mutation_access_config(method)
+            requires_permissions = list((method_access or {}).get("permissions") or [])
             requires_permissions = [
                 perm for perm in (requires_permissions or []) if perm
             ]
             action_kind = getattr(method, "_action_kind", None)
             guard_operation = _infer_guard_operation(name, action_kind)
-            allowed, required_permissions, requires_authentication, reason = (
+            (
+                allowed,
+                required_permissions,
+                required_roles,
+                requires_authentication,
+                reason,
+                access_resolver,
+            ) = (
                 _evaluate_access(
                     operation="custom",
                     guard_operation=guard_operation,
                     instance=instance,
                     extra_permissions=requires_permissions,
+                    method_access=method_access,
+                    method=method,
                 )
             )
 
@@ -1105,6 +1246,7 @@ class ModelSchemaExtractor(
                     "input_fields": input_fields,
                     "allowed": allowed,
                     "required_permissions": required_permissions,
+                    "required_roles": required_roles,
                     "reason": reason,
                     "mutation_type": "custom",
                     "model_name": model_name,
@@ -1117,6 +1259,7 @@ class ModelSchemaExtractor(
                     "success_message": None,
                     "error_messages": None,
                     "action": action_payload,
+                    "access_resolver": access_resolver,
                 }
             )
 

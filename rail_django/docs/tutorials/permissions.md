@@ -201,6 +201,18 @@ on:
 - `GraphQLMeta.OperationGuard`
 - the mutation pipeline, which can run hybrid ABAC checks when enabled
 
+Generated form contracts follow the same path. `modelFormContract` resolves
+operation access from `GraphQLMeta.OperationGuard` and `role_manager`, then
+evaluates field writability for the active mode. In practice, that means
+create forms evaluate field write access with the `add_<model>` permission,
+update forms use `change_<model>`, delete flows use `delete_<model>`, and
+view contracts use `view_<model>`.
+
+When you use Rail Django RBAC roles, this mode-aware field writability check
+uses the same RBAC permission context before it falls back to Django
+`user.has_perm(...)`. That keeps generated form fields aligned with the
+operation guards that expose the form in the first place.
+
 Hand-written resolvers usually rely on:
 
 - `@require_role`
@@ -214,6 +226,70 @@ decorators behind the scenes.
 Use `GraphQLMeta` for generated operations.
 
 Use decorators or service functions for custom resolvers.
+
+## Advanced access for model mutations
+
+When you expose a model method with `@mutation`, you can attach explicit
+access rules directly to that mutation. This is the right fit when a custom
+business action needs its own rule instead of reusing only the model's
+generated CRUD permissions.
+
+`@mutation` now supports three access inputs:
+
+- `permissions` for Django permission checks such as `app.change_model`
+- `roles` for RBAC roles or matching Django group names
+- `access_resolver` for a callable that decides access at runtime
+
+Rail Django evaluates each configured category as an alternative grant path.
+Inside one category, the rules stay strict. For example, a permission list
+must still pass every listed permission, but a matching role or a successful
+resolver can also grant access.
+
+Example:
+
+```python
+from rail_django.core.decorators import mutation
+
+
+def can_publish_product(*, user=None, instance=None, **_kwargs):
+    return bool(
+        user
+        and user.is_authenticated
+        and instance
+        and instance.status in {"draft", "review"}
+    )
+
+
+class Product(models.Model):
+    status = models.CharField(max_length=32)
+
+    @mutation(
+        description="Publish this product.",
+        permissions=["store.change_product"],
+        roles=["catalog_manager", "merchandising_lead"],
+        access_resolver=can_publish_product,
+    )
+    def publish(self) -> bool:
+        self.status = "published"
+        self.save(update_fields=["status"])
+        return True
+```
+
+The `access_resolver` callable receives keyword arguments from the mutation
+execution context. In practice, the most useful inputs are `user`, `instance`,
+`info`, `input`, and `model`.
+
+Rail Django uses the same access rules in three places:
+
+- mutation execution
+- metadata for custom mutations
+- generated form configuration and `modelFormContract`
+
+That means metadata and generated form contracts now resolve only the custom
+mutations that the current user is permitted to execute. If a custom mutation
+requires a role, a Django permission, or a successful access resolver, the
+mutation is omitted from `customMutation`, `customMutations`, and generated
+form `customMutations` until that access rule passes.
 
 ## The main RBAC APIs
 
@@ -903,6 +979,11 @@ This case extends field permissions to mutation inputs.
 
 A billing system wants only finance staff to edit `credit_limit`, even if the
 user can update other parts of the customer record.
+
+The same rule also affects generated form contracts. If a field is not
+writable for the current operation, Rail Django marks it as non-writable in
+`modelFormContract`, so frontend generators can remove or disable that input
+before the user submits anything.
 
 Set the input mode:
 

@@ -1,6 +1,9 @@
 """Unit tests for ABAC engine and manager behavior."""
 
+from types import SimpleNamespace
+
 import pytest
+from django.contrib.auth.models import User
 
 from rail_django.security.abac import (
     ABACContext,
@@ -9,9 +12,18 @@ from rail_django.security.abac import (
     AttributeSet,
     ConditionOperator,
     MatchCondition,
+    require_attributes,
 )
+from rail_django.security.abac.attributes import SubjectAttributeProvider
+from tests.models import TestCompany
 
 pytestmark = pytest.mark.unit
+
+
+class _InfoStub:
+    def __init__(self, user):
+        self.context = SimpleNamespace(user=user)
+        self.operation = None
 
 
 class TestABACConditions:
@@ -146,3 +158,48 @@ class TestABACPolicySelection:
         assert decision is not None
         assert decision.allowed is True
 
+
+@pytest.mark.django_db
+def test_subject_provider_includes_synthetic_rbac_roles():
+    provider = SubjectAttributeProvider()
+
+    staff_user = User.objects.create_user(
+        "abac_staff",
+        password="pass12345",
+        is_staff=True,
+    )
+    superuser = User.objects.create_superuser(
+        "abac_superuser",
+        email="abac-super@example.com",
+        password="pass12345",
+    )
+
+    staff_roles = provider.collect(staff_user).get("roles")
+    superuser_roles = provider.collect(superuser).get("roles")
+
+    assert "admin" in staff_roles
+    assert "superadmin" in superuser_roles
+
+
+@pytest.mark.django_db
+def test_require_attributes_uses_model_instance_for_resource_conditions():
+    user = User.objects.create_user("abac_inline", password="pass12345")
+    info = _InfoStub(user)
+    company = TestCompany.objects.create(
+        nom_entreprise="Acme Corp",
+        secteur_activite="Tech",
+        adresse_entreprise="123 Example Road",
+        email_entreprise="acme@example.com",
+        nombre_employes=10,
+        est_active=True,
+    )
+
+    @require_attributes(
+        resource_conditions={
+            "nom_entreprise": {"operator": "eq", "value": "Acme Corp"}
+        }
+    )
+    def _secured(root, info):
+        return "ok"
+
+    assert _secured(company, info) == "ok"

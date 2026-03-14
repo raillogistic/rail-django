@@ -261,10 +261,13 @@ class MutationConfigType(graphene.ObjectType):
     input_fields = graphene.List(MutationInputFieldType, required=True)
     allowed = graphene.Boolean(required=True)
     permission = graphene.String()
+    roles = graphene.List(graphene.String)
+    access_resolver = graphene.String()
     denial_reason = graphene.String()
     success_message = graphene.String()
     requires_optimistic_lock = graphene.Boolean(required=True)
     optimistic_lock_field = graphene.String()
+    requires_authentication = graphene.Boolean()
 
 
 class FormPermissionsType(graphene.ObjectType):
@@ -665,6 +668,7 @@ class ModelFormContractType(graphene.ObjectType):
     relations = graphene.List(ModelFormRelationType, required=True)
     permissions = graphene.Field(ModelFormPermissionsType, required=True)
     mutation_bindings = graphene.Field(ModelFormMutationBindingsType, required=True)
+    custom_mutations = graphene.List(MutationConfigType, required=True)
     error_policy = graphene.Field(ModelFormErrorPolicyType, required=True)
 
 

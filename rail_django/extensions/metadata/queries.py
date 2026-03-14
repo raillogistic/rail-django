@@ -416,7 +416,9 @@ class ModelSchemaQuery(graphene.ObjectType):
         return [
             mutation
             for mutation in schema.get("mutations", [])
-            if isinstance(mutation, dict) and mutation.get("operation") == "custom"
+            if isinstance(mutation, dict)
+            and mutation.get("operation") == "custom"
+            and bool(mutation.get("allowed", False))
         ]
 
     def resolve_modelTemplate(

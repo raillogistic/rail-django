@@ -4,9 +4,13 @@ from unittest.mock import MagicMock, patch
 from django.db import models
 from django.test import TestCase
 
-from rail_django.core.decorators import action_form
+from rail_django.core.decorators import action_form, mutation
 from rail_django.core.meta.config import OperationGuardConfig
 from rail_django.extensions.metadata.extractor import ModelSchemaExtractor
+
+
+def publish_access(*, user=None, **_kwargs):
+    return bool(user and getattr(user, "username", "") == "publisher")
 
 
 class PermissionTestModel(models.Model):
@@ -20,6 +24,11 @@ class PermissionTestModel(models.Model):
         """Approve the product."""
         return True
 
+    @mutation(roles=["catalog_manager"], access_resolver=publish_access)
+    def publish(self):
+        """Publish the product."""
+        return True
+
 
 class TestMetadataMutationPermissions(TestCase):
     def setUp(self):
@@ -28,6 +37,7 @@ class TestMetadataMutationPermissions(TestCase):
     def _make_user(self, perms):
         user = MagicMock()
         user.is_authenticated = True
+        user.is_superuser = False
 
         def has_perm(value):
             return value in perms
@@ -157,6 +167,43 @@ class TestMetadataMutationPermissions(TestCase):
         self.assertEqual(
             approve_mutation["required_permissions"], ["store.approve_product"]
         )
+
+    @patch("rail_django.extensions.metadata.extractor.get_authz_manager")
+    @patch("rail_django.extensions.metadata.extractor.MutationGeneratorSettings")
+    @patch("rail_django.extensions.metadata.extractor.get_model_graphql_meta")
+    def test_method_roles_and_access_resolver_are_reflected(
+        self, mock_get_meta, mock_settings_cls, mock_authz_manager
+    ):
+        mock_authz_manager.return_value = SimpleNamespace(
+            settings=SimpleNamespace(enable_authorization=True)
+        )
+        mock_settings = SimpleNamespace(
+            enable_create=False,
+            enable_update=False,
+            enable_delete=False,
+            require_model_permissions=False,
+            model_permission_codenames={},
+        )
+        mock_settings_cls.from_schema.return_value = mock_settings
+
+        meta = MagicMock()
+        meta._operation_guards = {}
+        meta.describe_operation_guard.return_value = {
+            "guarded": False,
+            "allowed": True,
+            "reason": None,
+        }
+        mock_get_meta.return_value = meta
+
+        user = self._make_user(set())
+        user.username = "reader"
+        user.groups.values_list.return_value = []
+        mutations = self.extractor._extract_mutations(PermissionTestModel, user)
+
+        publish_mutation = next(m for m in mutations if m["method_name"] == "publish")
+        self.assertFalse(publish_mutation["allowed"])
+        self.assertEqual(publish_mutation["required_roles"], ["catalog_manager"])
+        self.assertEqual(publish_mutation["access_resolver"], "publish_access")
 
     @patch("rail_django.extensions.metadata.extractor.get_authz_manager")
     @patch("rail_django.extensions.metadata.extractor.MutationGeneratorSettings")

@@ -1,5 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 
 from rail_django.core.decorators import custom_mutation_name, mutation
 from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
@@ -220,6 +221,80 @@ def test_custom_mutations_query_returns_all_custom_mutation_metadata(gql_client)
             delattr(Product, "archive_product")
         elif original_archived is not None:
             Product.archive_product = original_archived
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            del Product._graphql_meta_instance
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
+def test_custom_mutations_query_filters_out_denied_mutations(gql_client):
+    original_public = getattr(Product, "mark_featured", None)
+    original_admin = getattr(Product, "admin_publish", None)
+
+    @mutation(description="Mark this product as featured")
+    def mark_featured(self, note: str = "manual") -> bool:
+        return True
+
+    @mutation(
+        description="Publish product to the storefront",
+        permissions=["test_app.change_product"],
+    )
+    def admin_publish(self) -> bool:
+        return True
+
+    Product.mark_featured = mark_featured
+    Product.admin_publish = admin_publish
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    User = get_user_model()
+    limited_user = User.objects.create_user(
+        username="metadata_limited",
+        password="pass12345",
+    )
+    limited_user.user_permissions.add(
+        Permission.objects.get(
+            codename="view_product",
+            content_type__app_label="test_app",
+        )
+    )
+
+    query = """
+    query {
+      customMutations(app: "test_app", model: "Product") {
+        methodName
+      }
+      gated: customMutation(
+        app: "test_app"
+        model: "Product"
+        functionName: "admin_publish"
+      ) {
+        methodName
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query, user=limited_user)
+        assert result.get("errors") is None
+        payload = result["data"]["customMutations"]
+        method_names = {item["methodName"] for item in payload}
+        assert "mark_featured" in method_names
+        assert "admin_publish" not in method_names
+        assert result["data"]["gated"] is None
+    finally:
+        if original_public is None and hasattr(Product, "mark_featured"):
+            delattr(Product, "mark_featured")
+        elif original_public is not None:
+            Product.mark_featured = original_public
+
+        if original_admin is None and hasattr(Product, "admin_publish"):
+            delattr(Product, "admin_publish")
+        elif original_admin is not None:
+            Product.admin_publish = original_admin
 
         if hasattr(Product, "_graphql_meta_instance"):
             del Product._graphql_meta_instance

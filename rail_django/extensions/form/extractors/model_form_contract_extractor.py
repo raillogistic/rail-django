@@ -93,6 +93,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
             "relations": relations,
             "permissions": permissions,
             "mutation_bindings": get_model_form_mutation_bindings(model),
+            "custom_mutations": list(config.get("custom_mutations") or []),
             "error_policy": {
                 "canonical_form_error_key": DEFAULT_FORM_ERROR_KEY,
                 "field_path_notation": "dot",

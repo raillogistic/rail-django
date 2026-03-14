@@ -1,25 +1,23 @@
 from types import SimpleNamespace
 
 import pytest
-from django.contrib.auth import get_user_model
 
 from rail_django.extensions.form.extractors.base import FormConfigExtractor
-from rail_django.security.field_permissions import FieldAccessLevel, field_permission_manager
-from test_app.models import Category, Product
+from rail_django.security.field_permissions import (
+    FieldAccessLevel,
+    FieldContext,
+    FieldVisibility,
+    field_permission_manager,
+)
+from test_app.models import Product
 
 pytestmark = [pytest.mark.unit, pytest.mark.django_db]
 
 
 def test_form_extractor_passes_create_mode_to_field_permission_checks(monkeypatch):
-    category = Category.objects.create(name="Hardware", description="")
-    user = get_user_model().objects.create_superuser(
-        username="create_mode_perm_admin",
-        email="create_mode_perm_admin@example.com",
-        password="pass12345",
-    )
+    user = SimpleNamespace(is_authenticated=True, pk=1, is_superuser=False)
 
     operation_types: list[str] = []
-    original = field_permission_manager.check_field_permission
 
     def _wrapped_check_field_permission(
         target_user,
@@ -32,20 +30,19 @@ def test_form_extractor_passes_create_mode_to_field_permission_checks(monkeypatc
         parent_instance=None,
     ):
         operation_types.append(str(operation_type))
-        return original(
-            target_user,
-            model,
-            field_name,
-            instance=instance,
-            operation_type=operation_type,
-            request_context=request_context,
-            parent_instance=parent_instance,
+        return SimpleNamespace(
+            visibility=FieldVisibility.VISIBLE,
+            can_write=True,
         )
 
     monkeypatch.setattr(
         field_permission_manager,
         "check_field_permission",
         _wrapped_check_field_permission,
+    )
+    monkeypatch.setattr(
+        "rail_django.extensions.form.extractors.base.apps.get_model",
+        lambda app_name, model_name: Product,
     )
 
     extractor = FormConfigExtractor(schema_name="default")
@@ -73,10 +70,11 @@ def test_field_permission_manager_uses_rbac_and_operation_specific_codenames(
     operation_type,
     permission_name,
 ):
-    user = get_user_model().objects.create_user(
-        username=f"rbac_{operation_type}_user",
-        email=f"rbac_{operation_type}_user@example.com",
-        password="pass12345",
+    user = SimpleNamespace(
+        is_authenticated=True,
+        pk=1,
+        is_superuser=False,
+        has_perm=lambda _perm: False,
     )
 
     role_calls: list[tuple[str, str]] = []
@@ -89,9 +87,8 @@ def test_field_permission_manager_uses_rbac_and_operation_specific_codenames(
         "rail_django.security.rbac.role_manager.has_permission",
         _fake_has_permission,
     )
-    monkeypatch.setattr(user, "has_perm", lambda _perm: False)
 
-    context = SimpleNamespace(
+    context = FieldContext(
         user=user,
         field_name="name",
         model_class=Product,
