@@ -1,6 +1,7 @@
 """GraphQL types for table v3 contracts."""
 
 import graphene
+from graphene.types.generic import GenericScalar
 
 
 class TableColumnType(graphene.ObjectType):
@@ -33,6 +34,13 @@ class TableInitialStateType(graphene.ObjectType):
     page = graphene.Int(required=True)
     pageSize = graphene.Int(required=True)
     ordering = graphene.List(graphene.String, required=True)
+    columnOrder = graphene.List(graphene.String)
+    columnVisibility = GenericScalar()
+    columnWidths = GenericScalar()
+    density = graphene.String()
+    wrapCells = graphene.Boolean()
+    visibilityVersion = graphene.Int()
+    persistenceKey = graphene.String()
 
 
 class TablePageInfoType(graphene.ObjectType):
@@ -70,6 +78,7 @@ class TableBootstrapType(graphene.ObjectType):
 class TableBootstrapMinimalType(graphene.ObjectType):
     configVersion = graphene.String(required=True)
     essentialConfig = graphene.Field(TableConfigType, required=True)
+    initialState = graphene.Field(TableInitialStateType, required=True)
     permissions = graphene.Field(TablePermissionsType, required=True)
 
 

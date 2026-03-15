@@ -15,6 +15,7 @@ class TableQuery(graphene.ObjectType):
         app=graphene.String(required=True),
         model=graphene.String(required=True),
         view=graphene.String(),
+        persistenceKey=graphene.String(),
         objectId=graphene.ID(),
     )
 
@@ -23,13 +24,23 @@ class TableQuery(graphene.ObjectType):
         TableBootstrapMinimalType,
         app=graphene.String(required=True),
         model=graphene.String(required=True),
+        persistenceKey=graphene.String(),
     )
 
-    def resolve_tableBootstrap(self, info, app: str, model: str, view=None, objectId=None):
+    def resolve_tableBootstrap(
+        self,
+        info,
+        app: str,
+        model: str,
+        view=None,
+        persistenceKey=None,
+        objectId=None,
+    ):
         payload = build_table_bootstrap_payload(
             app,
             model,
             user=getattr(info.context, "user", None),
+            persistence_key=persistenceKey,
         )
         payload["firstPage"] = resolve_table_rows(
             {"app": app, "model": model},
@@ -40,10 +51,17 @@ class TableQuery(graphene.ObjectType):
     def resolve_tableRows(self, info, input):
         return resolve_table_rows(input, info=info)
 
-    def resolve_tableBootstrapMinimal(self, info, app: str, model: str):
+    def resolve_tableBootstrapMinimal(
+        self,
+        info,
+        app: str,
+        model: str,
+        persistenceKey=None,
+    ):
         payload = build_table_bootstrap_payload(
             app,
             model,
             user=getattr(info.context, "user", None),
+            persistence_key=persistenceKey,
         )
         return build_minimal_bootstrap(payload)

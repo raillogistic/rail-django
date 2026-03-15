@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..services.user_state import DEFAULT_TABLE_PAGE_SIZE
+
 
 def extract_table_config(
     model_cls,
@@ -38,5 +40,5 @@ def extract_table_config(
             if (not allowed or f.name in allowed)
             and f.get_internal_type() in {"CharField", "TextField"}
         ],
-        "pagination": {"defaultPageSize": 25},
+        "pagination": {"defaultPageSize": DEFAULT_TABLE_PAGE_SIZE},
     }

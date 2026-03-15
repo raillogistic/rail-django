@@ -12,8 +12,15 @@ def _digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(blob).hexdigest()[:24]
 
 
-def table_bootstrap_key(app: str, model: str, *, user_scope: str) -> str:
-    return f"table:bootstrap:{app}:{model}:{user_scope}"
+def table_bootstrap_key(
+    app: str,
+    model: str,
+    *,
+    user_scope: str,
+    persistence_scope: str | None = None,
+) -> str:
+    suffix = _digest({"persistence_scope": persistence_scope or ""})
+    return f"table:bootstrap:{app}:{model}:{user_scope}:{suffix}"
 
 
 def table_rows_key(
