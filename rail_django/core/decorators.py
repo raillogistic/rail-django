@@ -94,6 +94,8 @@ def confirm_action(
     icon: Optional[str] = None,
     description: Optional[str] = None,
     permissions: Optional[list[str]] = None,
+    roles: Optional[list[str]] = None,
+    access_resolver: Optional[Callable[..., Any]] = None,
 ):
     """
     Decorator to expose a **confirmation-only** model method as a GraphQL mutation.
@@ -137,6 +139,8 @@ def confirm_action(
             wrapper,
             normalize_mutation_access(
                 permissions=permissions,
+                roles=roles,
+                resolver=access_resolver,
                 existing=existing_access,
             ),
         )

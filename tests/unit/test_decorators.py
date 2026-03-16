@@ -15,6 +15,7 @@ from django.test import TestCase
 
 from rail_django.core.decorators import (
     business_logic,
+    confirm_action,
     custom_mutation_name,
     mutation,
     private_method,
@@ -248,6 +249,34 @@ class TestExistingDecorators(TestCase):
         self.assertIs(test_mutation_method._mutation_access["resolver"], can_execute)
         self.assertEqual(
             test_mutation_method._mutation_access["resolver_name"],
+            "can_execute",
+        )
+
+    def test_confirm_action_stores_advanced_access_metadata(self):
+        """Test que @confirm_action normalise les regles d'acces avancees."""
+
+        def can_execute(**_kwargs):
+            return True
+
+        @confirm_action(
+            permissions=["test_app.change_category"],
+            roles=["catalog_manager"],
+            access_resolver=can_execute,
+        )
+        def test_confirm_method(self):
+            return True
+
+        self.assertEqual(
+            test_confirm_method._requires_permissions,
+            ["test_app.change_category"],
+        )
+        self.assertEqual(
+            test_confirm_method._mutation_access["roles"],
+            ["catalog_manager"],
+        )
+        self.assertIs(test_confirm_method._mutation_access["resolver"], can_execute)
+        self.assertEqual(
+            test_confirm_method._mutation_access["resolver_name"],
             "can_execute",
         )
 
