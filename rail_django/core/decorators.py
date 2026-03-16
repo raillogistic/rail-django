@@ -26,6 +26,7 @@ def mutation(
     permissions: Optional[list[str]] = None,
     roles: Optional[list[str]] = None,
     access_resolver: Optional[Callable[..., Any]] = None,
+    match: str = "all",
 ):
     """
     Decorator to mark a model method as a GraphQL mutation.
@@ -66,6 +67,7 @@ def mutation(
                 permissions=permissions,
                 roles=roles,
                 resolver=access_resolver,
+                match=match,
                 existing=existing_access,
             ),
         )
@@ -96,6 +98,7 @@ def confirm_action(
     permissions: Optional[list[str]] = None,
     roles: Optional[list[str]] = None,
     access_resolver: Optional[Callable[..., Any]] = None,
+    match: str = "all",
 ):
     """
     Decorator to expose a **confirmation-only** model method as a GraphQL mutation.
@@ -141,6 +144,7 @@ def confirm_action(
                 permissions=permissions,
                 roles=roles,
                 resolver=access_resolver,
+                match=match,
                 existing=existing_access,
             ),
         )

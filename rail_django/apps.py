@@ -6,6 +6,7 @@ from django.db.backends.signals import connection_created
 from django.db.models.signals import post_migrate
 
 logger = logging.getLogger(__name__)
+_startup_schema_prebuild_done = False
 
 
 class AppConfig(AppConfig):
@@ -24,6 +25,7 @@ class AppConfig(AppConfig):
                 schema_registry.discover_schemas()
             except Exception as exc:
                 logger.debug("Deferred schema discovery at startup: %s", exc)
+        _prebuild_graphql_schemas_on_startup()
         mode = getattr(settings, "RAIL_METADATA_DEPLOY_VERSION", {}).get(
             "mode", "command"
         )
@@ -56,6 +58,70 @@ def _bump_on_migrate(**kwargs) -> None:
         logger.info("Metadata deploy version bumped after migrations.")
     except Exception as exc:
         logger.warning("Failed to bump metadata deploy version on migrate: %s", exc)
+
+
+def _startup_prebuild_requested() -> bool:
+    global_config = getattr(settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
+    global_schema_settings = global_config.get("schema_settings", {}) or {}
+    if bool(global_schema_settings.get("prebuild_on_startup")):
+        return True
+
+    schema_configs = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {}) or {}
+    if not isinstance(schema_configs, dict):
+        return False
+
+    for config in schema_configs.values():
+        if not isinstance(config, dict):
+            continue
+        if bool(config.get("prebuild_on_startup")):
+            return True
+        schema_settings = config.get("schema_settings", {}) or {}
+        if bool(schema_settings.get("prebuild_on_startup")):
+            return True
+    return False
+
+
+def _prebuild_graphql_schemas_on_startup() -> None:
+    global _startup_schema_prebuild_done
+    if _startup_schema_prebuild_done:
+        return
+
+    try:
+        from rail_django.core.registry import schema_registry
+        from rail_django.core.settings import SchemaSettings
+    except Exception as exc:
+        logger.debug("Skipping schema prebuild startup hook: %s", exc)
+        return
+
+    if not getattr(schema_registry, "_initialized", False):
+        if not _startup_prebuild_requested():
+            return
+        try:
+            schema_registry.discover_schemas()
+        except Exception as exc:
+            logger.debug("Deferred schema prebuild discovery at startup: %s", exc)
+            return
+
+    _startup_schema_prebuild_done = True
+    prebuilt = 0
+    for schema_info in schema_registry.list_schemas(enabled_only=True):
+        schema_name = getattr(schema_info, "name", "")
+        if not schema_name:
+            continue
+        try:
+            if not SchemaSettings.from_schema(schema_name).prebuild_on_startup:
+                continue
+            schema_registry.get_schema_instance(schema_name)
+            prebuilt += 1
+        except Exception as exc:
+            logger.debug(
+                "Deferred schema prebuild for '%s' at startup: %s",
+                schema_name,
+                exc,
+            )
+
+    if prebuilt:
+        logger.info("Prebuilt %s GraphQL schema(s) on startup.", prebuilt)
 
 
 def _normalize_sqlite_journal_mode(raw_mode: object) -> str | None:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from unittest.mock import Mock, patch
 
 import pytest
 from django.test import override_settings
 
 from rail_django.apps import (
+    _prebuild_graphql_schemas_on_startup,
     _configure_sqlite_connection,
     _normalize_sqlite_journal_mode,
     _resolve_busy_timeout_ms,
@@ -76,3 +78,55 @@ def test_configure_sqlite_connection_skips_non_sqlite():
     _configure_sqlite_connection(sender=None, connection=connection)
 
     assert connection.cursor_recorder.commands == []
+
+
+@override_settings(
+    RAIL_DJANGO_GRAPHQL={"schema_settings": {}},
+    RAIL_DJANGO_GRAPHQL_SCHEMAS={
+        "gql": {"schema_settings": {"prebuild_on_startup": True}},
+        "auth": {"schema_settings": {"prebuild_on_startup": False}},
+    },
+)
+def test_prebuild_graphql_schemas_on_startup_builds_opted_in_schemas():
+    enabled_schema = Mock(name="enabled_schema")
+    enabled_schema.name = "gql"
+    disabled_schema = Mock(name="disabled_schema")
+    disabled_schema.name = "auth"
+    schema_registry = Mock()
+    schema_registry._initialized = False
+    schema_registry.list_schemas.return_value = [enabled_schema, disabled_schema]
+
+    with (
+        patch("rail_django.apps._startup_schema_prebuild_done", False),
+        patch("rail_django.core.registry.schema_registry", schema_registry),
+        patch("rail_django.core.settings.SchemaSettings") as mock_schema_settings,
+    ):
+        mock_schema_settings.from_schema.side_effect = [
+            Mock(prebuild_on_startup=True),
+            Mock(prebuild_on_startup=False),
+        ]
+
+        _prebuild_graphql_schemas_on_startup()
+
+    schema_registry.discover_schemas.assert_called_once_with()
+    schema_registry.get_schema_instance.assert_called_once_with("gql")
+
+
+@override_settings(
+    RAIL_DJANGO_GRAPHQL={"schema_settings": {}},
+    RAIL_DJANGO_GRAPHQL_SCHEMAS={
+        "gql": {"schema_settings": {"prebuild_on_startup": False}}
+    },
+)
+def test_prebuild_graphql_schemas_on_startup_skips_when_not_requested():
+    schema_registry = Mock()
+    schema_registry._initialized = False
+
+    with (
+        patch("rail_django.apps._startup_schema_prebuild_done", False),
+        patch("rail_django.core.registry.schema_registry", schema_registry),
+    ):
+        _prebuild_graphql_schemas_on_startup()
+
+    schema_registry.discover_schemas.assert_not_called()
+    schema_registry.get_schema_instance.assert_not_called()

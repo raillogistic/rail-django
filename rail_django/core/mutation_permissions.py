@@ -40,6 +40,7 @@ def normalize_mutation_access(
     permissions: Any = None,
     roles: Any = None,
     resolver: Optional[Callable[..., Any]] = None,
+    match: Optional[str] = None,
     existing: Optional[MutationAccessConfig] = None,
 ) -> Optional[MutationAccessConfig]:
     """
@@ -60,6 +61,10 @@ def normalize_mutation_access(
     if resolver is None:
         resolver = payload.get("resolver")
 
+    match_mode = str(match or payload.get("match") or "all").strip().lower()
+    if match_mode not in {"all", "any"}:
+        match_mode = "all"
+
     resolver_name = str(payload.get("resolver_name") or "").strip()
     if callable(resolver):
         resolver_name = getattr(resolver, "__name__", None) or resolver_name
@@ -69,6 +74,7 @@ def normalize_mutation_access(
         "roles": merged_roles,
         "resolver": resolver,
         "resolver_name": str(resolver_name or "").strip() or None,
+        "match": match_mode,
     }
     if not normalized["permissions"] and not normalized["roles"] and not normalized["resolver"]:
         return None
@@ -199,6 +205,7 @@ def evaluate_mutation_access(
     required_roles = list((normalized or {}).get("roles") or [])
     resolver = (normalized or {}).get("resolver")
     resolver_name = (normalized or {}).get("resolver_name")
+    match_mode = str((normalized or {}).get("match") or "all").strip().lower()
     has_rules = bool(required_permissions or required_roles or resolver)
 
     result = {
@@ -206,6 +213,7 @@ def evaluate_mutation_access(
         "required_permissions": required_permissions,
         "required_roles": required_roles,
         "resolver_name": resolver_name,
+        "match": match_mode,
         "requires_authentication": has_rules,
         "reason": None,
     }
@@ -272,11 +280,16 @@ def evaluate_mutation_access(
             )
         )
 
-    if any(check_allowed for check_allowed, _ in checks):
-        return result
+    if match_mode == "any":
+        if any(check_allowed for check_allowed, _ in checks):
+            return result
+    else:
+        if all(check_allowed for check_allowed, _ in checks):
+            return result
 
     result["allowed"] = False
-    result["reason"] = " or ".join(
+    joiner = " or " if match_mode == "any" else " and "
+    result["reason"] = joiner.join(
         reason for _, reason in checks if str(reason or "").strip()
     ) or "Permission denied"
     return result

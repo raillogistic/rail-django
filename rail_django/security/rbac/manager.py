@@ -31,6 +31,13 @@ def _get_group_model():
     return Group
 
 
+def _get_permission_model():
+    """Lazy import to avoid AppRegistryNotReady during Django setup."""
+    from django.contrib.auth.models import Permission
+
+    return Permission
+
+
 class RoleManager(PermissionEvaluationMixin):
     """
     Central manager for role-based access control.
@@ -128,7 +135,7 @@ class RoleManager(PermissionEvaluationMixin):
     # --- Role Registration ---
 
     def _ensure_group_for_role(self, role_name: str) -> None:
-        """Ensure a Django Group exists for a role name."""
+        """Ensure a Django Group exists for a role name and mirrors Django perms."""
         if not role_name:
             return
         if not django_apps.ready:
@@ -136,6 +143,7 @@ class RoleManager(PermissionEvaluationMixin):
         try:
             group_model = _get_group_model()
             group_model.objects.get_or_create(name=role_name)
+            self._sync_group_permissions_for_role(role_name)
         except (OperationalError, ProgrammingError):
             # Auth tables may not be migrated yet during early startup.
             logger.debug("Skipping group sync for role '%s' (DB not ready)", role_name)
@@ -143,6 +151,65 @@ class RoleManager(PermissionEvaluationMixin):
             logger.warning(
                 "Failed to ensure Django group for role '%s': %s", role_name, exc
             )
+
+    def _get_role_django_permission_keys(self, role_name: str) -> set[tuple[str, str]]:
+        """Return Django permission keys derived from a role and its parents."""
+        role_def = self.get_role_definition(role_name)
+        if not role_def:
+            return set()
+
+        permissions = set(role_def.permissions or [])
+        permissions.update(self._get_inherited_permissions(role_name))
+
+        django_permissions: set[tuple[str, str]] = set()
+        for permission in permissions:
+            token = str(permission or "").strip()
+            if not token or token == "*" or "." not in token or "*" in token:
+                continue
+            app_label, codename = token.split(".", 1)
+            app_label = app_label.strip()
+            codename = codename.strip()
+            if not app_label or not codename:
+                continue
+            django_permissions.add((app_label, codename))
+        return django_permissions
+
+    def _sync_group_permissions_for_role(self, role_name: str) -> None:
+        """Synchronize Django auth permissions for a role-backed Django group."""
+        role_def = self.get_role_definition(role_name)
+        if not role_def or not django_apps.ready:
+            return
+
+        group_model = _get_group_model()
+        permission_model = _get_permission_model()
+        group, _ = group_model.objects.get_or_create(name=role_name)
+
+        permission_keys = self._get_role_django_permission_keys(role_name)
+        permission_ids: list[int] = []
+        missing_permissions: list[str] = []
+
+        for app_label, codename in sorted(permission_keys):
+            permission = (
+                permission_model.objects.filter(
+                    content_type__app_label=app_label,
+                    codename=codename,
+                )
+                .values_list("id", flat=True)
+                .first()
+            )
+            if permission is None:
+                missing_permissions.append(f"{app_label}.{codename}")
+                continue
+            permission_ids.append(permission)
+
+        if missing_permissions:
+            logger.debug(
+                "Permissions not found while syncing role '%s': %s",
+                role_name,
+                ", ".join(missing_permissions),
+            )
+
+        group.permissions.set(permission_ids)
 
     def sync_roles_to_groups(self) -> None:
         """Synchronize all known RBAC role names to Django groups."""
@@ -296,6 +363,7 @@ class RoleManager(PermissionEvaluationMixin):
 
         group_model = _get_group_model()
         group, created = group_model.objects.get_or_create(name=role_name)
+        self._sync_group_permissions_for_role(role_name)
 
         if role_def.max_users:
             current_count = group.user_set.count()
@@ -348,6 +416,10 @@ class RoleManager(PermissionEvaluationMixin):
         """Invalidate all cached permissions for a user."""
         user_id = getattr(user, "id", None)
         self.bump_user_cache_version(user_id)
+
+    def invalidate_cache(self, user: "AbstractUser") -> None:
+        """Backward-compatible alias used by project helpers."""
+        self.invalidate_user_cache(user)
 
     def _build_permission_cache_key(
         self, user_id: Optional[int], permission: str, context: Optional[PermissionContext]
