@@ -29,6 +29,33 @@ def _resolve_permission_operation_type(mode: str) -> str:
     return "update"
 
 
+def _check_field_permission_compat(
+    user: Any,
+    model: type[models.Model],
+    field_name: str,
+    *,
+    instance: Optional[models.Model] = None,
+    operation_type: str,
+) -> Any:
+    try:
+        return field_permission_manager.check_field_permission(
+            user,
+            model,
+            field_name,
+            instance=instance,
+            operation_type=operation_type,
+        )
+    except TypeError as exc:
+        if "operation_type" not in str(exc):
+            raise
+        return field_permission_manager.check_field_permission(
+            user,
+            model,
+            field_name,
+            instance=instance,
+        )
+
+
 class FieldExtractorMixin:
     """Mixin for extracting field configurations."""
 
@@ -121,7 +148,7 @@ class FieldExtractorMixin:
             readable, writable, visibility = True, True, "VISIBLE"
             if user:
                 try:
-                    perm = field_permission_manager.check_field_permission(
+                    perm = _check_field_permission_compat(
                         user,
                         model,
                         field.name,

@@ -292,6 +292,7 @@ cache_path="$(read_env CACHE_PATH)"
 if [ -z "$cache_path" ]; then
   cache_path="../../cache"
 fi
+ensure_dir "$SCRIPT_DIR/docker/$cache_path"
 ensure_mount_source_dir "$cache_path" "CACHE_PATH"
 
 if [ "$SKIP_BUILD" -eq 1 ] || is_truthy "$(read_env DEPLOY_SKIP_BUILD)"; then
