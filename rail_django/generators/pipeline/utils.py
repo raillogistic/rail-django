@@ -134,6 +134,24 @@ def process_relation_operations(
     for k, v in reverse_relations.items():
         all_relations[k] = v
 
+    def _is_list_relation(rel_info: Any) -> bool:
+        relation = None
+        if isinstance(rel_info, dict):
+            relation = rel_info.get("relation")
+        if relation is not None:
+            if getattr(relation, "many_to_many", False) or getattr(
+                relation, "one_to_many", False
+            ):
+                return True
+            if getattr(relation, "one_to_one", False) or getattr(
+                relation, "many_to_one", False
+            ):
+                return False
+        return bool(
+            hasattr(rel_info, "relationship_type")
+            and rel_info.relationship_type == "ManyToManyField"
+        )
+
     for field_name, value in processed.items():
         if field_name not in all_relations:
             continue
@@ -142,16 +160,10 @@ def process_relation_operations(
             continue
             
         rel_info = all_relations[field_name]
-        is_list = False
-        
-        # Check if relation is list-based (M2M or Reverse)
-        if isinstance(rel_info, dict): # Reverse relation usually
-             is_list = True
-        elif hasattr(rel_info, "relationship_type") and rel_info.relationship_type == "ManyToManyField":
-             is_list = True
-             
+        is_list = _is_list_relation(rel_info)
+
         ops = set(value.keys())
-        
+
         if not is_list:
             # FK/OneToOne: only one operation is allowed at a time.
             # Supports connect/create/update plus singular disconnect/set operations.
@@ -170,7 +182,7 @@ def process_relation_operations(
         else:
             # M2M/Reverse: 'set' cannot combine with others
             if "set" in value and (len(ops) > 1):
-                 raise ValidationError({
+                raise ValidationError({
                     field_name: f"For relation '{field_name}', 'set' cannot be combined with other operations."
                 })
 

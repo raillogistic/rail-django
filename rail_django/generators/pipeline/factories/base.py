@@ -52,6 +52,7 @@ class BasePipelineMutation(graphene.Mutation):
     pipeline: MutationPipeline = None
     operation: str = None
     graphql_meta: Any = None
+    mutation_settings: Any = None
 
     # Standard return fields
     ok = graphene.Boolean()
@@ -83,6 +84,7 @@ class BasePipelineMutation(graphene.Mutation):
             input_data=input_data.copy(),
             instance_id=instance_id,
             graphql_meta=cls.graphql_meta,
+            settings=cls.mutation_settings,
         )
 
     @classmethod

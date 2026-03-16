@@ -12,6 +12,7 @@ from django.contrib.auth.models import AnonymousUser, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
 from graphql import GraphQLError
+from graphql_relay import to_global_id
 
 from rail_django.core.decorators import business_logic, mutation
 from rail_django.core.exceptions import ValidationError as GraphQLValidationError
@@ -385,6 +386,144 @@ def test_create_mutation_requires_model_permission():
     message = result.errors[0].message
     assert "permission" in message.lower()
     assert "test_app.add_category" in message
+
+
+@pytest.mark.django_db
+def test_create_mutation_respects_custom_permission_codename_mapping():
+    settings = MutationGeneratorSettings(
+        model_permission_codenames={"create": "view"}
+    )
+    generator = MutationGenerator(TypeGenerator(), settings=settings)
+    create_mutation = generator.generate_create_mutation(Category)
+    user = User.objects.create_user(username="mapped_perm_user", password="pass12345")
+    content_type = ContentType.objects.get_for_model(Category)
+    user.user_permissions.add(
+        Permission.objects.get(
+            codename="view_category",
+            content_type=content_type,
+        )
+    )
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+    result = create_mutation.mutate(
+        None,
+        info,
+        input={"name": "mapped", "description": ""},
+    )
+
+    assert result.ok is True
+    assert result.object is not None
+    assert result.object.name == "mapped"
+
+
+@pytest.mark.django_db
+def test_bulk_update_decodes_global_id_and_ignores_nested_id():
+    category = Category.objects.create(name="before", description="")
+    original_id = category.id
+    user = User.objects.create_user(username="bulk_editor", password="pass12345")
+    content_type = ContentType.objects.get_for_model(Category)
+    user.user_permissions.add(
+        Permission.objects.get(
+            codename="change_category",
+            content_type=content_type,
+        )
+    )
+
+    generator = MutationGenerator(TypeGenerator())
+    bulk_update = generator.generate_bulk_update_mutation(Category)
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+    result = bulk_update.mutate(
+        None,
+        info,
+        inputs=[
+            {
+                "id": to_global_id("Category", str(category.id)),
+                "data": {
+                    "id": "999999",
+                    "name": "after",
+                    "description": "updated",
+                },
+            }
+        ],
+    )
+
+    category.refresh_from_db()
+
+    assert result.ok is True
+    assert result.objects[0].id == original_id
+    assert category.id == original_id
+    assert category.name == "after"
+
+
+@pytest.mark.django_db
+def test_bulk_delete_decodes_global_ids():
+    category = Category.objects.create(name="delete-me", description="")
+    user = User.objects.create_user(username="bulk_deleter", password="pass12345")
+    content_type = ContentType.objects.get_for_model(Category)
+    user.user_permissions.add(
+        Permission.objects.get(
+            codename="delete_category",
+            content_type=content_type,
+        )
+    )
+
+    generator = MutationGenerator(TypeGenerator())
+    bulk_delete = generator.generate_bulk_delete_mutation(Category)
+    info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+    result = bulk_delete.mutate(
+        None,
+        info,
+        ids=[to_global_id("Category", str(category.id))],
+    )
+
+    assert result.ok is True
+    assert not Category.objects.filter(pk=category.id).exists()
+
+
+@pytest.mark.django_db
+def test_method_mutation_decodes_global_id():
+    @mutation()
+    def activate(self):
+        self.name = f"{self.name}-active"
+        self.save(update_fields=["name"])
+        return True
+
+    original_method = getattr(Category, "activate", None)
+    Category.activate = activate
+    if hasattr(Category, "_graphql_meta_instance"):
+        delattr(Category, "_graphql_meta_instance")
+
+    try:
+        category = Category.objects.create(name="alpha", description="")
+        user = User.objects.create_user(
+            username="method_global_id_user",
+            password="pass12345",
+        )
+        generator = MutationGenerator(TypeGenerator())
+        method_info = ModelIntrospector(Category).get_model_methods()["activate"]
+        mutation_class = generator.generate_method_mutation(Category, method_info)
+        info = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        result = mutation_class.mutate(
+            None,
+            info,
+            id=to_global_id("Category", str(category.id)),
+        )
+
+        category.refresh_from_db()
+
+        assert result.ok is True
+        assert category.name == "alpha-active"
+    finally:
+        if original_method is None:
+            delattr(Category, "activate")
+        else:
+            Category.activate = original_method
+        if hasattr(Category, "_graphql_meta_instance"):
+            delattr(Category, "_graphql_meta_instance")
+        ModelIntrospector.clear_cache()
 
 
 @pytest.mark.django_db

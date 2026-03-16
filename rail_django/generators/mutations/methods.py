@@ -8,6 +8,7 @@ import inspect
 import graphene
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from graphene.types.unmountedtype import UnmountedType
 
 from ...core.exceptions import GraphQLAutoError
 from ...core.meta import get_model_graphql_meta
@@ -16,6 +17,7 @@ from ...core.mutation_permissions import (
     get_mutation_access_config,
 )
 from ..introspector import MethodInfo
+from ..pipeline.utils import decode_global_id
 from .errors import (
     MutationError,
     build_graphql_auto_errors,
@@ -87,6 +89,56 @@ def _validate_mutation_access(
     if not decision.get("allowed", False):
         return [build_mutation_error(decision.get("reason") or "Permission denied")]
     return None
+
+
+def _resolve_instance_from_id(
+    queryset: models.QuerySet,
+    model: type[models.Model],
+    raw_id: Any,
+):
+    try:
+        return queryset.get(pk=raw_id)
+    except (ValueError, model.DoesNotExist):
+        pass
+
+    _, decoded_id = decode_global_id(str(raw_id))
+    if decoded_id != str(raw_id):
+        return queryset.get(pk=decoded_id)
+
+    raise model.DoesNotExist
+
+
+def _mount_result_field(output_type: Any):
+    if isinstance(output_type, UnmountedType):
+        return output_type
+
+    if isinstance(output_type, type):
+        if issubclass(output_type, graphene.ObjectType):
+            return graphene.Field(output_type)
+        if issubclass(output_type, UnmountedType):
+            return output_type()
+
+    return graphene.Field(output_type)
+
+
+def _normalize_method_payload(payload: Any) -> Any:
+    if payload is None:
+        return None
+
+    if isinstance(payload, dict):
+        return dict(payload)
+
+    meta = getattr(payload, "_meta", None)
+    fields = getattr(meta, "fields", None)
+    if fields:
+        normalized: dict[str, Any] = {}
+        for field_name in fields:
+            field_value = getattr(payload, field_name, None)
+            if field_value is not None:
+                normalized[field_name] = field_value
+        return normalized
+
+    return payload
 
 
 def convert_method_to_mutation(
@@ -162,20 +214,31 @@ def convert_method_to_mutation(
     graphql_meta = get_model_graphql_meta(model)
     guard_operation = _infer_guard_operation(method_name)
 
+    uses_input_argument = custom_input_type is not None
+
     class ConvertedMethodMutation(graphene.Mutation):
         model_class = model
 
         class Arguments:
             id = graphene.ID(required=True)
+            if uses_input_argument and input_type:
+                input = input_type(required=True)
 
         # Standardized return format
         ok = graphene.Boolean()
-        result = output_type()
+        result = _mount_result_field(output_type)
         errors = graphene.List(MutationError)
 
         @classmethod
         @transaction.atomic
-        def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, **kwargs):
+        def mutate(
+            cls,
+            root: Any,
+            info: graphene.ResolveInfo,
+            id: str,
+            input: Any = None,
+            **kwargs,
+        ):
             try:
                 scoped = self._apply_tenant_scope(
                     model.objects.all(),
@@ -183,7 +246,7 @@ def convert_method_to_mutation(
                     model,
                     operation=guard_operation,
                 )
-                instance = scoped.get(pk=id)
+                instance = _resolve_instance_from_id(scoped, model, id)
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )
@@ -203,11 +266,13 @@ def convert_method_to_mutation(
                     )
                 method_func = getattr(instance, method_name)
 
-                # Filter kwargs to only include method parameters
-                method_params = set(signature.parameters.keys()) - {"self"}
-                filtered_kwargs = {
-                    k: v for k, v in kwargs.items() if k in method_params
-                }
+                if uses_input_argument:
+                    filtered_kwargs = _normalize_method_payload(input)
+                else:
+                    method_params = set(signature.parameters.keys()) - {"self"}
+                    filtered_kwargs = {
+                        k: v for k, v in kwargs.items() if k in method_params
+                    }
                 if filtered_kwargs:
                     filtered_kwargs = self.input_validator.validate_and_sanitize(
                         model.__name__, filtered_kwargs
@@ -257,28 +322,29 @@ def convert_method_to_mutation(
                     ],
                 )
 
-    # Add method parameters as individual arguments
-    for param_name, param in signature.parameters.items():
-        if param_name == "self":
-            continue
+    if not uses_input_argument:
+        # Add method parameters as individual arguments
+        for param_name, param in signature.parameters.items():
+            if param_name == "self":
+                continue
 
-        param_type = (
-            param.annotation if param.annotation != inspect.Parameter.empty else Any
-        )
-        graphql_type = self._convert_python_type_to_graphql(param_type)
+            param_type = (
+                param.annotation if param.annotation != inspect.Parameter.empty else Any
+            )
+            graphql_type = self._convert_python_type_to_graphql(param_type)
 
-        if param.default == inspect.Parameter.empty:
-            setattr(
-                ConvertedMethodMutation.Arguments,
-                param_name,
-                graphql_type(required=True),
-            )
-        else:
-            setattr(
-                ConvertedMethodMutation.Arguments,
-                param_name,
-                graphql_type(default_value=param.default),
-            )
+            if param.default == inspect.Parameter.empty:
+                setattr(
+                    ConvertedMethodMutation.Arguments,
+                    param_name,
+                    graphql_type(required=True),
+                )
+            else:
+                setattr(
+                    ConvertedMethodMutation.Arguments,
+                    param_name,
+                    graphql_type(default_value=param.default),
+                )
 
     # Preserve decorator metadata
     mutation_attrs = {
@@ -377,7 +443,7 @@ def generate_method_mutation(
 
         # Standardized return format
         ok = graphene.Boolean()
-        result = output_type()
+        result = _mount_result_field(output_type)
         errors = graphene.List(MutationError)
 
         @classmethod
@@ -411,7 +477,7 @@ def generate_method_mutation(
                     model,
                     operation=guard_operation,
                 )
-                instance = scoped.get(pk=id)
+                instance = _resolve_instance_from_id(scoped, model, id)
                 graphql_meta.ensure_operation_access(
                     guard_operation, info=info, instance=instance
                 )
@@ -444,10 +510,10 @@ def generate_method_mutation(
                 audited_method = _wrap_with_audit(
                     model, audit_operation, _perform_method
                 )
-                validated_input = input
-                if isinstance(input, dict):
+                validated_input = _normalize_method_payload(input)
+                if validated_input:
                     validated_input = self.input_validator.validate_and_sanitize(
-                        model.__name__, input
+                        model.__name__, validated_input
                     )
                 result = audited_method(info, instance, validated_input)
 

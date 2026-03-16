@@ -71,6 +71,7 @@ def delete_mutation_factory(
     DeleteMutation.operation = "delete"
     DeleteMutation.graphql_meta = graphql_meta
     DeleteMutation.pipeline = pipeline
+    DeleteMutation.mutation_settings = getattr(pipeline_builder, "settings", None)
 
     # Create named class with proper name
     return type(

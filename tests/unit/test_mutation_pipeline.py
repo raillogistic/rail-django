@@ -10,10 +10,13 @@ This module tests:
 - Integration with MutationGenerator
 """
 
-from unittest.mock import MagicMock, Mock, patch
 from dataclasses import asdict
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.test import TestCase
 
@@ -189,6 +192,28 @@ class TestMutationContext:
 
         ctx.operation = "delete"
         assert ctx.get_permission_codename() == "myapp.delete_testmodel"
+
+    def test_get_permission_codename_uses_custom_mapping(self):
+        """Custom mutation permission mappings should flow into the pipeline."""
+        mock_info = Mock()
+        mock_model = Mock()
+        mock_model.__name__ = "TestModel"
+        mock_model._meta = Mock()
+        mock_model._meta.app_label = "myapp"
+        mock_model._meta.model_name = "testmodel"
+
+        ctx = MutationContext(
+            info=mock_info,
+            model=mock_model,
+            operation="create",
+            raw_input={},
+            input_data={},
+            settings=SimpleNamespace(
+                model_permission_codenames={"create": "publish"},
+            ),
+        )
+
+        assert ctx.get_permission_codename() == "myapp.publish_testmodel"
 
 
 @pytest.mark.unit
@@ -368,6 +393,23 @@ class TestProcessRelationOperations:
         )
 
         assert result == payload
+
+    def test_reverse_one_to_one_rejects_multiple_operations(self):
+        introspector = ModelIntrospector(User)
+
+        payload = {
+            "profile": {
+                "connect": "1",
+                "create": {"bio": "new bio"},
+            }
+        }
+
+        with pytest.raises(ValidationError, match="singular relation 'profile'"):
+            process_relation_operations(
+                payload,
+                User,
+                introspector=introspector,
+            )
 
 
 @pytest.mark.unit
@@ -721,6 +763,27 @@ class TestPipelineSteps:
         result = step.execute(ctx)
 
         assert result.input_data["name"] == 'Test "value"'
+
+    def test_tenant_applicator_can_fail_open(self):
+        from rail_django.core.settings import MutationGeneratorSettings
+        from rail_django.generators.pipeline.tenant_applicator import TenantApplicator
+
+        applicator = TenantApplicator(
+            settings=MutationGeneratorSettings(
+                fail_open_on_multitenancy_errors=True,
+            )
+        )
+        queryset = Mock()
+        info = Mock()
+        model = Mock()
+
+        with patch(
+            "rail_django.extensions.multitenancy.apply_tenant_queryset",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = applicator.apply_tenant_scope(queryset, info, model)
+
+        assert result is queryset
 
     def test_enum_normalization_step(self):
         """Test that enum normalization step processes enums."""

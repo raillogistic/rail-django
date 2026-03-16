@@ -74,6 +74,7 @@ def create_mutation_factory(
     CreateMutation.operation = "create"
     CreateMutation.graphql_meta = graphql_meta
     CreateMutation.pipeline = pipeline
+    CreateMutation.mutation_settings = getattr(pipeline_builder, "settings", None)
 
     # Create named class with proper name
     return type(

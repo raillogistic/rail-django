@@ -69,6 +69,8 @@ class MutationStep(ABC):
         graphql_meta = getattr(ctx, "graphql_meta", None)
         pipeline_config = getattr(graphql_meta, "pipeline_config", None)
         skip_steps = getattr(pipeline_config, "skip_steps", None) or []
+        if not isinstance(skip_steps, (list, tuple, set, frozenset)):
+            skip_steps = []
         return self.name not in set(skip_steps)
 
     def __repr__(self) -> str:

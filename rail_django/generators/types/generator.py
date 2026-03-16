@@ -291,6 +291,19 @@ class TypeGenerator:
         return field_name == "id"
 
     def _get_mandatory_fields(self, model: type[models.Model]) -> list[str]:
+        meta = self._get_model_meta(model)
+        if not meta:
+            return []
+
+        field_config = getattr(meta, "field_config", None)
+        mandatory = list(getattr(field_config, "mandatory", []) or [])
+        if mandatory:
+            return mandatory
+
+        legacy_mandatory = getattr(meta, "mandatory_fields", None)
+        if legacy_mandatory:
+            return list(legacy_mandatory)
+
         return []
 
     def _should_include_field(

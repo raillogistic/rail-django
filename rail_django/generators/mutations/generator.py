@@ -230,7 +230,10 @@ class MutationGenerator:
         from ..pipeline.tenant_applicator import TenantApplicator
 
         self._pipeline_builder = PipelineBuilder(self.settings)
-        self._tenant_applicator = TenantApplicator(self.schema_name)
+        self._tenant_applicator = TenantApplicator(
+            self.schema_name,
+            settings=self.settings,
+        )
 
         # Configure builder based on settings
         if not getattr(

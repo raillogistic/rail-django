@@ -10,6 +10,7 @@ Ce module teste:
 """
 
 from typing import Any, Dict, List, Optional, Type
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import graphene
@@ -27,7 +28,7 @@ from test_app.models import Post as OrderForMutation
 from test_app.models import Product as ProductForMutation
 from test_app.models import Profile, Tag
 
-from rail_django.core.decorators import business_logic
+from rail_django.core.decorators import business_logic, mutation
 from rail_django.core.settings import MutationGeneratorSettings
 from rail_django.generators.introspector import ModelIntrospector
 from rail_django.generators.mutations import MutationError, MutationGenerator
@@ -244,6 +245,26 @@ class TestInputTypeGenerator(TestCase):
             self.assertIn("category", fields)
 
 
+    def test_input_type_respects_mandatory_field_metadata(self):
+        """Mandatory metadata should mark optional fields as required."""
+        type_generator = TypeGenerator()
+
+        with patch.object(
+            type_generator,
+            "_get_model_meta",
+            return_value=SimpleNamespace(
+                mandatory_fields=["description"],
+                exclude_fields=[],
+                include_fields=None,
+                should_expose_field=lambda *_args, **_kwargs: True,
+            ),
+        ):
+            create_input = type_generator.generate_input_type(Category, "create")
+
+        description_field = create_input._meta.fields["description"]
+        self.assertTrue(hasattr(description_field._type, "_of_type"))
+
+
 # Remove TestMutationInfo class since MutationInfo doesn't exist
 
 
@@ -310,4 +331,109 @@ def test_mutation_generator_tenant_scope_runtime_error_can_fail_open():
         result = generator._apply_tenant_scope(queryset, info, Category)
 
     assert result is queryset
+
+
+@pytest.mark.django_db
+class TestCustomMethodMutationContracts:
+    def setup_method(self):
+        self.generator = MutationGenerator(TypeGenerator())
+        self.category = Category.objects.create(name="alpha", description="")
+        self.user = User.objects.create_user(
+            username="custom_method_user",
+            password="pass12345",
+        )
+        self.info = Mock()
+        self.info.context = Mock()
+        self.info.context.user = self.user
+
+    def teardown_method(self):
+        ModelIntrospector.clear_cache()
+        if hasattr(Category, "_graphql_meta_instance"):
+            delattr(Category, "_graphql_meta_instance")
+
+    def test_generate_method_mutation_supports_custom_input_and_output_types(self):
+        class ActivateInput(graphene.InputObjectType):
+            note = graphene.String(required=True)
+
+        class ActivatePayload(graphene.ObjectType):
+            message = graphene.String()
+
+        @mutation(input_type=ActivateInput, output_type=ActivatePayload)
+        def activate(self, note: str):
+            self.description = note
+            self.save(update_fields=["description"])
+            return {"message": note}
+
+        original_method = getattr(Category, "activate", None)
+        Category.activate = activate
+
+        try:
+            method_info = ModelIntrospector(Category).get_model_methods()["activate"]
+            mutation_class = self.generator.generate_method_mutation(
+                Category,
+                method_info,
+            )
+
+            assert "result" in mutation_class._meta.fields
+            assert mutation_class._meta.fields["result"].type == ActivatePayload
+
+            runtime_input = SimpleNamespace(
+                note="hello",
+                _meta=SimpleNamespace(fields={"note": object()}),
+            )
+
+            result = mutation_class.mutate(
+                None,
+                self.info,
+                id=str(self.category.id),
+                input=runtime_input,
+            )
+
+            self.category.refresh_from_db()
+            assert result.ok is True
+            assert self.category.description == "hello"
+        finally:
+            if original_method is None:
+                delattr(Category, "activate")
+            else:
+                Category.activate = original_method
+            ModelIntrospector.clear_cache()
+
+    def test_convert_method_to_mutation_supports_custom_input_type(self):
+        class RenameInput(graphene.InputObjectType):
+            note = graphene.String(required=True)
+
+        def rename(self, note: str):
+            self.description = note
+            self.save(update_fields=["description"])
+            return True
+
+        original_method = getattr(Category, "rename", None)
+        Category.rename = rename
+
+        try:
+            mutation_class = self.generator.convert_method_to_mutation(
+                Category,
+                "rename",
+                custom_input_type=RenameInput,
+            )
+
+            assert hasattr(mutation_class.Arguments, "input")
+
+            result = mutation_class.mutate(
+                None,
+                self.info,
+                id=str(self.category.id),
+                input={"note": "renamed"},
+            )
+
+            self.category.refresh_from_db()
+            assert result.ok is True
+            assert self.category.description == "renamed"
+        finally:
+            if original_method is None:
+                delattr(Category, "rename")
+            else:
+                Category.rename = original_method
+            ModelIntrospector.clear_cache()
 

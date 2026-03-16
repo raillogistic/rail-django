@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import graphene
 from django.db import models
+from graphql import GraphQLError
 
 
 class TenantApplicator:
@@ -18,7 +19,7 @@ class TenantApplicator:
     injecting tenant fields into mutation input data.
     """
 
-    def __init__(self, schema_name: str = "default"):
+    def __init__(self, schema_name: str = "default", settings: Optional[Any] = None):
         """
         Initialize tenant applicator.
 
@@ -26,6 +27,7 @@ class TenantApplicator:
             schema_name: Schema name for multi-schema support
         """
         self.schema_name = schema_name
+        self.settings = settings
 
     def apply_tenant_scope(
         self,
@@ -51,14 +53,20 @@ class TenantApplicator:
             from ...extensions.multitenancy import apply_tenant_queryset
         except ImportError:
             return queryset
-
-        return apply_tenant_queryset(
-            queryset,
-            info,
-            model,
-            schema_name=self.schema_name,
-            operation=operation,
-        )
+        try:
+            return apply_tenant_queryset(
+                queryset,
+                info,
+                model,
+                schema_name=self.schema_name,
+                operation=operation,
+            )
+        except GraphQLError:
+            raise
+        except Exception as exc:
+            if getattr(self.settings, "fail_open_on_multitenancy_errors", False):
+                return queryset
+            raise GraphQLError("Tenant scope enforcement failed") from exc
 
     def apply_tenant_input(
         self,

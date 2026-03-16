@@ -10,6 +10,7 @@ from django.db import IntegrityError, models, transaction
 
 from ...core.exceptions import GraphQLAutoError
 from ...core.meta import get_model_graphql_meta
+from ..pipeline.utils import decode_global_id
 from .errors import (
     MutationError,
     build_graphql_auto_errors,
@@ -18,6 +19,11 @@ from .errors import (
     build_validation_errors,
 )
 from .methods import _wrap_with_audit
+
+
+def _resolve_lookup_id(value: Any) -> Any:
+    _, decoded_id = decode_global_id(str(value))
+    return decoded_id
 
 
 def generate_bulk_create_mutation(
@@ -213,7 +219,7 @@ def generate_bulk_update_mutation(
                     scoped = self._apply_tenant_scope(
                         model.objects.all(), info, model, operation="update"
                     )
-                    instance = scoped.get(pk=input_data["id"])
+                    instance = scoped.get(pk=_resolve_lookup_id(input_data["id"]))
                     graphql_meta.ensure_operation_access(
                         "bulk_update", info=info, instance=instance
                     )
@@ -221,9 +227,12 @@ def generate_bulk_update_mutation(
                         "update", info=info, instance=instance
                     )
                     # Normalize enum inputs for update payload
-                    update_data = cls._normalize_enum_inputs(
-                        input_data["data"], model
-                    )
+                    update_data = cls._normalize_enum_inputs(input_data["data"], model)
+                    update_data = {
+                        field_name: field_value
+                        for field_name, field_value in update_data.items()
+                        if field_name != "id"
+                    }
                     update_data = self._apply_tenant_input(
                         update_data, info, model, operation="update"
                     )
@@ -344,10 +353,20 @@ def generate_bulk_delete_mutation(
                 scoped = self._apply_tenant_scope(
                     model.objects.all(), info, model, operation="delete"
                 )
-                instances = scoped.filter(pk__in=ids)
+                normalized_ids = [
+                    (raw_id, _resolve_lookup_id(raw_id))
+                    for raw_id in ids
+                ]
+                instances = scoped.filter(
+                    pk__in=[resolved_id for _, resolved_id in normalized_ids]
+                )
                 if len(instances) != len(ids):
                     found_ids = set(str(instance.pk) for instance in instances)
-                    missing_ids = set(ids) - found_ids
+                    missing_ids = [
+                        str(raw_id)
+                        for raw_id, resolved_id in normalized_ids
+                        if str(resolved_id) not in found_ids
+                    ]
                     return cls(
                         ok=False,
                         objects=[],

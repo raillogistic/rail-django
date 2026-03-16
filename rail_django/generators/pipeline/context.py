@@ -187,8 +187,23 @@ class MutationContext:
             "create": "add",
             "update": "change",
             "delete": "delete",
+            "retrieve": "view",
+            "list": "view",
         }
-        codename = permission_map.get(self.operation, self.operation)
+        operation = str(self.operation or "").strip().lower()
+        normalized_operation = (
+            operation[len("bulk_") :] if operation.startswith("bulk_") else operation
+        )
+        configured_map = getattr(self.settings, "model_permission_codenames", None)
+        if isinstance(configured_map, dict):
+            codename = configured_map.get(operation) or configured_map.get(
+                normalized_operation
+            )
+        else:
+            codename = None
+        codename = str(codename or "").strip() or permission_map.get(
+            normalized_operation, normalized_operation
+        )
         return f"{self.app_label}.{codename}_{self.model_name_lower}"
 
     def copy_with(self, **overrides) -> "MutationContext":

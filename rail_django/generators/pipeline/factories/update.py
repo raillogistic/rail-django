@@ -82,6 +82,7 @@ def update_mutation_factory(
     UpdateMutation.operation = "update"
     UpdateMutation.graphql_meta = graphql_meta
     UpdateMutation.pipeline = pipeline
+    UpdateMutation.mutation_settings = getattr(pipeline_builder, "settings", None)
 
     # Create named class with proper name
     return type(
