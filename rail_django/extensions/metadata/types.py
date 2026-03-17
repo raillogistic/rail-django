@@ -464,6 +464,15 @@ class DetailContractResultType(graphene.ObjectType):
     contract = graphene.Field(DetailViewContractType)
 
 
+class DetailBootstrapMinimalType(graphene.ObjectType):
+    """Minimal detail bootstrap payload for auto-built detail views."""
+
+    layout_version = graphene.String(required=True)
+    default_include_fields = graphene.List(graphene.String, required=True)
+    default_exclude_fields = graphene.List(graphene.String, required=True)
+    metadata_version = graphene.String()
+
+
 class FrontendRouteAccessRuleType(graphene.ObjectType):
     """Resolved frontend route access rule."""
 

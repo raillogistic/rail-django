@@ -75,6 +75,55 @@ class DetailContractExtractor:
             "metadata_version": model_schema.get("metadata_version"),
         }
 
+    def extract_minimal(
+        self,
+        app_name: str,
+        model_name: str,
+        *,
+        user: Any = None,
+        object_id: str | None = None,
+    ) -> dict[str, Any]:
+        extractor = ModelSchemaExtractor(schema_name=self.schema_name)
+        model_schema = extractor.extract(
+            app_name,
+            model_name,
+            user=user,
+            object_id=object_id,
+            include_sections={"fields", "relationships"},
+            include_section_subfields={
+                "fields": {
+                    "name",
+                    "verbose_name",
+                    "field_type",
+                    "readable",
+                },
+                "relationships": {
+                    "name",
+                    "verbose_name",
+                    "related_app",
+                    "related_model",
+                    "is_reverse",
+                    "is_to_one",
+                    "readable",
+                },
+            },
+        )
+        default_descriptors = self.layout_planner._collect_default_descriptors(  # noqa: SLF001
+            model_schema
+        )
+
+        return {
+            "layout_version": "v2",
+            "default_include_fields": [
+                descriptor["name"]
+                for descriptor in default_descriptors
+                if isinstance(descriptor.get("name"), str)
+                and str(descriptor.get("name")).strip()
+            ],
+            "default_exclude_fields": [],
+            "metadata_version": model_schema.get("metadata_version"),
+        }
+
     @staticmethod
     def _resolve_query_root(model_name: str) -> str:
         if not model_name:

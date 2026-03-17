@@ -15,6 +15,7 @@ from .extractor import ModelSchemaExtractor
 from .detail_extractor import DetailContractExtractor
 from ...core.meta import get_model_graphql_meta
 from .types import (
+    DetailBootstrapMinimalType,
     DetailContractInputType,
     DetailContractResultType,
     FilterSchemaType,
@@ -227,6 +228,19 @@ class ModelSchemaQuery(graphene.ObjectType):
         description=(
             "Resolve metadata-driven detail contract for one model and optional "
             "record scope."
+        ),
+    )
+
+    detailBootstrapMinimal = graphene.Field(
+        DetailBootstrapMinimalType,
+        app=graphene.String(required=True, description="Django app label"),
+        model=graphene.String(required=True, description="Model name"),
+        objectId=graphene.ID(
+            description="Instance ID for instance-specific permissions"
+        ),
+        description=(
+            "Resolve the minimal detail bootstrap payload used for auto-built "
+            "detail sections."
         ),
     )
 
@@ -518,6 +532,24 @@ class ModelSchemaQuery(graphene.ObjectType):
                 "contract": contract,
             }
         return {"ok": True, "reason": None, "contract": contract}
+
+    def resolve_detailBootstrapMinimal(
+        self,
+        info,
+        app: str,
+        model: str,
+        objectId: Optional[str] = None,
+    ) -> dict:
+        self._resolve_model_class(info, app, model)
+        extractor = DetailContractExtractor(
+            schema_name=getattr(info.context, "schema_name", "default")
+        )
+        return extractor.extract_minimal(
+            app,
+            model,
+            user=getattr(info.context, "user", None),
+            object_id=objectId,
+        )
 
     def resolve_filterSchema(self, info, app: str, model: str) -> list[dict]:
         """Resolve available filters for a model."""
