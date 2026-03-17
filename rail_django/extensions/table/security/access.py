@@ -10,8 +10,10 @@ from django.conf import settings
 from django.db import models
 
 from ....core.meta import get_model_graphql_meta
+from ....core.settings import QueryGeneratorSettings
 from ....security.field_permissions import field_permission_manager
 from ....security.field_permissions.types import FieldVisibility
+from ....security.rbac import PermissionContext, role_manager
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,117 @@ def get_table_permissions(user: Any, model_cls: type[models.Model]) -> TablePerm
         can_update=has_table_permission(user, model_cls, "update"),
         can_delete=has_table_permission(user, model_cls, "delete"),
         can_export=has_table_permission(user, model_cls, "export") and can_view,
+    )
+
+
+def _is_authenticated(user: Any) -> bool:
+    return bool(
+        user
+        and getattr(user, "is_authenticated", False)
+        and getattr(user, "pk", getattr(user, "id", None)) is not None
+    )
+
+
+def _graphql_guard_allows_table_read(
+    user: Any,
+    model_cls: type[models.Model],
+    *,
+    operation: str,
+    instance: models.Model | None = None,
+) -> bool | None:
+    try:
+        graphql_meta = get_model_graphql_meta(model_cls)
+    except Exception:
+        return None
+
+    describe = getattr(graphql_meta, "describe_operation_guard", None)
+    if not callable(describe):
+        return None
+
+    try:
+        state = describe(operation, user=user, instance=instance)
+    except Exception:
+        return None
+
+    if not isinstance(state, dict) or not state.get("guarded"):
+        return None
+    return bool(state.get("allowed", False))
+
+
+def _user_has_model_permission_via_rbac(
+    user: Any,
+    model_cls: type[models.Model],
+    permission_name: str,
+    *,
+    operation: str,
+    instance: models.Model | None = None,
+) -> bool:
+    if not _is_authenticated(user):
+        return False
+
+    try:
+        permission_context = PermissionContext(
+            user=user,
+            model_class=model_cls,
+            object_instance=instance,
+            object_id=str(getattr(instance, "pk", "")) if instance is not None else None,
+            operation=operation,
+        )
+        return bool(
+            role_manager.has_permission(user, permission_name, permission_context)
+        )
+    except Exception:
+        return _user_has_perm(user, permission_name)
+
+
+def can_read_table_model(
+    user: Any,
+    model_cls: type[models.Model],
+    *,
+    schema_name: str = "default",
+    operation: str = "list",
+    instance: models.Model | None = None,
+    permission_snapshot: TablePermissionSnapshot | Any | None = None,
+) -> bool:
+    if getattr(user, "is_superuser", False):
+        return True
+
+    guard_allowed = _graphql_guard_allows_table_read(
+        user,
+        model_cls,
+        operation=operation,
+        instance=instance,
+    )
+    if guard_allowed is not None:
+        return guard_allowed
+
+    if bool(getattr(permission_snapshot, "can_view", False)):
+        return True
+
+    model_meta = getattr(model_cls, "_meta", None)
+    if model_meta is None:
+        return bool(getattr(permission_snapshot, "can_view", False))
+
+    query_settings = QueryGeneratorSettings.from_schema(schema_name)
+    if not getattr(query_settings, "require_model_permissions", True):
+        return True
+
+    if table_anonymous_read_enabled() and not _is_authenticated(user):
+        return True
+
+    codename = str(getattr(query_settings, "model_permission_codename", "view") or "").strip()
+    if not codename:
+        return True
+
+    permission_name = (
+        f"{model_meta.app_label}.{codename}_{model_meta.model_name}"
+    )
+    return _user_has_model_permission_via_rbac(
+        user,
+        model_cls,
+        permission_name,
+        operation=operation,
+        instance=instance,
     )
 
 

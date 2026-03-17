@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.test import TestCase
 
-from rail_django.extensions.auth.queries import MeQuery
+from rail_django.extensions.auth.queries import DummySettingsType, MeQuery, _get_user_settings_type
 
 
 class AuthRolesQueryTestCase(TestCase):
@@ -57,3 +57,17 @@ class AuthRolesQueryTestCase(TestCase):
 
         permission_codenames = {perm["codename"] for perm in role["permissions"]}
         self.assertIn("add_user", permission_codenames)
+
+    def test_user_settings_type_exposes_frontend_contract_fields(self):
+        settings_type = _get_user_settings_type()
+        if settings_type is None:
+            self.skipTest("UserSettings model is not installed in the unit test app set.")
+        field_names = set(settings_type._meta.fields.keys())
+        self.assertIn("id", field_names)
+        self.assertIn("table_configs", field_names)
+
+    def test_dummy_settings_type_matches_frontend_contract_fields(self):
+        field_names = set(DummySettingsType._meta.fields.keys())
+
+        self.assertIn("id", field_names)
+        self.assertIn("table_configs", field_names)

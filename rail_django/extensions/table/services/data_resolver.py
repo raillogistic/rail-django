@@ -15,6 +15,7 @@ from ..performance.monitoring import record_metric
 from ..performance.optimization import build_query_hints
 from ..performance.profiling import profile_block
 from ..security.access import (
+    can_read_table_model,
     get_table_permissions,
     get_visible_table_fields,
     resolve_table_model,
@@ -97,10 +98,17 @@ def resolve_table_rows(input_data: dict, *, info=None) -> dict:
     distinct_on = input_data.get("distinctOn")
     presets = input_data.get("presets") or []
     user = getattr(getattr(info, "context", None), "user", None)
+    schema_name = getattr(getattr(info, "context", None), "schema_name", "default")
 
     model_cls = resolve_table_model(app, model)
     permissions = get_table_permissions(user, model_cls)
-    if not permissions.can_view:
+    if not can_read_table_model(
+        user,
+        model_cls,
+        schema_name=schema_name,
+        operation="list",
+        permission_snapshot=permissions,
+    ):
         raise GraphQLError("Permission denied.")
 
     visible_fields, _editable_fields, masked_fields = get_visible_table_fields(

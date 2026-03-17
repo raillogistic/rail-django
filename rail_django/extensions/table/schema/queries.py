@@ -41,6 +41,7 @@ class TableQuery(graphene.ObjectType):
             model,
             user=getattr(info.context, "user", None),
             persistence_key=persistenceKey,
+            schema_name=getattr(info.context, "schema_name", "default"),
         )
         payload["firstPage"] = resolve_table_rows(
             {"app": app, "model": model},
@@ -63,5 +64,6 @@ class TableQuery(graphene.ObjectType):
             model,
             user=getattr(info.context, "user", None),
             persistence_key=persistenceKey,
+            schema_name=getattr(info.context, "schema_name", "default"),
         )
         return build_minimal_bootstrap(payload)

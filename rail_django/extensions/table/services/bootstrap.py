@@ -11,6 +11,7 @@ from ..cache.keys import table_bootstrap_key
 from ..cache.store import get_cache, set_cache
 from ..extraction.table_config_extractor import extract_table_config
 from ..security.access import (
+    can_read_table_model,
     get_table_permissions,
     get_visible_table_fields,
     resolve_table_model,
@@ -47,6 +48,7 @@ def build_table_bootstrap_payload(
     *,
     user=None,
     persistence_key: str | None = None,
+    schema_name: str = "default",
 ) -> dict:
     normalized_persistence_key = str(persistence_key or "").strip() or None
     cache_key = table_bootstrap_key(
@@ -61,7 +63,13 @@ def build_table_bootstrap_payload(
 
     model_cls = resolve_table_model(app, model)
     permissions = get_table_permissions(user, model_cls)
-    if not permissions.can_view:
+    if not can_read_table_model(
+        user,
+        model_cls,
+        schema_name=schema_name,
+        operation="list",
+        permission_snapshot=permissions,
+    ):
         raise GraphQLError("Permission denied.")
 
     visible_fields, editable_fields, _masked_fields = get_visible_table_fields(

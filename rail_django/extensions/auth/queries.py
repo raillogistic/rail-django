@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import graphene
 from django.contrib.auth import get_user_model
 from graphene_django import DjangoObjectType
+from graphene.types.generic import GenericScalar
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -56,12 +57,14 @@ def _get_user_settings_type():
             class Meta:
                 model = UserSettingsModel
                 fields = (
+                    "id",
                     "theme",
                     "mode",
                     "layout",
                     "sidebar_collapse_mode",
                     "font_size",
                     "font_family",
+                    "table_configs",
                 )
 
         _user_settings_type = UserSettingsType
@@ -80,6 +83,7 @@ class DummySettingsType(graphene.ObjectType):
     """
 
     info = graphene.String(description="Placeholder for missing UserSettings model")
+    id = graphene.ID(description="Identifiant des preferences utilisateur")
     theme = graphene.String(description="Theme de l'interface")
     mode = graphene.String(description="Mode d'affichage")
     layout = graphene.String(description="Disposition de l'interface")
@@ -88,6 +92,7 @@ class DummySettingsType(graphene.ObjectType):
     )
     font_size = graphene.String(description="Taille de police")
     font_family = graphene.String(description="Famille de police")
+    table_configs = GenericScalar(description="Configurations des tableaux")
 
 
 class AuthPermissionType(graphene.ObjectType):
