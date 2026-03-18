@@ -10,6 +10,7 @@ from rail_django.extensions.templating import template_urlpatterns
 from rail_django.extensions.excel import excel_urlpatterns
 from rail_django.extensions.importing.urls import importing_urlpatterns
 from .views import (
+    ProtectedMediaAPIView,
     SchemaDetailAPIView,
     SchemaDiscoveryAPIView,
     SchemaDiffAPIView,
@@ -57,6 +58,7 @@ urlpatterns = [
     # Health and monitoring
     path("health/", SchemaHealthAPIView.as_view(), name="schema-health"),
     path("metrics/", SchemaMetricsAPIView.as_view(), name="schema-metrics"),
+    path("media/<path:file_path>", ProtectedMediaAPIView.as_view(), name="protected-media"),
 ]
 
 urlpatterns += get_export_urls()
