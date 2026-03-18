@@ -123,6 +123,29 @@ def _resolve_role_manager():
     return role_manager
 
 
+def _user_has_required_permission(user: Any, permission: str) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    has_perm = getattr(user, "has_perm", None)
+    if callable(has_perm):
+        try:
+            if has_perm(permission):
+                return True
+        except Exception:
+            pass
+
+    try:
+        role_manager = _resolve_role_manager()
+        effective_permissions = role_manager.get_effective_permissions(user)
+        return role_manager._permission_in_effective_permissions(
+            permission,
+            effective_permissions,
+        )
+    except Exception:
+        return False
+
+
 def _invoke_access_resolver(
     resolver: Callable[..., Any],
     *,
@@ -245,16 +268,11 @@ def evaluate_mutation_access(
         checks.append((not missing_roles, f"Role required: {', '.join(required_roles)}"))
 
     if required_permissions:
-        has_perm = getattr(user, "has_perm", None)
-        missing_permissions: list[str]
-        if not callable(has_perm):
-            missing_permissions = required_permissions
-        else:
-            missing_permissions = [
-                permission
-                for permission in required_permissions
-                if not has_perm(permission)
-            ]
+        missing_permissions = [
+            permission
+            for permission in required_permissions
+            if not _user_has_required_permission(user, permission)
+        ]
         checks.append(
             (
                 not missing_permissions,

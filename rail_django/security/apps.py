@@ -16,7 +16,6 @@ class SecurityConfig(AppConfig):
             pass
         post_migrate.connect(
             _sync_roles_to_groups,
-            sender=self,
             dispatch_uid="rail_django.security.sync_roles_to_groups",
         )
 

@@ -23,3 +23,6 @@ def test_security_app_ready_connects_permission_cache_signals(monkeypatch):
 
     connect_mock.assert_called_once()
     post_migrate_connect.assert_called_once()
+    _, kwargs = post_migrate_connect.call_args
+    assert "sender" not in kwargs
+    assert kwargs["dispatch_uid"] == "rail_django.security.sync_roles_to_groups"

@@ -22,6 +22,28 @@ from .security_loader import load_security_components
 logger = logging.getLogger(__name__)
 
 
+def _user_has_guard_permission(user: Any, permission: str, role_mgr: Any) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    has_perm = getattr(user, "has_perm", None)
+    if callable(has_perm):
+        try:
+            if has_perm(permission):
+                return True
+        except Exception:
+            pass
+
+    try:
+        effective_permissions = role_mgr.get_effective_permissions(user)
+        return role_mgr._permission_in_effective_permissions(
+            permission,
+            effective_permissions,
+        )
+    except Exception:
+        return False
+
+
 class GraphQLMetaAPIMixin:
     """
     Mixin providing public API methods for GraphQLMeta.
@@ -98,12 +120,12 @@ class GraphQLMetaAPIMixin:
             criteria_results.append(bool(user_roles & set(guard.roles)))
 
         if guard.permissions:
-            if user:
-                criteria_results.append(
-                    any(user.has_perm(perm) for perm in guard.permissions)
+            criteria_results.append(
+                any(
+                    _user_has_guard_permission(user, perm, role_mgr)
+                    for perm in guard.permissions
                 )
-            else:
-                criteria_results.append(False)
+            )
 
         if guard.condition:
             condition_callable = resolve_condition_callable(
@@ -197,7 +219,10 @@ class GraphQLMetaAPIMixin:
                 failure_reasons.append("Rôle requis manquant")
 
         if guard.permissions:
-            permission_allowed = any(user.has_perm(perm) for perm in guard.permissions)
+            permission_allowed = any(
+                _user_has_guard_permission(user, perm, role_mgr)
+                for perm in guard.permissions
+            )
             criteria_results.append(permission_allowed)
             if not permission_allowed:
                 failure_reasons.append("Permission manquante")
