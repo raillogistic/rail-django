@@ -9,6 +9,7 @@ Ce module teste:
 - L'intégration avec les méthodes métier
 """
 
+from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional, Type
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
@@ -176,6 +177,41 @@ class TestMutationGenerator(TestCase):
     def test_logging_functionality(self):
         """Test que les fonctionnalités de logging fonctionnent correctement."""
         self.skipTest("Mutations module structure has changed")
+
+    def test_method_mutation_temporal_annotations_map_to_graphql_temporal_scalars(self):
+        """Temporal method annotations should produce temporal GraphQL input scalars."""
+        original_method = getattr(Category, "schedule_window", None)
+
+        @mutation(description="Schedule category window")
+        def schedule_window(
+            self,
+            starts_on: date,
+            starts_at: datetime,
+            reminder_at: time | None = None,
+        ) -> bool:
+            return True
+
+        try:
+            Category.schedule_window = schedule_window
+            mutation_class = self.mutation_generator.generate_method_mutation(
+                Category,
+                ModelIntrospector.for_model(Category).get_model_methods()[
+                    "schedule_window"
+                ],
+            )
+
+            self.assertIsNotNone(mutation_class)
+            input_type = mutation_class.Arguments.input._type.of_type
+            fields = input_type._meta.fields
+
+            self.assertEqual(fields["starts_on"].type.__name__, "Date")
+            self.assertEqual(fields["starts_at"].type.__name__, "DateTime")
+            self.assertEqual(fields["reminder_at"].type.__name__, "Time")
+        finally:
+            if original_method is None and hasattr(Category, "schedule_window"):
+                delattr(Category, "schedule_window")
+            elif original_method is not None:
+                Category.schedule_window = original_method
 
 
 class TestInputTypeGenerator(TestCase):

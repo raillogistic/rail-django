@@ -7,6 +7,7 @@ GraphQL mutations for Django models, including CRUD operations and custom method
 The generator uses a pipeline-based architecture for improved testability and customization.
 """
 
+from datetime import date, datetime, time
 from typing import Any, Optional, Union, get_origin
 
 import graphene
@@ -403,6 +404,12 @@ class MutationGenerator:
                 python_type = float
             elif base == "bool":
                 python_type = bool
+            elif base.lower() == "date":
+                python_type = date
+            elif base.lower() == "datetime":
+                python_type = datetime
+            elif base.lower() == "time":
+                python_type = time
             elif base in {"Any", "object"}:
                 python_type = Any
             elif base in {"None", "NoneType"}:
@@ -419,11 +426,15 @@ class MutationGenerator:
             if non_none_types:
                 return self._convert_python_type_to_graphql(non_none_types[0])
 
+        custom_scalars = getattr(self.type_generator, "custom_scalars", {}) or {}
         type_mapping = {
             str: graphene.String,
             int: graphene.Int,
             float: graphene.Float,
             bool: graphene.Boolean,
+            date: custom_scalars.get("Date", graphene.Date),
+            datetime: custom_scalars.get("DateTime", graphene.DateTime),
+            time: custom_scalars.get("Time", graphene.Time),
             dict: GenericScalar,
             list: GenericScalar,
             Any: GenericScalar,
