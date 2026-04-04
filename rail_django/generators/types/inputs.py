@@ -185,6 +185,12 @@ def generate_input_type(
             input_fields[field_name] = graphene.InputField(relation_input)
 
     # Create the input type class
+    if not input_fields:
+        raise ValueError(
+            f"{model.__name__} has no writable fields available for "
+            f"{mutation_type} input generation."
+        )
+
     prefix = ""
     if mutation_type == "update" and partial:
         prefix = "Update"

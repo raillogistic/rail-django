@@ -91,6 +91,54 @@ def test_create_input_restricted_financial_field_is_optional():
     assert not hasattr(price_field._type, "_of_type")
 
 
+def test_create_input_raises_for_fully_read_only_model():
+    class ReadOnlyMeta(GraphQLMetaConfig):
+        fields = GraphQLMetaConfig.Fields(read_only=["id", "name", "description"])
+
+    original_meta = _set_graphql_meta(Category, ReadOnlyMeta)
+    try:
+        type_generator = TypeGenerator()
+        with pytest.raises(ValueError, match="Category has no writable fields"):
+            type_generator.generate_input_type(Category, "create")
+    finally:
+        _restore_graphql_meta(Category, original_meta)
+
+
+def test_read_only_nested_relation_omits_create_branch():
+    class ReadOnlyMeta(GraphQLMetaConfig):
+        fields = GraphQLMetaConfig.Fields(read_only=["id", "name", "description"])
+
+    original_meta = _set_graphql_meta(Category, ReadOnlyMeta)
+    try:
+        type_generator = TypeGenerator()
+        create_input = type_generator.generate_input_type(Post, "create")
+        relation_input = create_input._meta.fields["category"].type
+        relation_input = getattr(relation_input, "of_type", relation_input)
+        relation_fields = relation_input._meta.fields
+
+        assert "connect" in relation_fields
+        assert "create" not in relation_fields
+        assert "update" not in relation_fields
+    finally:
+        _restore_graphql_meta(Category, original_meta)
+
+
+def test_generate_all_mutations_skips_create_for_fully_read_only_model():
+    class ReadOnlyMeta(GraphQLMetaConfig):
+        fields = GraphQLMetaConfig.Fields(read_only=["id", "name", "description"])
+
+    original_meta = _set_graphql_meta(Category, ReadOnlyMeta)
+    try:
+        generator = MutationGenerator(TypeGenerator())
+        mutations = generator.generate_all_mutations(Category)
+
+        assert "createCategory" not in mutations
+        assert "updateCategory" not in mutations
+        assert "deleteCategory" in mutations
+    finally:
+        _restore_graphql_meta(Category, original_meta)
+
+
 @pytest.mark.django_db
 def test_bulk_create_inherits_create_guard():
     class GuardedMeta(GraphQLMetaConfig):

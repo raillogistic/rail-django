@@ -104,22 +104,26 @@ class RelationInputTypeGenerator:
             # Pass remote_field_name as excluded field to generate_input_type
             exclude_fields = [remote_field_name] if remote_field_name else None
 
-            # We need the Input type for the related model.
-            # We ask TypeGenerator for it.
-            # Note: We use 'create' mutation type for the nested object.
-            nested_create_input = self.type_generator.generate_input_type(
-                related_model,
-                mutation_type="create",
-                partial=False,
-                include_reverse_relations=False,  # Prevent explosion
-                exclude_fields=exclude_fields,
-                depth=depth + 1
-            )
+            try:
+                # We need the Input type for the related model.
+                # We ask TypeGenerator for it.
+                # Note: We use 'create' mutation type for the nested object.
+                nested_create_input = self.type_generator.generate_input_type(
+                    related_model,
+                    mutation_type="create",
+                    partial=False,
+                    include_reverse_relations=False,  # Prevent explosion
+                    exclude_fields=exclude_fields,
+                    depth=depth + 1
+                )
+            except ValueError:
+                nested_create_input = None
 
-            if is_list:
-                fields["create"] = graphene.InputField(graphene.List(nested_create_input))
-            else:
-                fields["create"] = graphene.InputField(nested_create_input)
+            if nested_create_input is not None:
+                if is_list:
+                    fields["create"] = graphene.InputField(graphene.List(nested_create_input))
+                else:
+                    fields["create"] = graphene.InputField(nested_create_input)
 
         # 5. Update (Input)
         update_enabled = config.update.enabled if config else True
@@ -128,18 +132,22 @@ class RelationInputTypeGenerator:
         if depth < max_depth and update_enabled:
             # For update, we usually need the ID to identify WHICH object to update
             # inside the nested payload.
-            nested_update_input = self.type_generator.generate_input_type(
-                related_model,
-                mutation_type="update",
-                partial=True,
-                include_reverse_relations=False,
-                depth=depth + 1
-            )
+            try:
+                nested_update_input = self.type_generator.generate_input_type(
+                    related_model,
+                    mutation_type="update",
+                    partial=True,
+                    include_reverse_relations=False,
+                    depth=depth + 1
+                )
+            except ValueError:
+                nested_update_input = None
 
-            if is_list:
-                fields["update"] = graphene.InputField(graphene.List(nested_update_input))
-            else:
-                fields["update"] = graphene.InputField(nested_update_input)
+            if nested_update_input is not None:
+                if is_list:
+                    fields["update"] = graphene.InputField(graphene.List(nested_update_input))
+                else:
+                    fields["update"] = graphene.InputField(nested_update_input)
 
         # Create the InputObjectType dynamically
         type_name = f"{related_model.__name__}RelationInput"

@@ -1053,9 +1053,7 @@ class ModelSchemaExtractor(
                 requires_authentication,
                 reason,
                 access_resolver,
-            ) = (
-                _evaluate_access(operation="create")
-            )
+            ) = _evaluate_access(operation="create")
             results.append(
                 {
                     "name": f"create{model_name}",
@@ -1087,9 +1085,7 @@ class ModelSchemaExtractor(
                 requires_authentication,
                 reason,
                 access_resolver,
-            ) = (
-                _evaluate_access(operation="update", instance=instance)
-            )
+            ) = _evaluate_access(operation="update", instance=instance)
             results.append(
                 {
                     "name": f"update{model_name}",
@@ -1121,9 +1117,7 @@ class ModelSchemaExtractor(
                 requires_authentication,
                 reason,
                 access_resolver,
-            ) = (
-                _evaluate_access(operation="delete", instance=instance)
-            )
+            ) = _evaluate_access(operation="delete", instance=instance)
             results.append(
                 {
                     "name": f"delete{model_name}",
@@ -1200,15 +1194,13 @@ class ModelSchemaExtractor(
                 requires_authentication,
                 reason,
                 access_resolver,
-            ) = (
-                _evaluate_access(
-                    operation="custom",
-                    guard_operation=guard_operation,
-                    instance=instance,
-                    extra_permissions=requires_permissions,
-                    method_access=method_access,
-                    method=method,
-                )
+            ) = _evaluate_access(
+                operation="custom",
+                guard_operation=guard_operation,
+                instance=instance,
+                extra_permissions=requires_permissions,
+                method_access=method_access,
+                method=method,
             )
 
             input_fields = _resolve_custom_input_fields(info, method, action_kind)

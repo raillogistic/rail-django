@@ -269,6 +269,23 @@ class MutationGenerator:
             self._mutation_field_cache[cache_key] = field
         return field
 
+    def _can_generate_mutation_input(
+        self,
+        model: type[models.Model],
+        *,
+        mutation_type: str,
+        partial: bool = False,
+    ) -> bool:
+        try:
+            self.type_generator.generate_input_type(
+                model,
+                mutation_type=mutation_type,
+                partial=partial,
+            )
+        except ValueError:
+            return False
+        return True
+
     def generate_create_mutation(
         self, model: type[models.Model]
     ) -> type[graphene.Mutation]:
@@ -276,15 +293,16 @@ class MutationGenerator:
         Generate a create mutation for a model using the pipeline backend.
         """
         from ..pipeline.factories import create_mutation_factory
+        input_type = self.type_generator.generate_input_type(
+            model, mutation_type="create"
+        )
         cache_key = ("create", model)
         return self._get_or_create_mutation_class(
             cache_key,
             lambda: create_mutation_factory(
                 model=model,
                 model_type=self.type_generator.generate_object_type(model),
-                input_type=self.type_generator.generate_input_type(
-                    model, mutation_type="create"
-                ),
+                input_type=input_type,
                 graphql_meta=get_model_graphql_meta(model),
                 pipeline_builder=self._pipeline_builder,
                 nested_handler=self.nested_handler,
@@ -477,15 +495,24 @@ class MutationGenerator:
         mutations = {}
         model_class_name = model.__name__
         is_managed = getattr(model._meta, "managed", True)
+        can_generate_create = is_managed and self._can_generate_mutation_input(
+            model,
+            mutation_type="create",
+        )
+        can_generate_update = is_managed and self._can_generate_mutation_input(
+            model,
+            mutation_type="update",
+            partial=True,
+        )
 
         # Generate CRUD mutations if enabled and model is managed
-        if is_managed and self.settings.enable_create:
+        if can_generate_create and self.settings.enable_create:
             mutations[f"create{model_class_name}"] = self._get_or_create_mutation_field(
                 ("create", model),
                 lambda: self.generate_create_mutation(model),
             )
 
-        if is_managed and self.settings.enable_update:
+        if can_generate_update and self.settings.enable_update:
             mutations[f"update{model_class_name}"] = self._get_or_create_mutation_field(
                 ("update", model),
                 lambda: self.generate_update_mutation(model),
@@ -512,19 +539,21 @@ class MutationGenerator:
                 should_generate = True
 
             if should_generate:
-                mutations[f"bulkCreate{model_class_name}"] = (
+                if can_generate_create:
+                    mutations[f"bulkCreate{model_class_name}"] = (
                     self._get_or_create_mutation_field(
                         ("bulk_create", model),
                         lambda: self.generate_bulk_create_mutation(model),
                     )
-                )
-
-                mutations[f"bulkUpdate{model_class_name}"] = (
-                    self._get_or_create_mutation_field(
-                        ("bulk_update", model),
-                        lambda: self.generate_bulk_update_mutation(model),
                     )
-                )
+
+                if can_generate_update:
+                    mutations[f"bulkUpdate{model_class_name}"] = (
+                        self._get_or_create_mutation_field(
+                            ("bulk_update", model),
+                            lambda: self.generate_bulk_update_mutation(model),
+                        )
+                    )
 
                 mutations[f"bulkDelete{model_class_name}"] = (
                     self._get_or_create_mutation_field(
