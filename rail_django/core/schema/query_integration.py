@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 import graphene
+from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +84,31 @@ class QueryIntegrationMixin:
 
                         return wrapper
 
+                    field_type = field.type
+                    if query_class.__name__ == "MeQuery" and field_name in {
+                        "me",
+                        "viewer",
+                    }:
+                        try:
+                            from ...extensions.auth.queries import (
+                                get_authenticated_user_type,
+                            )
+
+                            project_user_type = (
+                                self.type_generator.generate_object_type(
+                                    get_user_model()
+                                )
+                            )
+                            field_type = get_authenticated_user_type(project_user_type)
+                        except Exception as exc:
+                            logger.debug(
+                                "Falling back to default auth user type for schema '%s': %s",
+                                self.schema_name,
+                                exc,
+                            )
+
                     query_attrs[field_name] = graphene.Field(
-                        field.type,
+                        field_type,
                         description=field.description,
                         resolver=create_resolver_wrapper(resolver_method),
                         args=getattr(field, "args", None),

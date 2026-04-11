@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy cache for UserSettingsType
 _user_settings_type = None
+_authenticated_user_type_cache = {}
 
 
 def _get_user_settings_type():
@@ -124,7 +125,57 @@ def _get_safe_settings_type():
     return _get_user_settings_type() or DummySettingsType
 
 
-def get_authenticated_user_type():
+def _build_auth_user_type_fields():
+    """Return auth-specific fields/resolvers layered onto a user GraphQL type."""
+
+    type_attrs = {
+        "permissions": graphene.List(
+            graphene.String, description="Permissions effectives de l'utilisateur"
+        ),
+        "roles": graphene.List(
+            AuthRoleType,
+            description="Roles RBAC et groupes Django de l'utilisateur",
+        ),
+        "model_permissions": graphene.List(
+            PermissionInfo,
+            description="Permissions CRUD detaillees par modele",
+        ),
+        "settings": graphene.Field(
+            lambda: _get_safe_settings_type(),
+            description="Preferences d'interface utilisateur",
+        ),
+    }
+
+    def resolve_permissions(self, info):
+        """Resolve the user's effective permissions."""
+        return _get_effective_permissions(self)
+
+    def resolve_roles(self, info):
+        """Resolve the user's RBAC roles and Django groups."""
+        return _get_user_roles_detail(self)
+
+    def resolve_model_permissions(self, info):
+        """Resolve the user's model-level CRUD permissions."""
+        return _build_model_permission_snapshot(self)
+
+    def resolve_settings(self, info):
+        """Resolve the user's settings preferences."""
+        if not _get_user_settings_type():
+            return None
+
+        try:
+            return self.settings
+        except Exception:
+            return None
+
+    type_attrs["resolve_permissions"] = resolve_permissions
+    type_attrs["resolve_roles"] = resolve_roles
+    type_attrs["resolve_model_permissions"] = resolve_model_permissions
+    type_attrs["resolve_settings"] = resolve_settings
+    return type_attrs
+
+
+def get_authenticated_user_type(base_type=None):
     """
     Factory function to create the GraphQL type exposed by auth queries.
 
@@ -138,35 +189,48 @@ def get_authenticated_user_type():
         UserType = get_authenticated_user_type()
         # Use UserType in your GraphQL schema
     """
+    cache_key = base_type or "__default__"
+    cached = _authenticated_user_type_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
-    class AuthenticatedUserType(DjangoObjectType):
-        """GraphQL type for authenticated user payloads."""
+    if base_type is not None:
+        existing_fields = set(getattr(base_type._meta, "fields", {}).keys())
+        meta_attrs = {
+            "model": getattr(base_type._meta, "model", None),
+        }
+        exclude = getattr(base_type._meta, "exclude", None)
+        if exclude:
+            meta_attrs["exclude"] = tuple(exclude)
+        else:
+            meta_attrs["fields"] = "__all__"
+        if getattr(base_type._meta, "interfaces", None):
+            meta_attrs["interfaces"] = getattr(base_type._meta, "interfaces")
+        auth_type_attrs = {}
+        for name, value in _build_auth_user_type_fields().items():
+            if name.startswith("resolve_"):
+                field_name = name.replace("resolve_", "", 1)
+                if field_name not in existing_fields:
+                    auth_type_attrs[name] = value
+                continue
+            if name not in existing_fields:
+                auth_type_attrs[name] = value
+        auth_type_attrs["Meta"] = type("Meta", (), meta_attrs)
 
-        permissions = graphene.List(
-            graphene.String, description="Permissions effectives de l'utilisateur"
+        authenticated_type = type(
+            f"{base_type.__name__}Authenticated",
+            (base_type,),
+            auth_type_attrs,
         )
-        roles = graphene.List(
-            AuthRoleType,
-            description="Roles RBAC et groupes Django de l'utilisateur",
-        )
-        model_permissions = graphene.List(
-            PermissionInfo,
-            description="Permissions CRUD detaillees par modele",
-        )
-        desc = graphene.String(description="Description de l'utilisateur")
+        _authenticated_user_type_cache[cache_key] = authenticated_type
+        return authenticated_type
 
-        settings = graphene.Field(
-            lambda: _get_safe_settings_type(),
-            description="Preferences d'interface utilisateur",
-        )
-
-        def resolve_desc(self, info):
-            """Resolve the user description (full name)."""
-            return self.get_full_name()
-
-        class Meta:
-            model = get_user_model()
-            fields = (
+    meta_class = type(
+        "Meta",
+        (),
+        {
+            "model": get_user_model(),
+            "fields": (
                 "id",
                 "username",
                 "email",
@@ -177,32 +241,24 @@ def get_authenticated_user_type():
                 "is_active",
                 "date_joined",
                 "last_login",
-            )
+            ),
+        },
+    )
 
-        def resolve_permissions(self, info):
-            """Resolve the user's effective permissions."""
-            return _get_effective_permissions(self)
+    def resolve_desc(self, info):
+        """Resolve the user description (full name)."""
+        return self.get_full_name()
 
-        def resolve_roles(self, info):
-            """Resolve the user's RBAC roles and Django groups."""
-            return _get_user_roles_detail(self)
-
-        def resolve_model_permissions(self, info):
-            """Resolve the user's model-level CRUD permissions."""
-            return _build_model_permission_snapshot(self)
-
-        def resolve_settings(self, info):
-            """Resolve the user's settings preferences."""
-            # Only resolve settings if the model and GraphQL type exist
-            if not _get_user_settings_type():
-                return None
-
-            try:
-                return self.settings
-            except Exception:
-                return None
-
-    return AuthenticatedUserType
+    type_attrs = {
+        "__doc__": "GraphQL type for authenticated user payloads.",
+        "Meta": meta_class,
+        "desc": graphene.String(description="Description de l'utilisateur"),
+        "resolve_desc": resolve_desc,
+        **_build_auth_user_type_fields(),
+    }
+    authenticated_type = type("AuthenticatedUserType", (DjangoObjectType,), type_attrs)
+    _authenticated_user_type_cache[cache_key] = authenticated_type
+    return authenticated_type
 
 
 # Create a lazy reference that will be resolved when needed
