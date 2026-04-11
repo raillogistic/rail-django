@@ -74,6 +74,13 @@ def generate_single_query(
             queryset = self._apply_tenant_scope(
                 manager.all(), info, model, operation="retrieve"
             )
+            if graphql_meta.has_custom_resolver("retrieve"):
+                queryset = graphql_meta.apply_custom_resolver(
+                    "retrieve",
+                    queryset,
+                    info,
+                    id=id,
+                )
             instance = queryset.get(pk=id)
             self._enforce_tenant_access(
                 instance, info, model, operation="retrieve"
@@ -184,6 +191,13 @@ def generate_list_query(
         queryset = self._apply_tenant_scope(
             queryset, info, model, operation="list"
         )
+        if graphql_meta.has_custom_resolver("list"):
+            queryset = graphql_meta.apply_custom_resolver(
+                "list",
+                queryset,
+                info,
+                **kwargs,
+            )
 
         # Apply query optimization
         queryset = self.optimizer.optimize_queryset(queryset, info, model)

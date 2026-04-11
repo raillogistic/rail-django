@@ -98,6 +98,8 @@ where: {
 ## Quick Search (`quick`)
 
 The `quick` argument performs a search across fields defined in `GraphQLMeta.filtering.quick`.
+If `quick` is not configured, Rail Django falls back to the model's default
+searchable text fields.
 
 ```python
 class Product(models.Model):
@@ -109,12 +111,48 @@ class Product(models.Model):
 
 ```graphql
 query {
-  # Searches SKU, Name, and Description for "premium"
+  # Searches only the configured quick fields for "premium"
   productList(quick: "premium") {
     name
   }
 }
 ```
+
+## Custom Filters
+
+Use `GraphQLMeta.Filtering(custom=...)` when you need a filter that does not
+map cleanly to a field lookup. Each entry maps a filter name to either a model
+method name or a callable.
+
+```python
+class Product(models.Model):
+    name = models.CharField(max_length=255)
+    active = models.BooleanField(default=True)
+
+    def filter_active(self, queryset, value):
+        return queryset.filter(active=bool(value))
+
+    class GraphQLMeta:
+        filtering = GraphQLMeta.Filtering(
+            custom={
+                "is_active_product": "filter_active",
+                "name_prefix": lambda queryset, value: queryset.filter(
+                    name__istartswith=value
+                ),
+            }
+        )
+```
+
+```graphql
+query {
+  productList(where: { isActiveProduct: true }) {
+    name
+  }
+}
+```
+
+Custom filters appear in the generated filter set and can also be applied with
+`get_custom_filter(...)` or `apply_custom_filter(...)` on the GraphQLMeta helper.
 
 ## Computed Filters
 

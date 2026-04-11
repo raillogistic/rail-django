@@ -352,6 +352,20 @@ def generate_paginated_query(
         queryset = self._apply_tenant_scope(
             queryset, info, model, operation=operation_name
         )
+        if graphql_meta.has_custom_resolver(operation_name):
+            queryset = graphql_meta.apply_custom_resolver(
+                operation_name,
+                queryset,
+                info,
+                **kwargs,
+            )
+        elif operation_name != "list" and graphql_meta.has_custom_resolver("list"):
+            queryset = graphql_meta.apply_custom_resolver(
+                "list",
+                queryset,
+                info,
+                **kwargs,
+            )
 
         # Parse pagination parameters
         try:

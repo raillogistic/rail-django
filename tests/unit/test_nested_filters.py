@@ -996,9 +996,9 @@ class TestQuickFilterMixin(TestCase):
 
 
 class TestGraphQLMetaIntegrationMixin(TestCase):
-    """Test GraphQLMeta quick filter merge behaviour."""
+    """Test GraphQLMeta quick filter behavior."""
 
-    def test_get_quick_filter_fields_merges_graphql_meta_with_defaults(self):
+    def test_get_quick_filter_fields_uses_graphql_meta_quick_fields(self):
         class _FilteringMock:
             quick = ["posts__title"]
 
@@ -1012,9 +1012,53 @@ class TestGraphQLMetaIntegrationMixin(TestCase):
         with patch.object(mixin, "get_graphql_meta", return_value=_MetaMock()):
             fields = mixin.get_quick_filter_fields(Category)
 
+        self.assertEqual(fields, ["posts__title"])
+
+    def test_get_quick_filter_fields_falls_back_to_defaults_when_missing(self):
+        class _MetaMock:
+            filtering = type("Filtering", (), {"quick": []})()
+
+        class _MixinUnderTest(GraphQLMetaIntegrationMixin):
+            pass
+
+        mixin = _MixinUnderTest()
+        with patch.object(mixin, "get_graphql_meta", return_value=_MetaMock()):
+            fields = mixin.get_quick_filter_fields(Category)
+
         self.assertIn("name", fields)
         self.assertIn("description", fields)
-        self.assertIn("posts__title", fields)
+        self.assertNotIn("posts__title", fields)
+
+
+class TestQuickFilterGraphQLMetaIntegration(TestCase):
+    """Test quick filter application with GraphQLMeta overrides."""
+
+    def setUp(self):
+        from rail_django.generators.filters import NestedFilterApplicator
+
+        self.applicator = NestedFilterApplicator()
+
+    def test_apply_where_filter_uses_graphql_meta_quick_fields(self):
+        class _FilteringMock:
+            quick = ["name"]
+
+        class _MetaMock:
+            filtering = _FilteringMock()
+
+        queryset = Category.objects.all()
+        where_input = {"quick": "MILIA"}
+
+        with patch("rail_django.core.meta.get_model_graphql_meta", return_value=_MetaMock()):
+            with patch.object(
+                QuickFilterMixin,
+                "build_quick_filter_q",
+                return_value=Q(),
+            ) as mock_build_quick:
+                self.applicator.apply_where_filter(queryset, where_input, Category)
+
+        mock_build_quick.assert_called_once()
+        _, _, quick_filter_fields = mock_build_quick.call_args.args
+        self.assertEqual(quick_filter_fields, ["name"])
 
 
 class TestIncludeFilterMixin(TestCase):

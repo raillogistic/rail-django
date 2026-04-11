@@ -87,7 +87,7 @@ class GraphQLMetaIntegrationMixin:
 
     def get_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
         """
-        Get merged quick filter fields from defaults and GraphQLMeta.
+        Get quick filter fields from GraphQLMeta, falling back to defaults.
 
         Args:
             model: Django model class
@@ -102,7 +102,8 @@ class GraphQLMetaIntegrationMixin:
         if graphql_meta:
             try:
                 quick_fields = list(getattr(graphql_meta.filtering, "quick", []))
-                return quick_mixin.merge_quick_filter_fields(model, quick_fields)
+                if quick_fields:
+                    return quick_fields
             except (TypeError, AttributeError):
                 pass
 

@@ -113,8 +113,9 @@ Important methods:
 - `describe_operation_guard(operation, user=None, instance=None)`: evaluate a
   guard without raising.
 - `should_expose_field(field_name, for_input=False)`: check field visibility.
-- `apply_quick_filter(queryset, search_value)`: apply quick search fields with
-  configured lookup.
+- `apply_quick_filter(queryset, search_value)`: apply quick search using the
+  explicit `filtering.quick` fields when provided, otherwise fall back to the
+  default searchable fields.
 - `get_custom_resolver(...)`, `apply_custom_resolver(...)`: custom resolver
   access and execution.
 - `get_custom_filter(...)`, `get_custom_filters()`,
