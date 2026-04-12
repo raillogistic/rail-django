@@ -1,1 +1,5 @@
 -r base.txt
+# Production ASGI server stack (Uvicorn + uvloop + httptools)
+# uvloop: C-based event loop, 2-5x faster than default asyncio
+# httptools: C-based HTTP parser, near-zero overhead
+uvicorn[standard]>=0.30.0

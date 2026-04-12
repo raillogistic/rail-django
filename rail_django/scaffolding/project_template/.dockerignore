@@ -5,6 +5,7 @@ __pycache__
 .Python
 env/
 venv/
+.venv/
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
@@ -17,11 +18,36 @@ coverage.xml
 *.log
 .git
 .gitignore
-.env
+.gitattributes
 .DS_Store
+
+# Runtime data (bind-mounted, not baked into image)
 media/
+mediafiles/
 staticfiles/
 backups/
 cache/
 logs/
 *.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Environment files — NEVER bake secrets into the image
+.env
+.env.*
+
+# Temporary and scratch files
+.tmp/
+
+# IDE and editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+tests/
+pytest.ini
+setup.cfg
+tox.ini

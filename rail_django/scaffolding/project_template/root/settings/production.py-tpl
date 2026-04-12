@@ -55,8 +55,11 @@ if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
         }
     )
 
-# Database performance: Keep connections alive for 10 minutes
+# Database performance: Keep connections alive for 10 minutes.
+# CONN_HEALTH_CHECKS (Django 4.1+) validates recycled connections before use,
+# avoiding "server closed the connection unexpectedly" errors.
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)
+DATABASES['default']['CONN_HEALTH_CHECKS'] = env.bool('CONN_HEALTH_CHECKS', default=True)
 
 # =============================================================================
 # PARAMÈTRES DE SÉCURITÉ DJANGO
@@ -235,8 +238,11 @@ TWILIO_FROM_NUMBER = env('TWILIO_FROM_NUMBER', default='')
 # d'un cache pour d'autres composants. Les vérifications de santé utilisent
 # des caches en mémoire par processus avec TTL.
 
-# Use a shared cache backend in production so async exports and rate limiting
-# can coordinate across processes.
+# Dual-cache architecture for production:
+#   • "default" — LocMemCache: fast per-process in-memory cache for general use,
+#     JWT validation, user lookups, and query memoization. Zero I/O overhead.
+#   • "shared" — FileBasedCache: cross-process coordination for async exports,
+#     rate limiting, and other multi-worker state. Uses disk I/O but works without Redis.
 CACHE_PATH = env('CACHE_PATH', default=str(BASE_DIR / 'cache'))
 CACHE_PATH = Path(CACHE_PATH)
 if not CACHE_PATH.is_absolute():
@@ -244,11 +250,20 @@ if not CACHE_PATH.is_absolute():
 CACHE_PATH = CACHE_PATH.resolve()
 CACHES = {
     'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'rail-django-locmem',
+        'KEY_PREFIX': 'rail_django',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 5000,
+        },
+    },
+    'shared': {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': str(CACHE_PATH),
-        'KEY_PREFIX': 'rail_django',
+        'KEY_PREFIX': 'rail_shared',
         'TIMEOUT': 3600,
-    }
+    },
 }
 
 # =============================================================================

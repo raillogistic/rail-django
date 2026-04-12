@@ -1,10 +1,16 @@
-version: '3.8'
+# ─────────────────────────────────────────────────────────────────────────────
+# Rail-Django — Production Docker Compose
+#
+# Performance architecture:
+#   Nginx (HTTP/2, TLS, keepalive) → Gunicorn (process manager) → Uvicorn (async workers)
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
   web:
     build:
       context: ../../
       dockerfile: deploy/docker/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-railapp}-api:latest
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -19,10 +25,31 @@ services:
       - ../../.env.prod
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import sys, urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/health/ready/', timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)\""]
-      interval: 30s
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    sysctls:
+      # Allow more TIME_WAIT sockets for high connection churn.
+      net.core.somaxconn: 2048
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   nginx:
     build:
@@ -33,9 +60,29 @@ services:
       - static_volume:/app/staticfiles
       - ${MEDIA_PATH:-../../media}:/app/mediafiles
     ports:
-      - "8000:8000"
+      - "${HTTPS_PORT:-8000}:8000"
     depends_on:
-      - web
+      web:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    sysctls:
+      net.core.somaxconn: 2048
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   static_volume:
