@@ -19,11 +19,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class QueryAnalysisResult:
-    """Result of query analysis for optimization."""
+    """Result of query analysis for optimization.
+
+    Attributes:
+        requested_fields: All field paths requested in the GraphQL selection.
+        select_related_fields: FK/O2O paths eligible for ``select_related()``.
+        prefetch_related_fields: M2M/reverse FK paths for ``prefetch_related()``.
+        only_fields: Concrete model column names for ``QuerySet.only()``.
+        complexity_score: Estimated query cost.
+        depth: Maximum nesting depth.
+        estimated_queries: Estimated DB queries without optimisation.
+    """
 
     requested_fields: set[str] = field(default_factory=set)
     select_related_fields: list[str] = field(default_factory=list)
     prefetch_related_fields: list[str] = field(default_factory=list)
+    only_fields: list[str] = field(default_factory=list)
     complexity_score: int = 0
     depth: int = 0
     estimated_queries: int = 1
@@ -51,6 +62,9 @@ class QueryAnalyzer:
             model, result.requested_fields
         )
         result.prefetch_related_fields = self._get_prefetch_related_fields(
+            model, result.requested_fields
+        )
+        result.only_fields = self._get_only_fields(
             model, result.requested_fields
         )
 
@@ -234,7 +248,28 @@ class QueryAnalyzer:
             if is_valid_chain and valid_path:
                 select_related.append("__".join(valid_path))
 
-        return self._dedupe_paths(select_related)
+        deduped = self._dedupe_paths(select_related)
+        return self._remove_subsumed_paths(deduped)
+
+    @staticmethod
+    def _remove_subsumed_paths(paths: list[str]) -> list[str]:
+        """Remove shorter paths that are prefixes of longer ones.
+
+        E.g. when both ``author`` and ``author__department`` are present,
+        ``author`` is redundant because ``select_related('author__department')``
+        already joins the author table.
+        """
+        if len(paths) <= 1:
+            return paths
+        # Sort longest first so we check broader paths against narrower ones
+        sorted_paths = sorted(paths, key=len, reverse=True)
+        kept: list[str] = []
+        for path in sorted_paths:
+            prefix = path + "__"
+            # Keep this path only if no already-kept path starts with it
+            if not any(k.startswith(prefix) for k in kept):
+                kept.append(path)
+        return kept
 
     def _get_prefetch_related_fields(
         self, model: type[models.Model], requested_fields: set[str]
@@ -322,3 +357,61 @@ class QueryAnalyzer:
                 query_count += 1
 
         return query_count
+
+    def _get_only_fields(
+        self, model: type[models.Model], requested_fields: set[str]
+    ) -> list[str]:
+        """Extract concrete model column names for ``QuerySet.only()``.
+
+        Inspects the GraphQL selection set and maps top-level field names
+        back to concrete Django model fields.  Relation fields are
+        converted to their ``attname`` (e.g. ``author`` → ``author_id``)
+        so that ``only()`` doesn't trigger a join.
+
+        The primary key is always included to guarantee correct ORM
+        behaviour.
+
+        Returns:
+            List of concrete column names, or empty list if extraction
+            is impossible (in which case the caller should skip ``only()``).
+        """
+        normalized = self._normalize_model_field_paths(requested_fields)
+        if not normalized:
+            return []
+
+        # Collect top-level field names (first segment only)
+        top_level_names: set[str] = set()
+        for field_path in normalized:
+            top_level_names.add(field_path.split("__", 1)[0])
+
+        concrete_names: list[str] = []
+        pk_name = model._meta.pk.attname if model._meta.pk else "id"
+        concrete_names.append(pk_name)
+
+        for field_name in top_level_names:
+            try:
+                field = model._meta.get_field(field_name)
+            except FieldDoesNotExist:
+                # Computed/property/reverse — not a concrete field; skip.
+                # If the selection includes non-concrete fields we cannot
+                # safely use only() because the property may access any
+                # number of columns.  Return empty to fall back to SELECT *.
+                continue
+
+            if not getattr(field, "concrete", False):
+                continue
+
+            # Use attname for FK/O2O fields to avoid triggering lazy load
+            if getattr(field, "is_relation", False) and hasattr(field, "attname"):
+                concrete_names.append(field.attname)
+            else:
+                concrete_names.append(field.column if hasattr(field, "column") else field.name)
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique: list[str] = []
+        for name in concrete_names:
+            if name not in seen:
+                seen.add(name)
+                unique.append(name)
+        return unique

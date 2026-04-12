@@ -76,6 +76,9 @@ class MultiSchemaGraphQLView(
     """
 
     _placeholder_schema = None
+    # Class-level caches shared across all view instances
+    _schema_info_cache: dict[str, tuple[Any, float]] = {}  # {name: (info, ts)}
+    _schema_info_ttl: float = 30.0  # seconds
 
     def __init__(self, **kwargs):
         """Initialize the multi-schema view with placeholder schema and cache."""
@@ -260,13 +263,20 @@ class MultiSchemaGraphQLView(
         return super().get(request, *args, **kwargs)
 
     def get_context(self, request):
-        """Override get_context to inject authenticated user from JWT token."""
+        """Override get_context to inject authenticated user from JWT token.
+
+        Performance: re-uses the user already resolved during ``dispatch()``
+        to avoid a second JWT decode + DB lookup.
+        """
         context = super().get_context(request)
 
-        user = self._resolve_request_user(request)
-        if user and getattr(user, "is_authenticated", False):
+        # The user was already resolved during dispatch -> _check_authentication
+        # or by the Django auth middleware.  Re-use it directly.
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
             context.user = user
-        else:
+        elif not (user and getattr(user, "is_authenticated", False)):
+            # Fallback: attempt token validation only if dispatch didn't set a user
             raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
             auth_header = raw_auth.strip()
             header_lower = auth_header.lower()

@@ -3,8 +3,16 @@ Middleware stack management for Rail Django GraphQL.
 
 This module provides functions for building and managing the middleware
 stack for GraphQL operations.
+
+Performance optimisation
+-----------------------
+Middleware instances are **cached per schema** so they are created once at
+first use instead of being re-instantiated on every single GraphQL request.
+Call ``clear_middleware_cache()`` when schema configuration changes at
+runtime (very rare outside test suites).
 """
 
+import threading
 from typing import Any, Callable, List, Optional
 
 from .base import BaseMiddleware
@@ -52,35 +60,52 @@ DEFAULT_MIDDLEWARE: List[type] = [
 # Filter out None values (e.g., if TenantContextMiddleware is not available)
 DEFAULT_MIDDLEWARE = [mw for mw in DEFAULT_MIDDLEWARE if mw is not None]
 
+# ---------------------------------------------------------------------------
+# Middleware stack cache – avoids re-instantiation on every request
+# ---------------------------------------------------------------------------
+_middleware_cache: dict[Optional[str], List[BaseMiddleware]] = {}
+_middleware_cache_lock = threading.Lock()
+
 
 def get_middleware_stack(schema_name: Optional[str] = None) -> List[BaseMiddleware]:
     """Get the middleware stack for a schema.
 
-    Creates instances of all default middleware classes configured for
-    the specified schema.
+    Instances are cached per *schema_name* so they are created once and
+    re-used across requests.  The first call for a given schema builds
+    the stack; subsequent calls return the cached list.
 
     Args:
         schema_name: Optional schema name for schema-specific middleware.
 
     Returns:
         List of middleware instances in execution order.
-
-    Example:
-        >>> middleware_stack = get_middleware_stack("my_schema")
-        >>> for middleware in middleware_stack:
-        ...     print(middleware.__class__.__name__)
-        AuthenticationMiddleware
-        GraphQLAuditMiddleware
-        RateLimitingMiddleware
-        ...
     """
-    middleware_stack = []
+    cached = _middleware_cache.get(schema_name)
+    if cached is not None:
+        return cached
 
-    for middleware_class in DEFAULT_MIDDLEWARE:
-        middleware_instance = middleware_class(schema_name)
-        middleware_stack.append(middleware_instance)
+    with _middleware_cache_lock:
+        # Double-checked locking
+        cached = _middleware_cache.get(schema_name)
+        if cached is not None:
+            return cached
 
-    return middleware_stack
+        middleware_stack: List[BaseMiddleware] = [
+            middleware_class(schema_name)
+            for middleware_class in DEFAULT_MIDDLEWARE
+        ]
+        _middleware_cache[schema_name] = middleware_stack
+        return middleware_stack
+
+
+def clear_middleware_cache() -> None:
+    """Invalidate the cached middleware stacks.
+
+    Call this when schema or middleware settings are changed at runtime
+    (e.g. in test suites that swap settings between tests).
+    """
+    with _middleware_cache_lock:
+        _middleware_cache.clear()
 
 
 def create_middleware_resolver(middleware_stack: List[BaseMiddleware]) -> Callable:
@@ -101,6 +126,9 @@ def create_middleware_resolver(middleware_stack: List[BaseMiddleware]) -> Callab
         >>> # Use resolver in GraphQL execution
         >>> result = resolver(original_resolver, root, info, **kwargs)
     """
+    # Pre-compute length to avoid repeated len() calls in the hot loop.
+    stack_length = len(middleware_stack)
+
     def middleware_resolver(next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
         """Apply middleware stack to resolver.
 
@@ -126,7 +154,7 @@ def create_middleware_resolver(middleware_stack: List[BaseMiddleware]) -> Callab
             Returns:
                 Result from the middleware chain.
             """
-            if index >= len(middleware_stack):
+            if index >= stack_length:
                 return next_resolver(current_root, current_info, **current_kwargs)
 
             middleware = middleware_stack[index]

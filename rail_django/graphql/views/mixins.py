@@ -211,13 +211,32 @@ class SchemaMixin:
         return self._get_primary_schema_name()
 
     def _get_schema_info(self, schema_name: str) -> Optional[dict[str, Any]]:
-        """Get schema information from the registry."""
+        """Get schema information from the registry.
+
+        Results are cached per schema name with a short TTL to avoid
+        calling ``discover_schemas()`` on every single request.
+        """
+        import time as _time
+
         from .utils import SchemaRegistryUnavailable
+
+        # Check class-level cache first (shared across view instances)
+        cache = getattr(self.__class__, "_schema_info_cache", None) or {}
+        ttl = getattr(self.__class__, "_schema_info_ttl", 30.0)
+        cached = cache.get(schema_name)
+        if cached is not None:
+            info, ts = cached
+            if _time.monotonic() - ts < ttl:
+                return info
+
         try:
             from ...core.registry import schema_registry
             schema_registry.discover_schemas()
             schema_info = schema_registry.get_schema(schema_name)
             if schema_info is not None:
+                cache[schema_name] = (schema_info, _time.monotonic())
+                if hasattr(self.__class__, "_schema_info_cache"):
+                    self.__class__._schema_info_cache = cache
                 return schema_info
 
             configured_schemas = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
@@ -229,7 +248,12 @@ class SchemaMixin:
                 # after startup; refresh the registry to reflect the active settings.
                 schema_registry.clear()
                 schema_registry.discover_schemas()
-                return schema_registry.get_schema(schema_name)
+                result = schema_registry.get_schema(schema_name)
+                if result is not None:
+                    cache[schema_name] = (result, _time.monotonic())
+                    if hasattr(self.__class__, "_schema_info_cache"):
+                        self.__class__._schema_info_cache = cache
+                return result
 
             return None
         except ImportError as exc:
@@ -289,15 +313,31 @@ class SchemaMixin:
             self.batch = schema_settings["batch"]
 
     def _get_effective_schema_settings(self, schema_info: dict[str, Any]) -> dict[str, Any]:
-        """Resolve schema settings using defaults plus schema overrides."""
+        """Resolve schema settings using defaults plus schema overrides.
+
+        Results are memoised on the *schema_info* object to avoid repeated
+        dataclass conversion on the same request.
+        """
+        # Fast path: check if we already resolved for this schema_info object
+        cached = getattr(schema_info, "_resolved_settings", None)
+        if cached is not None:
+            return cached
+
         schema_settings = getattr(schema_info, "settings", {}) or {}
         try:
             from dataclasses import asdict
             from ...core.settings import SchemaSettings
             resolved_settings = asdict(SchemaSettings.from_schema(schema_info.name))
-            return {**resolved_settings, **schema_settings}
+            result = {**resolved_settings, **schema_settings}
         except Exception:
-            return schema_settings
+            result = schema_settings
+
+        # Memoise on the schema_info object for the current request
+        try:
+            schema_info._resolved_settings = result
+        except (AttributeError, TypeError):
+            pass
+        return result
 
     def _check_graphiql_access(self, request: HttpRequest, schema_name: str,
                                 schema_info: dict[str, Any]) -> Optional[JsonResponse]:
@@ -337,7 +377,15 @@ class IntrospectionMixin:
         return self._resolve_schema_name(None)
 
     def _is_introspection_query(self, query: str) -> bool:
-        """Check if a query is an introspection query."""
+        """Check if a query is an introspection query.
+
+        Uses a fast string pre-check before the expensive AST parse.
+        """
+        # ── Fast reject: if the query doesn't contain introspection keywords,
+        # skip the full AST parse entirely. ──
+        if "__schema" not in query and "__type" not in query:
+            return False
+
         try:
             document = parse(query)
         except Exception:

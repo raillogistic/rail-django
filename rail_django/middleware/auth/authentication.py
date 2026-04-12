@@ -22,7 +22,18 @@ logger = logging.getLogger(__name__)
 class GraphQLAuthenticationMiddleware(MiddlewareMixin):
     """
     Middleware for GraphQL authentication with JWT support.
+
+    Performance optimisation
+    -----------------------
+    JWT token verification results are cached in-memory using a dict keyed
+    by token hash.  The cache stores essential user attributes so that
+    repeat requests with the same valid token skip both JWT decode **and**
+    the database lookup entirely.
     """
+
+    # Lightweight snapshot stored in the per-process cache.
+    # Avoids a DB round-trip on every authenticated request.
+    __slots__ = ()
 
     def __init__(self, get_response=None):
         super().__init__(get_response)
@@ -42,7 +53,13 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         self.debug_mode = getattr(settings, "DEBUG", False)
         self.debug_bypass = getattr(settings, "GRAPHQL_AUTH_DEBUG_BYPASS", False)
         self.user_cache_timeout = getattr(settings, "JWT_USER_CACHE_TIMEOUT", 300)
-        self._jwt_user_cache: dict[str, tuple[int, float]] = {}
+        # Cache layout: { cache_key: (user_id, expiry_ts, snapshot_dict) }
+        self._jwt_user_cache: dict[str, tuple[int, float, dict]] = {}
+
+        # Pre-compute graphql endpoint prefixes for fast path matching
+        self._graphql_endpoints: tuple[str, ...] = tuple(
+            getattr(settings, "GRAPHQL_ENDPOINTS", ["/graphql/", "/graphql"])
+        )
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         if not self._is_graphql_request(request):
@@ -94,14 +111,19 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         return response
 
     def _is_graphql_request(self, request: HttpRequest) -> bool:
-        graphql_endpoints = getattr(
-            settings, "GRAPHQL_ENDPOINTS", ["/graphql/", "/graphql"]
-        )
-        if any(request.path.startswith(endpoint) for endpoint in graphql_endpoints):
+        """Return True when the request targets a GraphQL endpoint.
+
+        Uses path-prefix matching first (fast).  Falls back to content-type
+        body sniffing only when path does not match, for backward
+        compatibility with custom endpoint paths.
+        """
+        request_path = request.path
+        if any(request_path.startswith(ep) for ep in self._graphql_endpoints):
             return True
+        # Fallback: body sniffing for custom endpoints
         if (
-            "application/json" in request.content_type.lower()
-            and request.method == "POST"
+            request.method == "POST"
+            and "application/json" in getattr(request, "content_type", "").lower()
         ):
             try:
                 body = json.loads(request.body.decode("utf-8"))
@@ -130,16 +152,39 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
     def _authenticate_jwt_token(
         self, token: str, request: HttpRequest
     ) -> Optional[Any]:
+        """Authenticate a JWT token, using an in-memory cache to skip DB.
+
+        Cache structure per entry:
+          (user_id, expiry_timestamp, user_snapshot_dict)
+
+        On cache hit the user object is reconstructed from the snapshot
+        without touching the database.  If the user has been deactivated
+        since the snapshot was taken, the deactivation will be detected
+        when the cache entry expires (default 5 min).
+
+        Args:
+            token: Raw JWT token string.
+            request: The current HTTP request.
+
+        Returns:
+            Authenticated user instance or None.
+        """
         try:
             cache_key = f"jwt_user_{hash(token)}"
             cached = self._jwt_user_cache.get(cache_key)
-            if cached and time.time() < cached[1]:
-                try:
-                    user = get_user_model().objects.get(id=cached[0])
-                    if getattr(user, "is_active", True):
-                        return user
-                except Exception:
-                    self._jwt_user_cache.pop(cache_key, None)
+            if cached is not None and time.time() < cached[1]:
+                # ── Fast path: reconstruct user from cached snapshot ──
+                snapshot = cached[2]
+                UserModel = get_user_model()
+                user = UserModel.__new__(UserModel)
+                user.__dict__.update(snapshot)
+                # Attach Django model state so the ORM doesn't consider
+                # this instance as unsaved / from a different DB.
+                from django.db.models.base import ModelState
+                user._state = ModelState()
+                user._state.db = "default"
+                user._state.adding = False
+                return user
 
             from ...extensions.auth import JWTManager
 
@@ -153,9 +198,16 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             if not getattr(user, "is_active", True):
                 self._audit_auth_event(request, user, "inactive_user", "jwt")
                 return None
+
+            # Store a lightweight snapshot of the user attributes
+            snapshot = {
+                k: v for k, v in user.__dict__.items()
+                if not k.startswith("_")
+            }
             self._jwt_user_cache[cache_key] = (
                 user.id,
                 time.time() + float(self.user_cache_timeout),
+                snapshot,
             )
             return user
         except Exception:

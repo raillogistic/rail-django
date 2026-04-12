@@ -29,6 +29,11 @@ class QueryOptimizer:
     ) -> QuerySet:
         """
         Optimize a Django queryset based on GraphQL query analysis.
+
+        Applies, in order:
+        1. ``select_related()`` for FK/O2O fields in the selection set.
+        2. ``prefetch_related()`` for M2M/reverse FK fields.
+        3. ``only()`` to limit fetched columns to those actually requested.
         """
         if not self.config.auto_optimize_queries:
             return queryset
@@ -49,16 +54,27 @@ class QueryOptimizer:
                 logger.debug(
                     f"Skipped invalid prefetch_related paths: {skipped_fields}"
                 )
-            if not prefetch_fields:
-                return queryset
+            if prefetch_fields:
+                prefetch_objects = self._build_prefetch_objects(
+                    model, prefetch_fields
+                )
+                queryset = queryset.prefetch_related(*prefetch_objects)
+                logger.debug(
+                    f"Applied prefetch_related: {prefetch_fields}"
+                )
 
-            prefetch_objects = self._build_prefetch_objects(
-                model, prefetch_fields
-            )
-            queryset = queryset.prefetch_related(*prefetch_objects)
-            logger.debug(
-                f"Applied prefetch_related: {prefetch_fields}"
-            )
+        # Apply only() to limit fetched columns to those in the selection set
+        if analysis.only_fields:
+            try:
+                queryset = queryset.only(*analysis.only_fields)
+                logger.debug(f"Applied only(): {analysis.only_fields}")
+            except Exception:
+                # only() can fail with complex inheritance or deferred fields
+                # that conflict with select_related.  Fall back to SELECT *.
+                logger.debug(
+                    "Skipped only() optimisation due to incompatibility",
+                    exc_info=True,
+                )
 
         return queryset
 

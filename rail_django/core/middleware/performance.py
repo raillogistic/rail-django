@@ -21,12 +21,14 @@ logger = logging.getLogger(__name__)
 class PerformanceMiddleware(BaseMiddleware):
     """Middleware for performance monitoring.
 
-    This middleware tracks the execution time of GraphQL operations
-    and logs warnings for operations that exceed the configured threshold.
+    This middleware tracks the execution time of **root-level** GraphQL
+    operations only.  Nested/scalar field resolutions are passed through
+    with zero overhead to avoid thousands of ``time.time()`` calls per
+    request.
     """
 
     def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
-        """Monitor performance of GraphQL operations.
+        """Monitor performance of root-level GraphQL operations.
 
         Args:
             next_resolver: Next resolver in the chain.
@@ -38,6 +40,11 @@ class PerformanceMiddleware(BaseMiddleware):
             Resolver result.
         """
         if not self.settings.enable_performance_middleware:
+            return next_resolver(root, info, **kwargs)
+
+        # ── Performance: skip nested fields (only measure root queries) ──
+        path = getattr(info, "path", None)
+        if path is not None and getattr(path, "prev", None) is not None:
             return next_resolver(root, info, **kwargs)
 
         start_time = time.time()
@@ -84,6 +91,9 @@ class QueryComplexityMiddleware(BaseMiddleware):
     def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
         """Analyze and limit query complexity.
 
+        Only runs on **root-level** field resolutions to avoid redundant
+        AST parsing on every nested field.
+
         Args:
             next_resolver: Next resolver in the chain.
             root: Root value.
@@ -97,6 +107,11 @@ class QueryComplexityMiddleware(BaseMiddleware):
             ValueError: If query complexity validation fails.
         """
         if not self.settings.enable_query_complexity_middleware:
+            return next_resolver(root, info, **kwargs)
+
+        # ── Performance: only analyze at root level ──
+        path = getattr(info, "path", None)
+        if path is not None and getattr(path, "prev", None) is not None:
             return next_resolver(root, info, **kwargs)
 
         # Only analyze queries

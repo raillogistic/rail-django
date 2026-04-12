@@ -280,19 +280,45 @@ class _ComplexityVisitor(Visitor):
         )
 
 
-# Global instances
+# ---------------------------------------------------------------------------
+# Singleton instances – cached per schema to avoid re-creation per request
+# ---------------------------------------------------------------------------
+_optimizer_by_schema: dict[Optional[str], QueryOptimizer] = {}
+_analyzer_by_schema: dict[Optional[str], QueryComplexityAnalyzer] = {}
+
+# Default instances for the common case (no schema specified)
 query_optimizer = QueryOptimizer()
 complexity_analyzer = QueryComplexityAnalyzer()
 
 
 def get_query_optimizer(schema_name: Optional[str] = None) -> QueryOptimizer:
-    """Get query optimizer instance for schema."""
-    return QueryOptimizer(schema_name)
+    """Get a cached query optimizer instance for *schema_name*.
+
+    Instances are created once per schema and reused across requests.
+    """
+    if not schema_name:
+        return query_optimizer
+    cached = _optimizer_by_schema.get(schema_name)
+    if cached is not None:
+        return cached
+    instance = QueryOptimizer(schema_name)
+    _optimizer_by_schema[schema_name] = instance
+    return instance
 
 
 ## get_query_cache removed
 
 
 def get_complexity_analyzer(schema_name: Optional[str] = None) -> QueryComplexityAnalyzer:
-    """Get complexity analyzer instance for schema."""
-    return QueryComplexityAnalyzer(schema_name)
+    """Get a cached complexity analyzer instance for *schema_name*.
+
+    Instances are created once per schema and reused across requests.
+    """
+    if not schema_name:
+        return complexity_analyzer
+    cached = _analyzer_by_schema.get(schema_name)
+    if cached is not None:
+        return cached
+    instance = QueryComplexityAnalyzer(schema_name)
+    _analyzer_by_schema[schema_name] = instance
+    return instance
