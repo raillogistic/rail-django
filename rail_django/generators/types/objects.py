@@ -652,6 +652,30 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
         type_attrs[f"resolve_{prop_name}"] = make_property_resolver(prop_name)
 
+    custom_fields = introspector.get_model_custom_fields()
+    for field_name, field_info in custom_fields.items():
+        if not self._should_include_field(model, field_name):
+            continue
+
+        type_attrs[field_name] = self._get_graphql_type_for_custom_field(
+            field_info.field_type,
+            return_type=field_info.return_type,
+            description=field_info.description,
+        )
+
+        def make_custom_field_resolver(method, accepts_info):
+            def resolver(self, info):
+                if accepts_info:
+                    return method(self, info)
+                return method(self)
+
+            return resolver
+
+        type_attrs[f"resolve_{field_name}"] = make_custom_field_resolver(
+            field_info.method,
+            field_info.accepts_info,
+        )
+
     # Create the type class with Meta configuration
     meta_attrs = {
         "model": model,
@@ -696,6 +720,38 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
         type_attrs["resolve_polymorphic_type"] = resolve_polymorphic_type
 
     model_type = type(class_name, (DjangoObjectType,), type_attrs)
+
+    # DjangoObjectType ignores non-model attributes during class construction,
+    # so computed fields must be mounted explicitly after the type exists.
+    for prop_name, prop_info in properties.items():
+        if not self._should_include_field(model, prop_name):
+            continue
+        if is_historical_model and prop_name == "instance":
+            continue
+
+        mounted_field = self._mount_graphql_field(
+            self._get_graphql_type_for_property(prop_info.return_type)
+        )
+        model_type._meta.fields[prop_name] = mounted_field
+        setattr(model_type, f"resolve_{prop_name}", make_property_resolver(prop_name))
+
+    for field_name, field_info in custom_fields.items():
+        if not self._should_include_field(model, field_name):
+            continue
+
+        mounted_field = self._mount_graphql_field(
+            self._get_graphql_type_for_custom_field(
+                field_info.field_type,
+                return_type=field_info.return_type,
+                description=field_info.description,
+            )
+        )
+        model_type._meta.fields[field_name] = mounted_field
+        setattr(
+            model_type,
+            f"resolve_{field_name}",
+            make_custom_field_resolver(field_info.method, field_info.accepts_info),
+        )
 
     # For polymorphic models, don't add interface logic here
     # Union types will be handled at the query level

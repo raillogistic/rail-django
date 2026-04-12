@@ -18,6 +18,8 @@ The generator adds helper fields automatically based on your model definitions:
     *   GraphQL: `orders` (list), `ordersCount` (int).
 3.  **Polymorphism**: For inherited models, it adds `polymorphicType` to indicate the concrete class name.
 4.  **Properties**: Python `@property` methods on models can be exposed if included in `GraphQLMeta`.
+5.  **Custom output fields**: Decorated model methods can expose explicit
+    GraphQL fields, including nested Graphene types.
 
 ### Naming Conventions
 
@@ -53,6 +55,63 @@ class Product(models.Model):
             exclude=["internal_notes"]
         )
 ```
+
+## Custom output fields
+
+Use the `@field` decorator when you want a computed GraphQL field with an
+explicit Graphene type instead of relying on Python type inference from a
+property.
+
+```python
+import graphene
+from django.db import models
+from rail_django.core.decorators import field
+from rail_django.core.meta import GraphQLMeta
+
+
+class EmployeeSummaryType(graphene.ObjectType):
+    full_name = graphene.String()
+    badge = graphene.String()
+
+
+class Employee(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    employee_code = models.CharField(max_length=32)
+
+    @field(type=graphene.String, title="Summary")
+    def summary(self) -> str:
+        return f"{self.first_name} {self.last_name} ({self.employee_code})"
+
+    @field(type=graphene.Field(EmployeeSummaryType), title="Summary payload")
+    def summary_payload(self):
+        return {
+            "full_name": f"{self.first_name} {self.last_name}",
+            "badge": self.employee_code,
+        }
+
+    class GraphQLMeta:
+        fields = GraphQLMeta.Fields(
+            include=[
+                "id",
+                "first_name",
+                "last_name",
+                "summary",
+                "summary_payload",
+            ],
+            read_only=["summary", "summary_payload"],
+        )
+```
+
+`@field` supports these patterns:
+
+- `type=graphene.String`
+- `type=graphene.String(required=True)`
+- `type=graphene.List(graphene.String)`
+- `type=graphene.Field(SomeGrapheneType)`
+
+The `title` value is used as the field label in metadata output. If you omit
+`type`, Rail Django falls back to the method return annotation.
 
 ## Relationships
 

@@ -1,8 +1,13 @@
 import pytest
+import graphene
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 
-from rail_django.core.decorators import custom_mutation_name, mutation
+from rail_django.core.decorators import (
+    custom_mutation_name,
+    field as custom_field,
+    mutation,
+)
 from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
 from rail_django.extensions.templating import model_pdf_template
 from rail_django.extensions.templating.registry import (
@@ -112,6 +117,179 @@ def test_model_schema_exposes_model_properties(gql_client):
             delattr(Product, "inventory_value")
         elif original_property is not None:
             Product.inventory_value = original_property
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            del Product._graphql_meta_instance
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
+def test_model_schema_exposes_decorated_custom_fields():
+    original_meta = getattr(Product, "GraphQLMeta", None)
+    original_summary = getattr(Product, "summary", None)
+
+    class PatchedMeta(RailGraphQLMeta):
+        fields = RailGraphQLMeta.Fields(
+            include=["id", "name", "summary"],
+            read_only=["summary"],
+        )
+
+    @custom_field(type=graphene.String, title="Summaries")
+    def summary(self) -> str:
+        name = str(getattr(self, "name", "") or "").strip()
+        return f"Summary: {name}"
+
+    Product.GraphQLMeta = PatchedMeta
+    Product.summary = summary
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    harness = build_schema(schema_name="test_custom_field_schema", apps=["test_app"])
+    User = get_user_model()
+    user = User.objects.create_superuser(
+        username="custom_field_admin",
+        email="custom-field@example.com",
+        password="pass12345",
+    )
+    gql_client = RailGraphQLTestClient(
+        harness.schema,
+        schema_name="test_custom_field_schema",
+        user=user,
+    )
+    Product.objects.create(name="Desk", price=100.00, cost_price=80.00)
+
+    schema_query = """
+    query {
+      modelSchema(app: "test_app", model: "Product") {
+        fields {
+          fieldName
+          fieldType
+          verboseName
+          graphqlType
+          isComputed
+        }
+      }
+    }
+    """
+    data_query = """
+    query {
+      productList {
+        name
+        summary
+      }
+    }
+    """
+
+    try:
+        schema_result = gql_client.execute(schema_query)
+        assert schema_result.get("errors") is None
+        fields = schema_result["data"]["modelSchema"]["fields"]
+        summary_field = next(
+            (field for field in fields if field["fieldName"] == "summary"),
+            None,
+        )
+
+        assert summary_field is not None
+        assert summary_field["fieldType"] == "CustomField"
+        assert summary_field["verboseName"] == "Summaries"
+        assert summary_field["graphqlType"] == "String"
+        assert summary_field["isComputed"] is True
+
+        data_result = gql_client.execute(data_query)
+        assert data_result.get("errors") is None
+        assert data_result["data"]["productList"][0]["summary"] == "Summary: Desk"
+    finally:
+        Product.objects.all().delete()
+        if original_meta is None and hasattr(Product, "GraphQLMeta"):
+            delattr(Product, "GraphQLMeta")
+        elif original_meta is not None:
+            Product.GraphQLMeta = original_meta
+
+        if original_summary is None and hasattr(Product, "summary"):
+            delattr(Product, "summary")
+        elif original_summary is not None:
+            Product.summary = original_summary
+
+        if hasattr(Product, "_graphql_meta_instance"):
+            del Product._graphql_meta_instance
+        ModelIntrospector.clear_cache()
+        invalidate_metadata_cache(app="test_app", model="Product")
+
+
+def test_model_schema_exposes_decorated_nested_graphene_fields():
+    original_meta = getattr(Product, "GraphQLMeta", None)
+    original_summary = getattr(Product, "summary_payload", None)
+
+    class SummaryType(graphene.ObjectType):
+        text = graphene.String()
+        slug = graphene.String()
+
+    class PatchedMeta(RailGraphQLMeta):
+        fields = RailGraphQLMeta.Fields(
+            include=["id", "name", "summary_payload"],
+            read_only=["summary_payload"],
+        )
+
+    @custom_field(type=graphene.Field(SummaryType), title="Summaries")
+    def summary_payload(self):
+        name = str(getattr(self, "name", "") or "").strip()
+        return {"text": f"Summary: {name}", "slug": name.lower()}
+
+    Product.GraphQLMeta = PatchedMeta
+    Product.summary_payload = summary_payload
+    if hasattr(Product, "_graphql_meta_instance"):
+        del Product._graphql_meta_instance
+    ModelIntrospector.clear_cache()
+    invalidate_metadata_cache(app="test_app", model="Product")
+
+    harness = build_schema(schema_name="test_custom_nested_field_schema", apps=["test_app"])
+    User = get_user_model()
+    user = User.objects.create_superuser(
+        username="custom_nested_field_admin",
+        email="custom-nested-field@example.com",
+        password="pass12345",
+    )
+    gql_client = RailGraphQLTestClient(
+        harness.schema,
+        schema_name="test_custom_nested_field_schema",
+        user=user,
+    )
+    Product.objects.create(name="Table", price=100.00, cost_price=80.00)
+
+    query = """
+    query {
+      productList {
+        name
+        summaryPayload {
+          text
+          slug
+        }
+      }
+    }
+    """
+
+    try:
+        result = gql_client.execute(query)
+        assert result.get("errors") is None
+        row = result["data"]["productList"][0]
+        assert row["name"] == "Table"
+        assert row["summaryPayload"] == {
+            "text": "Summary: Table",
+            "slug": "table",
+        }
+    finally:
+        Product.objects.all().delete()
+        if original_meta is None and hasattr(Product, "GraphQLMeta"):
+            delattr(Product, "GraphQLMeta")
+        elif original_meta is not None:
+            Product.GraphQLMeta = original_meta
+
+        if original_summary is None and hasattr(Product, "summary_payload"):
+            delattr(Product, "summary_payload")
+        elif original_summary is not None:
+            Product.summary_payload = original_summary
 
         if hasattr(Product, "_graphql_meta_instance"):
             del Product._graphql_meta_instance

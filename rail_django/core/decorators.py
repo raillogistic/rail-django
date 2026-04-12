@@ -51,6 +51,45 @@ def filter(
     return decorator
 
 
+def field(
+    type: Optional[Any] = None,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    name: Optional[str] = None,
+):
+    """
+    Decorator to mark a model method as a custom GraphQL output field.
+
+    The decorated callable is exposed on generated object types and called with
+    the model instance as ``self``. The ``type`` argument accepts a Graphene
+    unmounted type, an instantiated unmounted type, or a ``graphene.Field``.
+
+    Examples:
+        @field(type=graphene.String, title="Summary")
+        def summary(self):
+            return f"{self.name} ({self.code})"
+
+        @field(type=graphene.Field(SomeGrapheneType), title="Details")
+        def details(self):
+            return {"value": self.value}
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        wrapper._is_graphql_field = True
+        wrapper._graphql_field_name = name or func.__name__
+        wrapper._graphql_field_type = type
+        wrapper._graphql_field_title = title
+        wrapper._graphql_field_description = description or func.__doc__
+
+        return wrapper
+
+    return decorator
+
+
 def mutation(
     input_type: Optional[type[graphene.InputObjectType]] = None,
     output_type: Optional[type[graphene.ObjectType]] = None,

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Type, Union, get_args, get_origin
 import graphene
 from django.db import models
 from django.db.models.fields import Field
+from graphene import Field as GrapheneField
 from graphene.types.unmountedtype import UnmountedType
 from graphene_django import DjangoObjectType
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
@@ -170,6 +171,11 @@ class TypeGenerator:
         introspector = ModelIntrospector.for_model(model)
         all_fields = introspector.get_model_fields()
         valid_field_names = set(all_fields.keys())
+        valid_field_names.update(introspector.get_model_relationships().keys())
+        valid_field_names.update(introspector.get_model_properties().keys())
+        get_custom_fields = getattr(introspector, "get_model_custom_fields", None)
+        if callable(get_custom_fields):
+            valid_field_names.update(get_custom_fields().keys())
 
         if "polymorphic_ctype" in valid_field_names:
             excluded.add("polymorphic_ctype")
@@ -213,9 +219,14 @@ class TypeGenerator:
 
         meta = self._get_model_meta(model)
         if meta and meta.include_fields is not None:
+            introspector = ModelIntrospector.for_model(model)
             valid_field_names = {
                 f.name for f in model._meta.get_fields() if hasattr(f, "name")
             }
+            valid_field_names.update(introspector.get_model_properties().keys())
+            get_custom_fields = getattr(introspector, "get_model_custom_fields", None)
+            if callable(get_custom_fields):
+                valid_field_names.update(get_custom_fields().keys())
             included_fields = tuple(
                 name for name in meta.include_fields if name in valid_field_names
             )
@@ -369,6 +380,54 @@ class TypeGenerator:
         if isinstance(graphql_type, type) and issubclass(graphql_type, UnmountedType):
             return graphql_type()
         return graphql_type
+
+    def _get_graphql_type_for_custom_field(
+        self,
+        field_type: Any,
+        return_type: Any = Any,
+        description: Optional[str] = None,
+    ) -> graphene.Field:
+        """Resolve a decorated custom field to a Graphene field declaration."""
+        if field_type is None:
+            graphql_type = self._get_graphql_type_for_property(return_type)
+            if (
+                description
+                and isinstance(graphql_type, UnmountedType)
+                and not getattr(graphql_type, "kwargs", {}).get("description")
+            ):
+                kwargs = dict(getattr(graphql_type, "kwargs", {}) or {})
+                kwargs["description"] = description
+                return graphql_type.__class__(*getattr(graphql_type, "args", ()), **kwargs)
+            return graphql_type
+
+        if isinstance(field_type, GrapheneField):
+            if description and not getattr(field_type, "description", None):
+                field_type.description = description
+            return field_type
+
+        if isinstance(field_type, UnmountedType):
+            if description and not getattr(field_type, "kwargs", {}).get("description"):
+                kwargs = dict(getattr(field_type, "kwargs", {}) or {})
+                kwargs["description"] = description
+                return field_type.__class__(*getattr(field_type, "args", ()), **kwargs)
+            return field_type
+
+        if isinstance(field_type, type) and issubclass(field_type, UnmountedType):
+            if description:
+                return field_type(description=description)
+            return field_type()
+
+        return self._get_graphql_type_for_property(return_type)
+
+    def _mount_graphql_field(self, graphql_type: Any) -> GrapheneField:
+        """Convert an unmounted Graphene declaration to a mounted field."""
+        if isinstance(graphql_type, GrapheneField):
+            return graphql_type
+        if isinstance(graphql_type, UnmountedType):
+            return graphql_type.Field()
+        if isinstance(graphql_type, type) and issubclass(graphql_type, UnmountedType):
+            return graphql_type().Field()
+        return graphene.Field(graphql_type)
 
     def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectType]:
         return _generate_object_type(self, model)

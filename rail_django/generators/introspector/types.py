@@ -48,6 +48,19 @@ class PropertyInfo:
 
 
 @dataclass
+class CustomFieldInfo:
+    """Stores metadata about a custom GraphQL output field."""
+
+    name: str
+    field_type: Any = None
+    return_type: Any = Any
+    accepts_info: bool = False
+    verbose_name: Optional[str] = None
+    description: Optional[str] = None
+    method: Any = None
+
+
+@dataclass
 class ManagerInfo:
     """Stores metadata about a Django model manager."""
     name: str

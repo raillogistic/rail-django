@@ -12,6 +12,7 @@ from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOn
 from django.utils.functional import cached_property
 
 from .types import (
+    CustomFieldInfo,
     FieldInfo,
     InheritanceInfo,
     ManagerInfo,
@@ -156,6 +157,55 @@ class ModelIntrospector(MethodAnalyzerMixin, RelationshipDiscoveryMixin):
         return prop_info
 
     @cached_property
+    def custom_fields(self) -> dict[str, CustomFieldInfo]:
+        """Discovers model methods decorated as GraphQL output fields."""
+        field_info = {}
+
+        for base_class in reversed(self.model.__mro__):
+            if base_class in (models.Model, object):
+                continue
+
+            for attr_name, attr_value in vars(base_class).items():
+                member = getattr(attr_value, "__func__", attr_value)
+                if not getattr(member, "_is_graphql_field", False):
+                    continue
+
+                try:
+                    sig = inspect.signature(member)
+                    return_type = (
+                        sig.return_annotation
+                        if sig.return_annotation != inspect.Signature.empty
+                        else Any
+                    )
+                    accepts_info = len(
+                        [
+                            param
+                            for param in sig.parameters.values()
+                            if param.kind
+                            in (
+                                inspect.Parameter.POSITIONAL_ONLY,
+                                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            )
+                        ]
+                    ) >= 2
+                except Exception:
+                    return_type = Any
+                    accepts_info = False
+
+                field_name = getattr(member, "_graphql_field_name", None) or attr_name
+                field_info[field_name] = CustomFieldInfo(
+                    name=field_name,
+                    field_type=getattr(member, "_graphql_field_type", None),
+                    return_type=return_type,
+                    accepts_info=accepts_info,
+                    verbose_name=getattr(member, "_graphql_field_title", None),
+                    description=getattr(member, "_graphql_field_description", None),
+                    method=member,
+                )
+
+        return field_info
+
+    @cached_property
     def inheritance(self) -> InheritanceInfo:
         """Analyzes model inheritance."""
         if not self._meta: return InheritanceInfo(base_classes=[], is_abstract=False)
@@ -165,5 +215,6 @@ class ModelIntrospector(MethodAnalyzerMixin, RelationshipDiscoveryMixin):
     def get_model_relationships(self) -> dict[str, RelationshipInfo]: return self.relationships
     def get_model_methods(self) -> dict[str, MethodInfo]: return self.methods
     def get_model_properties(self) -> dict[str, PropertyInfo]: return self.properties
+    def get_model_custom_fields(self) -> dict[str, CustomFieldInfo]: return self.custom_fields
     def get_model_managers(self) -> dict[str, ManagerInfo]: return self.managers
     def analyze_inheritance(self) -> InheritanceInfo: return self.inheritance

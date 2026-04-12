@@ -10,20 +10,26 @@ import unittest
 from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
+import graphene
 from django.apps import apps
 from django.db import models
 from django.test import TestCase
+from django_filters import CharFilter
 
 from rail_django.core.decorators import (
     business_logic,
     confirm_action,
     custom_mutation_name,
+    field as custom_field,
     filter as custom_filter,
     mutation,
     private_method,
     register_schema,
 )
 from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta, get_model_graphql_meta
+from rail_django.extensions.metadata.field_extractor import FieldExtractorMixin
+from rail_django.generators.introspector import ModelIntrospector
+from rail_django.generators.types import TypeGenerator
 
 
 class TestRegisterSchemaDecorator(TestCase):
@@ -335,7 +341,7 @@ class TestCustomFilterDecorator(TestCase):
             class GraphQLMeta(RailGraphQLMeta):
                 filtering = RailGraphQLMeta.Filtering()
 
-            @custom_filter(name="name_prefix")
+            @custom_filter(name="name_prefix", filter_type=CharFilter)
             def starts_with(queryset, value):
                 return queryset.filter(name__istartswith=value)
 
@@ -343,7 +349,158 @@ class TestCustomFilterDecorator(TestCase):
 
         self.assertTrue(meta.has_custom_filter("name_prefix"))
         self.assertEqual(meta.filtering.custom["name_prefix"], "starts_with")
+        custom_filters = meta.get_custom_filters()
+        self.assertIn("name_prefix", custom_filters)
+        self.assertIsInstance(custom_filters["name_prefix"], CharFilter)
         self.assertTrue(callable(meta.get_custom_filter("name_prefix")))
+
+
+class TestCustomFieldDecorator(TestCase):
+    """Tests for the @field decorator."""
+
+    def test_field_decorator_registers_metadata_for_scalar_field(self):
+        class ScalarDecoratedModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            class GraphQLMeta(RailGraphQLMeta):
+                fields = RailGraphQLMeta.Fields(include=["name", "summary"])
+
+            @custom_field(type=graphene.String, title="Summaries")
+            def summary(self) -> str:
+                return self.name.upper()
+
+        ModelIntrospector.clear_cache()
+        introspector = ModelIntrospector.for_model(ScalarDecoratedModel)
+        custom_fields = introspector.get_model_custom_fields()
+
+        self.assertIn("summary", custom_fields)
+        summary = custom_fields["summary"]
+        self.assertEqual(summary.verbose_name, "Summaries")
+        self.assertIs(summary.field_type, graphene.String)
+        self.assertTrue(callable(summary.method))
+
+    def test_field_decorator_supports_graphene_field_instances(self):
+        class SummaryType(graphene.ObjectType):
+            text = graphene.String()
+
+        class NestedDecoratedModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            @custom_field(type=graphene.Field(SummaryType), title="Summaries")
+            def summary_payload(self):
+                return {"text": self.name}
+
+        ModelIntrospector.clear_cache()
+        introspector = ModelIntrospector.for_model(NestedDecoratedModel)
+        custom_fields = introspector.get_model_custom_fields()
+
+        self.assertIn("summary_payload", custom_fields)
+        summary_payload = custom_fields["summary_payload"]
+        self.assertEqual(summary_payload.verbose_name, "Summaries")
+        self.assertIsInstance(summary_payload.field_type, graphene.Field)
+
+    def test_field_decorator_is_exposed_on_generated_object_types(self):
+        class SummaryType(graphene.ObjectType):
+            text = graphene.String()
+
+        class GeneratedDecoratedModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            class GraphQLMeta(RailGraphQLMeta):
+                fields = RailGraphQLMeta.Fields(
+                    include=["name", "summary", "summary_payload"]
+                )
+
+            @custom_field(type=graphene.String, title="Summaries")
+            def summary(self) -> str:
+                return f"Summary: {self.name}"
+
+            @custom_field(type=graphene.Field(SummaryType), title="Nested summary")
+            def summary_payload(self):
+                return {"text": self.name}
+
+        ModelIntrospector.clear_cache()
+        generator = TypeGenerator()
+        object_type = generator.generate_object_type(GeneratedDecoratedModel)
+        instance = GeneratedDecoratedModel(name="Desk")
+
+        self.assertEqual(object_type.resolve_summary(instance, None), "Summary: Desk")
+        self.assertEqual(
+            object_type.resolve_summary_payload(instance, None),
+            {"text": "Desk"},
+        )
+
+    def test_field_decorator_is_exposed_in_metadata_fields(self):
+        class MetadataDecoratedModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            class GraphQLMeta(RailGraphQLMeta):
+                fields = RailGraphQLMeta.Fields(include=["name", "summary"])
+
+            @custom_field(type=graphene.String, title="Summaries")
+            def summary(self) -> str:
+                return f"Summary: {self.name}"
+
+        ModelIntrospector.clear_cache()
+        extractor = FieldExtractorMixin()
+        graphql_meta = get_model_graphql_meta(MetadataDecoratedModel)
+
+        fields = extractor._extract_fields(
+            MetadataDecoratedModel,
+            user=None,
+            graphql_meta=graphql_meta,
+            include_keys={
+                "field_name",
+                "field_type",
+                "verbose_name",
+                "graphql_type",
+                "is_computed",
+            },
+        )
+
+        summary_field = next(
+            (field for field in fields if field.get("field_name") == "summary"),
+            None,
+        )
+        self.assertIsNotNone(summary_field)
+        self.assertEqual(summary_field["field_type"], "CustomField")
+        self.assertEqual(summary_field["verbose_name"], "Summaries")
+        self.assertEqual(summary_field["graphql_type"], "String")
+        self.assertTrue(summary_field["is_computed"])
+
+    def test_typed_properties_are_mounted_when_included(self):
+        class PropertyDecoratedModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            class GraphQLMeta(RailGraphQLMeta):
+                fields = RailGraphQLMeta.Fields(include=["name", "summary"])
+
+            @property
+            def summary(self) -> str:
+                return f"Summary: {self.name}"
+
+        ModelIntrospector.clear_cache()
+        generator = TypeGenerator()
+        object_type = generator.generate_object_type(PropertyDecoratedModel)
+        instance = PropertyDecoratedModel(name="Desk")
+
+        self.assertIn("summary", object_type._meta.fields)
+        self.assertEqual(object_type.resolve_summary(instance, None), "Summary: Desk")
 
 
 class TestDecoratorIntegration(TestCase):

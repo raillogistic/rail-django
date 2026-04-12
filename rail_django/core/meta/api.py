@@ -344,12 +344,13 @@ class GraphQLMetaAPIMixin:
         Returns:
             Dictionary mapping filter names to Filter instances
         """
-        from django_filters import BooleanFilter, CharFilter, NumberFilter
+        from django_filters import BooleanFilter, CharFilter, Filter, NumberFilter
 
         filter_instances: dict[str, Any] = {}
 
         for filter_name, filter_func in (self.filtering.custom or {}).items():
             callable_fn = filter_func
+            filter_class = None
             if isinstance(filter_func, str):
                 callable_fn = getattr(self.model_class, filter_func, None)
                 if callable_fn is None:
@@ -366,13 +367,31 @@ class GraphQLMetaAPIMixin:
                 )
                 continue
 
-            lower_name = filter_name.lower()
-            if lower_name.startswith(("has_", "is_")) or "bool" in lower_name:
+            filter_class = getattr(callable_fn, "_custom_filter_type", None)
+            if filter_class is not None:
+                if not isinstance(filter_class, type) or not issubclass(
+                    filter_class, Filter
+                ):
+                    logger.warning(
+                        "Custom filter '%s' has invalid filter type %r",
+                        filter_name,
+                        filter_class,
+                    )
+                    filter_class = None
+
+            if filter_class is None:
+                lower_name = filter_name.lower()
+                if lower_name.startswith(("has_", "is_")) or "bool" in lower_name:
+                    filter_class = BooleanFilter
+                elif "count" in lower_name or "number" in lower_name:
+                    filter_class = NumberFilter
+                else:
+                    filter_class = CharFilter
+
+            if filter_class is BooleanFilter:
                 filter_instances[filter_name] = BooleanFilter(method=callable_fn)
-            elif "count" in lower_name or "number" in lower_name:
-                filter_instances[filter_name] = NumberFilter(method=callable_fn)
             else:
-                filter_instances[filter_name] = CharFilter(method=callable_fn)
+                filter_instances[filter_name] = filter_class(method=callable_fn)
 
         return filter_instances
 

@@ -126,8 +126,11 @@ method name or a callable.
 
 You can also register a custom filter directly on the model method with the
 `@filter` decorator from `rail_django.core.decorators`.
+Pass `filter_type` when you want Rail Django to build a specific
+`django-filter` class, such as `CharFilter` or `NumberFilter`.
 
 ```python
+from django_filters import CharFilter
 from rail_django.core.decorators import filter
 
 class Product(models.Model):
@@ -136,6 +139,10 @@ class Product(models.Model):
 
     class GraphQLMeta:
         filtering = GraphQLMeta.Filtering()
+
+    @filter(name="name_prefix", filter_type=CharFilter)
+    def starts_with(queryset, value):
+        return queryset.filter(name__istartswith=value)
 
     @filter(name="is_active_product")
     def filter_active(queryset, value):

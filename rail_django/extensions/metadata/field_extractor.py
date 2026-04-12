@@ -10,6 +10,7 @@ from typing import Any, Optional, get_args, get_origin
 from uuid import UUID
 
 from django.db import models
+import graphene
 from ...security.field_permissions import field_permission_manager, FieldVisibility
 from ...core.settings import MutationGeneratorSettings
 from ...generators.introspector import ModelIntrospector
@@ -180,6 +181,20 @@ class FieldExtractorMixin:
                 include_keys=include_keys,
             )
         )
+        fields.extend(
+            self._extract_custom_field_fields(
+                model,
+                user,
+                graphql_meta=graphql_meta,
+                existing_field_names={
+                    str(f.get("field_name"))
+                    for f in fields
+                    if isinstance(f, dict) and f.get("field_name")
+                },
+                field_metadata=field_metadata,
+                include_keys=include_keys,
+            )
+        )
         return fields
 
     def _is_field_exposed(
@@ -230,6 +245,41 @@ class FieldExtractorMixin:
 
         property_fields.sort(key=lambda item: str(item.get("name") or ""))
         return property_fields
+
+    def _extract_custom_field_fields(
+        self,
+        model: type[models.Model],
+        user: Any,
+        *,
+        graphql_meta: Optional[Any],
+        existing_field_names: set[str],
+        field_metadata: dict[str, Any],
+        include_keys: Optional[set[str]] = None,
+    ) -> list[dict]:
+        introspector = ModelIntrospector.for_model(model)
+        custom_fields: list[dict] = []
+
+        for field_name, field_info in introspector.get_model_custom_fields().items():
+            if str(field_name).lower() in self._IGNORED_PROPERTY_NAMES:
+                continue
+            if field_name in existing_field_names:
+                continue
+            if not self._is_field_exposed(graphql_meta, field_name):
+                continue
+
+            field_schema = self._extract_custom_field(
+                model,
+                field_name,
+                field_info,
+                user,
+                field_metadata=field_metadata.get(field_name),
+                include_keys=include_keys,
+            )
+            if field_schema and field_schema.get("readable", True):
+                custom_fields.append(field_schema)
+
+        custom_fields.sort(key=lambda item: str(item.get("name") or ""))
+        return custom_fields
 
     def _extract_property_field(
         self,
@@ -391,6 +441,212 @@ class FieldExtractorMixin:
         except Exception as e:
             logger.warning("Error extracting property field %s: %s", property_name, e)
             return None
+
+    def _extract_custom_field(
+        self,
+        model: type[models.Model],
+        field_name: str,
+        field_info: Any,
+        user: Any,
+        *,
+        field_metadata: Optional[dict[str, Any]] = None,
+        include_keys: Optional[set[str]] = None,
+    ) -> Optional[dict]:
+        try:
+            from graphene.utils.str_converters import to_camel_case
+
+            wants = lambda key: self._wants(include_keys, key)
+
+            readable, writable, visibility = True, False, "VISIBLE"
+            if wants("readable") or wants("writable") or wants("visibility"):
+                if user:
+                    try:
+                        perm = field_permission_manager.check_field_permission(
+                            user, model, field_name, instance=None
+                        )
+                        readable = perm.visibility != FieldVisibility.HIDDEN
+                        visibility = (
+                            perm.visibility.name
+                            if hasattr(perm.visibility, "name")
+                            else "VISIBLE"
+                        )
+                    except Exception:
+                        readable, visibility = False, "HIDDEN"
+
+            return_type = getattr(field_info, "return_type", Any)
+            declared_type = getattr(field_info, "field_type", None)
+            graphql_type = None
+            if any(
+                wants(key)
+                for key in (
+                    "graphql_type",
+                    "is_json",
+                    "is_date",
+                    "is_datetime",
+                    "is_numeric",
+                    "is_boolean",
+                    "is_text",
+                )
+            ):
+                graphql_type = self._map_declared_graphql_type(
+                    declared_type
+                ) or self._map_property_graphql_type(return_type)
+
+            python_type = None
+            if wants("python_type"):
+                python_type = self._map_property_python_type(return_type)
+
+            custom_metadata = None
+            if wants("custom_metadata"):
+                custom_metadata = (
+                    self._to_json_value(field_metadata)
+                    if field_metadata is not None
+                    else None
+                )
+
+            verbose_name = str(
+                getattr(field_info, "verbose_name", None)
+                or field_name.replace("_", " ").strip()
+                or field_name
+            )
+
+            result: dict[str, Any] = {}
+            if wants("name"):
+                result["name"] = to_camel_case(field_name)
+            if wants("field_name"):
+                result["field_name"] = field_name
+            if wants("verbose_name"):
+                result["verbose_name"] = verbose_name
+            if wants("help_text"):
+                result["help_text"] = str(getattr(field_info, "description", None) or "")
+            if wants("field_type"):
+                result["field_type"] = "CustomField"
+            if wants("graphql_type"):
+                result["graphql_type"] = graphql_type
+            if wants("python_type"):
+                result["python_type"] = python_type
+            if wants("required"):
+                result["required"] = False
+            if wants("nullable"):
+                result["nullable"] = True
+            if wants("blank"):
+                result["blank"] = True
+            if wants("editable"):
+                result["editable"] = False
+            if wants("unique"):
+                result["unique"] = False
+            if wants("max_length"):
+                result["max_length"] = None
+            if wants("min_length"):
+                result["min_length"] = None
+            if wants("max_value"):
+                result["max_value"] = None
+            if wants("min_value"):
+                result["min_value"] = None
+            if wants("decimal_places"):
+                result["decimal_places"] = None
+            if wants("max_digits"):
+                result["max_digits"] = None
+            if wants("choices"):
+                result["choices"] = None
+            if wants("default_value"):
+                result["default_value"] = None
+            if wants("has_default"):
+                result["has_default"] = False
+            if wants("auto_now"):
+                result["auto_now"] = False
+            if wants("auto_now_add"):
+                result["auto_now_add"] = False
+            if wants("validators"):
+                result["validators"] = []
+            if wants("regex_pattern"):
+                result["regex_pattern"] = None
+            if wants("readable"):
+                result["readable"] = readable
+            if wants("writable"):
+                result["writable"] = writable
+            if wants("visibility"):
+                result["visibility"] = visibility
+            if wants("is_primary_key"):
+                result["is_primary_key"] = False
+            if wants("is_indexed"):
+                result["is_indexed"] = False
+            if wants("is_relation"):
+                result["is_relation"] = False
+            if wants("relation_type"):
+                result["relation_type"] = None
+            if wants("related_model"):
+                result["related_model"] = None
+            if wants("related_name"):
+                result["related_name"] = None
+            if wants("on_delete"):
+                result["on_delete"] = None
+            if wants("through_model"):
+                result["through_model"] = None
+            if wants("through_fields"):
+                result["through_fields"] = None
+            if wants("is_reverse"):
+                result["is_reverse"] = False
+            if wants("is_many_to_many"):
+                result["is_many_to_many"] = False
+            if wants("is_one_to_many"):
+                result["is_one_to_many"] = False
+            if wants("is_one_to_one"):
+                result["is_one_to_one"] = False
+            if wants("is_foreign_key"):
+                result["is_foreign_key"] = False
+            if wants("is_json"):
+                result["is_json"] = graphql_type == "JSONString"
+            if wants("is_date"):
+                result["is_date"] = graphql_type == "Date"
+            if wants("is_datetime"):
+                result["is_datetime"] = graphql_type == "DateTime"
+            if wants("is_numeric"):
+                result["is_numeric"] = graphql_type in {"Int", "Float", "Decimal"}
+            if wants("is_boolean"):
+                result["is_boolean"] = graphql_type == "Boolean"
+            if wants("is_text"):
+                result["is_text"] = graphql_type in {"String", "ID"}
+            if wants("is_computed"):
+                result["is_computed"] = True
+            if wants("is_file"):
+                result["is_file"] = False
+            if wants("is_image"):
+                result["is_image"] = False
+            if wants("is_required_on_create"):
+                result["is_required_on_create"] = False
+            if wants("is_required_on_update"):
+                result["is_required_on_update"] = False
+            if wants("custom_metadata"):
+                result["custom_metadata"] = custom_metadata
+
+            return result
+        except Exception as e:
+            logger.warning("Error extracting custom field %s: %s", field_name, e)
+            return None
+
+    def _map_declared_graphql_type(self, declared_type: Any) -> Optional[str]:
+        if declared_type is None:
+            return None
+
+        if isinstance(declared_type, graphene.Field):
+            field_type = getattr(declared_type, "_type", None)
+            if callable(field_type):
+                try:
+                    field_type = field_type()
+                except Exception:
+                    pass
+            return self._map_declared_graphql_type(field_type)
+
+        if isinstance(declared_type, graphene.types.unmountedtype.UnmountedType):
+            declared_type = declared_type.__class__
+
+        if isinstance(declared_type, type):
+            name = getattr(declared_type, "__name__", "")
+            if name:
+                return name
+
+        return None
 
     def _map_property_graphql_type(self, annotation: Any) -> str:
         if annotation in (None, Any):
