@@ -18,6 +18,39 @@ from .mutation_permissions import (
 logger = logging.getLogger(__name__)
 
 
+def filter(
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    filter_type: Optional[type] = None,
+):
+    """
+    Decorator to mark a model method as a custom GraphQL filter.
+
+    The decorated callable must accept ``(queryset, value)`` and return a
+    filtered queryset. The decorator stores metadata on the function and
+    exposes it as a static method on the model class.
+
+    Example:
+        @filter(name="name_prefix")
+        def starts_with(queryset, value):
+            return queryset.filter(name__istartswith=value)
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(queryset, value, *args, **kwargs):
+            return func(queryset, value, *args, **kwargs)
+
+        wrapper._is_custom_filter = True
+        wrapper._custom_filter_name = name or func.__name__
+        wrapper._custom_filter_description = description or func.__doc__
+        wrapper._custom_filter_type = filter_type
+
+        return staticmethod(wrapper)
+
+    return decorator
+
+
 def mutation(
     input_type: Optional[type[graphene.InputObjectType]] = None,
     output_type: Optional[type[graphene.ObjectType]] = None,

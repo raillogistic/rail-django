@@ -11,16 +11,19 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
 from django.apps import apps
+from django.db import models
 from django.test import TestCase
 
 from rail_django.core.decorators import (
     business_logic,
     confirm_action,
     custom_mutation_name,
+    filter as custom_filter,
     mutation,
     private_method,
     register_schema,
 )
+from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta, get_model_graphql_meta
 
 
 class TestRegisterSchemaDecorator(TestCase):
@@ -317,6 +320,30 @@ class TestExistingDecorators(TestCase):
         self.assertEqual(
             test_custom_name_method._custom_mutation_name, "customMutationName"
         )
+
+
+class TestCustomFilterDecorator(TestCase):
+    """Tests for the @filter decorator."""
+
+    def test_filter_decorator_registers_with_graphql_meta(self):
+        class FilteredModel(models.Model):
+            name = models.CharField(max_length=255)
+
+            class Meta:
+                app_label = "test_decorators"
+
+            class GraphQLMeta(RailGraphQLMeta):
+                filtering = RailGraphQLMeta.Filtering()
+
+            @custom_filter(name="name_prefix")
+            def starts_with(queryset, value):
+                return queryset.filter(name__istartswith=value)
+
+        meta = get_model_graphql_meta(FilteredModel)
+
+        self.assertTrue(meta.has_custom_filter("name_prefix"))
+        self.assertEqual(meta.filtering.custom["name_prefix"], "starts_with")
+        self.assertTrue(callable(meta.get_custom_filter("name_prefix")))
 
 
 class TestDecoratorIntegration(TestCase):

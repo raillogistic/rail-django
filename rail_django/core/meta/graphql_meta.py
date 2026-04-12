@@ -136,6 +136,7 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
             self._meta_config
         )
 
+        self._register_decorated_custom_filters()
         self.relations_config: dict[str, FieldRelationConfig] = getattr(
             self._meta_config, "relations", {}
         )
@@ -168,6 +169,30 @@ class GraphQLMeta(GraphQLMetaAPIMixin):
         self._register_abac_policies()
 
         self._validate_configuration()
+
+    def _register_decorated_custom_filters(self) -> None:
+        """Merge custom filters declared via the @filter decorator."""
+        custom_filters = dict(self.filtering.custom)
+        discovered: dict[str, str] = {}
+
+        for base_class in reversed(self.model_class.__mro__):
+            if base_class in (models.Model, object):
+                continue
+
+            for attr_name, attr_value in vars(base_class).items():
+                target = getattr(attr_value, "__func__", attr_value)
+                if not getattr(target, "_is_custom_filter", False):
+                    continue
+
+                filter_name = getattr(
+                    target, "_custom_filter_name", None
+                ) or attr_name
+                discovered.setdefault(filter_name, attr_name)
+
+        for filter_name, method_name in discovered.items():
+            custom_filters.setdefault(filter_name, method_name)
+
+        self.filtering.custom = custom_filters
 
     def get_relation_config(self, field_name: str) -> Optional[FieldRelationConfig]:
         """Get configuration for a specific relation field."""

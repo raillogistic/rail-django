@@ -124,23 +124,22 @@ Use `GraphQLMeta.Filtering(custom=...)` when you need a filter that does not
 map cleanly to a field lookup. Each entry maps a filter name to either a model
 method name or a callable.
 
+You can also register a custom filter directly on the model method with the
+`@filter` decorator from `rail_django.core.decorators`.
+
 ```python
+from rail_django.core.decorators import filter
+
 class Product(models.Model):
     name = models.CharField(max_length=255)
     active = models.BooleanField(default=True)
 
-    def filter_active(self, queryset, value):
-        return queryset.filter(active=bool(value))
-
     class GraphQLMeta:
-        filtering = GraphQLMeta.Filtering(
-            custom={
-                "is_active_product": "filter_active",
-                "name_prefix": lambda queryset, value: queryset.filter(
-                    name__istartswith=value
-                ),
-            }
-        )
+        filtering = GraphQLMeta.Filtering()
+
+    @filter(name="is_active_product")
+    def filter_active(queryset, value):
+        return queryset.filter(active=bool(value))
 ```
 
 ```graphql
@@ -153,6 +152,8 @@ query {
 
 Custom filters appear in the generated filter set and can also be applied with
 `get_custom_filter(...)` or `apply_custom_filter(...)` on the GraphQLMeta helper.
+You can still use `custom={...}` when you want to point at an existing callable
+or model method name explicitly.
 
 ## Computed Filters
 
