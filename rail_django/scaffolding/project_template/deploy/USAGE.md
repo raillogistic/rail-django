@@ -30,12 +30,11 @@ placeholder value. It still rejects placeholder values for
 `DJANGO_SUPERUSER_PASSWORD`.
 
 **Optional runtime toggles:**
-- `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: Default to `False` in the scaffold because `deploy.sh` runs these steps. Set to `True` only if you explicitly want startup-time execution.
+- `RUN_MIGRATIONS` / `RUN_COLLECTSTATIC`: The bundled `web` service enables
+  these at container startup, so the app runs `migrate` and
+  `collectstatic` before the server starts.
 - `DJANGO_CHECK_DEPLOY`: Run `python manage.py check --deploy` on container start.
 - `MEDIA_PATH`: Host path for uploads (absolute or relative to `deploy/docker/`).
-
-**Optional deploy controls:**
-- `DEPLOY_REFRESH_DEPS`: Force base dependency rebuild during deploy (useful when `requirements/base.txt` changes).
 
 **Runtime server defaults (ASGI):**
 - `DJANGO_SERVER_MODE=asgi`
@@ -58,18 +57,16 @@ From your project root:
 bash deploy/deploy.sh
 ```
 
-The script validates `.env.prod`, ensures TLS
-certs exist, builds/starts containers, and runs migrations + collectstatic.
-This is the default owner for migration/static orchestration in the scaffold.
+The script validates `.env.prod`, ensures TLS certs exist, validates the
+Nginx config, builds the images, and starts the containers. The `web`
+container now owns `migrate` and `collectstatic` during its startup sequence.
 
 ### Optional Flags
 ```bash
-bash deploy/deploy.sh --create-superuser --follow-logs --refresh-deps
+bash deploy/deploy.sh --follow-logs
 ```
-Use `--refresh-deps` to bust the base dependency layer; the `rail-django` Git
-install is refreshed on every build.
 
-### Non-Interactive Superuser (CI/Automation)
+### Superuser automation
 Set these in your `.env.prod` and re-run the script:
 ```bash
 DEPLOY_CREATE_SUPERUSER=1
@@ -96,42 +93,32 @@ EOF
 
 bash deploy/deploy.sh
 ```
-Add `DEPLOY_REFRESH_DEPS=1` if you need to rebuild base dependencies.
 
 ## 3. Manual Deployment Steps
 
 Run these commands from your project root:
 
 ### A. Build web and nginx images
-Build the Python and Nginx images before running schema tasks:
+Build the Python and Nginx images before starting the stack:
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml build web nginx
 ```
 The default web runtime is ASGI, so GraphQL subscriptions are available without
 extra runtime changes.
 
-### B. Run Migrations
-Apply database schema changes to your external database:
+### B. Validate the Nginx configuration
+Validate the rendered Nginx config before you start the stack:
 ```bash
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --no-deps --entrypoint nginx nginx -t
 ```
 
-### C. Collect Static Files
-Prepare CSS, JS, and images for Nginx to serve:
-```bash
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
-```
-
-### D. Start Services
+### C. Start services
 Start the Web and Nginx containers:
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
-
-### E. Create Superuser (Optional)
-```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
-```
+On startup, the `web` container runs `python manage.py migrate` and
+`python manage.py collectstatic --noinput` before it starts the Django server.
 
 ## 4. Directory Structure
 
@@ -156,6 +143,11 @@ Use these endpoints for orchestrator probes and diagnostics:
   `/health/components/`, `/health/history/`) are restricted to loopback callers
   by the scaffolded Nginx config.
 
+The bundled Docker healthcheck calls the readiness endpoint over plain HTTP on
+the internal app port and sends `X-Forwarded-Proto: https`. Keep that header in
+place when `SECURE_SSL_REDIRECT` is enabled, or Django will redirect the probe
+to HTTPS and Docker will keep the `web` service in an unhealthy state.
+
 ### Stopping the Application
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml down
@@ -163,16 +155,12 @@ docker-compose -f deploy/docker/docker-compose.yml down
 
 ### Updating the Application
 1. Pull your latest code changes.
-2. Re-run build, schema tasks, and startup:
+2. Rebuild images, validate Nginx, and restart the stack:
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml build web nginx
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
+docker-compose -f deploy/docker/docker-compose.yml run --rm --no-deps --entrypoint nginx nginx -t
 docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
-Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
-need to rebuild base dependencies. The `rail-django` Git install is refreshed
-on every build.
 
 ### Running Backups
 Run a one-shot backup on the host:

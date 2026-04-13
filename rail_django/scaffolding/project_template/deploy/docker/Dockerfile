@@ -28,8 +28,6 @@ RUN apt-get update && \
 COPY requirements/ requirements/
 RUN pip install --upgrade pip
 RUN mkdir -p /app/wheels
-ARG RAIL_DEP_CACHE_BUST=0
-RUN echo "Dependency cache bust: ${RAIL_DEP_CACHE_BUST}" > /app/.dep_cache_bust
 RUN if [ -d requirements/wheels ] && [ "$(ls -A requirements/wheels)" ]; then \
         cp -r requirements/wheels/. /app/wheels; \
     else \
@@ -95,8 +93,6 @@ COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache-dir --no-index /wheels/*
 
 COPY requirements/ requirements/
-ARG RAIL_GIT_CACHE_BUST=0
-RUN echo "Rail git cache bust: ${RAIL_GIT_CACHE_BUST}" > $APP_HOME/.rail_git_cache_bust
 RUN pip install --no-cache-dir -r requirements/rail-django.txt
 
 # copy entrypoint.sh

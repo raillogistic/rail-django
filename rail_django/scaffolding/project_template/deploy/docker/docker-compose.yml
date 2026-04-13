@@ -12,6 +12,9 @@ services:
       dockerfile: deploy/docker/Dockerfile
     image: ${COMPOSE_PROJECT_NAME:-railapp}-api:latest
     restart: unless-stopped
+    environment:
+      RUN_MIGRATIONS: "True"
+      RUN_COLLECTSTATIC: "True"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -24,7 +27,7 @@ services:
     env_file:
       - ../../.env.prod
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import sys, urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:8000/health/ready/', timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import sys, urllib.request; req = urllib.request.Request('http://127.0.0.1:8000/health/ready/', headers={'X-Forwarded-Proto': 'https'}); resp = urllib.request.urlopen(req, timeout=3); sys.exit(0 if 200 <= getattr(resp, 'status', 200) < 400 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -60,7 +63,7 @@ services:
       - static_volume:/app/staticfiles
       - ${MEDIA_PATH:-../../media}:/app/mediafiles
     ports:
-      - "8000:8000"
+      - "${HTTPS_PORT:-7000}:8000"
     depends_on:
       web:
         condition: service_healthy

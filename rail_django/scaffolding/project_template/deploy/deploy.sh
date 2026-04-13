@@ -24,11 +24,7 @@ CERT_CRT="$CERTS_DIR/server.crt"
 CERT_KEY="$CERTS_DIR/server.key"
 HOST_DIR_HELPER_IMAGE="${DEPLOY_HOST_DIR_HELPER_IMAGE:-busybox:1.36.1}"
 
-CREATE_SUPERUSER=0
 FOLLOW_LOGS=0
-SKIP_MIGRATE=0
-SKIP_COLLECTSTATIC=0
-REFRESH_DEPS=0
 REPAIR_BUILD_CACHE=0
 SKIP_BUILD=0
 
@@ -37,13 +33,9 @@ usage() {
 Usage: deploy.sh [options]
 
 Options:
-  --create-superuser   Run Django createsuperuser (interactive).
   --follow-logs        Follow docker logs after deployment.
-  --refresh-deps       Rebuild dependency layer (useful for git-based deps).
   --repair-build-cache Prune Docker builder cache before build (fixes snapshot cache corruption).
   --skip-build         Skip image build and reuse existing web/nginx images.
-  --skip-migrate       Skip running migrations after containers start.
-  --skip-collectstatic Skip collectstatic after containers start.
   -h, --help           Show this help message.
 
 Environment:
@@ -51,12 +43,6 @@ Environment:
   DEPLOY_CREATE_SUPERUSER=1
                        Create a superuser non-interactively from .env.prod values.
                        Requires DJANGO_SUPERUSER_USERNAME and DJANGO_SUPERUSER_PASSWORD.
-  DEPLOY_REFRESH_DEPS=1
-                       Force dependency layer rebuild on deploy.
-  DEPLOY_REPAIR_BUILD_CACHE=1
-                       Prune Docker builder cache before build.
-  DEPLOY_SKIP_BUILD=1
-                       Skip image build and reuse existing images.
   DEPLOY_HOST_DIR_HELPER_IMAGE
                        Helper image used to create absolute bind paths on Docker host.
 EOF
@@ -64,13 +50,9 @@ EOF
 
 for arg in "$@"; do
   case "$arg" in
-    --create-superuser) CREATE_SUPERUSER=1 ;;
     --follow-logs) FOLLOW_LOGS=1 ;;
-    --refresh-deps) REFRESH_DEPS=1 ;;
     --repair-build-cache) REPAIR_BUILD_CACHE=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
-    --skip-migrate) SKIP_MIGRATE=1 ;;
-    --skip-collectstatic) SKIP_COLLECTSTATIC=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown option: $arg" ;;
   esac
@@ -295,102 +277,40 @@ fi
 ensure_dir "$SCRIPT_DIR/docker/$cache_path"
 ensure_mount_source_dir "$cache_path" "CACHE_PATH"
 
-if [ "$SKIP_BUILD" -eq 1 ] || is_truthy "$(read_env DEPLOY_SKIP_BUILD)"; then
-  if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
-    warn "Skipping build: --refresh-deps / DEPLOY_REFRESH_DEPS has no effect when build is skipped."
+if [ "$SKIP_BUILD" -eq 1 ]; then
+  if [ "$REPAIR_BUILD_CACHE" -eq 1 ]; then
+    warn "Skipping build: --repair-build-cache has no effect when build is skipped."
   fi
-  if [ "$REPAIR_BUILD_CACHE" -eq 1 ] || is_truthy "$(read_env DEPLOY_REPAIR_BUILD_CACHE)"; then
-    warn "Skipping build: --repair-build-cache / DEPLOY_REPAIR_BUILD_CACHE has no effect when build is skipped."
-  fi
-  note "Skipping web/nginx image build (DEPLOY_SKIP_BUILD=1 or --skip-build)."
+  note "Skipping web/nginx image build (--skip-build)."
 else
   note "Building web and nginx images..."
-  build_args=()
-  build_args+=(--build-arg "RAIL_GIT_CACHE_BUST=$(date +%s)")
-  if [ "$REFRESH_DEPS" -eq 1 ] || is_truthy "$(read_env DEPLOY_REFRESH_DEPS)"; then
-    build_args+=(--build-arg "RAIL_DEP_CACHE_BUST=$(date +%s)")
-  fi
 
-  if [ "$REPAIR_BUILD_CACHE" -eq 1 ] || is_truthy "$(read_env DEPLOY_REPAIR_BUILD_CACHE)"; then
+  if [ "$REPAIR_BUILD_CACHE" -eq 1 ]; then
     repair_builder_cache
   fi
 
-  if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" build "${build_args[@]}" web nginx; then
-    die "Image build failed. If the error includes 'parent snapshot ... does not exist', rerun with --repair-build-cache (or set DEPLOY_REPAIR_BUILD_CACHE=1)."
+  if ! "${COMPOSE[@]}" -f "$COMPOSE_FILE" build web nginx; then
+    die "Image build failed. If the error includes 'parent snapshot ... does not exist', rerun with --repair-build-cache."
   fi
+fi
+
+note "Validating nginx configuration..."
+output=""
+if ! output="$("${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint nginx nginx -t 2>&1)"; then
+  warn "Nginx configuration validation failed."
+  if [ -n "$output" ]; then
+    printf '%s\n' "$output" >&2
+  fi
+  die "Fix the nginx config before starting containers."
 fi
 
 note "Validating runtime storage permissions..."
 ensure_runtime_mount_writable
 
-if [ "$SKIP_MIGRATE" -eq 0 ]; then
-  note "Running migrations..."
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py migrate
-fi
-
-if [ "$SKIP_COLLECTSTATIC" -eq 0 ]; then
-  note "Collecting static files..."
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py collectstatic --noinput
-fi
-
 note "Starting containers..."
 "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
 
-note "Waiting for web readiness endpoint..."
-attempts=30
-allowed_hosts="$(read_env DJANGO_ALLOWED_HOSTS)"
-allowed_hosts="${allowed_hosts// /}"
-readiness_host="${allowed_hosts%%,*}"
-if [ -z "$readiness_host" ] || [ "$readiness_host" = "*" ]; then
-  readiness_host="localhost"
-fi
-readiness_url="https://nginx:8000/health/ready/"
-note "Readiness probe URL: ${readiness_url} (Host header: ${readiness_host})"
-readiness_cmd="$(cat <<'PY'
-import os
-import ssl
-import sys
-import urllib.request
-
-host = os.environ.get("RAIL_READINESS_HOST", "localhost")
-tls_context = ssl._create_unverified_context()
-
-try:
-    req = urllib.request.Request(
-        "https://nginx:8000/health/ready/",
-        headers={"Host": host},
-    )
-    resp = urllib.request.urlopen(
-        req,
-        timeout=3,
-        context=tls_context,
-    )
-    status = getattr(resp, "status", 200)
-    if 200 <= status < 400:
-        sys.exit(0)
-except Exception:
-    pass
-
-sys.exit(1)
-PY
-)"
-last_probe_error=""
-until probe_output="$("${COMPOSE[@]}" -f "$COMPOSE_FILE" exec -T -e "RAIL_READINESS_HOST=$readiness_host" web python -c "$readiness_cmd" 2>&1)"; do
-  last_probe_error="$probe_output"
-  attempts=$((attempts - 1))
-  if [ "$attempts" -le 0 ]; then
-    if [ -n "$last_probe_error" ]; then
-      warn "Last readiness probe error: $last_probe_error"
-    fi
-    die "Web readiness probe did not pass for ${readiness_url} (Host: ${readiness_host})."
-  fi
-  sleep 1
-done
-
-if [ "$CREATE_SUPERUSER" -eq 1 ]; then
-  note "Creating superuser (interactive)..."
-  "${COMPOSE[@]}" -f "$COMPOSE_FILE" exec web python manage.py createsuperuser
-elif is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
+if is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
   note "Ensuring superuser exists (non-interactive)..."
   su_username="$(read_env DJANGO_SUPERUSER_USERNAME)"
   su_email="$(read_env DJANGO_SUPERUSER_EMAIL)"
