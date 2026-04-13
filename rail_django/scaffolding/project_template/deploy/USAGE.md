@@ -112,13 +112,18 @@ Validate the rendered Nginx config before you start the stack:
 docker-compose -f deploy/docker/docker-compose.yml run --rm --no-deps --entrypoint nginx nginx -t
 ```
 
-### C. Start services
-Start the Web and Nginx containers:
+### C. Run schema tasks
+Run migrations and collect static files before the services start:
+```bash
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
+docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
+```
+
+### D. Start services
+Start the Web and Nginx containers after schema tasks complete:
 ```bash
 docker-compose -f deploy/docker/docker-compose.yml up -d
 ```
-On startup, the `web` container runs `python manage.py migrate` and
-`python manage.py collectstatic --noinput` before it starts the Django server.
 
 ## 4. Directory Structure
 

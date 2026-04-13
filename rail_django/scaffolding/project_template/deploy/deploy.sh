@@ -23,6 +23,7 @@ CERTS_DIR="$SCRIPT_DIR/nginx/certs"
 CERT_CRT="$CERTS_DIR/server.crt"
 CERT_KEY="$CERTS_DIR/server.key"
 HOST_DIR_HELPER_IMAGE="${DEPLOY_HOST_DIR_HELPER_IMAGE:-busybox:1.36.1}"
+RAIL_READINESS_HOST="${RAIL_READINESS_HOST:-localhost}"
 
 FOLLOW_LOGS=0
 REPAIR_BUILD_CACHE=0
@@ -307,8 +308,43 @@ fi
 note "Validating runtime storage permissions..."
 ensure_runtime_mount_writable
 
+note "Running database migrations..."
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py migrate
+
+note "Collecting static files..."
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --entrypoint python web manage.py collectstatic --noinput
+
 note "Starting containers..."
 "${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d
+
+note "Waiting for HTTPS readiness probe via nginx..."
+"${COMPOSE[@]}" -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint python web -c "
+import os
+import ssl
+import time
+import urllib.request
+
+host = os.environ.get('RAIL_READINESS_HOST', 'localhost')
+url = "https://nginx:8000/health/ready/"
+deadline = time.time() + 120
+headers={"Host": host}
+context = ssl._create_unverified_context()
+
+last_error = None
+while time.time() < deadline:
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5, context=context) as resp:
+            status = getattr(resp, 'status', 200)
+            if 200 <= status < 400:
+                raise SystemExit(0)
+            last_error = f'Unexpected status: {status}'
+    except Exception as exc:
+        last_error = str(exc)
+    time.sleep(2)
+
+raise SystemExit(last_error or 'Readiness probe timed out')
+"
 
 if is_truthy "$(read_env DEPLOY_CREATE_SUPERUSER)"; then
   note "Ensuring superuser exists (non-interactive)..."

@@ -63,7 +63,7 @@ services:
       - static_volume:/app/staticfiles
       - ${MEDIA_PATH:-../../media}:/app/mediafiles
     ports:
-      - "${HTTPS_PORT:-7000}:8000"
+      - "8000:8000"
     depends_on:
       web:
         condition: service_healthy
