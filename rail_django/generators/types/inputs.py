@@ -143,9 +143,10 @@ def generate_input_type(
         else:
             input_fields[field_name] = graphene.InputField(relation_input)
 
+    has_direct_writable_fields = bool(input_fields)
 
     # Add reverse relationship fields
-    if include_reverse_relations:
+    if include_reverse_relations and has_direct_writable_fields:
         reverse_relations = self._get_reverse_relations(model)
         for field_name, rel_info in reverse_relations.items():
             if exclude_fields and field_name in exclude_fields:

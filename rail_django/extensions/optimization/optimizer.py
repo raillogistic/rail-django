@@ -35,6 +35,8 @@ class QueryOptimizer:
         2. ``prefetch_related()`` for M2M/reverse FK fields.
         3. ``only()`` to limit fetched columns to those actually requested.
         """
+        tenant_filter = getattr(queryset, "_rail_tenant_filter", None)
+
         if not self.config.auto_optimize_queries:
             return queryset
 
@@ -75,6 +77,12 @@ class QueryOptimizer:
                     "Skipped only() optimisation due to incompatibility",
                     exc_info=True,
                 )
+
+        if tenant_filter:
+            try:
+                setattr(queryset, "_rail_tenant_filter", tenant_filter)
+            except Exception:
+                pass
 
         return queryset
 

@@ -1,4 +1,4 @@
-FROM nginx:1.27-alpine
+FROM nginx:1.25-alpine
 
 # Custom Nginx main config for worker tuning
 RUN echo 'worker_processes auto;' > /etc/nginx/nginx.conf && \

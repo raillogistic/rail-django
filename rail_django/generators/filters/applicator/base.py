@@ -180,6 +180,7 @@ class BaseFilterApplicatorMixin:
             return queryset
 
         model = model or queryset.model
+        tenant_filter = getattr(queryset, "_rail_tenant_filter", None)
 
         # Get quick fields from GraphQLMeta if not provided
         if quick_filter_fields is None and model:
@@ -313,6 +314,12 @@ class BaseFilterApplicatorMixin:
 
         if q_object:
             queryset = queryset.filter(q_object)
+
+        if tenant_filter:
+            try:
+                setattr(queryset, "_rail_tenant_filter", tenant_filter)
+            except Exception:
+                pass
 
         # Apply include filter last
         if include_ids:
