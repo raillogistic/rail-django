@@ -77,6 +77,7 @@ WORKDIR $APP_HOME
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libpq5 \
+    libaio1t64 \
     netcat-openbsd \
     libcairo2 \
     libgdk-pixbuf-2.0-0 \
@@ -85,6 +86,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 \
     libffi8 \
     curl \
+    && \
+    if [ ! -e /usr/lib/x86_64-linux-gnu/libaio.so.1 ] && [ -e /usr/lib/x86_64-linux-gnu/libaio.so.1t64 ]; then \
+      ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1; \
+    fi \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

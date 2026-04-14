@@ -38,6 +38,7 @@ logs/
 
 # Temporary and scratch files
 .tmp/
+deploy/.build-context/
 
 # IDE and editor configs
 .vscode/

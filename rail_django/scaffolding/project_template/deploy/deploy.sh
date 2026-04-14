@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker/docker-compose.yml"
 ENV_FILE="$PROJECT_ROOT/.env.prod"
+BUILD_CONTEXT_DIR="$SCRIPT_DIR/.build-context"
 CERTS_DIR="$SCRIPT_DIR/nginx/certs"
 CERT_CRT="$CERTS_DIR/server.crt"
 CERT_KEY="$CERTS_DIR/server.key"
@@ -108,6 +109,61 @@ ensure_mount_source_dir() {
 
   warn "Could not pre-create ${mount_label} on Docker host: ${path} (helper image: ${HOST_DIR_HELPER_IMAGE})."
   warn "If deployment fails with mount/permission errors, create it manually on the server and retry."
+}
+
+prepare_build_context() {
+  note "Preparing filtered Docker build context..."
+  ensure_dir "$BUILD_CONTEXT_DIR"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude '/deploy/.build-context/' \
+      --exclude '/env/' \
+      --exclude '/.git/' \
+      --exclude '/oracle/' \
+      --exclude '/media/' \
+      --exclude '/mediafiles/' \
+      --exclude '/backups/' \
+      --exclude '/cache/' \
+      --exclude '/logs/' \
+      --exclude '/.tmp/' \
+      --exclude '/docs/' \
+      --exclude '/tests/' \
+      --exclude '/db.sqlite3' \
+      --exclude '/db.sqlite3-shm' \
+      --exclude '/db.sqlite3-wal' \
+      --exclude '/events.txt' \
+      --exclude '/sync.md' \
+      --exclude '/.env' \
+      --exclude '/.env.*' \
+      "$PROJECT_ROOT"/ "$BUILD_CONTEXT_DIR"/
+  else
+    rm -rf "$BUILD_CONTEXT_DIR"
+    mkdir -p "$BUILD_CONTEXT_DIR"
+    tar -C "$PROJECT_ROOT" \
+      --exclude='./deploy/.build-context' \
+      --exclude='./env' \
+      --exclude='./.git' \
+      --exclude='./oracle' \
+      --exclude='./media' \
+      --exclude='./mediafiles' \
+      --exclude='./backups' \
+      --exclude='./cache' \
+      --exclude='./logs' \
+      --exclude='./.tmp' \
+      --exclude='./docs' \
+      --exclude='./tests' \
+      --exclude='./db.sqlite3' \
+      --exclude='./db.sqlite3-shm' \
+      --exclude='./db.sqlite3-wal' \
+      --exclude='./events.txt' \
+      --exclude='./sync.md' \
+      --exclude='./.env' \
+      --exclude='./.env.*' \
+      -cf - . | tar -C "$BUILD_CONTEXT_DIR" -xf -
+  fi
+
+  export BUILD_CONTEXT="$BUILD_CONTEXT_DIR"
 }
 
 ensure_runtime_mount_writable() {
@@ -284,6 +340,7 @@ if [ "$SKIP_BUILD" -eq 1 ]; then
   fi
   note "Skipping web/nginx image build (--skip-build)."
 else
+  prepare_build_context
   note "Building web and nginx images..."
 
   if [ "$REPAIR_BUILD_CACHE" -eq 1 ]; then
