@@ -76,6 +76,12 @@ class SecurityConfig:
             "store_in_database": getattr(settings, "AUDIT_STORE_IN_DATABASE", True),
             "store_in_file": getattr(settings, "AUDIT_STORE_IN_FILE", True),
             "webhook_url": getattr(settings, "AUDIT_WEBHOOK_URL", None),
+            "audited_query_fields": get_setting(
+                "security_settings.audited_query_fields", []
+            ),
+            "limited_query_fields": get_setting(
+                "security_settings.limited_query_fields", []
+            ),
             "retention_days": getattr(settings, "AUDIT_RETENTION_DAYS", 90),
             "alert_thresholds": getattr(
                 settings,

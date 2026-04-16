@@ -22,6 +22,8 @@ class RuntimeSettings:
     rate_limit_requests_per_minute: int = 60
     rate_limit_requests_per_hour: int = 1000
     enable_query_depth_limiting: bool = True
+    audited_query_fields: list[str] = field(default_factory=list)
+    limited_query_fields: list[str] = field(default_factory=list)
     allowed_origins: list[str] = field(default_factory=lambda: ["*"])
     enable_csrf_protection: bool = True
     enable_cors: bool = True

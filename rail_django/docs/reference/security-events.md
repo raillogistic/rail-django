@@ -36,6 +36,11 @@ security.query_blocked(request, "complexity", {"score": 150, "max": 100})
 | query | QUERY_BLOCKED_COMPLEXITY | Query rejected |
 | rate | RATE_LIMIT_EXCEEDED | Rate limit hit |
 
+With the default audit configuration, GraphQL mutations emit data events into
+the configured audit sinks. GraphQL queries emit `DATA_READ` only when the
+query root field name or operation name is listed in
+`security_settings.audited_query_fields`.
+
 ## Anomaly Detection
 
 Requires Redis for distributed counting:

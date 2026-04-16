@@ -11,6 +11,10 @@ Audit entries are stored as `AuditEventModel` records and are emitted through
 the security event API. Events include actor identity, request metadata,
 outcome, severity, and optional structured context.
 
+By default, Rail Django audits all GraphQL mutations. Query audit entries are
+opt-in. Add the root query field name or GraphQL operation name to
+`security_settings.audited_query_fields` when you want a query recorded.
+
 The persisted model lives in `rail_django.extensions.audit.models` and includes
 fields such as:
 
@@ -35,6 +39,17 @@ AUDIT_STORE_IN_DATABASE = True
 AUDIT_STORE_IN_FILE = True
 AUDIT_WEBHOOK_URL = None
 AUDIT_RETENTION_DAYS = 90
+
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        # Mutations are always audited when audit logging is enabled.
+        # Add root query field names or GraphQL operation names here to audit
+        # specific queries too.
+        "audited_query_fields": ["me", "CustomerSearch"],
+        # Apply depth and complexity limits only to these queries.
+        "limited_query_fields": ["me", "CustomerSearch"],
+    }
+}
 
 AUDIT_ALERT_THRESHOLDS = {
     "failed_logins_per_ip": 10,
@@ -109,6 +124,10 @@ from rail_django.extensions.audit.models import get_audit_event_model
 AuditEvent = get_audit_event_model()
 recent = AuditEvent.objects.filter(success=False).order_by("-timestamp")[:50]
 ```
+
+Mutation audit rows are stored as `data.create`, `data.update`, `data.delete`,
+or `data.bulk` events. Query audit rows are stored as `data.read` when the
+query matches `security_settings.audited_query_fields`.
 
 ## Next steps
 

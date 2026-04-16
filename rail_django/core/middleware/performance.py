@@ -11,11 +11,29 @@ from typing import Any, Callable, Optional
 
 from graphql import DocumentNode
 
+from ...config_proxy import get_setting
 from .base import BaseMiddleware
 from ..performance import get_complexity_analyzer
 from ..services import get_rate_limiter
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_query_selector_list(values: Any) -> set[str]:
+    if values is None:
+        return set()
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple, set)):
+        return set()
+    normalized: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        item = str(value).strip().lower()
+        if item:
+            normalized.add(item)
+    return normalized
 
 
 class PerformanceMiddleware(BaseMiddleware):
@@ -118,6 +136,8 @@ class QueryComplexityMiddleware(BaseMiddleware):
         operation_type = info.operation.operation.value if info.operation else "unknown"
         if operation_type != "query":
             return next_resolver(root, info, **kwargs)
+        if not self._should_limit_query(info):
+            return next_resolver(root, info, **kwargs)
 
         # Analyze query complexity
         query_string = str(info.operation)
@@ -146,6 +166,26 @@ class QueryComplexityMiddleware(BaseMiddleware):
             raise ValueError(f"Query complexity validation failed: {'; '.join(validation_errors)}")
 
         return next_resolver(root, info, **kwargs)
+
+    def _should_limit_query(self, info: Any) -> bool:
+        """Apply query limits only to queries explicitly listed in settings."""
+        selectors = _normalize_query_selector_list(
+            get_setting(
+                "security_settings.limited_query_fields",
+                [],
+                schema_name=self.schema_name,
+            )
+        )
+        if not selectors:
+            return False
+
+        field_name = str(getattr(info, "field_name", "") or "").strip().lower()
+        operation = getattr(info, "operation", None)
+        name_node = getattr(operation, "name", None)
+        operation_name = ""
+        if name_node and getattr(name_node, "value", None):
+            operation_name = str(name_node.value).strip().lower()
+        return field_name in selectors or operation_name in selectors
 
 
 class RateLimitingMiddleware(BaseMiddleware):

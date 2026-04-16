@@ -511,6 +511,10 @@ RAIL_DJANGO_GRAPHQL = {
         "permission_audit_log_all": False,
         # Log deny decisions when audit is enabled
         "permission_audit_log_denies": True,
+        # Audit all mutations plus only these named root queries or operation names
+        "audited_query_fields": [],
+        # Apply depth and complexity limits only to these root queries or operation names
+        "limited_query_fields": [],
         # Enable rate limiting
         "enable_rate_limiting": False,
         # Requests per minute limit

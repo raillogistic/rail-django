@@ -331,6 +331,31 @@ When `enforce_allowlist` is false, allowlist entries are treated as pre-register
 queries and unknown hashes return `PERSISTED_QUERY_NOT_FOUND` so clients can
 register them when `allow_unregistered` is enabled.
 
+## Query-specific audit and limits
+
+You can scope audit logging and query guardrails to named queries instead of
+applying them to every read operation.
+
+```python
+GRAPHQL_ENABLE_AUDIT_LOGGING = True
+AUDIT_STORE_IN_DATABASE = True
+
+RAIL_DJANGO_GRAPHQL = {
+    "security_settings": {
+        # Mutations are always audited. Queries are audited only when the root
+        # field name or GraphQL operation name appears here.
+        "audited_query_fields": ["me", "CustomerSearch"],
+        # Depth and complexity limits run only for these root query field names
+        # or operation names.
+        "limited_query_fields": ["me", "CustomerSearch"],
+    }
+}
+```
+
+If both lists are empty, Rail Django still audits mutations, but it does not
+create `data.read` audit rows for queries and it does not apply query depth or
+complexity limits to reads.
+
 ## Rate limiting
 
 Rate limiting is centralized in `rail_django.rate_limiting` and applied in:
@@ -442,6 +467,11 @@ AUDIT_RETENTION_DAYS = 90
 AUDIT_RETENTION_RUN_INTERVAL = 3600
 AUDIT_RETENTION_HOOK = None  # Optional dotted path or callable
 ```
+
+`AUDIT_STORE_IN_DATABASE` defaults to `True`. With audit logging enabled, Rail
+Django stores all mutation audit events in the configured sinks. Query audit
+events are stored only for the query names listed in
+`security_settings.audited_query_fields`.
 
 ## Webhooks
 

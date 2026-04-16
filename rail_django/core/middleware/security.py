@@ -12,11 +12,29 @@ from typing import Any, Callable, Optional
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 
+from ...config_proxy import get_setting
 from .base import BaseMiddleware
 from ..security import get_input_validator
 from ..exceptions import ValidationError as GraphQLValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_query_selector_list(values: Any) -> set[str]:
+    if values is None:
+        return set()
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple, set)):
+        return set()
+    normalized: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        item = str(value).strip().lower()
+        if item:
+            normalized.add(item)
+    return normalized
 
 
 class ValidationMiddleware(BaseMiddleware):
@@ -176,6 +194,11 @@ class GraphQLAuditMiddleware(BaseMiddleware):
         # but kept structure if needed for future extensions
 
         operation_type = info.operation.operation.value if info.operation else "unknown"
+        if (
+            operation_type == "query"
+            and not self._should_audit_query(info)
+        ):
+            return next_resolver(root, info, **kwargs)
         event_type = self._resolve_event_type(operation_type, info.field_name, EventType)
 
         additional_data = {
@@ -235,6 +258,22 @@ class GraphQLAuditMiddleware(BaseMiddleware):
         if name_node and getattr(name_node, "value", None):
             return name_node.value
         return None
+
+    def _should_audit_query(self, info: Any) -> bool:
+        """Audit queries only when explicitly listed in settings."""
+        selectors = _normalize_query_selector_list(
+            get_setting(
+                "security_settings.audited_query_fields",
+                [],
+                schema_name=self.schema_name,
+            )
+        )
+        if not selectors:
+            return False
+
+        field_name = str(getattr(info, "field_name", "") or "").strip().lower()
+        operation_name = str(self._get_operation_name(info) or "").strip().lower()
+        return field_name in selectors or operation_name in selectors
 
     def _resolve_event_type(
         self, operation_type: str, field_name: Optional[str], audit_enum: Any

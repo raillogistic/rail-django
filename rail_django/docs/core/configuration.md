@@ -96,8 +96,18 @@ Common keys:
 - `enable_sql_injection_protection`
 - `enable_xss_protection`
 - `enable_rate_limiting`
+- `audited_query_fields`
+- `limited_query_fields`
 - `permission_cache_ttl_seconds`
 - `input_allowed_html_tags` and `input_allowed_html_attributes`
+
+`audited_query_fields` lets you opt specific root queries into audit logging.
+Rail Django audits mutations by default when `GRAPHQL_ENABLE_AUDIT_LOGGING` is
+enabled.
+
+`limited_query_fields` lets you apply depth and complexity limits only to the
+root queries or operation names you list. When the list is empty, the
+query-complexity middleware skips query limit enforcement.
 
 ## `middleware_settings`
 
@@ -123,6 +133,9 @@ Examples:
 - `GRAPHQL_ENABLE_AUDIT_LOGGING`
 - `AUDIT_STORE_IN_DATABASE`, `AUDIT_STORE_IN_FILE`, `AUDIT_RETENTION_DAYS`
 - `JWT_*` and `MFA_*` keys for auth flows
+
+Audit storage defaults to database persistence because
+`AUDIT_STORE_IN_DATABASE` defaults to `True`.
 
 ## Validate your configuration
 
