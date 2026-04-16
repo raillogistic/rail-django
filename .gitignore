@@ -206,7 +206,7 @@ celerybeat-schedule.db
 # Local configuration overrides
 local_config.py
 config_local.py
-
+graphify-out
 # Never commit TLS material from scaffold deploy templates
 rail_django/scaffolding/project_template/deploy/nginx/certs/*.crt
 rail_django/scaffolding/project_template/deploy/nginx/certs/*.key

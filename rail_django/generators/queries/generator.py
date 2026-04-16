@@ -202,7 +202,19 @@ class QueryGenerator:
         def mask_instance(instance: models.Model):
             if not isinstance(instance, models.Model):
                 return instance
-            field_defs = list(instance._meta.concrete_fields)
+            deferred_fields = set()
+            get_deferred_fields = getattr(instance, "get_deferred_fields", None)
+            if callable(get_deferred_fields):
+                deferred_fields = set(get_deferred_fields())
+
+            # Respect deferred columns from queryset.only()/defer() so field masking
+            # does not trigger one query per skipped field.
+            field_defs = [
+                field
+                for field in instance._meta.concrete_fields
+                if field.name not in deferred_fields
+                and getattr(field, "attname", field.name) not in deferred_fields
+            ]
 
             snapshot = {}
             for field in field_defs:
