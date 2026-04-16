@@ -307,15 +307,14 @@ def is_introspection_allowed(
             if str(role).strip()
         )
     except Exception:
-        pass
-    try:
-        user_roles.update(
-            str(group_name).strip().lower()
-            for group_name in user.groups.values_list("name", flat=True)
-            if str(group_name).strip()
-        )
-    except Exception:
-        pass
+        try:
+            user_roles.update(
+                str(group_name).strip().lower()
+                for group_name in user.groups.values_list("name", flat=True)
+                if str(group_name).strip()
+            )
+        except Exception:
+            pass
 
     return bool(user_roles.intersection(allowed_roles))
 

@@ -50,11 +50,10 @@ def _get_effective_permissions(user: "AbstractUser") -> list[str]:
         permissions.update(role_manager.get_effective_permissions(user) or [])
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Impossible de recuperer les permissions de %s: %s", user, exc)
-
-    try:
-        permissions.update(user.get_all_permissions() or [])
-    except Exception:
-        pass
+        try:
+            permissions.update(user.get_all_permissions() or [])
+        except Exception:
+            pass
 
     return sorted(str(permission) for permission in permissions if permission)
 
@@ -81,12 +80,11 @@ def _get_user_roles(user: "AbstractUser") -> list[str]:
         roles.update(role_manager.get_user_roles(user))
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Impossible de recuperer les roles RBAC de %s: %s", user, exc)
-
-    try:
-        roles.update(user.groups.values_list("name", flat=True))
-    except Exception:
-        # ignore group lookup failures
-        pass
+        try:
+            roles.update(user.groups.values_list("name", flat=True))
+        except Exception:
+            # ignore group lookup failures
+            pass
 
     # Ensure staff/superuser roles are always included.
     if getattr(user, "is_superuser", False):
@@ -129,9 +127,11 @@ def _get_user_roles_detail(user: "AbstractUser") -> list[dict[str, Any]]:
         return []
 
     roles: dict[str, dict[str, Any]] = {}
+    group_names: set[str] = set()
 
     try:
-        for group in user.groups.all():
+        for group in user.groups.prefetch_related("permissions").all():
+            group_names.add(group.name)
             role = roles.setdefault(
                 group.name,
                 {"id": f"group:{group.id}", "name": group.name, "permissions": []},
@@ -143,11 +143,11 @@ def _get_user_roles_detail(user: "AbstractUser") -> list[dict[str, Any]]:
     except Exception:
         pass
 
-    try:
-        role_names = role_manager.get_user_roles(user)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Impossible de recuperer les roles RBAC de %s: %s", user, exc)
-        role_names = []
+    role_names = set(group_names)
+    if getattr(user, "is_superuser", False):
+        role_names.add("superadmin")
+    elif getattr(user, "is_staff", False):
+        role_names.add("admin")
 
     for role_name in role_names:
         role = roles.setdefault(

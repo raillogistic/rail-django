@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_USER_ROLES_CACHE_ATTR = "_rail_rbac_user_roles_cache"
+_USER_EFFECTIVE_PERMISSIONS_CACHE_ATTR = "_rail_rbac_effective_permissions_cache"
+
 
 def _get_group_model():
     """Lazy import to avoid AppRegistryNotReady during Django setup."""
@@ -290,11 +293,15 @@ class RoleManager(PermissionEvaluationMixin):
             return []
         if getattr(user, "pk", None) is None:
             return []
+        cached_roles = getattr(user, _USER_ROLES_CACHE_ATTR, None)
+        if cached_roles is not None:
+            return list(cached_roles)
         roles = list(user.groups.values_list("name", flat=True))
         if user.is_superuser:
             roles.append("superadmin")
         elif user.is_staff:
             roles.append("admin")
+        setattr(user, _USER_ROLES_CACHE_ATTR, tuple(roles))
         return roles
 
     def get_effective_permissions(
@@ -305,6 +312,9 @@ class RoleManager(PermissionEvaluationMixin):
             return set()
         if getattr(user, "pk", None) is None:
             return set()
+        cached_permissions = getattr(user, _USER_EFFECTIVE_PERMISSIONS_CACHE_ATTR, None)
+        if cached_permissions is not None:
+            return set(cached_permissions)
 
         permissions = set()
         user_roles = self.get_user_roles(user)
@@ -318,6 +328,7 @@ class RoleManager(PermissionEvaluationMixin):
 
         django_permissions = user.get_all_permissions()
         permissions.update(django_permissions)
+        setattr(user, _USER_EFFECTIVE_PERMISSIONS_CACHE_ATTR, frozenset(permissions))
         return permissions
 
     def _get_inherited_permissions(
@@ -415,6 +426,15 @@ class RoleManager(PermissionEvaluationMixin):
     def invalidate_user_cache(self, user: "AbstractUser") -> None:
         """Invalidate all cached permissions for a user."""
         user_id = getattr(user, "id", None)
+        for attr_name in (
+            _USER_ROLES_CACHE_ATTR,
+            _USER_EFFECTIVE_PERMISSIONS_CACHE_ATTR,
+            "_perm_cache",
+            "_user_perm_cache",
+            "_group_perm_cache",
+        ):
+            if hasattr(user, attr_name):
+                delattr(user, attr_name)
         self.bump_user_cache_version(user_id)
 
     def invalidate_cache(self, user: "AbstractUser") -> None:

@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ABAC_ROLE_CACHE_ATTR = "_rail_abac_role_names_cache"
+_ABAC_PROFILE_ATTRS_CACHE_ATTR = "_rail_abac_profile_attrs_cache"
+
 
 class BaseAttributeProvider(ABC):
     """Base provider class."""
@@ -48,10 +51,16 @@ class SubjectAttributeProvider(BaseAttributeProvider):
             "roles": [],
         }
 
-        try:
-            attrs["roles"] = list(user.groups.values_list("name", flat=True))
-        except Exception:
-            attrs["roles"] = []
+        cached_roles = getattr(user, _ABAC_ROLE_CACHE_ATTR, None)
+        if cached_roles is None:
+            try:
+                from ..rbac import role_manager
+
+                cached_roles = tuple(role_manager.get_user_roles(user))
+            except Exception:
+                cached_roles = ()
+            setattr(user, _ABAC_ROLE_CACHE_ATTR, cached_roles)
+        attrs["roles"] = list(cached_roles)
         if attrs["is_superuser"] and "superadmin" not in attrs["roles"]:
             attrs["roles"].append("superadmin")
         elif attrs["is_staff"] and "admin" not in attrs["roles"]:
@@ -59,9 +68,21 @@ class SubjectAttributeProvider(BaseAttributeProvider):
 
         profile = getattr(user, "profile", None)
         if profile is not None:
-            for attr in ("department", "organization", "team", "location", "level"):
-                if hasattr(profile, attr):
-                    attrs[attr] = getattr(profile, attr)
+            cached_profile_attrs = getattr(user, _ABAC_PROFILE_ATTRS_CACHE_ATTR, None)
+            if cached_profile_attrs is None:
+                profile_attrs: dict[str, object] = {}
+                for attr in (
+                    "department",
+                    "organization",
+                    "team",
+                    "location",
+                    "level",
+                ):
+                    if hasattr(profile, attr):
+                        profile_attrs[attr] = getattr(profile, attr)
+                cached_profile_attrs = profile_attrs
+                setattr(user, _ABAC_PROFILE_ATTRS_CACHE_ATTR, cached_profile_attrs)
+            attrs.update(cached_profile_attrs)
 
         return AttributeSet(
             static_attributes=attrs,
@@ -99,14 +120,22 @@ class ResourceAttributeProvider(BaseAttributeProvider):
             }
 
         if instance is not None:
+            deferred_fields: set[str] = set()
+            get_deferred_fields = getattr(instance, "get_deferred_fields", None)
+            if callable(get_deferred_fields):
+                deferred_fields = set(get_deferred_fields())
+
             if meta is not None:
                 for field in meta.get_fields():
                     attname = getattr(field, "attname", None)
                     if not attname:
                         continue
-                    if not hasattr(instance, attname):
+                    if field.name in deferred_fields or attname in deferred_fields:
                         continue
-                    attrs[field.name] = getattr(instance, attname)
+                    try:
+                        attrs[field.name] = getattr(instance, attname)
+                    except Exception:
+                        continue
             else:
                 try:
                     attrs.update(vars(instance))
@@ -115,9 +144,14 @@ class ResourceAttributeProvider(BaseAttributeProvider):
 
             for owner_attr in ("owner", "created_by", "user"):
                 owner_id_attr = f"{owner_attr}_id"
-                if hasattr(instance, owner_id_attr):
-                    attrs["owner_id"] = getattr(instance, owner_id_attr)
-                    break
+                if owner_id_attr in deferred_fields:
+                    continue
+                try:
+                    owner_id = getattr(instance, owner_id_attr)
+                except Exception:
+                    continue
+                attrs["owner_id"] = owner_id
+                break
 
         graphql_meta = getattr(model, "GraphQLMeta", None)
         if graphql_meta is not None:
