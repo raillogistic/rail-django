@@ -20,9 +20,12 @@ from .jobs import (
     _delete_excel_job,
     _get_excel_job,
     _job_access_allowed,
+    _get_excel_storage_dir,
+    _excel_async,
     _parse_iso_datetime,
     _sanitize_filename,
 )
+from ..async_jobs import resolve_managed_job_file
 
 # Optional imports
 try:
@@ -124,12 +127,16 @@ class ExcelTemplateJobDownloadView(View):
             return JsonResponse({"error": "Excel job not completed"}, status=409)
 
         file_path = job.get("file_path")
-        if not file_path or not Path(str(file_path)).exists():
+        resolved_file = resolve_managed_job_file(
+            file_path,
+            storage_dir=_get_excel_storage_dir(_excel_async()),
+        )
+        if resolved_file is None or not resolved_file.exists():
             return JsonResponse({"error": "Excel job file missing"}, status=410)
 
         filename = _sanitize_filename(str(job.get("filename") or "export"))
         response = FileResponse(
-            open(file_path, "rb"),
+            open(resolved_file, "rb"),
             content_type=job.get(
                 "content_type",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

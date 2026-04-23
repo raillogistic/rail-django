@@ -10,11 +10,14 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from ...async_job_views import ensure_job_access, get_job_or_404, handle_job_expiry
+from ...async_jobs import resolve_managed_job_file
 from ..config import sanitize_filename
 from ..jobs import (
     cleanup_export_job_files,
     delete_export_job,
     get_export_job,
+    get_export_settings,
+    get_export_storage_dir,
     parse_iso_datetime,
 )
 from ..security import job_access_allowed, jwt_required_decorator
@@ -82,13 +85,17 @@ class ExportJobDownloadView(View):
             return JsonResponse({"error": "Export job not completed"}, status=409)
 
         file_path = job.get("file_path")
-        if not file_path or not Path(file_path).exists():
+        resolved_file = resolve_managed_job_file(
+            file_path,
+            storage_dir=get_export_storage_dir(get_export_settings()),
+        )
+        if resolved_file is None or not resolved_file.exists():
             raise Http404("Export file not found")
 
         filename = sanitize_filename(str(job.get("filename") or "export"))
         extension = job.get("file_extension") or "csv"
         response = FileResponse(
-            open(file_path, "rb"),
+            open(resolved_file, "rb"),
             content_type=job.get("content_type", "application/octet-stream"),
             as_attachment=True,
             filename=f"{filename}.{extension}",

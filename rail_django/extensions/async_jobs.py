@@ -48,6 +48,23 @@ def build_storage_dir(
     return path
 
 
+def resolve_managed_job_file(
+    file_path: Optional[Any],
+    *,
+    storage_dir: Path,
+) -> Optional[Path]:
+    """Resolve a job artifact path only when it stays under the storage root."""
+    if not file_path:
+        return None
+    try:
+        managed_root = Path(storage_dir).resolve()
+        candidate = Path(str(file_path)).resolve()
+        candidate.relative_to(managed_root)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return candidate
+
+
 def parse_iso_datetime(
     value: Optional[str], *, make_aware: bool = False
 ) -> Optional[datetime]:
@@ -133,6 +150,7 @@ class JobCache:
 __all__ = [
     "JobCache",
     "build_job_request",
+    "resolve_managed_job_file",
     "build_storage_dir",
     "hash_payload",
     "job_access_allowed",

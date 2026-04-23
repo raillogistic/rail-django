@@ -93,7 +93,7 @@ def get_schema_builder():
 
 def get_config_loader():
     """Get ConfigLoader class with lazy import."""
-    from .core.config_loader import ConfigLoader
+    from .core import ConfigLoader
 
     return ConfigLoader
 
@@ -122,7 +122,7 @@ def __getattr__(name):
 
         return SchemaBuilder
     elif name == "ConfigLoader":
-        from .core.config_loader import ConfigLoader
+        from .core import ConfigLoader
 
         return ConfigLoader
     elif name == "settings":

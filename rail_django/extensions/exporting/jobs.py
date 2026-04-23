@@ -13,6 +13,7 @@ from typing import Any, Optional
 from django.utils import timezone
 
 from ..async_jobs import JobCache, build_storage_dir, parse_iso_datetime as parse_iso_datetime_util
+from ..async_jobs import resolve_managed_job_file
 from .config import get_export_settings
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,12 @@ def cleanup_export_job_files(job: dict[str, Any]) -> None:
     if not file_path:
         return
     try:
-        path = Path(file_path)
+        path = resolve_managed_job_file(
+            file_path,
+            storage_dir=get_export_storage_dir(get_export_settings()),
+        )
+        if path is None:
+            return
         if path.exists():
             path.unlink()
     except Exception:

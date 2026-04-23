@@ -18,6 +18,7 @@ from ...mutations.errors import (
     build_graphql_auto_errors,
     build_mutation_error,
 )
+from ...mutations.utils import sanitize_error_message
 
 
 class BasePipelineMutation(graphene.Mutation):
@@ -162,5 +163,11 @@ class BasePipelineMutation(graphene.Mutation):
             transaction.set_rollback(True)
             return cls(
                 ok=False,
-                errors=[build_mutation_error(message=str(exc))],
+                errors=[
+                    build_mutation_error(
+                        message=sanitize_error_message(
+                            exc, cls.operation or "mutation", cls.model_class.__name__
+                        )
+                    )
+                ],
             )

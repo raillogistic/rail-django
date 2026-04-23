@@ -3,7 +3,8 @@ PostgreSQL-specific reporting extensions.
 """
 from typing import Any, Dict, List, Optional, Tuple, Set
 
-from django.contrib.postgres.aggregates import ArrayAgg, StringAgg, JSONBAgg
+from django import get_version
+from django.contrib.postgres import aggregates as postgres_aggregates
 from django.contrib.postgres.search import SearchVector, SearchQuery
 from django.db.models import StdDev, Variance, Count
 from django.db import models
@@ -16,6 +17,20 @@ from ..types import (
 )
 
 from .core import DatasetExecutionEngine
+
+ArrayAgg = postgres_aggregates.ArrayAgg
+StringAgg = postgres_aggregates.StringAgg
+JSONBAgg = postgres_aggregates.JSONBAgg
+
+
+def _require_postgres_aggregate(class_name: str, agg_name: str) -> Any:
+    aggregate_cls = getattr(postgres_aggregates, class_name, None)
+    if aggregate_cls is None:
+        raise ReportingError(
+            f"Agregation '{agg_name}' indisponible avec Django {get_version()}."
+        )
+    return aggregate_cls
+
 
 # Extended aggregation map for Postgres
 PSQL_AGGREGATION_MAP = BASE_AGGREGATION_MAP.copy()
@@ -70,10 +85,12 @@ class PostgresDatasetExecutionEngine(DatasetExecutionEngine):
                 continue
             
             if agg_name == "percentile":
-                from django.contrib.postgres.aggregates import PercentileCont
+                percentile_cls = _require_postgres_aggregate("PercentileCont", agg_name)
                 p = agg_params.get("param", 0.5)
                 # PercentileCont requires an ordering argument in Django
-                annotations[metric.name] = PercentileCont(p, ordering=expr_field, filter=filter_q) 
+                annotations[metric.name] = percentile_cls(
+                    p, ordering=expr_field, filter=filter_q
+                )
                 continue
 
             agg_factory = PSQL_AGGREGATION_MAP.get(agg_name)

@@ -1,10 +1,15 @@
 # Plugin System Guide
 
+This guide explains how to build and register Rail Django plugins against the
+current plugin API. Use these hooks when you need framework-level behavior
+around schema discovery, schema building, or GraphQL execution.
+
 Rail Django features a powerful plugin system that lets you hook into various stages of the framework's lifecycle, from schema discovery and building to query execution and field resolution.
 
 ## Overview
 
-Plugins are classes that inherit from `rail_django.plugins.base.BasePlugin`. They are registered in your Django settings and are executed by the `PluginManager`.
+Plugins are classes that inherit from `rail_django.plugins.BasePlugin`. They
+are registered in your Django settings and are executed by the `PluginManager`.
 
 Plugins can:
 - Modify the schema build context.
@@ -18,7 +23,7 @@ To create a plugin, subclass `BasePlugin` and implement the hooks you need.
 
 ```python
 # my_app/plugins.py
-from rail_django.plugins.base import BasePlugin, ExecutionHookResult
+from rail_django.plugins import BasePlugin, ExecutionHookResult
 
 class MyCustomPlugin(BasePlugin):
     """
@@ -66,34 +71,53 @@ GRAPHQL_SCHEMA_PLUGINS = {
 
 ## Available Hooks
 
-### Registry Hooks
+### Registry hooks
 
-- `pre_registration_hook(registry)`: Called before apps are scanned.
-- `discovery_hook(registry, app_name, module)`: Called when a schema module is discovered.
-- `post_registration_hook(registry)`: Called after all schemas are registered.
+Use registry hooks to influence schema registration and discovery.
 
-### Schema Build Hooks
+- `pre_registration_hook(registry, schema_name, **kwargs)`: Called before a
+  schema is registered. Return a dictionary to override registration
+  parameters.
+- `post_registration_hook(registry, schema_info)`: Called after a schema is
+  registered.
+- `discovery_hook(registry)`: Called during schema discovery after app modules
+  have been scanned.
 
-- `pre_schema_build(schema_name, builder, context)`: Called before the schema is constructed. Useful for modifying the build context.
-- `post_schema_build(schema_name, schema)`: Called after the Graphene schema is finalized.
+### Schema build hooks
 
-### Execution Hooks
+Use schema build hooks to add data to the build context or react after a
+Graphene schema is created.
 
-- `before_operation(schema_name, document, context, variables)`: Called before a GraphQL query is executed.
-- `after_operation(schema_name, document, context, result, error)`: Called after execution completes.
-- `before_resolve(schema_name, info, root, kwargs, context)`: Called before a field resolver runs. Return `ExecutionHookResult(handled=True, result=...)` to bypass the resolver.
-- `after_resolve(schema_name, info, result, context)`: Called after a field resolver returns.
+- `pre_schema_build(schema_name, builder, context)`: Called before the schema
+  is constructed. Return a dictionary to add values to the build context.
+- `post_schema_build(schema_name, builder, schema, context)`: Called after the
+  Graphene schema is finalized.
+
+### Execution hooks
+
+Use execution hooks to observe or intercept GraphQL operations and resolver
+execution.
+
+- `before_operation(schema_name, operation_type, operation_name, info,
+  context)`: Called before a root GraphQL operation runs.
+- `after_operation(schema_name, operation_type, operation_name, info, result,
+  error, context)`: Called after a root GraphQL operation finishes.
+- `before_resolve(schema_name, info, root, kwargs, context)`: Called before a
+  field resolver runs. Return `ExecutionHookResult(handled=True, result=...)`
+  to bypass the resolver.
+- `after_resolve(schema_name, info, root, kwargs, result, error, context)`:
+  Called after a field resolver returns or raises.
 
 ## ExecutionHookResult
 
-For execution hooks like `before_resolve`, you must return an `ExecutionHookResult`.
+For execution hooks like `before_resolve`, return an
+`ExecutionHookResult` when you need to stop normal processing.
 
 ```python
 class ExecutionHookResult:
-    def __init__(self, handled: bool = False, result: Any = None, error: Exception = None):
+    def __init__(self, handled: bool = False, result: Any = None):
         self.handled = handled  # If True, stops further processing
         self.result = result    # The return value if handled=True
-        self.error = error      # Exception to raise if handled=True
 ```
 
 ## Example: Request Timing Plugin
@@ -102,16 +126,16 @@ Here is a simple plugin that measures the time taken for the entire operation.
 
 ```python
 import time
-from rail_django.plugins.base import BasePlugin
+from rail_django.plugins import BasePlugin
 
 class TimingPlugin(BasePlugin):
     def get_name(self) -> str:
         return "timing-plugin"
 
-    def before_operation(self, schema_name, document, context, variables):
+    def before_operation(self, schema_name, operation_type, operation_name, info, context):
         context['start_time'] = time.time()
 
-    def after_operation(self, schema_name, document, context, result, error):
+    def after_operation(self, schema_name, operation_type, operation_name, info, result, error, context):
         duration = time.time() - context.get('start_time', time.time())
         print(f"Operation took {duration:.4f}s")
 ```

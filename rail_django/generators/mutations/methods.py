@@ -25,6 +25,7 @@ from .errors import (
     build_mutation_error,
     build_validation_errors,
 )
+from .utils import sanitize_error_message
 
 
 def _wrap_with_audit(model: type[models.Model], operation: str, func):
@@ -317,7 +318,9 @@ def convert_method_to_mutation(
                     result=None,
                     errors=[
                         build_mutation_error(
-                            message=f"Failed to execute {method_name}: {str(exc)}"
+                            message=sanitize_error_message(
+                                exc, f"execute {method_name}", model_name
+                            )
                         )
                     ],
                 )
@@ -562,7 +565,9 @@ def generate_method_mutation(
                     result=None,
                     errors=[
                         build_mutation_error(
-                            message=f"Failed to execute {method_name}: {str(e)}"
+                            message=sanitize_error_message(
+                                e, f"execute {method_name}", model.__name__
+                            )
                         )
                     ],
                 )

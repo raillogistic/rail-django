@@ -18,6 +18,7 @@ from .errors import (
     build_mutation_error,
     build_validation_errors,
 )
+from .utils import sanitize_error_message
 from .methods import _wrap_with_audit
 
 
@@ -108,7 +109,7 @@ def generate_bulk_create_mutation(
                 error_objects = [
                     MutationError(
                         field=None,
-                        message=f"Failed to bulk create {model_name}s: {str(e)}",
+                        message=sanitize_error_message(e, "bulk create", model_name),
                     )
                 ]
                 return cls(ok=False, objects=[], errors=error_objects)
@@ -278,7 +279,9 @@ def generate_bulk_update_mutation(
                     objects=[],
                     errors=[
                         build_mutation_error(
-                            message=f"Failed to bulk update {model_name}s: {str(exc)}"
+                            message=sanitize_error_message(
+                                exc, "bulk update", model_name
+                            )
                         )
                     ],
                 )
@@ -406,7 +409,9 @@ def generate_bulk_delete_mutation(
                     objects=[],
                     errors=[
                         build_mutation_error(
-                            message=f"Failed to bulk delete {model_name}s: {str(exc)}"
+                            message=sanitize_error_message(
+                                exc, "bulk delete", model_name
+                            )
                         )
                     ],
                 )

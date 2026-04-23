@@ -2,8 +2,9 @@
 Mutation error helpers.
 """
 
-from typing import Any, Dict, List, Optional, Type
+import logging
 import re
+from typing import Any, Dict, List, Optional, Type
 
 import graphene
 from django.core.exceptions import ValidationError
@@ -11,6 +12,8 @@ from django.core.exceptions import ValidationError
 from ...core.exceptions import GraphQLAutoError
 from django.db import IntegrityError, models
 from django.db.models.deletion import ProtectedError
+
+logger = logging.getLogger(__name__)
 
 
 class MutationError(graphene.ObjectType):
@@ -315,10 +318,18 @@ def _safe_exception_message(model: type[models.Model], exc: Exception) -> str:
         return ""
 
 
+def _log_mutation_exception(exc: Exception, *, model: type[models.Model]) -> None:
+    logger.error(
+        "Mutation integrity error on %s",
+        model.__name__,
+        extra={"model": model.__name__},
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
 def build_integrity_errors(
     model: type[models.Model], exc: IntegrityError
 ) -> list[MutationError]:
     """Create friendly errors for database integrity failures."""
+    _log_mutation_exception(exc=exc, model=model)
     error_msg = _safe_exception_message(model, exc)
     field = _extract_not_null_field(error_msg)
     if field:
@@ -368,6 +379,10 @@ def build_integrity_errors(
     if "check constraint" in lower_msg:
         return [build_mutation_error("Value violates a database constraint.", None, code="CHECK_CONSTRAINT")]
 
-    if error_msg:
-        return [build_mutation_error(error_msg, None, code="INTEGRITY_ERROR")]
-    return [build_mutation_error("Database integrity error.", None, code="INTEGRITY_ERROR")]
+    return [
+        build_mutation_error(
+            "Database integrity error.",
+            None,
+            code="INTEGRITY_ERROR",
+        )
+    ]

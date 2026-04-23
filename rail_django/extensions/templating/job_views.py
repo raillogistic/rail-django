@@ -21,9 +21,12 @@ from .jobs import (
     _get_pdf_job,
     _delete_pdf_job,
     _cleanup_pdf_job_files,
+    _get_pdf_storage_dir,
+    _templating_async,
     _parse_iso_datetime,
     _job_access_allowed,
 )
+from ..async_jobs import resolve_managed_job_file
 
 logger = logging.getLogger(__name__)
 
@@ -123,12 +126,16 @@ class PdfTemplateJobDownloadView(View):
             return JsonResponse({"error": "PDF job not completed"}, status=409)
 
         file_path = job.get("file_path")
-        if not file_path or not Path(str(file_path)).exists():
+        resolved_file = resolve_managed_job_file(
+            file_path,
+            storage_dir=_get_pdf_storage_dir(_templating_async()),
+        )
+        if resolved_file is None or not resolved_file.exists():
             return JsonResponse({"error": "PDF job file missing"}, status=410)
 
         filename = _sanitize_filename(str(job.get("filename") or "document"))
         response = FileResponse(
-            open(file_path, "rb"),
+            open(resolved_file, "rb"),
             content_type=job.get("content_type", "application/pdf"),
         )
         response["Content-Disposition"] = f'inline; filename="{filename}"'

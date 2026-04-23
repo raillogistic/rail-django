@@ -34,6 +34,7 @@ from ..async_jobs import (
     hash_payload,
     job_access_allowed,
     parse_iso_datetime,
+    resolve_managed_job_file,
 )
 from ...utils.sanitization import sanitize_filename_basic
 
@@ -168,7 +169,13 @@ def _cleanup_pdf_job_files(job: dict[str, Any]) -> None:
     if not file_path:
         return
     try:
-        Path(str(file_path)).unlink(missing_ok=True)
+        resolved_file = resolve_managed_job_file(
+            file_path,
+            storage_dir=_get_pdf_storage_dir(_templating_async()),
+        )
+        if resolved_file is None:
+            return
+        resolved_file.unlink(missing_ok=True)
     except Exception:
         return
 

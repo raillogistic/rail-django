@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
+from django import get_version
+from django.contrib.postgres import aggregates as postgres_aggregates
 from django.db import connection, models
 from django.db.models import Count, F, Q
 from django.db.models.functions import (
@@ -27,16 +29,6 @@ from django.db.models.functions import (
     TruncWeek,
     TruncYear,
     Upper,
-)
-from django.contrib.postgres.aggregates import (
-    ArrayAgg,
-    BitAnd,
-    BitOr,
-    BitXor,
-    BoolAnd,
-    BoolOr,
-    JSONBAgg,
-    StringAgg,
 )
 
 from ..types import (
@@ -124,6 +116,14 @@ class QueryBuilderMixin:
 
         raise ReportingError(f"Transformation non supportee: {transform}")
 
+    def _require_postgres_aggregate(self, agg_name: str, class_name: str) -> Any:
+        aggregate_cls = getattr(postgres_aggregates, class_name, None)
+        if aggregate_cls is None:
+            raise ReportingError(
+                f"Agregation '{agg_name}' indisponible avec Django {get_version()}."
+            )
+        return aggregate_cls
+
     def _build_postgres_aggregation(
         self,
         agg_name: str,
@@ -153,21 +153,29 @@ class QueryBuilderMixin:
 
         if agg_name == "string_agg":
             delimiter = options.get("delimiter", ", ")
-            return StringAgg(expr_field, delimiter, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "StringAgg")
+            return aggregate_cls(expr_field, delimiter, **extra)
         if agg_name == "array_agg":
-            return ArrayAgg(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "ArrayAgg")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "jsonb_agg":
-            return JSONBAgg(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "JSONBAgg")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "bool_and":
-            return BoolAnd(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "BoolAnd")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "bool_or":
-            return BoolOr(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "BoolOr")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "bit_and":
-            return BitAnd(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "BitAnd")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "bit_or":
-            return BitOr(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "BitOr")
+            return aggregate_cls(expr_field, **extra)
         if agg_name == "bit_xor":
-            return BitXor(expr_field, **extra)
+            aggregate_cls = self._require_postgres_aggregate(agg_name, "BitXor")
+            return aggregate_cls(expr_field, **extra)
 
         raise ReportingError(f"Agregation non supportee: {agg_name}")
 
