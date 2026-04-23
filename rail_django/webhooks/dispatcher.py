@@ -323,6 +323,11 @@ def _stringify_payload(value: Any) -> Any:
         return {k: _stringify_payload(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_stringify_payload(item) for item in value]
+    
+    # Fast path for known primitives to avoid CPU-heavy json.dumps
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+        
     try:
         json.dumps(value, cls=DjangoJSONEncoder)
         return value

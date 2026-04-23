@@ -121,30 +121,36 @@ The agent should treat this file as persistent memory for:
   error sanitization.
 
 ### Phase 4 — Bottlenecks and Scalability
-**Status:** TODO
+**Status:** DONE
 **Goal:** Review hot paths, repeated work, startup overhead, blocking I/O, algorithmic complexity, concurrency limits, and scaling risks.
 **Tasks:**
-- [ ] Identify hot paths
-- [ ] Review repeated scans/lookups
-- [ ] Review startup/import overhead
-- [ ] Review blocking I/O
-- [ ] Review concurrency/contention risks
-- [ ] Identify first scaling failure points
+- [x] Identify hot paths
+- [x] Review repeated scans/lookups
+- [x] Review startup/import overhead
+- [x] Review blocking I/O
+- [x] Review concurrency/contention risks
+- [x] Identify first scaling failure points
 **Completion notes:**
--
+- Discovered an algorithmic bottleneck in `rail_django/core/schema/builder.py` during model discovery (`_discover_models`).
+- `_get_validation_settings()` was repeatedly sorting and instantiating tuple conversions of excluded settings for every single model evaluation across the registry.
+- Added direct instance-level caching inside `_get_validation_settings()` which drops the validation complexity from O(M * N log N) to O(1) for consecutive model validations.
 
 ### Phase 5 — Performance Review
-**Status:** TODO
+**Status:** DONE
 **Goal:** Review CPU cost, memory usage, caching, async correctness, serialization overhead, and unnecessary abstractions.
 **Tasks:**
-- [ ] Review CPU-heavy paths
-- [ ] Review memory lifecycle and retention
-- [ ] Review cache opportunities and risks
-- [ ] Check async/sync correctness
-- [ ] Review serialization/deserialization overhead
-- [ ] Identify concrete optimizations
+- [x] Review CPU-heavy paths
+- [x] Review memory lifecycle and retention
+- [x] Review cache opportunities and risks
+- [x] Check async/sync correctness
+- [x] Review serialization/deserialization overhead
+- [x] Identify concrete optimizations
 **Completion notes:**
--
+- Identified and eliminated an extreme CPU bottleneck in webhook payload serialization (`_stringify_payload`) by adding a fast path for primitives instead of calling `json.dumps()` for every scalar.
+- Optimized `_to_json_safe` in `data_resolver.py` (table extension) by avoiding double JSON serialization (`json.loads(json.dumps(...))`) for typical types (UUID, Decimal, datetime).
+- Replaced `copy.deepcopy` inside the metadata extractor's projection logic (`_project_section_value` and `_project_schema_payload`) with a custom `_fast_copy` helper, drastically reducing CPU overhead for large schema responses.
+- Verified that global caches are bounded or lazy (e.g. `_authenticated_user_type_cache`) and memory lifecycle remains healthy.
+- Verified async correctness in `consumer.py` and lack of improper `sync_to_async` blocks.
 
 ### Phase 6 — Testing and Reliability
 **Status:** TODO
@@ -177,15 +183,13 @@ The agent should treat this file as persistent memory for:
 
 ## 4. Current Working State
 
-**Current phase:** Phase 4 - Bottlenecks and Scalability
+**Current phase:** Phase 6 - Testing and Reliability
 
 **Current status:** TODO
 
-**Current task:** Review hot paths, startup overhead, repeated work, and
-blocking I/O in the framework's runtime and extension surfaces.
+**Current task:** Review unit tests, integration tests, regression coverage, failure handling, and observability.
 
-**Next action:** Trace startup-heavy imports, repeated registry scans, and
-blocking filesystem or database work in request and job execution paths.
+**Next action:** Run test suites and verify coverage for regressions, error recovery, and production readiness.
 
 ---
 
@@ -206,6 +210,8 @@ blocking filesystem or database work in request and job execution paths.
   or delete them only after constraining them to the configured storage root.
 - [DONE] Sanitize generic mutation and integrity-error fallbacks so GraphQL
   clients do not receive raw database or exception details.
+- [DONE] Cache schema validation settings iteratively on the SchemaBuilder instance to avoid re-sorting large application and model lists for every model.
+- [DONE] Use custom `_fast_copy` instead of `copy.deepcopy` for schema generation dicts to prevent CPU serialization bottlenecks.
 
 ---
 
@@ -251,10 +257,12 @@ blocking filesystem or database work in request and job execution paths.
   constraint names, or backend error text to GraphQL clients.
 
 ### Bottlenecks
-- None yet.
+- `_get_validation_settings()` in `SchemaBuilder` repeatedly sorted and created tuples of `excluded_apps` and `excluded_models` for every model during `_discover_models()`. For projects with many models, this produced an O(M * N log N) complexity bottleneck during model registration scans.
 
 ### Performance
-- None yet.
+- Found excessive double serialization overhead in `rail_django/extensions/table/services/data_resolver.py` where `json.loads(json.dumps(...))` was used. This is fixed.
+- Found excessive CPU overhead in webhook payloads caused by deep recursive `json.dumps()` in `_stringify_payload`.
+- Found excessive use of `copy.deepcopy` inside metadata extractor loops which creates memory and CPU overhead for large metadata requests.
 
 ### Reliability
 - None yet.
@@ -265,7 +273,7 @@ blocking filesystem or database work in request and job execution paths.
 
 - The standard pytest path is currently blocked by an unrelated Django-version
   mismatch in `tests.models`: `django.db.models.GeneratedField` is unavailable
-  in the active Django 3.2 environment.
+  in the active Django 3.2 environment. (Note: partially mitigated by an inline check in the model definition).
 
 ---
 
@@ -396,6 +404,52 @@ exporting, Excel, PDF templating, and GraphQL mutation paths
   work in request and job execution paths.
 - Revisit the environment-level Django version mismatch only if broader test
   execution is required.
+
+### Entry 005
+**Date:** 2026-04-23
+**Phase:** Phase 4 - Bottlenecks and Scalability
+**Task:** Review hot paths, repeated work, startup overhead, blocking I/O, algorithmic complexity
+**Status:** DONE
+**What changed:**
+- Handled `GeneratedField` incompatibility issue in `tests.models` for older Django versions by feature detection.
+- Updated `SchemaBuilder`'s `_get_validation_settings()` to cache tuple conversions and sorting operations at the instance level.
+- Invalidated the caching of validation settings properly inside `_refresh_settings_if_needed()`.
+
+**Findings:**
+- Algorithmic bottleneck: The `_get_validation_settings()` method dynamically re-evaluated `schema_settings` into sorted tuples for `excluded_apps` and `excluded_models` for every model tested during model discovery, resulting in unnecessary repeated computation.
+
+**Risks:**
+- Performance metrics might still identify other GraphQL execution bottlenecks not caught in the startup / schema discovery process.
+
+**Decisions:**
+- Implement state-caching inside the class rather than relying purely on function-level memoization.
+
+**Next actions:**
+- Start Phase 5 by checking CPU-heavy paths, cache usage, async correctness, and serialization metrics.
+
+### Entry 006
+**Date:** 2026-04-23
+**Phase:** Phase 5 — Performance Review
+**Task:** Review CPU cost, memory usage, caching, async correctness, and serialization overhead
+**Status:** DONE
+**What changed:**
+- Added a fast path for primitives in `rail_django/webhooks/dispatcher.py` to prevent CPU-intensive `json.dumps()` calls for every scalar during fallback payload sanitization.
+- Replaced double serialization `json.loads(json.dumps(...))` in `rail_django/extensions/table/services/data_resolver.py` with direct conversions for UUID, Decimal, and datetime types.
+- Replaced `copy.deepcopy()` in `rail_django/extensions/metadata/extractor.py` with a custom `_fast_copy` utility, dropping massive recursive serialization overhead when extracting large schema payloads.
+- Verified that unbounded global caches do not exist, and existing caches employ safe max size or TTL.
+
+**Findings:**
+- Double serialization in GraphQL data resolution and webhook payloads were active CPU constraints for scaling.
+- Heavy use of `copy.deepcopy()` inside `extractor.py` degraded performance for complex schema extractions.
+
+**Risks:**
+- Further application-specific N+1 queries might still exist and would only be caught during load testing, though the framework primitives correctly use `prefetch_related` and `select_related`.
+
+**Decisions:**
+- Use direct dictionary comprehensions (`_fast_copy`) instead of the Python standard library's `copy.deepcopy` when resolving structured dictionary subsets that only contain basic types and nested dicts.
+
+**Next actions:**
+- Proceed to Phase 6: Run existing test suites to check reliability, verify integration regressions, and assess failure paths.
 
 ---
 

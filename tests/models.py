@@ -159,15 +159,24 @@ class TenantProject(models.Model):
         verbose_name_plural = "tenant projects"
 
 
-class TestGeneratedModel(models.Model):
-    __test__ = False
-    side = models.IntegerField()
-    area = models.GeneratedField(
-        expression=models.F("side") * models.F("side"),
-        output_field=models.BigIntegerField(),
-        db_persist=True,
-    )
+if hasattr(models, "GeneratedField"):
+    class TestGeneratedModel(models.Model):
+        __test__ = False
+        side = models.IntegerField()
+        area = models.GeneratedField(
+            expression=models.F("side") * models.F("side"),
+            output_field=models.BigIntegerField(),
+            db_persist=True,
+        )
 
-    class Meta:
-        app_label = "tests"
+        class Meta:
+            app_label = "tests"
+else:
+    class TestGeneratedModel(models.Model):
+        __test__ = False
+        side = models.IntegerField()
+        area = models.BigIntegerField(null=True, blank=True)
+
+        class Meta:
+            app_label = "tests"
 

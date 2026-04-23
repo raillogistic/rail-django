@@ -33,12 +33,22 @@ from ..templating.access import evaluate_template_access
 logger = logging.getLogger(__name__)
 
 
+def _fast_copy(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _fast_copy(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_fast_copy(x) for x in obj]
+    if isinstance(obj, tuple):
+        return tuple(_fast_copy(x) for x in obj)
+    return obj
+
+
 def _project_section_value(value: Any, allowed_keys: set[str] | None) -> Any:
     if not allowed_keys:
-        return copy.deepcopy(value)
+        return _fast_copy(value)
     if isinstance(value, dict):
         return {
-            key: copy.deepcopy(item)
+            key: _fast_copy(item)
             for key, item in value.items()
             if key in allowed_keys
         }
@@ -48,15 +58,15 @@ def _project_section_value(value: Any, allowed_keys: set[str] | None) -> Any:
             if isinstance(entry, dict):
                 projected.append(
                     {
-                        key: copy.deepcopy(item)
+                        key: _fast_copy(item)
                         for key, item in entry.items()
                         if key in allowed_keys
                     }
                 )
             else:
-                projected.append(copy.deepcopy(entry))
+                projected.append(_fast_copy(entry))
         return projected
-    return copy.deepcopy(value)
+    return _fast_copy(value)
 
 
 def _project_schema_payload(
@@ -65,12 +75,12 @@ def _project_schema_payload(
     include_section_subfields: dict[str, set[str]],
 ) -> dict[str, Any]:
     if not include_sections:
-        return copy.deepcopy(payload)
+        return _fast_copy(payload)
 
     result: dict[str, Any] = {}
     for key in ("app", "model", "metadata_version"):
         if key in payload:
-            result[key] = copy.deepcopy(payload[key])
+            result[key] = _fast_copy(payload[key])
 
     for section in include_sections:
         if section not in payload:

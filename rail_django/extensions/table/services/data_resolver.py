@@ -43,8 +43,24 @@ _ALLOWED_FILTER_LOOKUPS = {
 }
 
 
+import datetime
+import uuid
+from decimal import Decimal
+
 def _to_json_safe(value):
     """Normalize nested payload values to JSON-safe primitives."""
+    if isinstance(value, dict):
+        return {k: _to_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_safe(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, Decimal):
+        return str(value)
     return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
 
 

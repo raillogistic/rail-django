@@ -131,6 +131,7 @@ class SchemaBuilderCore:
             self._raw_settings = settings_dict or {}
             self._model_validation_cache.clear()
             self._validation_settings_key = None
+            self._cached_validation_settings = None
             self._schema = None
 
     @property
@@ -240,6 +241,9 @@ class SchemaBuilderCore:
         self,
     ) -> tuple[tuple[str, ...], tuple[str, ...], set[str], set[str]]:
         """Return cached exclusion settings used during model validation."""
+        if getattr(self, "_cached_validation_settings", None) is not None:
+            return self._cached_validation_settings
+
         excluded_apps = tuple(
             sorted(str(app) for app in (self._get_schema_setting("excluded_apps", []) or []))
         )
@@ -250,10 +254,15 @@ class SchemaBuilderCore:
             )
         )
         settings_key = (excluded_apps, excluded_models)
-        if settings_key != self._validation_settings_key:
-            self._validation_settings_key = settings_key
-            self._model_validation_cache.clear()
-        return settings_key[0], settings_key[1], set(excluded_apps), set(excluded_models)
+        self._validation_settings_key = settings_key
+        self._cached_validation_settings = (
+            excluded_apps,
+            excluded_models,
+            set(excluded_apps),
+            set(excluded_models),
+        )
+        self._model_validation_cache.clear()
+        return self._cached_validation_settings
 
     def _handle_post_migrate(self, sender, **kwargs) -> None:
         """Handles post-migrate signal to rebuild schema after migrations."""
