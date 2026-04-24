@@ -3,6 +3,12 @@ Query analyzer package.
 """
 
 from .analyzer import QueryAnalyzer
+from .profiler import (
+    ProductionQueryProfiler,
+    QueryProfileEntry,
+    QueryProfileInput,
+    QueryProfileReport,
+)
 from .types import (
     QueryAnalysisResult,
     QueryComplexity,
@@ -20,4 +26,8 @@ __all__ = [
     "QueryIssue",
     "QueryComplexity",
     "QueryAnalysisResult",
+    "ProductionQueryProfiler",
+    "QueryProfileEntry",
+    "QueryProfileInput",
+    "QueryProfileReport",
 ]

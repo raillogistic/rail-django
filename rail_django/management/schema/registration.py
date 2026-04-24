@@ -76,17 +76,12 @@ class SchemaRegistrationMixin:
                 'name': name, 'schema': schema, 'metadata': metadata, 'event': event
             })
 
-            if self.debug_hooks:
-                self.debug_hooks.log_schema_registration(schema_name=name, version=version, success=True)
-
             logger.info(f"Schema registered successfully: {name} v{version}")
             return True
 
         except Exception as e:
             event.success = False
             event.error_message = str(e)
-            if self.debug_hooks:
-                self.debug_hooks.log_schema_registration(schema_name=name, version=version, success=False, error=str(e))
             logger.error(f"Schema registration failed: {name} - {e}")
             raise
         finally:

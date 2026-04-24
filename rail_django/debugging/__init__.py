@@ -8,13 +8,14 @@ performance monitoring, query analysis, and error tracking.
 from .debug_hooks import DebugHooks, DebugLevel
 from .error_tracking import ErrorTracker
 from .performance_monitor import PerformanceMonitor
-from .query_analyzer import QueryAnalyzer, QueryComplexity
+from .query_analyzer import ProductionQueryProfiler, QueryAnalyzer, QueryComplexity
 
 __all__ = [
-    'DebugHooks',
-    'DebugLevel',
-    'PerformanceMonitor',
-    'QueryAnalyzer',
-    'QueryComplexity',
-    'ErrorTracker'
+    "DebugHooks",
+    "DebugLevel",
+    "PerformanceMonitor",
+    "QueryAnalyzer",
+    "QueryComplexity",
+    "ErrorTracker",
+    "ProductionQueryProfiler",
 ]

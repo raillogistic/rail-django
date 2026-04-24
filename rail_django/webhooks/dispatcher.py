@@ -1,4 +1,13 @@
-"""Webhook dispatcher for model lifecycle events."""
+"""Webhook dispatcher for model lifecycle events.
+
+This module handles the serialization and delivery of webhook payloads
+triggered by Django model lifecycle signals (create, update, delete).
+
+It includes built-in PII protection via ``_PII_FIELD_PATTERNS`` which
+automatically redacts common sensitive field names (passwords, tokens,
+secrets, SSNs, etc.) even when the user has not configured explicit
+``redact_fields``. This is a defense-in-depth security measure.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +16,7 @@ import hmac
 import json
 import logging
 import random
+import re
 import threading
 import time
 import uuid
@@ -24,6 +34,26 @@ except Exception:  # pragma: no cover - optional dependency guard
     requests = None
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# PII Protection: Default sensitive field patterns
+# ---------------------------------------------------------------------------
+# These patterns are always redacted in webhook payloads, regardless of
+# user-configured ``redact_fields``.  They cover common PII and credential
+# field names across Django models, providing a defense-in-depth layer
+# against accidental data leakage.
+_PII_FIELD_PATTERNS: re.Pattern = re.compile(
+    r"(?:^|_)("
+    r"password|passwd|pwd|"
+    r"secret|signing_secret|api_key|private_key|"
+    r"token|access_token|refresh_token|auth_token|"
+    r"ssn|social_security|national_id|"
+    r"credit_card|card_number|cvv|cvc|"
+    r"pin|security_code|"
+    r"otp|two_factor|mfa_secret"
+    r")(?:$|_)",
+    re.IGNORECASE,
+)
 
 _EXECUTOR = None
 _EXECUTOR_LOCK = threading.Lock()
@@ -142,6 +172,14 @@ def _serialize_instance(
     settings: WebhookSettings,
     model_label_lower: str,
 ) -> dict[str, Any]:
+    """Serialize a model instance into a webhook-safe dictionary.
+
+    Applies three layers of field filtering:
+    1. Include/exclude field lists from webhook settings.
+    2. Explicit ``redact_fields`` from webhook settings.
+    3. Automatic PII redaction via ``_PII_FIELD_PATTERNS`` for common
+       sensitive field names (passwords, tokens, SSN, etc.).
+    """
     model = instance.__class__
     fields = list(getattr(model._meta, "concrete_fields", []))
     include_fields = set(settings.include_fields.get(model_label_lower, []))
@@ -163,7 +201,13 @@ def _serialize_instance(
         key = _select_field_key(field)
         value = field.value_from_object(instance)
 
+        # Layer 1: Explicit redaction from user configuration
         if redact_fields and field_names_lower.intersection(redact_fields):
+            payload[key] = redaction_mask
+            continue
+
+        # Layer 2: Automatic PII redaction for common sensitive field names
+        if any(_PII_FIELD_PATTERNS.search(name) for name in field_names_lower):
             payload[key] = redaction_mask
             continue
 

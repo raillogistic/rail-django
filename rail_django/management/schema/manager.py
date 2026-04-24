@@ -1,11 +1,14 @@
 """
 SchemaManager implementation.
+
+Centralized lifecycle manager for GraphQL schemas. Uses a pluggable
+``SchemaHookRegistry`` for pre/post operation hooks instead of
+inline dictionary management.
 """
 
 import logging
 import threading
 import time
-from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Union, Tuple
 
@@ -21,6 +24,7 @@ from .lifecycle import (
     SchemaStatus,
 )
 from .health import SchemaHealth
+from .hooks import SchemaHookRegistry, hook_registry
 from .registration import SchemaRegistrationMixin
 from .health_monitor import SchemaHealthMixin
 from .export import SchemaExportMixin
@@ -39,23 +43,33 @@ class SchemaManager(SchemaRegistrationMixin, SchemaHealthMixin, SchemaExportMixi
                  enable_caching: bool = True,
                  cache_timeout: int = 3600,
                  enable_health_monitoring: bool = True,
-                 health_check_interval: int = 300):
+                 health_check_interval: int = 300,
+                 hooks: SchemaHookRegistry | None = None):
+        """Initialise le gestionnaire de schémas.
 
+        Args:
+            validator: Validateur de schéma.
+            introspector: Introspecteur de schéma.
+            enable_caching: Active le cache de schémas.
+            cache_timeout: Durée de vie du cache en secondes.
+            enable_health_monitoring: Active le monitoring de santé.
+            health_check_interval: Intervalle entre les vérifications.
+            hooks: Registre de hooks enfichable. Si ``None``, utilise
+                   l'instance globale ``hook_registry``.
+        """
         self.validator = validator or SchemaValidator()
         self.introspector = introspector or SchemaIntrospector()
         self.enable_caching = enable_caching
         self.cache_timeout = cache_timeout
         self.enable_health_monitoring = enable_health_monitoring
         self.health_check_interval = health_check_interval
+        self.hooks = hooks or hook_registry
 
         self._schemas: dict[str, GraphQLSchema] = {}
         self._schema_cache: dict[str, tuple[GraphQLSchema, float]] = {}
         self._metadata: dict[str, SchemaMetadata] = {}
         self._lifecycle_events: list[SchemaLifecycleEvent] = []
         self._health_status: dict[str, SchemaHealth] = {}
-
-        self._pre_operation_hooks: dict[SchemaOperation, list[Callable]] = defaultdict(list)
-        self._post_operation_hooks: dict[SchemaOperation, list[Callable]] = defaultdict(list)
 
         self._lock = threading.RLock()
         self._health_monitor_thread = None
@@ -161,10 +175,16 @@ class SchemaManager(SchemaRegistrationMixin, SchemaHealthMixin, SchemaExportMixi
         return events
 
     def add_lifecycle_hook(self, operation: SchemaOperation, hook: Callable, when: str = 'post'):
-        """Add lifecycle hook."""
-        if when == 'pre': self._pre_operation_hooks[operation].append(hook)
-        elif when == 'post': self._post_operation_hooks[operation].append(hook)
-        else: raise ValueError("when must be 'pre' or 'post'")
+        """Add lifecycle hook.
+
+        Delegates to the pluggable ``SchemaHookRegistry`` instance.
+
+        Args:
+            operation: The schema operation to hook into.
+            hook: Callable accepting a context dict.
+            when: ``'pre'`` or ``'post'``.
+        """
+        self.hooks.register(operation, hook, when=when)
 
     def cleanup_old_events(self, days_to_keep: int = 30):
         """Clean up old lifecycle events."""
@@ -201,10 +221,8 @@ class SchemaManager(SchemaRegistrationMixin, SchemaHealthMixin, SchemaExportMixi
                                     schema_name=schema_name, operation=operation, timestamp=datetime.now(), user_id=user_id)
 
     def _execute_hooks(self, operation: SchemaOperation, when: str, context: dict[str, Any]):
-        hooks = self._pre_operation_hooks[operation] if when == 'pre' else self._post_operation_hooks[operation]
-        for hook in hooks:
-            try: hook(context)
-            except Exception as e: logger.error(f"Error in {when}-{operation.value} hook: {e}")
+        """Execute registered hooks via the pluggable hook registry."""
+        self.hooks.execute(operation, when, context)
 
     def _clear_schema_cache(self, name: str):
         self._schema_cache.pop(name, None)

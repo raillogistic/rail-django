@@ -84,6 +84,29 @@ server {
 }
 ```
 
+Add edge rate limits at the proxy layer so abusive traffic is rejected before it
+reaches Django. The generated project template includes Nginx `limit_req`
+directives for `/graphql/` and the default route. Tune the rates for your
+production traffic profile.
+
+```nginx
+limit_req_zone $binary_remote_addr zone=rail_graphql_per_ip:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=rail_conn_per_ip:10m;
+limit_req_status 429;
+
+server {
+    location /graphql/ {
+        limit_req zone=rail_graphql_per_ip burst=40 nodelay;
+        limit_conn rail_conn_per_ip 20;
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+```
+
+If Nginx runs behind another load balancer, configure the Nginx real IP module
+so `$binary_remote_addr` represents the original client and not the upstream
+load balancer.
+
 ### Database Optimization
 Use persistent connections to improve performance:
 ```python
@@ -141,6 +164,20 @@ Configure your orchestrator (Kubernetes/Docker Swarm) to use the Rail Django hea
 
 ### Error Tracking
 Ensure Sentry is correctly initialized to catch unhandled exceptions in both Django and GraphQL resolvers.
+
+### Query profiling
+Profile captured production GraphQL query samples before changing resolver or
+index strategy. The command accepts `.graphql`, `.json`, and `.jsonl` files.
+
+```bash
+python manage.py profile_graphql_queries \
+  --query-file ./logs/graphql-queries.jsonl \
+  --expensive-field posts \
+  --expensive-field comments
+```
+
+Use `--format json` for CI or dashboards, and `--fail-on-risk` when you want
+the command to fail if it detects N+1 risk signals.
 
 ## See Also
 

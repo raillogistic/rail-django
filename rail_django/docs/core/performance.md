@@ -94,6 +94,27 @@ Log queries that exceed a certain time threshold:
 "performance_threshold_ms": 1000 # Log queries slower than 1s
 ```
 
+### Production N+1 profiling
+Use `profile_graphql_queries` to analyze captured GraphQL query samples with
+`QueryAnalyzer`. This gives you a repeatable profile for N+1 risk, deep
+nesting, expensive fields, and duplicate selections.
+
+```bash
+python manage.py profile_graphql_queries \
+  --query-file ./logs/graphql-queries.jsonl \
+  --format json
+```
+
+JSONL entries must include a `query` field. They can also include
+`operationName`, `source`, `count`, and `durationMs`:
+
+```json
+{"operationName": "CustomerSearch", "query": "{ users { posts { comments { id } } } }", "count": 42}
+```
+
+Pass `--expensive-field` for fields that commonly fan out into additional
+resolver work, and use `--fail-on-risk` in performance gates.
+
 ## Best Practices
 
 1. **Database Indexing**: Ensure all fields used in filters (`where`) or ordering are properly indexed in your database.
