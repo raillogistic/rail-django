@@ -11,7 +11,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union, Tuple
 
 from graphql import GraphQLSchema
 
-from ...debugging import DebugHooks, PerformanceMonitor
 from ...introspection import SchemaIntrospector
 from ...validation import SchemaValidator
 
@@ -37,8 +36,6 @@ class SchemaManager(SchemaRegistrationMixin, SchemaHealthMixin, SchemaExportMixi
     def __init__(self,
                  validator: SchemaValidator = None,
                  introspector: SchemaIntrospector = None,
-                 debug_hooks: DebugHooks = None,
-                 performance_monitor: PerformanceMonitor = None,
                  enable_caching: bool = True,
                  cache_timeout: int = 3600,
                  enable_health_monitoring: bool = True,
@@ -46,8 +43,6 @@ class SchemaManager(SchemaRegistrationMixin, SchemaHealthMixin, SchemaExportMixi
 
         self.validator = validator or SchemaValidator()
         self.introspector = introspector or SchemaIntrospector()
-        self.debug_hooks = debug_hooks
-        self.performance_monitor = performance_monitor
         self.enable_caching = enable_caching
         self.cache_timeout = cache_timeout
         self.enable_health_monitoring = enable_health_monitoring

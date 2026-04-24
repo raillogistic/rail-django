@@ -49,11 +49,12 @@ def _get_effective_permissions(user: "AbstractUser") -> list[str]:
     try:
         permissions.update(role_manager.get_effective_permissions(user) or [])
     except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Impossible de recuperer les permissions de %s: %s", user, exc)
-        try:
-            permissions.update(user.get_all_permissions() or [])
-        except Exception:
-            pass
+        logger.warning("Impossible de recuperer les permissions RBAC de %s: %s", user, exc)
+        
+    try:
+        permissions.update(user.get_all_permissions() or [])
+    except Exception as exc:
+        logger.warning("Impossible de recuperer les permissions Django de %s: %s", user, exc)
 
     return sorted(str(permission) for permission in permissions if permission)
 

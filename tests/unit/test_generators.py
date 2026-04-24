@@ -1,3 +1,4 @@
+import django.test.utils
 """
 Tests complets pour le système de génération de types GraphQL.
 
@@ -322,6 +323,7 @@ class TestAdvancedTypeGeneration(TestCase):
         # Note: Ceci dépend de l'implémentation spécifique du générateur
         self.assertIsNotNone(category_type)
 
+    @django.test.utils.isolate_apps('test_app')
     def test_type_inheritance(self):
         """Test la gestion de l'héritage de modèles."""
 

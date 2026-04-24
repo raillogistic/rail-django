@@ -201,7 +201,14 @@ class TestMutationGenerator(TestCase):
             )
 
             self.assertIsNotNone(mutation_class)
-            input_type = mutation_class.Arguments.input._type.of_type
+            input_arg = mutation_class.Arguments.input
+            if hasattr(input_arg, "_type"):
+                input_type = input_arg._type.of_type
+            elif hasattr(input_arg, "type"):
+                input_type = getattr(input_arg.type, "of_type", input_arg.type)
+            else:
+                input_type = type(input_arg)
+
             fields = input_type._meta.fields
 
             self.assertEqual(fields["starts_on"].type.__name__, "Date")

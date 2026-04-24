@@ -34,7 +34,7 @@ from .methods import (
 )
 from ..nested import NestedOperationHandler
 from ..types import TypeGenerator
-from ...core.error_handling import get_error_handler
+
 from ...core.meta import get_model_graphql_meta
 from ...core.security import get_auth_manager, get_authz_manager, get_input_validator
 from ...core.services import get_query_optimizer
@@ -85,7 +85,7 @@ class MutationGenerator:
         self.authentication_manager = get_auth_manager(schema_name)
         self.authorization_manager = get_authz_manager(schema_name)
         self.input_validator = get_input_validator(schema_name)
-        self.error_handler = get_error_handler(schema_name)
+
         self.query_optimizer = get_query_optimizer(schema_name)
 
         # Pass mutation settings to type generator for nested relations configuration

@@ -14,7 +14,7 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from ...core.error_handling import get_error_handler
+
 from ...core.meta import get_model_graphql_meta
 from ...core.services import get_query_optimizer
 from ...core.security import get_authz_manager, get_input_validator
@@ -40,7 +40,7 @@ class NestedOperationHandlerBase:
 
         self.authorization_manager = get_authz_manager(schema_name)
         self.input_validator = get_input_validator(schema_name)
-        self.error_handler = get_error_handler(schema_name)
+
         self.query_optimizer = get_query_optimizer(schema_name)
         self.circular_reference_tracker = set()
         self.max_depth = getattr(self.mutation_settings, "max_nested_depth", 10)
