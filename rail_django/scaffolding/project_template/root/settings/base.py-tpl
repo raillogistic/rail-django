@@ -317,7 +317,7 @@ RAIL_DJANGO_GRAPHQL = {
         # List of custom query extension classes to add
         "query_extensions": [],
         "mutation_extensions": [
-            "users.mutations.UsersMutations",
+            "users.apps.mutations.UsersMutations",
         ],
         # Allowlist root query fields (None = no filtering)
         "query_field_allowlist": None,

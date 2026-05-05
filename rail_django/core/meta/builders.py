@@ -144,7 +144,10 @@ def build_ordering_config(meta_config: Any, model_class: Any) -> OrderingConfig:
             )
         elif isinstance(raw, (list, tuple)):
             values = list(raw)
-            config = OrderingConfig(allowed=values, default=values)
+            # Ensure PK is always allowed even if not in the default list
+            pk_name = model_class._meta.pk.name if model_class._meta.pk else "id"
+            allowed = values if pk_name in values else values + [pk_name]
+            config = OrderingConfig(allowed=allowed, default=values)
         else:
             config = OrderingConfig()
     else:
