@@ -329,3 +329,40 @@ def decode_global_id(id_value: str) -> tuple[Optional[str], str]:
         return type_name, decoded_id
     except Exception:
         return None, id_value
+
+
+def auto_populate_updated_by(
+    input_data: dict[str, Any],
+    model: type["models.Model"],
+    user,
+) -> dict[str, Any]:
+    """
+    Auto-populate updated_by field if available on model.
+
+    Args:
+        input_data: The input data to update
+        model: The Django model
+        user: The authenticated user
+
+    Returns:
+        Dict with updated_by populated if applicable
+    """
+    if "updated_by" in input_data or "updated_by_id" in input_data:
+        return input_data
+
+    try:
+        field = model._meta.get_field("updated_by")
+        if user and getattr(user, "is_authenticated", False) and field:
+            user_id = getattr(user, "id", None)
+            if user_id is None:
+                user_id = getattr(user, "pk", None)
+            if user_id is None:
+                return input_data
+
+            result = input_data.copy()
+            result["updated_by_id"] = user_id
+            return result
+    except Exception:
+        pass
+
+    return input_data
