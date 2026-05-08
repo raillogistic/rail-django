@@ -571,6 +571,42 @@ class TypeGenerator:
                 reverse_relations[accessor_name] = {"model": rel.related_model, "relation": rel}
         return reverse_relations
 
+    def _get_generic_relations(self, model: type[models.Model]) -> dict[str, dict[str, Any]]:
+        """Discover GenericRelation fields on a Django model.
+
+        GenericRelation fields (from ``django.contrib.contenttypes.fields``)
+        are *not* included in ``model._meta.related_objects``, so they must be
+        discovered separately by iterating all fields returned by
+        ``model._meta.get_fields()``.
+
+        Returns:
+            Dictionary mapping field names to dicts containing ``model``
+            (the related model class) and ``field`` (the GenericRelation
+            field instance).
+        """
+        try:
+            from django.contrib.contenttypes.fields import GenericRelation
+        except ImportError:
+            return {}
+
+        generic_relations: dict[str, dict[str, Any]] = {}
+        for field in model._meta.get_fields():
+            if not isinstance(field, GenericRelation):
+                continue
+            field_name = field.name
+            if not self._should_include_field(model, field_name):
+                continue
+            related_model = field.related_model
+            if related_model is None:
+                continue
+            if self._is_historical_model(related_model):
+                continue
+            generic_relations[field_name] = {
+                "model": related_model,
+                "field": field,
+            }
+        return generic_relations
+
     def _get_relation_dataloader(self, context: Any, related_model: type[models.Model], relation: Any, state: Any):
         if not RelatedObjectsLoader or not context or relation is None:
             return None

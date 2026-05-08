@@ -631,6 +631,225 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                 apply_tenant_scope,
             )
 
+    # ---------- GenericRelation fields ---------------------------------
+    # GenericRelation fields are not included in related_objects and must
+    # be discovered separately.  They behave like reverse ManyToOne but
+    # resolve through content_type + object_id instead of a direct FK.
+    generic_relations = self._get_generic_relations(model)
+    for field_name, gr_info in generic_relations.items():
+        related_model = gr_info["model"]
+        gr_field = gr_info["field"]
+        if not self._should_include_field(model, field_name):
+            continue
+
+        def make_lazy_type_gr(model_ref):
+            def lazy_type():
+                if model_ref in self._type_registry:
+                    return self._type_registry[model_ref]
+                return self.generate_object_type(model_ref)
+            return lazy_type
+
+        # List field with optional filters
+        type_attrs[field_name] = graphene.List(
+            make_lazy_type_gr(related_model),
+            filters=graphene.Argument(graphene.JSONString),
+            description=f"Related {related_model.__name__} objects (generic relation)",
+        )
+
+        # Count field
+        count_field_name = f"{field_name}_count"
+        type_attrs[count_field_name] = graphene.Int(
+            description=f"Count of related {related_model.__name__} objects (generic relation)",
+        )
+
+        # Resolver — uses the manager created by GenericRelation, which
+        # automatically filters by content_type + object_id.
+        def make_gr_resolver(
+            field_name,
+            related_model,
+            gr_field,
+            apply_tenant_scope,
+        ):
+            """Build resolver for a GenericRelation field.
+
+            The resolver first checks the prefetch cache (populated by the
+            query optimizer when ``prefetch_related`` includes this field),
+            then falls back to the GenericRelatedObjectManager which issues
+            a properly scoped query through content_type + object_id.
+            """
+            def resolver(self, info, filters=None):
+                # Use prefetch cache when available and no extra filters
+                if (
+                    not filters
+                    and hasattr(self, "_prefetched_objects_cache")
+                    and field_name in self._prefetched_objects_cache
+                ):
+                    return self._prefetched_objects_cache[field_name]
+
+                # GenericRelatedObjectManager handles content_type scoping
+                related_manager = getattr(self, field_name)
+                queryset = related_manager.all()
+                queryset = apply_tenant_scope(
+                    queryset, info, related_model, operation="read"
+                )
+
+                if filters:
+                    from ..filters import ModelFilterGenerator
+
+                    filter_generator = ModelFilterGenerator()
+                    filter_set_class = filter_generator.generate_filter_set(
+                        related_model
+                    )
+                    filter_set = filter_set_class(filters, queryset=queryset)
+                    queryset = filter_set.qs
+
+                return queryset
+            return resolver
+
+        def make_gr_count_resolver(field_name, related_model, apply_tenant_scope):
+            """Build count resolver for a GenericRelation field."""
+            def count_resolver(self, info):
+                # Use prefetch cache when available
+                if (
+                    hasattr(self, "_prefetched_objects_cache")
+                    and field_name in self._prefetched_objects_cache
+                ):
+                    return len(self._prefetched_objects_cache[field_name])
+
+                related_manager = getattr(self, field_name)
+                queryset = related_manager.all()
+                queryset = apply_tenant_scope(
+                    queryset, info, related_model, operation="read"
+                )
+                return queryset.count()
+            return count_resolver
+
+        type_attrs[f"resolve_{field_name}"] = make_gr_resolver(
+            field_name,
+            related_model,
+            gr_field,
+            apply_tenant_scope,
+        )
+        type_attrs[f"resolve_{count_field_name}"] = make_gr_count_resolver(
+            field_name, related_model, apply_tenant_scope
+        )
+
+        # Stats aggregation type (same pattern as regular reverse relations)
+        numeric_fields = [
+            field
+            for field in related_model._meta.get_fields()
+            if _is_numeric_model_field(field)
+        ]
+        stats_field_name = f"{field_name}_stats"
+        stats_type_name = (
+            f"{model.__name__}{related_model.__name__}"
+            f"{''.join(part.capitalize() for part in field_name.split('_'))}"
+            "StatsType"
+        )
+
+        def get_numeric_graphql_type_gr(django_field: models.Field):
+            for django_field_type, graphql_type in self.FIELD_TYPE_MAP.items():
+                try:
+                    if isinstance(django_field, django_field_type):
+                        return graphql_type
+                except Exception:
+                    continue
+            return graphene.Float
+
+        stats_type_attrs = {
+            "__doc__": f"Aggregate statistics for {field_name} on {model.__name__} (generic relation).",
+            "total_count": graphene.Int(
+                description=f"Total number of related {related_model.__name__} rows"
+            ),
+        }
+        numeric_field_names: list[str] = []
+        for numeric_field in numeric_fields:
+            nf_name = numeric_field.name
+            numeric_field_names.append(nf_name)
+            numeric_graphql_type = get_numeric_graphql_type_gr(numeric_field)
+            stats_type_attrs[f"{nf_name}_sum"] = graphene.Field(
+                numeric_graphql_type,
+                description=f"Sum of {nf_name} on related {related_model.__name__}",
+            )
+            stats_type_attrs[f"{nf_name}_avg"] = graphene.Float(
+                description=f"Average of {nf_name} on related {related_model.__name__}",
+            )
+            stats_type_attrs[f"{nf_name}_min"] = graphene.Field(
+                numeric_graphql_type,
+                description=f"Minimum {nf_name} on related {related_model.__name__}",
+            )
+            stats_type_attrs[f"{nf_name}_max"] = graphene.Field(
+                numeric_graphql_type,
+                description=f"Maximum {nf_name} on related {related_model.__name__}",
+            )
+            stats_type_attrs[f"{nf_name}_count"] = graphene.Int(
+                description=f"Non-null count of {nf_name} on related {related_model.__name__}",
+            )
+            stats_type_attrs[f"{nf_name}_distinct_count"] = graphene.Int(
+                description=f"Distinct non-null count of {nf_name} on related {related_model.__name__}",
+            )
+
+        stats_type = type(stats_type_name, (graphene.ObjectType,), stats_type_attrs)
+
+        type_attrs[stats_field_name] = graphene.Field(
+            stats_type,
+            filters=graphene.Argument(graphene.JSONString),
+            description=f"Aggregate stats for related {related_model.__name__} objects (generic relation)",
+        )
+
+        def make_gr_stats_resolver(
+            field_name,
+            related_model,
+            numeric_field_names,
+            apply_tenant_scope,
+        ):
+            """Build stats resolver for a GenericRelation field."""
+            def stats_resolver(self, info, filters=None):
+                related_manager = getattr(self, field_name)
+                queryset = related_manager.all()
+                queryset = apply_tenant_scope(
+                    queryset, info, related_model, operation="read"
+                )
+
+                if filters:
+                    from ..filters import ModelFilterGenerator
+
+                    filter_generator = ModelFilterGenerator()
+                    filter_set_class = filter_generator.generate_filter_set(
+                        related_model
+                    )
+                    filter_set = filter_set_class(filters, queryset=queryset)
+                    queryset = filter_set.qs
+
+                annotations = {"total_count": Count("pk")}
+                for nf_name in numeric_field_names:
+                    annotations[f"{nf_name}_sum"] = Sum(nf_name)
+                    annotations[f"{nf_name}_avg"] = Avg(nf_name)
+                    annotations[f"{nf_name}_min"] = Min(nf_name)
+                    annotations[f"{nf_name}_max"] = Max(nf_name)
+                    annotations[f"{nf_name}_count"] = Count(nf_name)
+                    annotations[f"{nf_name}_distinct_count"] = Count(
+                        nf_name, distinct=True
+                    )
+
+                aggregate_values = queryset.aggregate(**annotations)
+                aggregate_values["total_count"] = aggregate_values.get("total_count") or 0
+
+                for nf_name in numeric_field_names:
+                    for suffix in ("_sum", "_count", "_distinct_count"):
+                        key = f"{nf_name}{suffix}"
+                        aggregate_values[key] = aggregate_values.get(key) or 0
+
+                return aggregate_values
+            return stats_resolver
+
+        type_attrs[f"resolve_{stats_field_name}"] = make_gr_stats_resolver(
+            field_name,
+            related_model,
+            numeric_field_names,
+            apply_tenant_scope,
+        )
+
     # Add @property methods as GraphQL fields
     properties = introspector.properties
     for prop_name, prop_info in properties.items():

@@ -12,6 +12,11 @@ from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOn
 from graphql import GraphQLResolveInfo
 from graphql.language.ast import FieldNode, FragmentSpreadNode, InlineFragmentNode
 
+try:
+    from django.contrib.contenttypes.fields import GenericRelation as _GenericRelation
+except ImportError:
+    _GenericRelation = None
+
 from .config import QueryOptimizationConfig
 
 logger = logging.getLogger(__name__)
@@ -170,9 +175,18 @@ class QueryAnalyzer:
         current_model: type[models.Model],
         segment: str,
     ) -> tuple[Optional[Any], Optional[type[models.Model]]]:
+        """Resolve a single path segment to a relation field and its related model.
+
+        Handles regular relations (FK, O2O, M2M, reverse FK) as well as
+        GenericRelation fields from ``django.contrib.contenttypes``.
+        """
         try:
             field = current_model._meta.get_field(segment)
             if getattr(field, "is_relation", False):
+                return field, getattr(field, "related_model", None)
+            # GenericRelation has is_relation=True on modern Django,
+            # but guard against older versions or edge cases.
+            if _GenericRelation is not None and isinstance(field, _GenericRelation):
                 return field, getattr(field, "related_model", None)
             return None, None
         except FieldDoesNotExist:
@@ -296,6 +310,9 @@ class QueryAnalyzer:
                     getattr(relation, "many_to_many", False)
                     or getattr(relation, "one_to_many", False)
                 )
+                # GenericRelation always requires prefetch_related
+                if not is_prefetch_needed and _GenericRelation is not None:
+                    is_prefetch_needed = isinstance(relation, _GenericRelation)
                 if is_prefetch_needed:
                     prefetch_related.append("__".join(current_path))
                     break

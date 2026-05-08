@@ -11,6 +11,11 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from graphql import GraphQLResolveInfo
 
+try:
+    from django.contrib.contenttypes.fields import GenericRelation as _GenericRelation
+except ImportError:
+    _GenericRelation = None
+
 from .config import QueryOptimizationConfig
 from .analyzer import QueryAnalyzer
 
@@ -119,9 +124,16 @@ class QueryOptimizer:
     def _resolve_related_model(
         current_model: type[models.Model], segment: str
     ) -> Optional[type[models.Model]]:
+        """Resolve a path segment to a related model.
+
+        Supports standard relations and GenericRelation fields.
+        """
         try:
             field = current_model._meta.get_field(segment)
             if getattr(field, "is_relation", False):
+                return getattr(field, "related_model", None)
+            # GenericRelation fallback
+            if _GenericRelation is not None and isinstance(field, _GenericRelation):
                 return getattr(field, "related_model", None)
             return None
         except FieldDoesNotExist:
@@ -137,7 +149,18 @@ class QueryOptimizer:
     def _build_prefetch_objects(
         self, model: type[models.Model], fields: list[str]
     ) -> list[Union[str, Prefetch]]:
-        """Build Prefetch objects for complex prefetch_related optimization."""
+        """Build Prefetch objects for complex prefetch_related optimization.
+
+        For GenericRelation fields the plain string name is used because
+        Django's GenericRelatedObjectManager already applies content_type
+        filtering automatically when used with ``prefetch_related()``.
+
+        GenericRelation fields are validated before adding to ensure
+        the related model's content_type and object_id columns actually
+        exist in the database schema.  An unapplied migration would
+        otherwise produce an opaque ``column does not exist`` error at
+        query time.
+        """
         prefetch_objects = []
 
         for field_name in fields:
@@ -146,7 +169,22 @@ class QueryOptimizer:
                 continue
             try:
                 field = model._meta.get_field(field_name)
-                if isinstance(field, ManyToManyField):
+                # GenericRelation — validate schema then use plain string.
+                if _GenericRelation is not None and isinstance(field, _GenericRelation):
+                    if self._is_generic_relation_schema_valid(field, field_name):
+                        prefetch_objects.append(field_name)
+                    else:
+                        logger.warning(
+                            "Skipping prefetch for GenericRelation '%s' on %s: "
+                            "related model '%s' is missing required columns "
+                            "('%s', '%s').  Run 'manage.py migrate' to fix.",
+                            field_name,
+                            model.__name__,
+                            field.related_model.__name__,
+                            field.content_type_field_name,
+                            field.object_id_field_name,
+                        )
+                elif isinstance(field, ManyToManyField):
                     prefetch_objects.append(field_name)
                 else:
                     related_model = field.related_model
@@ -157,6 +195,65 @@ class QueryOptimizer:
                 prefetch_objects.append(field_name)
 
         return prefetch_objects
+
+    @staticmethod
+    def _is_generic_relation_schema_valid(gr_field, field_name: str) -> bool:
+        """Verify that a GenericRelation's related model has the required columns.
+
+        A GenericRelation depends on two fields in the related model:
+        - ``content_type_field_name`` (typically ``content_type``)
+        - ``object_id_field_name`` (typically ``object_id``)
+
+        If either is missing (e.g. migration not applied), prefetch_related
+        will fail with a ``ProgrammingError`` at query time.
+
+        Args:
+            gr_field: The GenericRelation field instance.
+            field_name: The accessor name (for logging).
+
+        Returns:
+            True if both required fields exist on the related model.
+        """
+        related_model = gr_field.related_model
+        if related_model is None:
+            return False
+
+        ct_field_name = getattr(gr_field, "content_type_field_name", "content_type")
+        oid_field_name = getattr(gr_field, "object_id_field_name", "object_id")
+
+        try:
+            ct_field = related_model._meta.get_field(ct_field_name)
+            if not getattr(ct_field, "concrete", False):
+                logger.debug(
+                    "GenericRelation '%s': content_type field '%s' on %s "
+                    "is not concrete.",
+                    field_name, ct_field_name, related_model.__name__,
+                )
+                return False
+        except FieldDoesNotExist:
+            logger.debug(
+                "GenericRelation '%s': content_type field '%s' not found on %s.",
+                field_name, ct_field_name, related_model.__name__,
+            )
+            return False
+
+        try:
+            oid_field = related_model._meta.get_field(oid_field_name)
+            if not getattr(oid_field, "concrete", False):
+                logger.debug(
+                    "GenericRelation '%s': object_id field '%s' on %s "
+                    "is not concrete.",
+                    field_name, oid_field_name, related_model.__name__,
+                )
+                return False
+        except FieldDoesNotExist:
+            logger.debug(
+                "GenericRelation '%s': object_id field '%s' not found on %s.",
+                field_name, oid_field_name, related_model.__name__,
+            )
+            return False
+
+        return True
 
 
 # Global optimization manager instances

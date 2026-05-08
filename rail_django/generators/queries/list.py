@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Type, Union
 import graphene
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
+from django.db.utils import OperationalError, ProgrammingError
 
 try:
     from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
@@ -32,6 +33,20 @@ from .ordering import get_default_ordering
 
 logger = logging.getLogger(__name__)
 
+
+def _is_schema_error(exc: Exception) -> bool:
+    """Check if an exception indicates a DB schema issue.
+
+    Detects ProgrammingError ('column does not exist', 'relation does not
+    exist') and OperationalError ('no such column', 'no such table') which
+    occur when migrations haven't been applied.
+    """
+    if isinstance(exc, (ProgrammingError, OperationalError)):
+        return True
+    # Unwrap chained exceptions
+    if exc.__cause__ and isinstance(exc.__cause__, (ProgrammingError, OperationalError)):
+        return True
+    return False
 
 def _get_nested_filter_generator(schema_name: str):
     """Lazy import to avoid circular dependencies. Returns singleton instance."""
@@ -244,9 +259,84 @@ def generate_list_query(
                 items = items[offset:offset + limit]
             else:
                 queryset = queryset[offset:offset + limit]
-                items = list(queryset)
+                try:
+                    items = list(queryset)
+                except Exception as eval_exc:
+                    # Guard against prefetch_related failures caused by
+                    # missing DB columns (e.g. unapplied GenericRelation
+                    # migrations).  Strip prefetch and retry.
+                    if (
+                        queryset.query.select_related
+                        or getattr(queryset, "_prefetch_related_lookups", None)
+                    ) and _is_schema_error(eval_exc):
+                        logger.warning(
+                            "Prefetch/select_related failed for %s "
+                            "(possible unapplied migration): %s.  "
+                            "Retrying without prefetch.  "
+                            "Run 'manage.py migrate' to fix.",
+                            model.__name__,
+                            eval_exc,
+                        )
+                        plain_qs = manager.all()
+                        plain_qs = self._apply_tenant_scope(
+                            plain_qs, info, model, operation="list"
+                        )
+                        if graphql_meta.has_custom_resolver("list"):
+                            plain_qs = graphql_meta.apply_custom_resolver(
+                                "list", plain_qs, info, **kwargs,
+                            )
+                        context_retry = QueryContext(
+                            model=model,
+                            queryset=plain_qs,
+                            info=info,
+                            kwargs=kwargs,
+                            graphql_meta=graphql_meta,
+                            filter_applicator=nested_filter_applicator,
+                            filter_class=filter_class,
+                            ordering_config=ordering_config,
+                            settings=self.settings,
+                            schema_name=self.schema_name,
+                        )
+                        pipeline_retry = QueryFilterPipeline(context_retry)
+                        plain_qs = pipeline_retry.apply_all()
+                        ordering_helper_retry = QueryOrderingHelper(
+                            self, model, ordering_config, self.settings
+                        )
+                        plain_qs, items, _, _ = ordering_helper_retry.apply(
+                            plain_qs,
+                            kwargs.get("order_by"),
+                            kwargs.get("distinct_on"),
+                            skip_count=False,
+                        )
+                        if items is None:
+                            plain_qs = plain_qs[offset:offset + limit]
+                            items = list(plain_qs)
+                        else:
+                            items = items[offset:offset + limit]
+                    else:
+                        raise
         elif items is None:
-            items = list(queryset)
+            try:
+                items = list(queryset)
+            except Exception as eval_exc:
+                if (
+                    queryset.query.select_related
+                    or getattr(queryset, "_prefetch_related_lookups", None)
+                ) and _is_schema_error(eval_exc):
+                    logger.warning(
+                        "Prefetch/select_related failed for %s "
+                        "(possible unapplied migration): %s.  "
+                        "Retrying without prefetch.",
+                        model.__name__,
+                        eval_exc,
+                    )
+                    plain_qs = manager.all()
+                    plain_qs = self._apply_tenant_scope(
+                        plain_qs, info, model, operation="list"
+                    )
+                    items = list(plain_qs)
+                else:
+                    raise
 
         return self._apply_field_masks(items, info, model)
 
