@@ -241,9 +241,19 @@ class NestedDeleteMixin:
 
         for field_name, value in input_data.items():
             if isinstance(value, dict) and hasattr(model, field_name):
+                # Only check for circularity if we are actually going to recurse
+                # into nested data (create or update)
+                if not any(k in value for k in ("create", "update")):
+                    continue
+
                 try:
                     field = model._meta.get_field(field_name)
                     if hasattr(field, "related_model"):
+                        # If the related model is the same as current, it's a self-reference.
+                        # We allow it because the input data tree is finite.
+                        if field.related_model == model:
+                            continue
+
                         if self._has_circular_reference(
                             field.related_model, value, visited_models.copy()
                         ):
