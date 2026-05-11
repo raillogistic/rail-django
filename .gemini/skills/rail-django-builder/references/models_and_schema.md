@@ -14,38 +14,148 @@ The generator adds helper fields based on model definitions:
 
 ## `GraphQLMeta` Configuration
 
-Customize how a model is exposed by defining a `GraphQLMeta` class within the model.
+Customize how a model is exposed by defining a `GraphQLMeta` class within the model. It controls field exposure, filtering, ordering, operation guards, relation operation policy, and metadata exported to clients.
 
 ```python
 from django.db import models
 from rail_django.core.meta import GraphQLMeta as RailGraphQLMeta
+from django.db.models.functions import Now
+from datetime import timedelta
 
-class Product(models.Model):
-    sku = models.CharField(max_length=64, unique=True)
-    name = models.CharField(max_length=200)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+class Order(models.Model):
+    order_number = models.CharField(max_length=64, unique=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     internal_notes = models.TextField(blank=True)
+    risk_score = models.IntegerField(default=0)
+    placed_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def can_access_order(user=None, instance=None, **kwargs):
+        return True # custom logic
 
     class GraphQLMeta(RailGraphQLMeta):
-        # 1. Field Exposure
+        # 1. Field Exposure (FieldExposureConfig)
         fields = RailGraphQLMeta.Fields(
-            include=["sku", "name", "price"],
-            read_only=["sku"],
-            exclude=["internal_notes"]
+            include=["id", "order_number", "total_amount", "placed_at"],
+            read_only=["order_number", "placed_at"],
+            exclude=["internal_notes"],
+            write_only=[]
         )
 
-        # 2. Filtering
+        # 2. Filtering (FilteringConfig)
         filtering = RailGraphQLMeta.Filtering(
-            quick=["sku", "name"],
-            fields={"price": ["gt", "lt", "between"]}
+            quick=["order_number"], # Fields for the 'quick' search argument
+            fields={
+                "total_amount": RailGraphQLMeta.FilterField(lookups=["eq", "gt", "lt", "between"])
+            },
+            presets={
+                "high_value": {"total_amount": {"gte": 1000}}
+            },
+            custom={
+                "overdue": "filter_overdue" # Reference to a model method
+            }
         )
 
-        # 3. Ordering
+        # 3. Computed Filters (Django Expressions)
+        computed_filters = {
+            "is_recent": {
+                "expression": models.Q(placed_at__gte=Now() - timedelta(days=7)),
+                "filter_type": "boolean"
+            }
+        }
+
+        # 4. Ordering (OrderingConfig)
         ordering = RailGraphQLMeta.Ordering(
-            allowed=["name", "price"],
-            default=["name"]
+            allowed=["placed_at", "total_amount"],
+            default=["-placed_at"]
         )
+
+        # 5. Access Control (AccessControlConfig)
+        access = RailGraphQLMeta.AccessControl(
+            operations={
+                "create": RailGraphQLMeta.OperationGuard(
+                    roles=["order_manager"],
+                    permissions=["store.add_order"]
+                ),
+                "retrieve": RailGraphQLMeta.OperationGuard(
+                    condition="can_access_order" # Reference to staticmethod
+                ),
+                "list": RailGraphQLMeta.OperationGuard(
+                    allow_anonymous=False
+                )
+            },
+            fields=[
+                RailGraphQLMeta.FieldGuard(
+                    field="risk_score",
+                    access="read",
+                    visibility="hidden", # or "masked"
+                    roles=["admin"]
+                )
+            ]
+        )
+
+        # 6. Resolvers (ResolverConfig)
+        resolvers = RailGraphQLMeta.Resolvers(
+            queries={"priority_queue": "resolve_priority_queue"},
+            mutations={},
+            fields={"full_name": "resolve_full_name"}
+        )
+
+        # 7. Relation Operation Policy (FieldRelationConfig)
+        relations = {
+            "items": RailGraphQLMeta.FieldRelation(
+                style="unified", # or "id_only"
+                connect=RailGraphQLMeta.RelationOperation(enabled=True),
+                create=RailGraphQLMeta.RelationOperation(enabled=False),
+                update=RailGraphQLMeta.RelationOperation(enabled=False),
+                disconnect=RailGraphQLMeta.RelationOperation(enabled=True),
+                set=RailGraphQLMeta.RelationOperation(enabled=True),
+            )
+        }
+
+        # 8. Classification (ClassificationConfig)
+        classifications = RailGraphQLMeta.Classification(
+            model=["customer-data"],
+            fields={"risk_score": ["sensitive", "financial"]}
+        )
+
+        # 9. ABAC Policies
+        abac_policies = [
+            {
+                "name": "same_department_only",
+                "effect": "allow",
+                "priority": 60,
+                "subject_conditions": {
+                    "department": {
+                        "operator": "eq",
+                        "target": "resource.department",
+                    }
+                },
+            }
+        ]
+
+        # 10. Multi-tenancy
+        tenant_field = "organization" # Field path used by multitenancy integrations. Set to None to disable.
 ```
+
+### `GraphQLMeta` Detailed Breakdown
+
+- **Fields**: Controls visibility.
+  - `include`: Explicit list of fields to expose.
+  - `exclude`: Fields to hide entirely.
+  - `read_only`: Exposed in Queries, hidden in Mutation inputs.
+  - `write_only`: Hidden in Queries, exposed in Mutation inputs.
+- **Filtering**: Controls filter capabilities.
+  - `quick`: List of fields searched when using the `quick` argument.
+  - `fields`: Specific lookups allowed per field (e.g., `["eq", "in"]`).
+  - `presets`: Map of named pre-defined filter sets.
+  - `custom`: Map of filter names to model methods.
+- **Computed Filters**: Define complex filters using Django expressions (like `Q` objects or `ExpressionWrapper`).
+- **AccessControl**: Contains `operations` and `fields` guards.
+  - `operations`: Dict mapping standard operations (`list`, `retrieve`, `create`, `update`, `delete`) to `OperationGuard` objects which can define `roles`, `permissions`, a custom `condition` method, and `match` ("any" or "all").
+  - `fields`: List of `FieldGuard` objects to control `visibility` ("visible", "hidden", "masked") based on `roles` or `access` ("read", "write").
+- **Relations**: Defines the policy for nested operations (e.g., disable `create` or `update` on a reverse foreign key to prevent errors when the FK cannot be null). Use `style="id_only"` to disable nested `create`/`update`.
+- **Classification**: Tag models and fields with classifications to apply broad security policies across your app (e.g., tag fields as "pii" and create a global policy restricting "pii" access).
 
 ## Custom Output Fields (`@field`)
 
