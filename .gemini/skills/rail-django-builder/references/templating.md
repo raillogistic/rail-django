@@ -42,6 +42,10 @@ urlpatterns = [
 Generate PDFs from HTML/CSS using WeasyPrint (recommended) or wkhtmltopdf.
 
 ### 1. Decorator Approach
+
+The `@model_pdf_template` decorator can be applied to either a specific method or the entire model class.
+
+**Method-Level Usage:**
 ```python
 from rail_django.extensions.templating import model_pdf_template
 
@@ -55,6 +59,20 @@ class Order(models.Model):
             "order": self,
             "items": self.items.all()
         }
+```
+
+**Class-Level Usage:**
+When applied to a class, it generates a standard template exposing the instance in the context.
+```python
+from rail_django.extensions.templating import model_pdf_template
+
+@model_pdf_template(
+    content="documents/pdf/restitution_slip.html",
+    title="Bon de restitution",
+)
+class Restitution(models.Model):
+    # Model fields here...
+    pass
 ```
 
 ### 2. Class-Based Approach
