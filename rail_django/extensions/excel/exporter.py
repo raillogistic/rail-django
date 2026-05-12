@@ -275,15 +275,31 @@ def excel_template(
 
 
 def _register_model_excel_templates(sender: Any, **kwargs: Any) -> None:
-    """Signal handler to register decorated methods once models are ready."""
+    """Signal handler to register decorated classes and methods once models are ready."""
     if not hasattr(sender, "_meta"):
         return
     if sender._meta.abstract:
         return
 
+    # Check class itself for class-level Excel template decorator
+    class_meta: Optional[ExcelTemplateMeta] = getattr(
+        sender, "_excel_template_meta", None
+    )
+    if class_meta:
+        # For class-level templates, we use a default method name 'export'
+        # if no explicit url_path is provided.
+        method_name = (
+            class_meta.url_path.split("/")[-1] if class_meta.url_path else "export"
+        )
+        excel_template_registry.register(sender, method_name, class_meta)
+
     for attr_name, attr in inspect.getmembers(sender, predicate=callable):
         meta: Optional[ExcelTemplateMeta] = getattr(attr, "_excel_template_meta", None)
         if not meta:
+            continue
+
+        # Avoid duplicate registration
+        if meta is class_meta:
             continue
 
         excel_template_registry.register(sender, attr_name, meta)
@@ -294,7 +310,7 @@ class_prepared.connect(
 )
 
 
-def _register_existing_models_if_ready() -> None:
+def _register_existing_excel_models_if_ready() -> None:
     """Register templates for models that were loaded before the module import."""
     try:
         from django.apps import apps
@@ -308,7 +324,7 @@ def _register_existing_models_if_ready() -> None:
         logger.debug("Skipping eager Excel template registration: %s", exc)
 
 
-_register_existing_models_if_ready()
+_register_existing_excel_models_if_ready()
 
 
 def _call_model_method(method: Optional[Callable], request: HttpRequest) -> Any:

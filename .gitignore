@@ -202,7 +202,6 @@ dump.rdb
 
 # Celery
 celerybeat-schedule.db
-
 # Local configuration overrides
 local_config.py
 config_local.py

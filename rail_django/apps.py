@@ -18,6 +18,26 @@ class AppConfig(AppConfig):
             _configure_sqlite_connection,
             dispatch_uid="rail_django.sqlite_connection_configuration",
         )
+
+        # Register existing templates for models that might have been loaded early
+        try:
+            from rail_django.extensions.templating.registry import (
+                _register_existing_pdf_models_if_ready,
+            )
+
+            _register_existing_pdf_models_if_ready()
+        except Exception as exc:
+            logger.debug("Failed to register existing PDF templates: %s", exc)
+
+        try:
+            from rail_django.extensions.excel.exporter import (
+                _register_existing_excel_models_if_ready,
+            )
+
+            _register_existing_excel_models_if_ready()
+        except Exception as exc:
+            logger.debug("Failed to register existing Excel templates: %s", exc)
+
         if getattr(settings, "RAIL_DJANGO_DISCOVER_SCHEMAS_ON_STARTUP", False):
             try:
                 from rail_django.core.registry import schema_registry

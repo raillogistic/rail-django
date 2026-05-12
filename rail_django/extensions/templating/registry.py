@@ -430,7 +430,7 @@ def pdf_template(
 
 def _register_model_templates(sender: Any, **kwargs: Any) -> None:
     """
-    Signal handler to register decorated methods once models are ready.
+    Signal handler to register decorated classes and methods once models are ready.
 
     Args:
         sender: Model class being prepared.
@@ -440,9 +440,23 @@ def _register_model_templates(sender: Any, **kwargs: Any) -> None:
     if sender._meta.abstract:
         return
 
+    # Check class itself for class-level template decorator
+    class_meta: Optional[TemplateMeta] = getattr(sender, "_pdf_template_meta", None)
+    if class_meta:
+        # For class-level templates, we use a default method name 'print'
+        # if no explicit url_path is provided, to maintain naming consistency.
+        method_name = (
+            class_meta.url_path.split("/")[-1] if class_meta.url_path else "print"
+        )
+        template_registry.register(sender, method_name, class_meta)
+
     for attr_name, attr in inspect.getmembers(sender, predicate=callable):
         meta: Optional[TemplateMeta] = getattr(attr, "_pdf_template_meta", None)
         if not meta:
+            continue
+
+        # Avoid duplicate registration if the class itself was decorated with the same meta
+        if meta is class_meta:
             continue
 
         template_registry.register(sender, attr_name, meta)
@@ -453,7 +467,7 @@ class_prepared.connect(
 )
 
 
-def _register_existing_models_if_ready() -> None:
+def _register_existing_pdf_models_if_ready() -> None:
     """Register templates for models that were loaded before the module import."""
     try:
         from django.apps import apps
@@ -467,4 +481,5 @@ def _register_existing_models_if_ready() -> None:
         logger.debug("Skipping eager template registration: %s", exc)
 
 
-_register_existing_models_if_ready()
+_register_existing_pdf_models_if_ready()
+

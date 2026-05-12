@@ -255,17 +255,31 @@ class ModelSchemaExtractor(
     ) -> list[dict]:
         """Extract available PDF and Excel templates for the model."""
         from django.urls import NoReverseMatch, reverse
+
         from graphene.utils.str_converters import to_camel_case
+
+        from ..templating.access import evaluate_template_access
         from ..templating.config import _url_prefix as _pdf_url_prefix
+        from ..templating.registry import _register_model_templates, template_registry
 
         try:
             from ..excel.access import evaluate_excel_template_access
             from ..excel.config import _url_prefix as _excel_url_prefix
-            from ..excel.exporter import excel_template_registry
+            from ..excel.exporter import (
+                _register_model_excel_templates,
+                excel_template_registry,
+            )
         except Exception:
             evaluate_excel_template_access = None
             _excel_url_prefix = None
             excel_template_registry = None
+            _register_model_excel_templates = None
+
+        # Lazy discovery fallback: ensure templates are registered for this model.
+        # This is a fail-safe for cases where the model was loaded before signals were connected.
+        _register_model_templates(model)
+        if _register_model_excel_templates:
+            _register_model_excel_templates(model)
 
         pdf_prefix = _pdf_url_prefix().strip("/")
         excel_prefix = (
@@ -333,8 +347,16 @@ class ModelSchemaExtractor(
         templates: list[dict[str, Any]] = []
 
         for url_path, definition in template_registry.all().items():
-            if definition.model != model:
+            if not definition.model:
                 continue
+
+            # Compare using labels to be more robust against proxy models or reloads
+            try:
+                if definition.model._meta.label_lower != model._meta.label_lower:
+                    continue
+            except (AttributeError, Exception):
+                if definition.model != model:
+                    continue
 
             access = evaluate_template_access(
                 definition,
@@ -376,8 +398,16 @@ class ModelSchemaExtractor(
 
         if excel_template_registry and evaluate_excel_template_access:
             for url_path, definition in excel_template_registry.all().items():
-                if definition.model != model:
+                if not definition.model:
                     continue
+
+                # Compare using labels to be more robust against proxy models or reloads
+                try:
+                    if definition.model._meta.label_lower != model._meta.label_lower:
+                        continue
+                except (AttributeError, Exception):
+                    if definition.model != model:
+                        continue
 
                 access = evaluate_excel_template_access(
                     definition,
