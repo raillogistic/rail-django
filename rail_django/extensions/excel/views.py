@@ -95,10 +95,24 @@ class ExcelTemplateView(View):
         pk = request.GET.get("pk")
 
         template_def = excel_template_registry.get(template_path)
+
+        if not template_def:
+            # Lazy discovery fallback
+            try:
+                from .exporter import _register_existing_excel_models_if_ready
+
+                _register_existing_excel_models_if_ready()
+                template_def = excel_template_registry.get(template_path)
+            except Exception as exc:
+                logger.debug("Lazy Excel registration failed: %s", exc)
+
         if not template_def:
             self._log_template_event(
-                request, success=False, error_message="Template not found",
-                template_path=template_path, pk=pk,
+                request,
+                success=False,
+                error_message="Template not found",
+                template_path=template_path,
+                pk=pk,
             )
             return JsonResponse(
                 {"error": "Template not found", "template": template_path}, status=404

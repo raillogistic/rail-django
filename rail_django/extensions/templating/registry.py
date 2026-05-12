@@ -164,7 +164,7 @@ class TemplateRegistry:
         self._templates: dict[str, TemplateDefinition] = {}
 
     def register(
-        self, model: type[models.Model], method_name: str, meta: TemplateMeta
+        self, model: Type[models.Model], method_name: str, meta: TemplateMeta
     ) -> None:
         """
         Register a template for a model method.
@@ -181,9 +181,26 @@ class TemplateRegistry:
 
         app_label = model._meta.app_label
         model_name = model._meta.model_name
-        url_path = meta.url_path or f"{app_label}/{model_name}/{method_name}"
+        base_url_path = meta.url_path or f"{app_label}/{model_name}/{method_name}"
+
+        url_path = base_url_path
+        counter = 1
+        while url_path in self._templates:
+            # If this exact meta is already registered, skip it
+            existing = self._templates[url_path]
+            if (
+                existing.model == model
+                and existing.method_name == method_name
+                and existing.content_template == meta.content_template
+                and existing.title == (meta.title or _derive_template_title(model, method_name))
+            ):
+                return
+
+            counter += 1
+            url_path = f"{base_url_path}_{counter}"
 
         merged_config = {**_default_template_config(), **(meta.config or {})}
+
         header = meta.header_template or _default_header()
         footer = meta.footer_template or _default_footer()
         title = meta.title or _derive_template_title(model, method_name)
@@ -336,7 +353,7 @@ def model_pdf_template(
     """
 
     def decorator(func: Callable) -> Callable:
-        func._pdf_template_meta = TemplateMeta(
+        meta = TemplateMeta(
             header_template=header,
             content_template=content,
             footer_template=footer,
@@ -353,6 +370,9 @@ def model_pdf_template(
             client_data_fields=tuple(client_data_fields or ()),
             client_data_schema=tuple(client_data_schema or ()),
         )
+        if not hasattr(func, "_pdf_template_metas"):
+            func._pdf_template_metas = []
+        func._pdf_template_metas.append(meta)
         return func
 
     return decorator
@@ -416,7 +436,10 @@ def pdf_template(
             client_data_fields=tuple(client_data_fields or ()),
             client_data_schema=tuple(client_data_schema or ()),
         )
-        func._pdf_template_meta = meta
+        if not hasattr(func, "_pdf_template_metas"):
+            func._pdf_template_metas = []
+        func._pdf_template_metas.append(meta)
+
         template_registry.register_function(func, meta)
         return func
 
@@ -440,26 +463,28 @@ def _register_model_templates(sender: Any, **kwargs: Any) -> None:
     if sender._meta.abstract:
         return
 
-    # Check class itself for class-level template decorator
-    class_meta: Optional[TemplateMeta] = getattr(sender, "_pdf_template_meta", None)
-    if class_meta:
+    # Keep track of registered metas to avoid duplicates
+    registered_metas: set[int] = set()
+
+    # Check class itself for class-level template decorators
+    class_metas: list[TemplateMeta] = getattr(sender, "_pdf_template_metas", [])
+    for meta in class_metas:
         # For class-level templates, we use a default method name 'print'
         # if no explicit url_path is provided, to maintain naming consistency.
         method_name = (
-            class_meta.url_path.split("/")[-1] if class_meta.url_path else "print"
+            meta.url_path.split("/")[-1] if meta.url_path else "print"
         )
-        template_registry.register(sender, method_name, class_meta)
+        template_registry.register(sender, method_name, meta)
+        registered_metas.add(id(meta))
 
     for attr_name, attr in inspect.getmembers(sender, predicate=callable):
-        meta: Optional[TemplateMeta] = getattr(attr, "_pdf_template_meta", None)
-        if not meta:
-            continue
+        metas: list[TemplateMeta] = getattr(attr, "_pdf_template_metas", [])
+        for meta in metas:
+            if id(meta) in registered_metas:
+                continue
 
-        # Avoid duplicate registration if the class itself was decorated with the same meta
-        if meta is class_meta:
-            continue
-
-        template_registry.register(sender, attr_name, meta)
+            template_registry.register(sender, attr_name, meta)
+            registered_metas.add(id(meta))
 
 
 class_prepared.connect(

@@ -94,7 +94,22 @@ class ExcelTemplateRegistry:
         """
         app_label = model._meta.app_label
         model_name = model._meta.model_name
-        url_path = meta.url_path or f"{app_label}/{model_name}/{method_name}"
+        base_url_path = meta.url_path or f"{app_label}/{model_name}/{method_name}"
+
+        url_path = base_url_path
+        counter = 1
+        while url_path in self._templates:
+            # If this exact meta is already registered, skip it
+            existing = self._templates[url_path]
+            if (
+                existing.model == model
+                and existing.method_name == method_name
+                and existing.title == (meta.title or _derive_excel_template_title(model, method_name))
+            ):
+                return
+
+            counter += 1
+            url_path = f"{base_url_path}_{counter}"
 
         merged_config = {**_default_excel_config(), **(meta.config or {})}
         title = meta.title or _derive_excel_template_title(model, method_name)
@@ -209,7 +224,7 @@ def model_excel_template(
     """
 
     def decorator(func: Callable) -> Callable:
-        func._excel_template_meta = ExcelTemplateMeta(
+        meta = ExcelTemplateMeta(
             url_path=url,
             config=config or {},
             roles=tuple(roles or ()),
@@ -220,6 +235,9 @@ def model_excel_template(
             allow_client_data=allow_client_data,
             client_data_fields=tuple(client_data_fields or ()),
         )
+        if not hasattr(func, "_excel_template_metas"):
+            func._excel_template_metas = []
+        func._excel_template_metas.append(meta)
         return func
 
     return decorator
@@ -267,7 +285,10 @@ def excel_template(
             allow_client_data=allow_client_data,
             client_data_fields=tuple(client_data_fields or ()),
         )
-        func._excel_template_meta = meta
+        if not hasattr(func, "_excel_template_metas"):
+            func._excel_template_metas = []
+        func._excel_template_metas.append(meta)
+
         excel_template_registry.register_function(func, meta)
         return func
 
@@ -281,28 +302,28 @@ def _register_model_excel_templates(sender: Any, **kwargs: Any) -> None:
     if sender._meta.abstract:
         return
 
-    # Check class itself for class-level Excel template decorator
-    class_meta: Optional[ExcelTemplateMeta] = getattr(
-        sender, "_excel_template_meta", None
-    )
-    if class_meta:
+    # Keep track of registered metas to avoid duplicates
+    registered_metas: set[int] = set()
+
+    # Check class itself for class-level Excel template decorators
+    class_metas: list[ExcelTemplateMeta] = getattr(sender, "_excel_template_metas", [])
+    for meta in class_metas:
         # For class-level templates, we use a default method name 'export'
         # if no explicit url_path is provided.
         method_name = (
-            class_meta.url_path.split("/")[-1] if class_meta.url_path else "export"
+            meta.url_path.split("/")[-1] if meta.url_path else "export"
         )
-        excel_template_registry.register(sender, method_name, class_meta)
+        excel_template_registry.register(sender, method_name, meta)
+        registered_metas.add(id(meta))
 
     for attr_name, attr in inspect.getmembers(sender, predicate=callable):
-        meta: Optional[ExcelTemplateMeta] = getattr(attr, "_excel_template_meta", None)
-        if not meta:
-            continue
+        metas: list[ExcelTemplateMeta] = getattr(attr, "_excel_template_metas", [])
+        for meta in metas:
+            if id(meta) in registered_metas:
+                continue
 
-        # Avoid duplicate registration
-        if meta is class_meta:
-            continue
-
-        excel_template_registry.register(sender, attr_name, meta)
+            excel_template_registry.register(sender, attr_name, meta)
+            registered_metas.add(id(meta))
 
 
 class_prepared.connect(

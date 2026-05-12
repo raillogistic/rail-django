@@ -6,12 +6,15 @@ and building CSS style blocks for PDF generation.
 """
 
 import html
+import logging
 import re
 from typing import Any, Iterable, Optional
 
 from django.template import loader
 
 from ..config import _normalize_page_stamps, _normalize_watermark, _resolve_postprocess_config
+
+logger = logging.getLogger(__name__)
 
 
 def _render_template(template_path: Optional[str], context: dict[str, Any]) -> str:
@@ -24,11 +27,22 @@ def _render_template(template_path: Optional[str], context: dict[str, Any]) -> s
 
     Returns:
         Rendered HTML string.
+
+    Raises:
+        TemplateDoesNotExist: If the template path cannot be resolved by Django's loaders.
     """
     if not template_path:
         return ""
-    template = loader.get_template(template_path)
-    return template.render(context)
+    try:
+        template = loader.get_template(template_path)
+        return template.render(context)
+    except Exception as exc:
+        logger.error(
+            "Failed to load template '%s'. Ensure it is in one of the directories "
+            "configured in TEMPLATES['DIRS'] or within an app's 'templates' folder.",
+            template_path,
+        )
+        raise exc
 
 
 def _normalize_html_fragment(fragment: str) -> tuple[str, list[str]]:

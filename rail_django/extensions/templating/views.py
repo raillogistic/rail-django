@@ -93,10 +93,24 @@ class PdfTemplateView(View):
         **kwargs: Any,
     ) -> HttpResponse:
         template_def = template_registry.get(template_path)
+
+        if not template_def:
+            # Lazy discovery fallback: if template not found, ensure all models are scanned.
+            try:
+                from .registry import _register_existing_pdf_models_if_ready
+
+                _register_existing_pdf_models_if_ready()
+                template_def = template_registry.get(template_path)
+            except Exception as exc:
+                logger.debug("Lazy PDF registration failed: %s", exc)
+
         if not template_def:
             self._log_template_event(
-                request, success=False, error_message="Template not found",
-                template_path=template_path, pk=pk,
+                request,
+                success=False,
+                error_message="Template not found",
+                template_path=template_path,
+                pk=pk,
             )
             return JsonResponse(
                 {"error": "Template not found", "template": template_path}, status=404
