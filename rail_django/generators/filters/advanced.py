@@ -146,6 +146,11 @@ class ModelFilterGenerator(
                         field_name=field_name
                     )
 
+            # Include custom filters declared via the @filter decorator
+            custom_filters = self.get_custom_filters(model)
+            for filter_name, filter_instance in custom_filters.items():
+                filters[filter_name] = filter_instance
+
             # Add quick filter across merged primitive/default + GraphQLMeta fields
             quick_fields = self.get_quick_filter_fields(model)
             if quick_fields:

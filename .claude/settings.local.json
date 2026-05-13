@@ -22,7 +22,8 @@
       "Bash(export PYTHONPATH=$PYTHONPATH:.:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git grep:*)"
+      "Bash(git grep:*)",
+      "Bash(git stash *)"
     ]
   }
 }

@@ -509,7 +509,18 @@ class TypeGenerator:
             models.ImageField: {"filter_class": CharFilter, "extra": lambda f: {"lookup_expr": "exact"}},
         }
         meta_class = type("Meta", (), {"model": model, "fields": filter_fields, "filter_overrides": filter_overrides})
-        filter_class = type(class_name, (FilterSet,), {"Meta": meta_class, "__doc__": f"Filter set for {model.__name__} queries."})
+        extra_attrs: dict[str, Any] = {"Meta": meta_class, "__doc__": f"Filter set for {model.__name__} queries."}
+
+        # Include custom filters registered via the @filter decorator
+        try:
+            graphql_meta = get_model_graphql_meta(model)
+            custom_instances = graphql_meta.get_custom_filters() if graphql_meta else {}
+            for custom_name, custom_instance in custom_instances.items():
+                extra_attrs[custom_name] = custom_instance
+        except Exception:
+            pass
+
+        filter_class = type(class_name, (FilterSet,), extra_attrs)
         self._filter_type_registry[model] = filter_class
         return filter_class
 

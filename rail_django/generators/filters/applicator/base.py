@@ -132,6 +132,34 @@ class BaseFilterApplicatorMixin:
 
         return True
 
+    def _apply_custom_decorated_filters(
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+        model: Optional[Type[models.Model]],
+    ) -> tuple[models.QuerySet, Dict[str, Any]]:
+        """Apply ``@filter``-decorated custom filters and remove them from *where_input*."""
+        if not model or not where_input:
+            return queryset, where_input
+
+        graphql_meta = self._get_graphql_meta(model)
+        if graphql_meta is None:
+            return queryset, where_input
+
+        custom_names = set(getattr(graphql_meta.filtering, "custom", None) or {})
+        if not custom_names:
+            return queryset, where_input
+
+        remaining: Dict[str, Any] = {}
+        for key, value in where_input.items():
+            if key in custom_names:
+                if value is not None:
+                    queryset = graphql_meta.apply_custom_filter(key, queryset, value)
+            else:
+                remaining[key] = value
+
+        return queryset, remaining
+
     def apply_presets(
         self,
         where_input: Dict[str, Any],
@@ -237,6 +265,11 @@ class BaseFilterApplicatorMixin:
 
         if window_filter and self.filtering_settings and getattr(self.filtering_settings, "enable_window_filters", False):
             queryset = self.prepare_queryset_for_window_filter(queryset, window_filter)
+
+        # Apply custom filters declared via the @filter decorator
+        queryset, where_input = self._apply_custom_decorated_filters(
+            queryset, where_input, model
+        )
 
         # Build main Q object
         property_context = {"queryset": queryset, "cache": {}}

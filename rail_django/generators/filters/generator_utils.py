@@ -274,6 +274,83 @@ def generate_property_filters(
     return fields
 
 
+def _resolve_custom_filter_graphene_type(filter_type: Optional[type]) -> type[graphene.Scalar]:
+    """Resolve a custom-filter ``filter_type`` to a Graphene scalar input type."""
+    if filter_type is None:
+        return graphene.String
+
+    # Already a Graphene scalar
+    if isinstance(filter_type, type) and issubclass(filter_type, graphene.Scalar):
+        return filter_type
+
+    # django-filter BooleanFilter → graphene.Boolean
+    try:
+        import django_filters
+        if issubclass(filter_type, django_filters.BooleanFilter):
+            return graphene.Boolean
+        if issubclass(filter_type, django_filters.NumberFilter):
+            return graphene.Float
+        if issubclass(filter_type, django_filters.Filter):
+            return graphene.String
+    except (ImportError, TypeError):
+        pass
+
+    return graphene.String
+
+
+def generate_custom_filters(
+    model: Type[models.Model],
+) -> Dict[str, graphene.InputField]:
+    """Generate filter inputs for ``@filter``-decorated model methods.
+
+    Custom filters defined with the ``@filter`` decorator are exposed as
+    scalar-valued fields on the WhereInput.  At execution time the value is
+    forwarded to the decorated method via
+    ``GraphQLMeta.apply_custom_filter()``.
+    """
+    fields: Dict[str, graphene.InputField] = {}
+    try:
+        from ...core.meta import get_model_graphql_meta
+
+        graphql_meta = get_model_graphql_meta(model)
+        custom: dict[str, Any] = getattr(graphql_meta.filtering, "custom", None) or {}
+        if not custom:
+            return fields
+
+        for filter_name, resolver_ref in custom.items():
+            callable_fn: Any = None
+            if isinstance(resolver_ref, str):
+                callable_fn = getattr(model, resolver_ref, None)
+            elif callable(resolver_ref):
+                callable_fn = resolver_ref
+
+            if not callable(callable_fn):
+                continue
+
+            filter_type_hint = getattr(callable_fn, "_custom_filter_type", None)
+            graphene_type = _resolve_custom_filter_graphene_type(filter_type_hint)
+
+            if graphene_type is graphene.Boolean and filter_type_hint is None:
+                lower = filter_name.lower()
+                if not (lower.startswith(("has_", "is_")) or "bool" in lower):
+                    graphene_type = graphene.String
+
+            description = (
+                getattr(callable_fn, "_custom_filter_description", None)
+                or f"Custom filter: {filter_name}"
+            )
+
+            fields[filter_name] = graphene.InputField(
+                graphene_type,
+                name=to_camel_case(filter_name),
+                description=description,
+            )
+    except Exception as e:
+        logger.debug(f"Error generating custom filters for {model.__name__}: {e}")
+
+    return fields
+
+
 def generate_array_field_filters(
     model: Type[models.Model],
 ) -> Dict[str, graphene.InputField]:
@@ -456,6 +533,7 @@ __all__ = [
     "is_historical_model",
     "generate_computed_filters",
     "generate_property_filters",
+    "generate_custom_filters",
     "generate_array_field_filters",
     "generate_date_trunc_filters",
     "generate_date_extract_filters",
