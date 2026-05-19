@@ -138,7 +138,7 @@ class InputSanitizer:
                 strip=True,
             )
         else:
-            sanitized_value = html.escape(strip_tags(sanitized_value))
+            sanitized_value = html.unescape(html.escape(strip_tags(sanitized_value)))
 
         violations.extend(issue.message for issue in issues)
         severity = highest_severity(issues)
