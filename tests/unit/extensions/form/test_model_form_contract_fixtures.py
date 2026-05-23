@@ -268,3 +268,35 @@ def test_model_form_contract_field_read_only_when_non_editable():
     )
 
     assert fields[0]["read_only"] is True
+
+
+def test_model_form_contract_extractor_includes_help_text():
+    """
+    Vérifie que l'extracteur inclut correctement le texte d'aide (help_text) du champ.
+    """
+    extractor = ModelFormContractExtractor(schema_name="default")
+    fields = extractor._build_fields(
+        {
+            "fields": [
+                {
+                    "name": "status",
+                    "field_name": "status",
+                    "label": "Status",
+                    "input_type": "SELECT",
+                    "graphql_type": "String",
+                    "python_type": "str",
+                    "required": False,
+                    "nullable": False,
+                    "read_only": False,
+                    "hidden": False,
+                    "help_text": "Choisissez le statut de la commande.",
+                    "validators": [],
+                }
+            ]
+        },
+        mode="CREATE",
+        contract_permissions={"field_permissions": []},
+    )
+
+    assert fields[0]["help_text"] == "Choisissez le statut de la commande."
+

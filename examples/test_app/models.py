@@ -68,7 +68,7 @@ class Comment(models.Model):
 
 
 class Product(models.Model):
-    name = models.CharField(max_length=120)
+    name = models.CharField(max_length=120, help_text="Nom du produit")
     price = models.DecimalField(max_digits=10, decimal_places=2)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     date_creation = models.DateTimeField(auto_now_add=True)

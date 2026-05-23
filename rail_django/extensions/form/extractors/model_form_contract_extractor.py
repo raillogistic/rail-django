@@ -203,6 +203,18 @@ class ModelFormContractExtractor(FormConfigExtractor):
         mode: str = "CREATE",
         contract_permissions: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        """
+        Construit et configure les champs du contrat de formulaire.
+
+        Args:
+            config (dict): Configuration de base extraite du modèle.
+            primary_key_name (str, optional): Nom de la clé primaire du modèle.
+            mode (str): Mode du formulaire (CREATE, UPDATE, VIEW).
+            contract_permissions (dict, optional): Permissions associées au contrat.
+
+        Returns:
+            list[dict]: Liste des configurations de champs enrichies et prêtes pour le GraphQL.
+        """
         permission_lookup = self._build_field_permission_lookup(contract_permissions)
         is_view_mode = str(mode).upper() == "VIEW"
         fields: list[dict[str, Any]] = []
@@ -277,6 +289,7 @@ class ModelFormContractExtractor(FormConfigExtractor):
                     "readable": readable,
                     "writable": writable,
                     "visibility": visibility,
+                    "help_text": field.get("help_text"),
                 }
             )
         return fields

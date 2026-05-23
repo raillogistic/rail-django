@@ -543,6 +543,31 @@ class ModelFormValidatorType(graphene.ObjectType):
 
 
 class ModelFormFieldType(graphene.ObjectType):
+    """
+    Type GraphQL représentant la configuration d'un champ individuel du contrat de formulaire.
+
+    Attributs:
+        name (str): Nom du champ au format camelCase.
+        path (str): Chemin d'accès unique du champ.
+        field_name (str): Nom d'origine du champ dans le modèle Django (snake_case).
+        label (str): Libellé d'affichage (verbose_name) traduit en français.
+        kind (ModelFormFieldKindEnum): Nature du champ (TEXT, NUMBER, RELATION, etc.).
+        graphql_type (str): Type GraphQL du champ.
+        python_type (str): Type de données Python sous-jacent.
+        required (bool): Indique si le champ est obligatoire.
+        nullable (bool): Indique si la valeur peut être nulle.
+        read_only (bool): Indique si le champ est en lecture seule.
+        hidden (bool): Indique si le champ est masqué.
+        default_value (Any): Valeur par défaut du champ.
+        constraints (dict): Contraintes de validation du champ.
+        validators (list): Liste des validateurs configurés.
+        ui (dict): Propriétés d'interface utilisateur et de rendu.
+        metadata (dict): Métadonnées additionnelles du champ.
+        readable (bool): Indique si l'utilisateur a le droit de lire ce champ.
+        writable (bool): Indique si l'utilisateur a le droit d'écrire dans ce champ.
+        visibility (str): Niveau de visibilité appliqué (ex: VISIBLE, HIDDEN, MASKED).
+        help_text (str): Texte d'aide ou description d'utilisation associée au champ.
+    """
     name = graphene.String(required=True)
     path = graphene.String(required=True)
     field_name = graphene.String(required=True)
@@ -562,6 +587,8 @@ class ModelFormFieldType(graphene.ObjectType):
     readable = graphene.Boolean(required=True)
     writable = graphene.Boolean(required=True)
     visibility = graphene.String(required=True)
+    help_text = graphene.String(description="Texte d'aide ou description d'utilisation associée au champ.")
+
 
 
 class ModelFormSectionType(graphene.ObjectType):

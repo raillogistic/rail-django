@@ -482,3 +482,32 @@ def test_model_form_initial_data_applies_to_many_relation_limit(gql_client):
         assert len(values["orderItems"]) == 3
     finally:
         get_form_settings.cache_clear()
+
+
+def test_model_form_contract_fields_expose_help_text(gql_client):
+    """
+    Vérifie que la requête GraphQL modelFormContract renvoie le champ helpText
+    avec la bonne valeur issue du modèle Django.
+    """
+    query = """
+    query {
+      contract: modelFormContract(
+        appLabel: "test_app"
+        modelName: "Product"
+        mode: CREATE
+      ) {
+        fields {
+          fieldName
+          helpText
+        }
+      }
+    }
+    """
+    result = gql_client.execute(query)
+    assert result.get("errors") is None
+
+    fields = result["data"]["contract"]["fields"]
+    name_field = next((f for f in fields if f["fieldName"] == "name"), None)
+    assert name_field is not None
+    assert name_field["helpText"] == "Nom du produit"
+
