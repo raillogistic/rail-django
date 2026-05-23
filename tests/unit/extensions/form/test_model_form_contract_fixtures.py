@@ -300,3 +300,88 @@ def test_model_form_contract_extractor_includes_help_text():
 
     assert fields[0]["help_text"] == "Choisissez le statut de la commande."
 
+
+def test_field_extractor_extracts_constraints_from_validators():
+    """
+    Vérifie que l'extracteur de champs extrait correctement les contraintes
+    (min_value, max_value, min_length, max_length, pattern, allowed_extensions)
+    à partir des validateurs Django (MinValueValidator, MaxValueValidator, etc.).
+    """
+    from django.core.validators import (
+        MinValueValidator,
+        MaxValueValidator,
+        MinLengthValidator,
+        MaxLengthValidator,
+        RegexValidator,
+        FileExtensionValidator,
+    )
+    from django.db import models
+    from rail_django.extensions.form.extractors.field_extractor import FieldExtractorMixin
+
+    class DummyModel(models.Model):
+        class Meta:
+            app_label = "test_app"
+
+    # Mock un champ Django avec différents validateurs
+    field = models.IntegerField(
+        validators=[
+            MinValueValidator(10),
+            MaxValueValidator(50),
+        ]
+    )
+    field.name = "age"
+    field.model = DummyModel
+
+    extractor = FieldExtractorMixin()
+    res = extractor._extract_field(
+        model=DummyModel,
+        field=field,
+        user=None,
+        mode="CREATE",
+    )
+
+    assert res is not None
+    assert res["constraints"]["min_value"] == 10.0
+    assert res["constraints"]["max_value"] == 50.0
+
+    # Mock un champ de caractères avec Min/Max Length et Regex
+    char_field = models.CharField(
+        max_length=100,
+        validators=[
+            MinLengthValidator(5),
+            RegexValidator(r"^[A-Z]+$"),
+        ]
+    )
+    char_field.name = "code"
+    char_field.model = DummyModel
+
+    res_char = extractor._extract_field(
+        model=DummyModel,
+        field=char_field,
+        user=None,
+        mode="CREATE",
+    )
+    assert res_char is not None
+    assert res_char["constraints"]["min_length"] == 5
+    assert res_char["constraints"]["max_length"] == 100
+    assert res_char["constraints"]["pattern"] == r"^[A-Z]+$"
+
+    # Mock un FileField avec FileExtensionValidator
+    file_field = models.FileField(
+        validators=[
+            FileExtensionValidator(allowed_extensions=["pdf", "docx"]),
+        ]
+    )
+    file_field.name = "document"
+    file_field.model = DummyModel
+
+    res_file = extractor._extract_field(
+        model=DummyModel,
+        field=file_field,
+        user=None,
+        mode="CREATE",
+    )
+    assert res_file is not None
+    assert res_file["constraints"]["allowed_extensions"] == ["pdf", "docx"]
+
+

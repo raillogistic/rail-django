@@ -142,6 +142,20 @@ class FieldExtractorMixin:
         field_metadata: Optional[dict[str, Any]] = None,
         mode: str = "CREATE",
     ) -> Optional[dict[str, Any]]:
+        """
+        Extrait les métadonnées et contraintes d'un champ spécifique d'un modèle Django.
+
+        Args:
+            model (type[models.Model]): Le modèle Django parent.
+            field (models.Field): Le champ Django à extraire.
+            user (Any): L'utilisateur actuel pour le calcul des permissions.
+            instance (models.Model, optional): L'instance spécifique du modèle.
+            field_metadata (dict, optional): Métadonnées spécifiques au champ.
+            mode (str): Mode du formulaire (CREATE, UPDATE, VIEW).
+
+        Returns:
+            Optional[dict]: Un dictionnaire représentant le schéma du champ, ou None.
+        """
         try:
             from graphene.utils.str_converters import to_camel_case
 
@@ -180,9 +194,38 @@ class FieldExtractorMixin:
                 except Exception:
                     default_value = str(field.default)
 
+            # Extraction des contraintes à partir des validateurs et attributs du champ
+            max_length = getattr(field, "max_length", None)
+            min_length = getattr(field, "min_length", None)
+            max_value = getattr(field, "max_value", None)
+            min_value = getattr(field, "min_value", None)
+            pattern = None
+            pattern_message = None
+            allowed_extensions = None
+
             validators = []
             for validator in getattr(field, "validators", []):
                 params: dict[str, Any] = {}
+                val_name = type(validator).__name__
+
+                # Extraction intelligente des limites depuis les validateurs
+                if val_name == "MinValueValidator" and hasattr(validator, "limit_value"):
+                    min_value = validator.limit_value
+                elif val_name == "MaxValueValidator" and hasattr(validator, "limit_value"):
+                    max_value = validator.limit_value
+                elif val_name == "MinLengthValidator" and hasattr(validator, "limit_value"):
+                    min_length = validator.limit_value
+                elif val_name == "MaxLengthValidator" and hasattr(validator, "limit_value"):
+                    max_length = validator.limit_value
+                elif val_name == "RegexValidator" and hasattr(validator, "regex"):
+                    if hasattr(validator.regex, "pattern"):
+                        pattern = validator.regex.pattern
+                    elif isinstance(validator.regex, str):
+                        pattern = validator.regex
+                    pattern_message = getattr(validator, "message", None)
+                elif val_name == "FileExtensionValidator" and hasattr(validator, "allowed_extensions"):
+                    allowed_extensions = validator.allowed_extensions
+
                 if hasattr(validator, "limit_value"):
                     params["limit_value"] = self._to_json_value(validator.limit_value)
                 if hasattr(validator, "regex"):
@@ -196,12 +239,20 @@ class FieldExtractorMixin:
                 message = getattr(validator, "message", None)
                 validators.append(
                     {
-                        "type": type(validator).__name__,
+                        "type": val_name,
                         "params": params or None,
                         "message": str(message) if message else None,
                         "async_field": False,
                     }
                 )
+
+            def _to_float(val: Any) -> Optional[float]:
+                if val is None:
+                    return None
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return None
 
             custom_metadata = (
                 self._to_json_value(field_metadata)
@@ -213,8 +264,8 @@ class FieldExtractorMixin:
             if type(field).__name__ in ("FileField", "ImageField"):
                 upload_config = {
                     "strategy": "GRAPHQL_UPLOAD",
-                    "allowed_extensions": None,
-                    "max_file_size": None,
+                    "allowed_extensions": self._to_json_value(allowed_extensions),
+                    "max_file_size": getattr(field, "max_file_size", None),
                     "max_files": 1,
                     "direct_upload_url": None,
                 }
@@ -233,16 +284,16 @@ class FieldExtractorMixin:
                 "disabled": False,
                 "hidden": visibility == "HIDDEN",
                 "constraints": {
-                    "max_length": getattr(field, "max_length", None),
-                    "min_length": getattr(field, "min_length", None),
-                    "max_value": getattr(field, "max_value", None),
-                    "min_value": getattr(field, "min_value", None),
-                    "pattern": None,
-                    "pattern_message": None,
+                    "max_length": self._to_json_value(max_length),
+                    "min_length": self._to_json_value(min_length),
+                    "max_value": _to_float(max_value),
+                    "min_value": _to_float(min_value),
+                    "pattern": pattern,
+                    "pattern_message": str(pattern_message) if pattern_message else None,
                     "decimal_places": getattr(field, "decimal_places", None),
                     "max_digits": getattr(field, "max_digits", None),
-                    "allowed_extensions": None,
-                    "max_file_size": None,
+                    "allowed_extensions": self._to_json_value(allowed_extensions),
+                    "max_file_size": getattr(field, "max_file_size", None),
                 },
                 "choices": choices,
                 "default_value": default_value,
