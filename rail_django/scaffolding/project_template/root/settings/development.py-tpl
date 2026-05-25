@@ -21,6 +21,8 @@ ALLOWED_HOSTS = env.list(
     default=env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '::1']),
 )
 
+
+
 # Same-server dev mode:
 # Enable GraphQLAuthenticationMiddleware so cookie/JWT auth is resolved on GraphQL requests.
 _auth_middleware = "django.contrib.auth.middleware.AuthenticationMiddleware"

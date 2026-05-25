@@ -1,5 +1,8 @@
 """
 Field extraction for Form API.
+
+@module rail_django.extensions.form.extractors.field_extractor
+@description Extrait les configurations et les métadonnées des champs de modèle Django pour l'API Form.
 """
 
 from __future__ import annotations
@@ -145,16 +148,13 @@ class FieldExtractorMixin:
         """
         Extrait les métadonnées et contraintes d'un champ spécifique d'un modèle Django.
 
-        Args:
-            model (type[models.Model]): Le modèle Django parent.
-            field (models.Field): Le champ Django à extraire.
-            user (Any): L'utilisateur actuel pour le calcul des permissions.
-            instance (models.Model, optional): L'instance spécifique du modèle.
-            field_metadata (dict, optional): Métadonnées spécifiques au champ.
-            mode (str): Mode du formulaire (CREATE, UPDATE, VIEW).
-
-        Returns:
-            Optional[dict]: Un dictionnaire représentant le schéma du champ, ou None.
+        @param model Le modèle Django parent.
+        @param field Le champ Django à extraire.
+        @param user L'utilisateur actuel pour le calcul des permissions.
+        @param instance L'instance spécifique du modèle.
+        @param field_metadata Métadonnées spécifiques au champ.
+        @param mode Mode du formulaire (CREATE, UPDATE, VIEW).
+        @returns Un dictionnaire représentant le schéma du champ, ou None.
         """
         try:
             from graphene.utils.str_converters import to_camel_case
@@ -309,11 +309,12 @@ class FieldExtractorMixin:
                 "readable": readable,
                 "writable": writable,
             }
-        except Exception:
-            logger.warning(
-                "Failed to extract field metadata for %s.%s.",
+        except Exception as exc:
+            logger.debug(
+                "Failed to extract field metadata for %s.%s. Details: %s",
                 model._meta.label,
                 getattr(field, "name", "<unknown>"),
+                str(exc),
                 exc_info=True,
             )
             return None

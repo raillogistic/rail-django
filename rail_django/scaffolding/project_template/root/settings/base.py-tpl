@@ -267,15 +267,20 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': True,
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": True,
         },
-        'rail_django': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': True,
+        "rail_django": {
+            "handlers": ["console", "file"],
+            "level": env("RAIL_DJANGO_LOG_LEVEL", default="WARNING"),
+            "propagate": True,
+        },
+        "audit": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": True,
         },
     },
 }
