@@ -745,6 +745,9 @@ class ModelSchemaExtractor(
 
                 choices = _normalize_choice_payload(override.get("choices"))
 
+                # Résolution du modèle lié pour les champs de type ID (relation)
+                related_model_label: Optional[str] = override.get("model") or None
+
                 entries.append(
                     {
                         "name": to_camel_case(field_name),
@@ -755,7 +758,7 @@ class ModelSchemaExtractor(
                         "default_value": _to_json_safe(default_value),
                         "description": description,
                         "choices": choices,
-                        "related_model": None,
+                        "related_model": related_model_label,
                     }
                 )
 
