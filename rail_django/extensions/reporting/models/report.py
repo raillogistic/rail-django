@@ -67,6 +67,7 @@ class ReportingReport(models.Model):
             roles=_reporting_roles(),
             operations=_reporting_operations(),
         )
+        method_mutations = ["build_payload"]
 
     def __str__(self) -> str:
         return f"{self.title} ({self.code})"

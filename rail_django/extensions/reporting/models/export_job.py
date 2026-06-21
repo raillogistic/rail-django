@@ -158,6 +158,7 @@ class ReportingExportJob(models.Model):
             roles=_reporting_roles(),
             operations=_reporting_operations(),
         )
+        method_mutations = ["run_export"]
 
     def __str__(self) -> str:
         return f"{self.title} ({self.format})"
