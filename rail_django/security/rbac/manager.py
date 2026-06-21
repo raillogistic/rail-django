@@ -349,6 +349,8 @@ class RoleManager(PermissionEvaluationMixin):
                 if parent_def:
                     permissions.update(parent_def.permissions)
                     permissions.update(self._get_inherited_permissions(parent_role, visited))
+        
+        visited.remove(role_name)
         return permissions
 
     def _permission_in_effective_permissions(

@@ -473,7 +473,7 @@ class ModelFormRelationTypeEnum(graphene.Enum):
     REVERSE_M2M = "REVERSE_M2M"
 
     class Meta:
-        name = "ModelFormRelationType"
+        name = "ModelFormRelationTypeEnum"
 
 
 class ModelFormNestedActionEnum(graphene.Enum):
