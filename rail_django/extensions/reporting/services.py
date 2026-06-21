@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from .types import ReportingError
+from .types import ReportingError, ReportingExecutionContext
 
 
 class ReportingService:
@@ -31,6 +31,7 @@ class ReportingService:
 
     @staticmethod
     def execute_dataset(
+        context: ReportingExecutionContext,
         dataset_code: str,
         *,
         spec: Optional[dict] = None,
@@ -57,11 +58,12 @@ class ReportingService:
                 f"Dataset introuvable: '{dataset_code}'."
             ) from exc
 
-        engine = dataset.build_engine()
+        engine = dataset.build_engine(context=context)
         return engine.run_query(spec or {})
 
     @staticmethod
     def preview_dataset(
+        context: ReportingExecutionContext,
         dataset_code: str,
         *,
         quick: str = "",
@@ -95,6 +97,7 @@ class ReportingService:
             ) from exc
 
         return dataset.preview(
+            context=context,
             quick=quick,
             limit=limit,
             ordering=ordering,
@@ -103,6 +106,7 @@ class ReportingService:
 
     @staticmethod
     def describe_dataset(
+        context: ReportingExecutionContext,
         dataset_code: str,
         *,
         include_model_fields: bool = True,
@@ -129,11 +133,12 @@ class ReportingService:
                 f"Dataset introuvable: '{dataset_code}'."
             ) from exc
 
-        engine = dataset.build_engine()
+        engine = dataset.build_engine(context=context)
         return engine.describe_dataset(include_model_fields=include_model_fields)
 
     @staticmethod
     def render_visualization(
+        context: ReportingExecutionContext,
         visualization_code: str,
         dataset_code: str,
         *,
@@ -173,6 +178,7 @@ class ReportingService:
             ) from exc
 
         return viz.render(
+            context=context,
             quick=quick,
             limit=limit,
             filters=filters,
@@ -243,6 +249,7 @@ class ReportingService:
 
     @staticmethod
     def build_report_payload(
+        context: ReportingExecutionContext,
         report_code: str,
         *,
         quick: str = "",
@@ -274,6 +281,7 @@ class ReportingService:
             ) from exc
 
         return report.build_payload(
+            context=context,
             quick=quick,
             limit=limit,
             filters=filters,

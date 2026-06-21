@@ -60,8 +60,10 @@ class ExecutionMixin:
         ttl = self._cache_ttl_seconds()
         cache_key = None
         if cache_enabled and ttl > 0:
+            user_id = str(getattr(self.context.user, "id", "anonymous")) if getattr(self, "context", None) and self.context.user else "anonymous"
             cache_key = (
                 f"rail_django:reporting:{self.dataset.id}:{self.dataset.updated_at.isoformat()}:"
+                f"{user_id}:"
                 f"{_hash_query_payload(spec)}"
             )
             cached = cache.get(cache_key)
@@ -71,6 +73,43 @@ class ExecutionMixin:
                 return payload
 
         warnings: list[str] = []
+
+        if not self._source_adapter.supports_orm_operations():
+            if mode != "records":
+                warnings.append(
+                    "Mode agregation ignore pour les sources non-ORM (SQL/Python)."
+                )
+            rows = self._source_adapter.get_base_queryset(context=getattr(self, "context", None))
+            bounded_limit = min(int(limit), self._max_limit())
+            if offset:
+                rows = rows[offset : offset + bounded_limit]
+            else:
+                rows = rows[:bounded_limit]
+            
+            payload = {
+                "mode": "records",
+                "rows": rows,
+                "fields": [],
+                "applied_filters": [],
+                "ordering": [],
+                "limit": bounded_limit,
+                "offset": offset,
+                "warnings": warnings,
+                "source": {
+                    "app_label": self.dataset.source_app_label,
+                    "model": self.dataset.source_model,
+                },
+                "query": spec,
+                "dataset": {
+                    "id": getattr(self.dataset, "id", None),
+                    "code": self.dataset.code,
+                    "title": self.dataset.title,
+                },
+            }
+            if cache_key:
+                cache.set(cache_key, payload, ttl)
+                payload["cache"] = {"hit": False, "key": cache_key, "ttl_seconds": ttl}
+            return _json_sanitize(payload)
 
         if mode == "records":
             return self._run_records_mode(
@@ -111,7 +150,7 @@ class ExecutionMixin:
         cache_key: Optional[str],
         ttl: int,
     ) -> dict[str, Any]:
-        queryset = self.model.objects.all()
+        queryset = self._source_adapter.get_base_queryset(context=getattr(self, "context", None))
         queryset, applied_filters, where_warnings = self._apply_where(
             queryset,
             where=where,
@@ -226,7 +265,7 @@ class ExecutionMixin:
         )
         warnings.extend(dim_warnings + metric_warnings + computed_warnings)
 
-        queryset = self.model.objects.all()
+        queryset = self._source_adapter.get_base_queryset(context=getattr(self, "context", None))
         allowed_where_fields = {dim.field for dim in dimensions if dim.field} | {
             metric.field for metric in metrics if metric.field
         }

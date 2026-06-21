@@ -89,17 +89,25 @@ class PythonDataSourceAdapter(DataSourceAdapter):
                 f"Module introuvable pour callable '{self.callable_path}': {exc}"
             ) from exc
 
-    def get_base_queryset(self) -> list[dict[str, Any]]:
+    def get_base_queryset(self, context: Any = None) -> list[dict[str, Any]]:
         """
         Invoque le callable Python et retourne les résultats.
+        Exige une permission admin (is_superuser ou is_staff) via le context.
 
         Returns:
             Liste de dictionnaires retournée par le callable.
 
         Raises:
-            ReportingError: Si le callable échoue ou retourne un format invalide.
+            ReportingError: Si le callable échoue, retourne un format invalide, ou permission refusee.
         """
+        if not context or not getattr(context, "user", None):
+            raise ReportingError("Contexte manquant pour l'execution de la source Python.")
+        user = context.user
+        if not (getattr(user, "is_superuser", False) or getattr(user, "is_staff", False)):
+            raise ReportingError("Permission refusee : l'execution de callable Python exige un acces administrateur.")
+
         try:
+            # We can pass context to the callable if needed, but for now we keep the original signature
             result = self.callable_fn(**self.callable_kwargs)
         except Exception as exc:
             logger.error(

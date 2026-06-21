@@ -41,7 +41,7 @@ class DataSourceAdapter(ABC):
         self.source_config = source_config
 
     @abstractmethod
-    def get_base_queryset(self) -> QuerySet | list[dict[str, Any]]:
+    def get_base_queryset(self, context: Any = None) -> QuerySet | list[dict[str, Any]]:
         """
         Retourne le jeu de données initial brut.
 

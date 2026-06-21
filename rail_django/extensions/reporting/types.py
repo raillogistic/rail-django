@@ -21,6 +21,14 @@ class ReportingError(Exception):
     """Raised when a reporting configuration cannot be executed."""
 
 
+@dataclass(frozen=True)
+class ReportingExecutionContext:
+    """Secure execution context for reporting operations."""
+    user: Any
+    request: Any | None = None
+    scope_key: str = ""
+
+
 @dataclass
 class FilterSpec:
     """Declarative filter used by the execution engine."""
@@ -245,6 +253,7 @@ SAFE_QUERY_BUILTINS: dict[str, Callable] = {
 
 __all__ = [
     "ReportingError",
+    "ReportingExecutionContext",
     "FilterSpec",
     "DimensionSpec",
     "MetricSpec",

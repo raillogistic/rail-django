@@ -137,7 +137,7 @@ class ReportingDataset(models.Model):
                 f"Impossible de resoudre {self.source_app_label}.{self.source_model}"
             )
 
-    def build_engine(self) -> "DatasetExecutionEngine":
+    def build_engine(self, context: Any = None) -> "DatasetExecutionEngine":
         from django.db import connection
         from ..engine import DatasetExecutionEngine
 
@@ -145,10 +145,10 @@ class ReportingDataset(models.Model):
             try:
                 from ..engine import PostgresDatasetExecutionEngine
 
-                return PostgresDatasetExecutionEngine(self)
+                return PostgresDatasetExecutionEngine(self, context=context)
             except ImportError:
                 pass
-        return DatasetExecutionEngine(self)
+        return DatasetExecutionEngine(self, context=context)
 
     def _runtime_filters(self, filters: Optional[dict]) -> list[FilterSpec]:
         if not filters:
@@ -180,12 +180,13 @@ class ReportingDataset(models.Model):
     )
     def preview(
         self,
+        context: Any = None,
         quick: str = "",
         limit: Any = 50,
         ordering: str = "",
         filters: Optional[dict] = None,
     ) -> dict:
-        engine = self.build_engine()
+        engine = self.build_engine(context=context)
         runtime_filters = self._runtime_filters(filters)
         coerced_limit = _coerce_int(limit, default=self.preview_limit)
         result = engine.run(
@@ -208,8 +209,8 @@ class ReportingDataset(models.Model):
             }
         },
     )
-    def run_query(self, spec: Optional[dict] = None) -> dict:
-        engine = self.build_engine()
+    def run_query(self, context: Any = None, spec: Optional[dict] = None) -> dict:
+        engine = self.build_engine(context=context)
         return engine.run_query(spec or {})
 
     @action_form(
@@ -224,8 +225,8 @@ class ReportingDataset(models.Model):
             }
         },
     )
-    def describe(self, include_model_fields: bool = True) -> dict:
-        engine = self.build_engine()
+    def describe(self, context: Any = None, include_model_fields: bool = True) -> dict:
+        engine = self.build_engine(context=context)
         return engine.describe_dataset(include_model_fields=bool(include_model_fields))
 
     @confirm_action(

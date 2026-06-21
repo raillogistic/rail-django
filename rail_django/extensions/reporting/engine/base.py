@@ -45,8 +45,9 @@ class DatasetExecutionEngineBase:
     - ``python``: Python callable via ``PythonDataSourceAdapter``
     """
 
-    def __init__(self, dataset: "ReportingDataset"):
+    def __init__(self, dataset: "ReportingDataset", context: Any = None):
         self.dataset = dataset
+        self.context = context
         self._source_adapter = self._resolve_source_adapter()
         self.model = self._load_model()
         self.dimensions = self._load_dimensions()

@@ -51,14 +51,17 @@ class OrmDataSourceAdapter(DataSourceAdapter):
                 f"Impossible de trouver le modele {app_label}.{model_name}"
             ) from exc
 
-    def get_base_queryset(self) -> models.QuerySet:
+    def get_base_queryset(self, context: Any = None) -> models.QuerySet:
         """
-        Retourne le queryset de base ``Model.objects.all()``.
+        Retourne le queryset de base scope.
 
         Returns:
-            QuerySet non filtré du modèle.
+            QuerySet du modèle.
         """
-        return self.model.objects.all()
+        qs = self.model.objects.all()
+        if context and hasattr(self.model, "filter_reporting_queryset"):
+            qs = self.model.filter_reporting_queryset(qs, context.user)
+        return qs
 
     def get_model_class(self) -> Optional[type[models.Model]]:
         """

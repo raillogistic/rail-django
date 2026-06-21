@@ -11,6 +11,7 @@ Attributes:
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
@@ -18,7 +19,7 @@ from django.utils import timezone
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
 from rail_django.core.decorators import confirm_action
 
-from ..types import ReportingError
+from ..types import ReportingError, ReportingExecutionContext
 from ..security import _reporting_roles, _reporting_operations
 
 
@@ -124,6 +125,14 @@ class ReportingExportJob(models.Model):
         help_text="Options passees au renderer (delimiter, encoding, orientation...).",
     )
     error_message = models.TextField(blank=True, verbose_name="Erreur")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reporting_export_jobs",
+        verbose_name="Demandeur",
+    )
     started_at = models.DateTimeField(null=True, blank=True, verbose_name="Debut")
     finished_at = models.DateTimeField(null=True, blank=True, verbose_name="Fin")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creation")
@@ -163,12 +172,15 @@ class ReportingExportJob(models.Model):
         Raises:
             ReportingError: If no export target is configured.
         """
+        context = ReportingExecutionContext(user=self.requested_by) if self.requested_by else None
+
         if self.report:
-            return self.report.build_payload(quick="", limit=500, filters=self.filters)
+            return self.report.build_payload(context=context, quick="", limit=500, filters=self.filters)
         if self.visualization:
-            return self.visualization.render(quick="", limit=500, filters=self.filters)
+            return self.visualization.render(context=context, quick="", limit=500, filters=self.filters)
         if self.dataset:
             return self.dataset.preview(
+                context=context,
                 quick="",
                 limit=self.dataset.preview_limit,
                 ordering="",

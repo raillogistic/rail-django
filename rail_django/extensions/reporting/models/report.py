@@ -77,11 +77,12 @@ class ReportingReport(models.Model):
         )
 
     def _render_visualizations(
-        self, quick: str, limit: int, filters: Optional[dict]
+        self, context: Any, quick: str, limit: int, filters: Optional[dict]
     ) -> list[dict]:
         rendered: list[dict] = []
         for block in self._resolved_blocks():
             payload = block.visualization.render(
+                context=context,
                 quick=quick,
                 limit=limit,
                 filters=filters,
@@ -108,12 +109,13 @@ class ReportingReport(models.Model):
     )
     def build_payload(
         self,
+        context: Any = None,
         quick: str = "",
         limit: int = 200,
         filters: Optional[dict] = None,
     ) -> dict:
         visualizations = self._render_visualizations(
-            quick=quick, limit=limit, filters=filters
+            context=context, quick=quick, limit=limit, filters=filters
         )
         return {
             "report": {

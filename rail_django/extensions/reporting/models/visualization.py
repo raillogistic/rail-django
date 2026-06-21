@@ -114,12 +114,13 @@ class ReportingVisualization(models.Model):
     )
     def render(
         self,
+        context: Any = None,
         quick: str = "",
         limit: Any = 200,
         filters: Optional[dict] = None,
         spec: Optional[dict] = None,
     ) -> dict:
-        engine = self.dataset.build_engine()
+        engine = self.dataset.build_engine(context=context)
         merged_filters = self._merge_filters(filters)
         coerced_limit = _coerce_int(limit, default=self.dataset.preview_limit)
         base_spec = {}
