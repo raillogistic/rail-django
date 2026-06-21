@@ -2,7 +2,8 @@
 Base DatasetExecutionEngine class with core initialization and utility methods.
 
 This module contains the foundation of the execution engine including model
-loading, configuration access, and field validation methods.
+loading, data source adapter resolution, configuration access, and field
+validation methods.
 """
 
 from __future__ import annotations
@@ -34,19 +35,72 @@ class DatasetExecutionEngineBase:
     """
     Base class for DatasetExecutionEngine with initialization and utility methods.
 
-    This class handles model loading, configuration parsing, and field validation.
-    The full engine is built by combining this base with query building, aggregation,
-    and export mixins.
+    This class handles model loading (via data source adapters), configuration
+    parsing, and field validation. The full engine is built by combining this
+    base with query building, aggregation, and export mixins.
+
+    Data source adapters are resolved from ``dataset.source_kind``:
+    - ``model`` (default): Django ORM via ``OrmDataSourceAdapter``
+    - ``sql``: Raw SQL via ``SqlDataSourceAdapter``
+    - ``python``: Python callable via ``PythonDataSourceAdapter``
     """
 
     def __init__(self, dataset: "ReportingDataset"):
         self.dataset = dataset
+        self._source_adapter = self._resolve_source_adapter()
         self.model = self._load_model()
         self.dimensions = self._load_dimensions()
         self.metrics = self._load_metrics()
         self.computed_fields = self._load_computed_fields()
 
+    def _resolve_source_adapter(self):
+        """
+        Resolve the appropriate data source adapter based on ``dataset.source_kind``.
+
+        Returns:
+            A ``DataSourceAdapter`` instance, or ``None`` for legacy ORM mode
+            when the adapter is not needed.
+        """
+        from .data_sources import (
+            OrmDataSourceAdapter,
+            PythonDataSourceAdapter,
+            SqlDataSourceAdapter,
+        )
+
+        source_kind = getattr(self.dataset, "source_kind", "model")
+        meta = dict(self.dataset.metadata or {})
+
+        if source_kind == "sql":
+            return SqlDataSourceAdapter({
+                "sql": meta.get("sql", ""),
+                "params": meta.get("sql_params"),
+            })
+        if source_kind == "python":
+            return PythonDataSourceAdapter({
+                "callable": meta.get("callable", ""),
+                "callable_kwargs": meta.get("callable_kwargs"),
+            })
+        # Default: ORM adapter
+        return OrmDataSourceAdapter({
+            "app_label": self.dataset.source_app_label,
+            "model_name": self.dataset.source_model,
+        })
+
     def _load_model(self) -> models.Model:
+        """
+        Load the Django model via the source adapter.
+
+        For ORM sources, returns the resolved model class.
+        For non-ORM sources (SQL, Python), returns ``None``.
+
+        Returns:
+            Model class or ``None``.
+        """
+        if self._source_adapter is not None:
+            model_class = self._source_adapter.get_model_class()
+            if model_class is not None:
+                return model_class
+        # Fallback for legacy behavior
         try:
             return apps.get_model(
                 self.dataset.source_app_label, self.dataset.source_model
@@ -60,6 +114,9 @@ class DatasetExecutionEngineBase:
         return dict(self.dataset.metadata or {})
 
     def _default_pk_field(self) -> str:
+        """Return the primary key field name, delegating to the adapter."""
+        if self._source_adapter is not None:
+            return self._source_adapter.get_pk_field_name()
         pk = getattr(self.model._meta, "pk", None)
         name = getattr(pk, "name", None)
         return name or "id"
@@ -151,11 +208,15 @@ class DatasetExecutionEngineBase:
 
     def _validate_field_path(self, field_path: str) -> bool:
         """
-        Validate a Django ORM field path (including relations via `__`).
+        Validate a Django ORM field path (including relations via ``__``).
 
-        This prevents typos and rejects reverse relations / unsupported segments.
+        Delegates to the source adapter when available. Falls back to ORM
+        introspection for backward compatibility.
         """
+        if self._source_adapter is not None:
+            return self._source_adapter.validate_field_path(field_path)
 
+        # Legacy fallback for ORM introspection
         if not field_path or not isinstance(field_path, str):
             return False
         if field_path.startswith("_"):
@@ -271,6 +332,35 @@ class DatasetExecutionEngineBase:
                 )
             )
         return parsed
+
+    def _apply_computed_fields(
+        self, rows: list[dict[str, Any]], computed_fields: Optional[list["ComputedFieldSpec"]] = None
+    ) -> None:
+        """
+        Apply post-stage computed fields to result rows in-place.
+
+        Uses the formula evaluator with SAFE_BUILTINS support (IF, COALESCE, ROUND, etc.).
+        If ``computed_fields`` is None, falls back to ``self.computed_fields``.
+        """
+        from ..utils import _safe_formula_eval
+
+        fields_to_apply = computed_fields if computed_fields is not None else self.computed_fields
+        computed_post = [
+            computed for computed in fields_to_apply if computed.stage != "query"
+        ]
+        if not computed_post:
+            return
+
+        for row in rows:
+            context = {key: row.get(key, 0) for key in row.keys()}
+            for computed in computed_post:
+                try:
+                    row[computed.name] = _safe_formula_eval(
+                        computed.formula, dict(context)
+                    )
+                except ReportingError as exc:
+                    row[computed.name] = None
+                    row.setdefault("_warnings", []).append(str(exc))
 
 
 __all__ = ["DatasetExecutionEngineBase"]

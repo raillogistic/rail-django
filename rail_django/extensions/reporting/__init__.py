@@ -2,17 +2,28 @@
 BI reporting module integrated with the GraphQL auto schema.
 
 This extension lets us declare reusable datasets, drive rich visualizations, and
-manage export jobs (PDF/CSV/JSON) without custom resolvers. Everything is stored
+manage export jobs (PDF/CSV/JSON/XLSX) without custom resolvers. Everything is stored
 as Django models so the GraphQL generator can expose CRUD plus method mutations
 used by the frontend to render tables, charts, and document exports.
 
-Usage:
+Key features:
+    - Multiple data source support (ORM, raw SQL, Python callable)
+    - Pluggable export renderers (CSV, JSON, XLSX, PDF)
+    - Extensible visualization type registry
+    - Reusable visualization templates with slot-based bindings
+    - Scheduled materialization, exports, and conditional alerts
+    - Standalone service layer for programmatic access
+
+Usage::
+
     from rail_django.extensions.reporting import (
         ReportingDataset,
         ReportingVisualization,
         ReportingReport,
-        ReportingReportBlock,
         ReportingExportJob,
+        ReportingVisualizationTemplate,
+        ReportingSchedule,
+        ReportingService,
         DatasetExecutionEngine,
         ReportingError,
     )
@@ -28,6 +39,8 @@ from .types import (
     DEFAULT_MAX_LIMIT,
     AGGREGATION_MAP,
     POSTGRES_AGGREGATIONS,
+    SAFE_BUILTINS,
+    SAFE_QUERY_BUILTINS,
 )
 
 from .utils import (
@@ -55,6 +68,11 @@ from .engine import (
     AggregationMixin,
     ExecutionMixin,
     ExportMixin,
+    # Data source adapters
+    DataSourceAdapter,
+    OrmDataSourceAdapter,
+    SqlDataSourceAdapter,
+    PythonDataSourceAdapter,
 )
 
 from .models import (
@@ -63,7 +81,19 @@ from .models import (
     ReportingReport,
     ReportingReportBlock,
     ReportingExportJob,
+    ReportingVisualizationTemplate,
+    ReportingSchedule,
 )
+
+from .visualization_registry import (
+    VisualizationTypeConfig,
+    register_visualization_type,
+    get_visualization_type,
+    get_available_types,
+    get_type_choices,
+)
+
+from .services import ReportingService
 
 
 __all__ = [
@@ -73,6 +103,8 @@ __all__ = [
     "ReportingReport",
     "ReportingReportBlock",
     "ReportingExportJob",
+    "ReportingVisualizationTemplate",
+    "ReportingSchedule",
     # Engine
     "DatasetExecutionEngine",
     "DatasetExecutionEngineBase",
@@ -80,12 +112,27 @@ __all__ = [
     "AggregationMixin",
     "ExecutionMixin",
     "ExportMixin",
+    # Data source adapters
+    "DataSourceAdapter",
+    "OrmDataSourceAdapter",
+    "SqlDataSourceAdapter",
+    "PythonDataSourceAdapter",
+    # Visualization registry
+    "VisualizationTypeConfig",
+    "register_visualization_type",
+    "get_visualization_type",
+    "get_available_types",
+    "get_type_choices",
+    # Service layer
+    "ReportingService",
     # Types
     "ReportingError",
     "FilterSpec",
     "DimensionSpec",
     "MetricSpec",
     "ComputedFieldSpec",
+    "SAFE_BUILTINS",
+    "SAFE_QUERY_BUILTINS",
     # Constants
     "DEFAULT_ALLOWED_LOOKUPS",
     "DEFAULT_MAX_LIMIT",

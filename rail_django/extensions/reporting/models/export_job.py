@@ -2,11 +2,16 @@
 ReportingExportJob model for the BI reporting module.
 
 This module contains the export job model which tracks export runs
-(PDF/CSV/JSON) for datasets, visualizations or full reports.
+(PDF/CSV/JSON/XLSX) for datasets, visualizations or full reports.
+Uses the pluggable renderer system for real file generation.
+
+Attributes:
+    ReportingExportJob: Model tracking export runs with file generation.
 """
 
 from __future__ import annotations
 
+from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
 
@@ -18,7 +23,29 @@ from ..security import _reporting_roles, _reporting_operations
 
 
 class ReportingExportJob(models.Model):
-    """Tracks export runs (PDF/CSV/JSON) for datasets, visualizations or full reports."""
+    """
+    Tracks export runs (PDF/CSV/JSON/XLSX) for datasets, visualizations or reports.
+
+    Uses the pluggable renderer registry to generate real files instead of
+    just storing JSON snapshots.
+
+    Attributes:
+        title: Titre descriptif de l'export.
+        dataset: Référence optionnelle au dataset source.
+        visualization: Référence optionnelle à la visualisation source.
+        report: Référence optionnelle au rapport source.
+        format: Format d'export (pdf, csv, json, xlsx).
+        status: Statut de l'export (pending, running, completed, failed).
+        filters: Filtres appliqués lors de l'export.
+        payload: Snapshot des données brutes (JSON).
+        file: Fichier généré par le renderer.
+        file_size: Taille du fichier en octets.
+        render_options: Options passées au renderer.
+        error_message: Message d'erreur en cas d'échec.
+        started_at: Horodatage de début d'exécution.
+        finished_at: Horodatage de fin d'exécution.
+        created_at: Horodatage de création.
+    """
 
     class ExportStatus(models.TextChoices):
         PENDING = "pending", "En attente"
@@ -79,6 +106,23 @@ class ReportingExportJob(models.Model):
         verbose_name="Payload",
         help_text="Snapshot utilise par le frontend (donnees et layout).",
     )
+    file = models.FileField(
+        upload_to="reporting/exports/%Y/%m/",
+        null=True,
+        blank=True,
+        verbose_name="Fichier exporte",
+        help_text="Fichier genere par le renderer (CSV, XLSX, PDF, JSON).",
+    )
+    file_size = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Taille du fichier",
+        help_text="Taille du fichier en octets.",
+    )
+    render_options = models.JSONField(
+        default=dict,
+        verbose_name="Options de rendu",
+        help_text="Options passees au renderer (delimiter, encoding, orientation...).",
+    )
     error_message = models.TextField(blank=True, verbose_name="Erreur")
     started_at = models.DateTimeField(null=True, blank=True, verbose_name="Debut")
     finished_at = models.DateTimeField(null=True, blank=True, verbose_name="Fin")
@@ -98,7 +142,9 @@ class ReportingExportJob(models.Model):
             allowed=["id", "created_at", "status", "title"],
             default=["-created_at"],
         )
-        fields = GraphQLMetaBase.Fields(read_only=["started_at", "finished_at"])
+        fields = GraphQLMetaBase.Fields(
+            read_only=["started_at", "finished_at", "file_size"],
+        )
         access = GraphQLMetaBase.AccessControl(
             roles=_reporting_roles(),
             operations=_reporting_operations(),
@@ -108,6 +154,15 @@ class ReportingExportJob(models.Model):
         return f"{self.title} ({self.format})"
 
     def _build_payload(self) -> dict:
+        """
+        Build the data payload from the linked source (report, visualization, or dataset).
+
+        Returns:
+            Dictionary containing rows and metadata.
+
+        Raises:
+            ReportingError: If no export target is configured.
+        """
         if self.report:
             return self.report.build_payload(quick="", limit=500, filters=self.filters)
         if self.visualization:
@@ -121,21 +176,69 @@ class ReportingExportJob(models.Model):
             )
         raise ReportingError("Aucune cible d export n est renseignee.")
 
+    def _render_file(self, payload: dict) -> tuple[bytes, str]:
+        """
+        Render the payload to a file using the appropriate renderer.
+
+        Args:
+            payload: Data payload to render.
+
+        Returns:
+            Tuple of (file_bytes, filename).
+
+        Raises:
+            ReportingError: If the format is not supported.
+        """
+        from ..renderers import get_renderer
+
+        try:
+            renderer = get_renderer(self.format)
+        except ValueError as exc:
+            raise ReportingError(str(exc)) from exc
+
+        options = dict(self.render_options or {})
+        # Inject metadata into options for renderers that support it
+        if "title" not in options:
+            options["title"] = self.title
+
+        file_bytes = renderer.render(payload, options=options)
+        base_name = f"export_{self.pk or 'draft'}"
+        filename = renderer.get_filename(base_name)
+        return file_bytes, filename
+
     @confirm_action(
         title="Lancer l export",
-        message="Prepare un payload pour PDF/CSV/JSON.",
+        message="Prepare et genere un fichier pour PDF/CSV/JSON/XLSX.",
         confirm_label="Lancer",
         severity="primary",
     )
     def run_export(self) -> bool:
+        """
+        Execute the export: build payload, render file, and save results.
+
+        Returns:
+            ``True`` if export succeeded, ``False`` otherwise.
+        """
         self.status = self.ExportStatus.RUNNING
         self.started_at = timezone.now()
         self.save(update_fields=["status", "started_at"])
         try:
+            # Build the data payload
             self.payload = self._build_payload()
+
+            # Render to file using the appropriate renderer
+            file_bytes, filename = self._render_file(self.payload)
+
+            # Save the generated file
+            self.file.save(filename, ContentFile(file_bytes), save=False)
+            self.file_size = len(file_bytes)
+
             self.status = self.ExportStatus.COMPLETED
             self.finished_at = timezone.now()
-            self.save(update_fields=["payload", "status", "finished_at"])
+            self.save(update_fields=[
+                "payload", "status", "finished_at",
+                "file", "file_size",
+            ])
             return True
         except Exception as exc:  # pragma: no cover - defensive
             self.status = self.ExportStatus.FAILED

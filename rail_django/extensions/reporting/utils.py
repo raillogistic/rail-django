@@ -23,7 +23,9 @@ from django.utils.functional import Promise
 from .types import (
     FilterSpec,
     ReportingError,
+    SAFE_BUILTINS,
     SAFE_EXPR_NODES,
+    SAFE_QUERY_BUILTINS,
     SAFE_QUERY_EXPR_NODES,
 )
 
@@ -36,6 +38,8 @@ def _safe_query_expression(formula: str, *, allowed_names: set[str]) -> Any:
     - arithmetic operators: +, -, *, /, %, **
     - variables: any name in `allowed_names` (resolved as `F(name)`)
     - constants: numbers / booleans / nulls
+    - function calls: COALESCE(...), GREATEST(...), LEAST(...), NULLIF(...)
+    - ternary: `x if cond else y`
     """
 
     try:
@@ -57,13 +61,39 @@ def _safe_query_expression(formula: str, *, allowed_names: set[str]) -> Any:
         if isinstance(node, ast.Constant):
             return Value(node.value)
         if isinstance(node, ast.Name):
+            if node.id in SAFE_QUERY_BUILTINS:
+                return node.id  # Will be resolved as function in ast.Call
             if node.id not in allowed_names:
                 raise ReportingError(
                     f"Variable non autorisee '{node.id}' dans '{formula}'."
                 )
             return F(node.id)
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-            return -build(node.operand)
+        if isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                return -build(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +build(node.operand)
+        if isinstance(node, ast.Call):
+            func_name = getattr(node.func, "id", None)
+            if func_name not in SAFE_QUERY_BUILTINS:
+                raise ReportingError(
+                    f"Fonction non autorisee '{func_name}' dans '{formula}'."
+                )
+            args = [build(arg) for arg in node.args]
+            return SAFE_QUERY_BUILTINS[func_name](*args)
+        if isinstance(node, ast.IfExp):
+            from django.db.models import Case, When, BooleanField
+            from django.db.models.lookups import Exact
+
+            test = build(node.test)
+            # Ensure it is a valid condition by wrapping it in Exact(..., True)
+            # if it's just an F() object or a value.
+            if not getattr(test, "conditional", False):
+                test = Exact(test, True)
+
+            body = build(node.body)
+            orelse = build(node.orelse)
+            return Case(When(condition=test, then=body), default=orelse)
         if isinstance(node, ast.BinOp):
             left = build(node.left)
             right = build(node.right)
@@ -87,7 +117,12 @@ def _safe_query_expression(formula: str, *, allowed_names: set[str]) -> Any:
 
 
 def _safe_formula_eval(formula: str, context: dict[str, Any]) -> Any:
-    """Evaluate simple arithmetic/boolean expressions without builtins."""
+    """
+    Evaluate simple arithmetic/boolean/functional expressions without builtins.
+
+    Supports function calls from SAFE_BUILTINS (IF, COALESCE, ROUND, etc.)
+    and ternary expressions (x if cond else y).
+    """
 
     try:
         tree = ast.parse(formula, mode="eval")
@@ -99,7 +134,7 @@ def _safe_formula_eval(formula: str, context: dict[str, Any]) -> Any:
             raise ReportingError(
                 f"Expression non supportee dans '{formula}': {node.__class__.__name__}"
             )
-        if isinstance(node, ast.Name) and node.id not in context:
+        if isinstance(node, ast.Name) and node.id not in context and node.id not in SAFE_BUILTINS:
             context[node.id] = 0
 
     def evaluate(node: ast.AST) -> Any:
@@ -112,10 +147,36 @@ def _safe_formula_eval(formula: str, context: dict[str, Any]) -> Any:
             return node.value
 
         if isinstance(node, ast.Name):
+            if node.id in SAFE_BUILTINS:
+                return SAFE_BUILTINS[node.id]
             return context[node.id]
 
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-            return -evaluate(node.operand)
+        if isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                return -evaluate(node.operand)
+            if isinstance(node.op, ast.Not):
+                return not evaluate(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +evaluate(node.operand)
+
+        if isinstance(node, ast.Call):
+            func = evaluate(node.func)
+            if not callable(func):
+                raise ReportingError(
+                    f"'{getattr(node.func, 'id', '?')}' n'est pas une fonction dans '{formula}'."
+                )
+            args = [evaluate(arg) for arg in node.args]
+            kwargs = {kw.arg: evaluate(kw.value) for kw in node.keywords if kw.arg}
+            try:
+                return func(*args, **kwargs)
+            except Exception as exc:
+                raise ReportingError(
+                    f"Erreur d'execution de '{getattr(node.func, 'id', '?')}' dans '{formula}': {exc}"
+                ) from exc
+
+        if isinstance(node, ast.IfExp):
+            test = evaluate(node.test)
+            return evaluate(node.body) if test else evaluate(node.orelse)
 
         if isinstance(node, ast.BinOp):
             left = evaluate(node.left)

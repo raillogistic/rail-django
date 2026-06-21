@@ -2,7 +2,8 @@
 ReportingVisualization model for the BI reporting module.
 
 This module contains the ReportingVisualization model which represents
-visualizations attached to a dataset (table, chart, KPI, pivot).
+visualizations attached to a dataset. Supported visualization types are
+defined in the visualization registry.
 """
 
 from __future__ import annotations
@@ -17,21 +18,11 @@ from rail_django.core.decorators import action_form
 from ..types import FilterSpec
 from ..utils import _coerce_int, _to_filter_list
 from ..security import _reporting_roles, _reporting_operations
+from ..visualization_registry import get_type_choices
 
 
 class ReportingVisualization(models.Model):
-    """Visualization attached to a dataset (table, chart, KPI, pivot)."""
-
-    class VisualizationKind(models.TextChoices):
-        TABLE = "table", "Tableau"
-        BAR = "bar", "Histogramme"
-        LINE = "line", "Courbe"
-        PIE = "pie", "Camembert"
-        KPI = "kpi", "Indicateur"
-        AREA = "area", "Aire"
-        PIVOT = "pivot", "Pivot"
-        HEATMAP = "heatmap", "Heatmap"
-        PDF = "pdf", "Export PDF"
+    """Visualization attached to a dataset. Types are defined in the registry."""
 
     dataset = models.ForeignKey(
         "ReportingDataset",
@@ -44,8 +35,8 @@ class ReportingVisualization(models.Model):
     description = models.TextField(blank=True, verbose_name="Description")
     kind = models.CharField(
         max_length=30,
-        choices=VisualizationKind.choices,
-        default=VisualizationKind.TABLE,
+        choices=get_type_choices(),
+        default="table",
         verbose_name="Type",
     )
     config = models.JSONField(

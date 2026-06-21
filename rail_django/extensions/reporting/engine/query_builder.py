@@ -409,25 +409,7 @@ class QueryBuilderMixin:
             return queryset, flat, warnings
         return queryset.filter(q), flat, warnings
 
-    def _apply_computed_fields(self, rows: list[dict[str, Any]]) -> None:
-        from ..utils import _safe_formula_eval
-
-        computed_post = [
-            computed for computed in self.computed_fields if computed.stage != "query"
-        ]
-        if not computed_post:
-            return
-
-        for row in rows:
-            context = {key: row.get(key, 0) for key in row.keys()}
-            for computed in computed_post:
-                try:
-                    row[computed.name] = _safe_formula_eval(
-                        computed.formula, dict(context)
-                    )
-                except ReportingError as exc:
-                    row[computed.name] = None
-                    row.setdefault("_warnings", []).append(str(exc))
+    # _apply_computed_fields is inherited from DatasetExecutionEngineBase
 
     def describe_columns_for(
         self,
