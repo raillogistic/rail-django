@@ -17,7 +17,11 @@ from rail_django.core.decorators import action_form
 
 from ..types import FilterSpec
 from ..utils import _coerce_int, _to_filter_list
-from ..security import _reporting_roles, _reporting_operations
+from ..security import (
+    _reporting_roles,
+    _reporting_operations,
+    dataset_is_visible_to_user,
+)
 from ..visualization_registry import get_type_choices
 
 
@@ -86,6 +90,22 @@ class ReportingVisualization(models.Model):
             roles=_reporting_roles(),
             operations=_reporting_operations(),
         )
+        resolvers = GraphQLMetaBase.Resolvers(
+            queries={
+                "list": "resolve_visible_queryset",
+                "retrieve": "resolve_visible_queryset",
+            }
+        )
+
+    @staticmethod
+    def resolve_visible_queryset(queryset, info, **kwargs):
+        user = getattr(getattr(info, "context", None), "user", None)
+        visible_ids = [
+            visualization.pk
+            for visualization in queryset.select_related("dataset")
+            if dataset_is_visible_to_user(visualization.dataset, user)
+        ]
+        return queryset.filter(pk__in=visible_ids)
 
     def __str__(self) -> str:
         return f"{self.title} ({self.kind})"

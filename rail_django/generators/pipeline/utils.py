@@ -276,7 +276,7 @@ def auto_populate_created_by(
     user,
 ) -> dict[str, Any]:
     """
-    Auto-populate created_by field if available on model.
+    Auto-populate a conventional ownership field if available on model.
 
     Args:
         input_data: The input data to update
@@ -286,25 +286,24 @@ def auto_populate_created_by(
     Returns:
         Dict with created_by populated if applicable
     """
-    if "created_by" in input_data or "created_by_id" in input_data:
+    if not user or not getattr(user, "is_authenticated", False):
         return input_data
 
-    try:
-        field = model._meta.get_field("created_by")
-        if user and getattr(user, "is_authenticated", False) and field:
-            user_id = getattr(user, "id", None)
-            if user_id is None:
-                user_id = getattr(user, "pk", None)
-            if user_id is None:
-                return input_data
+    user_id = getattr(user, "id", None) or getattr(user, "pk", None)
+    if user_id is None:
+        return input_data
 
-            result = input_data.copy()
-            # Assign FK id directly to avoid requiring nested relation
-            # permission checks on the related User retrieve operation.
-            result["created_by_id"] = user_id
-            return result
-    except Exception:
-        pass
+    for field_name in ("created_by", "requested_by"):
+        if field_name in input_data or f"{field_name}_id" in input_data:
+            continue
+        try:
+            model._meta.get_field(field_name)
+        except Exception:
+            continue
+        result = input_data.copy()
+        # Assign the FK id directly; ownership must come from the request user.
+        result[f"{field_name}_id"] = user_id
+        return result
 
     return input_data
 

@@ -14,7 +14,11 @@ from django.db import models
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
 from rail_django.core.decorators import action_form
 
-from ..security import _reporting_roles, _reporting_operations
+from ..security import (
+    _reporting_roles,
+    _reporting_operations,
+    dataset_is_visible_to_user,
+)
 
 if TYPE_CHECKING:
     from .visualization import ReportingVisualization
@@ -67,7 +71,26 @@ class ReportingReport(models.Model):
             roles=_reporting_roles(),
             operations=_reporting_operations(),
         )
+        resolvers = GraphQLMetaBase.Resolvers(
+            queries={
+                "list": "resolve_visible_queryset",
+                "retrieve": "resolve_visible_queryset",
+            }
+        )
         method_mutations = ["build_payload"]
+
+    @staticmethod
+    def resolve_visible_queryset(queryset, info, **kwargs):
+        user = getattr(getattr(info, "context", None), "user", None)
+        visible_ids = []
+        reports = queryset.prefetch_related("blocks__visualization__dataset")
+        for report in reports:
+            datasets = [block.visualization.dataset for block in report.blocks.all()]
+            if datasets and all(
+                dataset_is_visible_to_user(item, user) for item in datasets
+            ):
+                visible_ids.append(report.pk)
+        return queryset.filter(pk__in=visible_ids)
 
     def __str__(self) -> str:
         return f"{self.title} ({self.code})"

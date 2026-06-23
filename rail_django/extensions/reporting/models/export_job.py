@@ -20,7 +20,7 @@ from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
 from rail_django.core.decorators import confirm_action
 
 from ..types import ReportingError, ReportingExecutionContext
-from ..security import _reporting_roles, _reporting_operations
+from ..security import _reporting_export_operations, _reporting_roles
 
 
 class ReportingExportJob(models.Model):
@@ -152,16 +152,40 @@ class ReportingExportJob(models.Model):
             default=["-created_at"],
         )
         fields = GraphQLMetaBase.Fields(
-            read_only=["started_at", "finished_at", "file_size"],
+            read_only=[
+                "status",
+                "payload",
+                "file",
+                "file_size",
+                "error_message",
+                "requested_by",
+                "started_at",
+                "finished_at",
+            ],
         )
         access = GraphQLMetaBase.AccessControl(
             roles=_reporting_roles(),
-            operations=_reporting_operations(),
+            operations=_reporting_export_operations(),
+        )
+        resolvers = GraphQLMetaBase.Resolvers(
+            queries={
+                "list": "resolve_visible_queryset",
+                "retrieve": "resolve_visible_queryset",
+            }
         )
         method_mutations = ["run_export"]
 
     def __str__(self) -> str:
         return f"{self.title} ({self.format})"
+
+    @staticmethod
+    def resolve_visible_queryset(queryset, info, **kwargs):
+        user = getattr(getattr(info, "context", None), "user", None)
+        if getattr(user, "is_superuser", False):
+            return queryset
+        if not user or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        return queryset.filter(requested_by=user)
 
     def _build_payload(self) -> dict:
         """
@@ -225,13 +249,21 @@ class ReportingExportJob(models.Model):
         confirm_label="Lancer",
         severity="primary",
     )
-    def run_export(self) -> bool:
+    def run_export(self, context=None) -> bool:
         """
         Execute the export: build payload, render file, and save results.
 
         Returns:
             ``True`` if export succeeded, ``False`` otherwise.
         """
+        if not self.requested_by_id:
+            raise ReportingError("Le demandeur de l export est obligatoire.")
+        user = getattr(context, "user", None)
+        if not getattr(user, "is_superuser", False) and self.requested_by_id != getattr(
+            user, "pk", None
+        ):
+            raise ReportingError("Vous n etes pas autorise a executer cet export.")
+
         self.status = self.ExportStatus.RUNNING
         self.started_at = timezone.now()
         self.save(update_fields=["status", "started_at"])

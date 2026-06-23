@@ -7,7 +7,30 @@ the reporting extension's access control.
 
 from __future__ import annotations
 
+from django.conf import settings
+
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
+from rail_django.security.rbac import role_manager
+
+
+def _configured_roles(key: str) -> list[str]:
+    config = getattr(settings, "RAIL_DJANGO_REPORTING", {}) or {}
+    return list(config.get(key, []))
+
+
+def reporting_user_roles(user) -> set[str]:
+    """Return directly assigned reporting/business roles for a user."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return set()
+    return set(role_manager.get_user_roles(user))
+
+
+def dataset_is_visible_to_user(dataset, user) -> bool:
+    """Enforce a dataset's optional role allowlist."""
+    if getattr(user, "is_superuser", False):
+        return True
+    allowed = set((dataset.metadata or {}).get("allowed_roles") or [])
+    return not allowed or bool(allowed & reporting_user_roles(user))
 
 
 def _reporting_roles() -> dict[str, GraphQLMetaBase.Role]:
@@ -62,36 +85,68 @@ def _reporting_operations() -> dict[str, GraphQLMetaBase.OperationGuard]:
     Returns a dictionary mapping operation names to OperationGuard instances
     with their allowed roles and required permissions.
     """
+    viewer_roles = [
+        "reporting_viewer",
+        "reporting_author",
+        "reporting_admin",
+        *_configured_roles("viewer_roles"),
+    ]
+    author_roles = [
+        "reporting_author",
+        "reporting_admin",
+        *_configured_roles("author_roles"),
+    ]
+    admin_roles = ["reporting_admin", *_configured_roles("admin_roles")]
     return {
         "list": GraphQLMetaBase.OperationGuard(
             name="list",
-            roles=["reporting_viewer", "reporting_author", "reporting_admin"],
+            roles=viewer_roles,
             permissions=[],
         ),
         "retrieve": GraphQLMetaBase.OperationGuard(
             name="retrieve",
-            roles=["reporting_viewer", "reporting_author", "reporting_admin"],
+            roles=viewer_roles,
             permissions=[],
         ),
         "create": GraphQLMetaBase.OperationGuard(
             name="create",
-            roles=["reporting_author", "reporting_admin"],
+            roles=author_roles,
             permissions=[],
         ),
         "update": GraphQLMetaBase.OperationGuard(
             name="update",
-            roles=["reporting_author", "reporting_admin"],
+            roles=author_roles,
             permissions=[],
         ),
         "delete": GraphQLMetaBase.OperationGuard(
             name="delete",
-            roles=["reporting_admin"],
+            roles=admin_roles,
             permissions=[],
         ),
     }
 
 
+def _reporting_export_operations() -> dict[str, GraphQLMetaBase.OperationGuard]:
+    """Allow viewers to create and run only their own export jobs."""
+    operations = _reporting_operations()
+    operations["create"] = GraphQLMetaBase.OperationGuard(
+        name="create",
+        roles=[
+            "reporting_viewer",
+            "reporting_author",
+            "reporting_admin",
+            *_configured_roles("viewer_roles"),
+        ],
+        permissions=[],
+    )
+    operations["update"] = operations["create"]
+    return operations
+
+
 __all__ = [
     "_reporting_roles",
     "_reporting_operations",
+    "_reporting_export_operations",
+    "dataset_is_visible_to_user",
+    "reporting_user_roles",
 ]

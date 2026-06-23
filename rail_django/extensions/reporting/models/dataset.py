@@ -19,7 +19,11 @@ from rail_django.core.decorators import action_form, confirm_action
 
 from ..types import FilterSpec
 from ..utils import _coerce_int, _to_filter_list, _to_ordering
-from ..security import _reporting_roles, _reporting_operations
+from ..security import (
+    _reporting_roles,
+    _reporting_operations,
+    dataset_is_visible_to_user,
+)
 
 if TYPE_CHECKING:
     from ..engine import DatasetExecutionEngine
@@ -121,6 +125,23 @@ class ReportingDataset(models.Model):
             roles=_reporting_roles(),
             operations=_reporting_operations(),
         )
+        resolvers = GraphQLMetaBase.Resolvers(
+            queries={
+                "list": "resolve_visible_queryset",
+                "retrieve": "resolve_visible_queryset",
+            }
+        )
+
+    @staticmethod
+    def resolve_visible_queryset(queryset, info, **kwargs):
+        user = getattr(getattr(info, "context", None), "user", None)
+        # ponytail: catalogs are small; move this predicate into SQL if that changes.
+        visible_ids = [
+            dataset.pk
+            for dataset in queryset
+            if dataset_is_visible_to_user(dataset, user)
+        ]
+        return queryset.filter(pk__in=visible_ids)
 
     def __str__(self) -> str:
         return f"{self.title} ({self.code})"
@@ -140,6 +161,11 @@ class ReportingDataset(models.Model):
     def build_engine(self, context: Any = None) -> "DatasetExecutionEngine":
         from django.db import connection
         from ..engine import DatasetExecutionEngine
+        from ..types import ReportingError
+
+        user = getattr(context, "user", None)
+        if context is not None and not dataset_is_visible_to_user(self, user):
+            raise ReportingError("Vous n'etes pas autorise a consulter ce dataset.")
 
         if connection.vendor == "postgresql":
             try:

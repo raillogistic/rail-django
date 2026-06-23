@@ -27,6 +27,8 @@ from .errors import (
 )
 from .utils import sanitize_error_message
 
+_CONTEXT_PARAMETER = "context"
+
 
 def _wrap_with_audit(model: type[models.Model], operation: str, func):
     try:
@@ -270,7 +272,10 @@ def convert_method_to_mutation(
                 if uses_input_argument:
                     filtered_kwargs = _normalize_method_payload(input)
                 else:
-                    method_params = set(signature.parameters.keys()) - {"self"}
+                    method_params = set(signature.parameters.keys()) - {
+                        "self",
+                        _CONTEXT_PARAMETER,
+                    }
                     filtered_kwargs = {
                         k: v for k, v in kwargs.items() if k in method_params
                     }
@@ -278,6 +283,9 @@ def convert_method_to_mutation(
                     filtered_kwargs = self.input_validator.validate_and_sanitize(
                         model.__name__, filtered_kwargs
                     )
+                if _CONTEXT_PARAMETER in signature.parameters:
+                    filtered_kwargs = dict(filtered_kwargs or {})
+                    filtered_kwargs[_CONTEXT_PARAMETER] = info.context
 
                 def _perform_method(info, target, payload):
                     result = method_func(**payload)
@@ -328,7 +336,7 @@ def convert_method_to_mutation(
     if not uses_input_argument:
         # Add method parameters as individual arguments
         for param_name, param in signature.parameters.items():
-            if param_name == "self":
+            if param_name in {"self", _CONTEXT_PARAMETER}:
                 continue
 
             param_type = (
@@ -403,7 +411,7 @@ def generate_method_mutation(
     else:
         input_fields = {}
         for param_name, param in signature.parameters.items():
-            if param_name == "self":
+            if param_name in {"self", _CONTEXT_PARAMETER}:
                 continue
 
             param_type = (
@@ -518,6 +526,9 @@ def generate_method_mutation(
                     validated_input = self.input_validator.validate_and_sanitize(
                         model.__name__, validated_input
                     )
+                if _CONTEXT_PARAMETER in signature.parameters:
+                    validated_input = dict(validated_input or {})
+                    validated_input[_CONTEXT_PARAMETER] = info.context
                 result = audited_method(info, instance, validated_input)
 
                 return cls(ok=True, result=result, errors=[])

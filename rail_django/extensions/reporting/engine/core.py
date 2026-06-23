@@ -4,7 +4,7 @@ DatasetExecutionEngine core class.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base import DatasetExecutionEngineBase
 from .query_builder import QueryBuilderMixin
@@ -27,5 +27,5 @@ class DatasetExecutionEngine(
     Executes a ReportingDataset definition against its underlying model.
     """
 
-    def __init__(self, dataset: "ReportingDataset"):
-        super().__init__(dataset)
+    def __init__(self, dataset: "ReportingDataset", context: Any = None):
+        super().__init__(dataset, context=context)

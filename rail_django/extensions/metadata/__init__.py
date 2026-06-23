@@ -55,6 +55,11 @@ from .utils import (
     invalidate_metadata_cache,
 )
 from .mapping import FieldTypeRegistry, registry
+from .services import (
+    get_model_schema_for_user,
+    list_available_models_for_user,
+    user_can_discover_model,
+)
 
 __all__ = [
     # Queries
@@ -108,4 +113,7 @@ __all__ = [
     # Mapping
     "FieldTypeRegistry",
     "registry",
+    "get_model_schema_for_user",
+    "list_available_models_for_user",
+    "user_can_discover_model",
 ]

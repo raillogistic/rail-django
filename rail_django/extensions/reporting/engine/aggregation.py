@@ -46,7 +46,9 @@ class AggregationMixin:
         ordering: Optional[list[str]] = None,
         quick_search: str = "",
     ) -> dict[str, Any]:
-        queryset = self.model.objects.all()
+        queryset = self._source_adapter.get_base_queryset(
+            context=getattr(self, "context", None)
+        )
         default_filters_raw: Any = self.dataset.default_filters or []
         runtime_filters_raw: Any = runtime_filters or []
         if isinstance(runtime_filters_raw, list) and all(

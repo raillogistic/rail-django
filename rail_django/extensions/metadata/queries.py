@@ -12,8 +12,12 @@ from graphql import GraphQLError
 from graphql.language import ast
 
 from .extractor import ModelSchemaExtractor
+from .services import (
+    get_model_schema_for_user,
+    list_available_models_for_user,
+    user_can_discover_model,
+)
 from .detail_extractor import DetailContractExtractor
-from ...core.meta import get_model_graphql_meta
 from .types import (
     DetailBootstrapMinimalType,
     DetailContractInputType,
@@ -30,53 +34,8 @@ from ...security.frontend_routes import frontend_route_access_registry
 logger = logging.getLogger(__name__)
 
 
-def _describe_discovery_state(model, user) -> list[dict]:
-    try:
-        graphql_meta = get_model_graphql_meta(model)
-    except Exception:
-        return []
-
-    describe = getattr(graphql_meta, "describe_operation_guard", None)
-    if not callable(describe):
-        return []
-
-    states: list[dict] = []
-    for operation in ("list", "retrieve"):
-        try:
-            state = describe(operation, user=user, instance=None)
-        except Exception:
-            continue
-        if isinstance(state, dict):
-            states.append(state)
-    return states
-
-
 def _user_can_discover_model(model, user) -> bool:
-    if user and getattr(user, "is_superuser", False):
-        return True
-
-    states = _describe_discovery_state(model, user)
-    guarded_states = [state for state in states if state.get("guarded")]
-    guarded_allows = any(state.get("allowed", False) for state in guarded_states)
-
-    has_view_perm = False
-    has_perm = getattr(user, "has_perm", None)
-    if callable(has_perm):
-        perm_name = f"{model._meta.app_label}.view_{model._meta.model_name}"
-        try:
-            has_view_perm = bool(has_perm(perm_name))
-        except Exception:
-            has_view_perm = False
-
-    is_authenticated = bool(user and getattr(user, "is_authenticated", False))
-    if not is_authenticated:
-        # Anonymous users can only discover models explicitly allowed by guards.
-        return guarded_allows
-
-    if guarded_states and not guarded_allows:
-        return False
-
-    return has_view_perm or guarded_allows
+    return user_can_discover_model(model, user)
 
 
 def _collect_requested_subfields(info) -> set[str]:
@@ -359,22 +318,13 @@ class ModelSchemaQuery(graphene.ObjectType):
             Complete model schema.
         """
         user = getattr(info.context, "user", None)
-        try:
-            model_cls = apps.get_model(app, model)
-        except LookupError:
-            raise GraphQLError(f"Model '{app}.{model}' not found.")
-        if not _user_can_discover_model(model_cls, user):
-            raise GraphQLError("Access denied")
-
-        extractor = ModelSchemaExtractor(
-            schema_name=getattr(info.context, "schema_name", "default")
-        )
         requested_sections = _collect_requested_subfields(info)
         requested_section_subfields = _collect_requested_section_subfields(info)
-        return extractor.extract(
+        return get_model_schema_for_user(
             app,
             model,
             user=user,
+            schema_name=getattr(info.context, "schema_name", "default"),
             object_id=objectId,
             include_sections=requested_sections,
             include_section_subfields=requested_section_subfields,
@@ -606,23 +556,9 @@ class ModelSchemaQuery(graphene.ObjectType):
         Returns:
             List of model info dicts.
         """
-        results = []
-        for model in apps.get_models():
-            if app and model._meta.app_label != app:
-                continue
-            if model._meta.app_label in ("admin", "auth", "contenttypes", "sessions"):
-                continue
-            if not _user_can_discover_model(model, getattr(info.context, "user", None)):
-                continue
-            results.append(
-                {
-                    "app": model._meta.app_label,
-                    "model": model.__name__,
-                    "verbose_name": str(model._meta.verbose_name),
-                    "verbose_name_plural": str(model._meta.verbose_name_plural),
-                }
-            )
-        return results
+        return list_available_models_for_user(
+            getattr(info.context, "user", None), app_label=app
+        )
 
     def resolve_appSchemas(self, info, app: str) -> list[dict]:
         """
