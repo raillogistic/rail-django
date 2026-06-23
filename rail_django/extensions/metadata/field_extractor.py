@@ -607,6 +607,12 @@ class FieldExtractorMixin:
                 result["is_boolean"] = graphql_type == "Boolean"
             if wants("is_text"):
                 result["is_text"] = graphql_type in {"String", "ID"}
+            if wants("is_rich_text"):
+                result["is_rich_text"] = False
+            if wants("is_fsm_field"):
+                result["is_fsm_field"] = False
+            if wants("fsm_transitions"):
+                result["fsm_transitions"] = []
             if wants("is_computed"):
                 result["is_computed"] = True
             if wants("is_file"):
