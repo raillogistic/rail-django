@@ -37,7 +37,7 @@ class HealthChecker:
     """
 
     _process_start_time = time.time()
-    _cache_lock = threading.Lock()
+    _cache_lock = threading.RLock()
     _system_metrics_cache: Optional[SystemMetrics] = None
     _system_metrics_cache_ts: float = 0.0
     _health_report_cache: Optional[Dict[str, Any]] = None
@@ -181,12 +181,8 @@ class HealthChecker:
                 )
 
             try:
-                introspection_query = """
-                query IntrospectionQuery {
-                    __schema { types { name } }
-                }
-                """
-                result = schema.execute(introspection_query)
+                simple_query = "{ __typename }"
+                result = schema.execute(simple_query)
 
                 if result.errors:
                     return HealthStatus(
@@ -198,7 +194,8 @@ class HealthChecker:
                         details={"errors": [str(e) for e in result.errors]},
                     )
 
-                type_count = len(result.data["__schema"]["types"])
+                # Fast type count without querying
+                type_count = len(schema.graphql_schema.type_map) if hasattr(schema, 'graphql_schema') else 0
                 return HealthStatus(
                     component="schema",
                     status="healthy",
@@ -350,6 +347,20 @@ class HealthChecker:
             if cached_report:
                 return copy.deepcopy(cached_report)
 
+            cache_owner = type(self)
+            with cache_owner._cache_lock:
+                # Check cache again after acquiring lock without calling _get_cached_health_report
+                # to avoid deadlocking on the non-reentrant threading.Lock
+                now = time.monotonic()
+                cached = cache_owner._health_report_cache
+                if cached and (now - cache_owner._health_report_cache_ts) <= ttl_value:
+                    return copy.deepcopy(cached)
+                
+                return self._generate_and_cache_report(ttl_value, use_cache)
+        else:
+            return self._generate_and_cache_report(ttl_value, use_cache)
+
+    def _generate_and_cache_report(self, ttl_value: float, use_cache: bool) -> Dict[str, Any]:
         report_start_time = time.perf_counter()
 
         schema_health = self.check_schema_health()
@@ -388,8 +399,14 @@ class HealthChecker:
             "system_metrics": asdict(system_metrics),
             "recommendations": generate_recommendations(all_statuses, system_metrics),
         }
+        
+        # Note: We skip calling _set_cached_health_report here because it acquires the lock again,
+        # which would cause a deadlock since we already hold _cache_lock.
+        # Instead, we directly update the cache variables.
         if use_cache and ttl_value > 0:
-            self._set_cached_health_report(report)
+            cache_owner = type(self)
+            cache_owner._health_report_cache = copy.deepcopy(report)
+            cache_owner._health_report_cache_ts = time.monotonic()
 
         return report
 
