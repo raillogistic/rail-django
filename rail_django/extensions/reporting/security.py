@@ -29,8 +29,30 @@ def dataset_is_visible_to_user(dataset, user) -> bool:
     """Enforce a dataset's optional role allowlist."""
     if getattr(user, "is_superuser", False):
         return True
-    allowed = set((dataset.metadata or {}).get("allowed_roles") or [])
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    allowed = set(
+        getattr(dataset, "allowed_roles", None)
+        or (dataset.metadata or {}).get("allowed_roles")
+        or []
+    )
     return not allowed or bool(allowed & reporting_user_roles(user))
+
+
+def report_is_visible_to_user(report, user) -> bool:
+    """Require report audience access and access to every backing dataset."""
+    if getattr(user, "is_superuser", False):
+        return True
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    allowed = set(getattr(report, "allowed_roles", None) or [])
+    if allowed and not allowed.intersection(reporting_user_roles(user)):
+        return False
+    blocks = list(report.blocks.all())
+    return bool(blocks) and all(
+        dataset_is_visible_to_user(block.visualization.dataset, user)
+        for block in blocks
+    )
 
 
 def _reporting_roles() -> dict[str, GraphQLMetaBase.Role]:
@@ -148,5 +170,6 @@ __all__ = [
     "_reporting_operations",
     "_reporting_export_operations",
     "dataset_is_visible_to_user",
+    "report_is_visible_to_user",
     "reporting_user_roles",
 ]

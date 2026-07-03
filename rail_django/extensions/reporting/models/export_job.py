@@ -200,6 +200,31 @@ class ReportingExportJob(models.Model):
         context = ReportingExecutionContext(user=self.requested_by) if self.requested_by else None
 
         if self.report:
+            if self.format in {self.ExportFormat.CSV, self.ExportFormat.XLSX}:
+                blocks = list(
+                    self.report.blocks.select_related(
+                        "visualization", "visualization__dataset"
+                    )
+                )
+                if not blocks:
+                    raise ReportingError("Ce rapport ne contient aucune visualisation.")
+                block = next(
+                    (
+                        item
+                        for item in blocks
+                        if item.visualization.kind in {"table", "records"}
+                    ),
+                    blocks[0],
+                )
+                return block.visualization.render(
+                    context=context,
+                    filters={
+                        "filters": self.report.normalize_filters(
+                            self.filters, block.visualization.dataset.code
+                        )
+                    },
+                    limit=10_000,
+                )["dataset"]
             return self.report.build_payload(context=context, quick="", limit=500, filters=self.filters)
         if self.visualization:
             return self.visualization.render(context=context, quick="", limit=500, filters=self.filters)

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Optional, TYPE_CHECKING
 
 from django.apps import apps
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -37,6 +38,10 @@ class ReportingDataset(models.Model):
         SQL = "sql", "SQL"
         GRAPHQL = "graphql", "GraphQL"
         PYTHON = "python", "Python"
+
+    class Origin(models.TextChoices):
+        CATALOG = "catalog", "Catalogue"
+        STUDIO = "studio", "Studio"
 
     code = models.SlugField(unique=True, max_length=80, verbose_name="Code")
     title = models.CharField(max_length=120, verbose_name="Titre")
@@ -84,6 +89,34 @@ class ReportingDataset(models.Model):
         verbose_name="Metadonnees UI",
         help_text="Sections, quick fields, champs favorises.",
     )
+    allowed_roles = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Roles autorises",
+        help_text="Roles autorises a consulter ce jeu de donnees.",
+    )
+    origin = models.CharField(
+        max_length=20,
+        choices=Origin.choices,
+        default=Origin.CATALOG,
+        verbose_name="Origine",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_reporting_datasets",
+        verbose_name="Cree par",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="updated_reporting_datasets",
+        verbose_name="Modifie par",
+    )
     last_materialized_at = models.DateTimeField(
         null=True, blank=True, verbose_name="Derniere materialisation"
     )
@@ -115,6 +148,9 @@ class ReportingDataset(models.Model):
                 "created_at",
                 "updated_at",
                 "last_materialized_at",
+                "origin",
+                "created_by",
+                "updated_by",
             ]
         )
         ordering = GraphQLMetaBase.Ordering(

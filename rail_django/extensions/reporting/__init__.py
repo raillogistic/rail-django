@@ -31,6 +31,7 @@ Usage::
 
 from .types import (
     ReportingError,
+    ReportingExecutionContext,
     FilterSpec,
     DimensionSpec,
     MetricSpec,
@@ -59,6 +60,9 @@ from .utils import (
 from .security import (
     _reporting_roles,
     _reporting_operations,
+    dataset_is_visible_to_user,
+    report_is_visible_to_user,
+    reporting_user_roles,
 )
 
 from .engine import (
@@ -94,6 +98,8 @@ from .visualization_registry import (
 )
 
 from .services import ReportingService
+from .studio import ReportingStudioService
+from .schema import ReportingMutation, ReportingQuery
 
 
 __all__ = [
@@ -125,8 +131,15 @@ __all__ = [
     "get_type_choices",
     # Service layer
     "ReportingService",
+    "ReportingStudioService",
+    "ReportingQuery",
+    "ReportingMutation",
     # Types
     "ReportingError",
+    "ReportingExecutionContext",
+    "dataset_is_visible_to_user",
+    "report_is_visible_to_user",
+    "reporting_user_roles",
     "FilterSpec",
     "DimensionSpec",
     "MetricSpec",

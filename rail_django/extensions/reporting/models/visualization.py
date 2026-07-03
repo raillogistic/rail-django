@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from django.conf import settings
 from django.db import models
 
 from rail_django.core.meta import GraphQLMeta as GraphQLMetaBase
@@ -27,6 +28,10 @@ from ..visualization_registry import get_type_choices
 
 class ReportingVisualization(models.Model):
     """Visualization attached to a dataset. Types are defined in the registry."""
+
+    class Origin(models.TextChoices):
+        CATALOG = "catalog", "Catalogue"
+        STUDIO = "studio", "Studio"
 
     dataset = models.ForeignKey(
         "ReportingDataset",
@@ -61,6 +66,28 @@ class ReportingVisualization(models.Model):
     is_default = models.BooleanField(
         default=False, verbose_name="Visualisation par defaut"
     )
+    origin = models.CharField(
+        max_length=20,
+        choices=Origin.choices,
+        default=Origin.CATALOG,
+        verbose_name="Origine",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_reporting_visualizations",
+        verbose_name="Cree par",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="updated_reporting_visualizations",
+        verbose_name="Modifie par",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creation")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Mise a jour")
 
@@ -84,7 +111,7 @@ class ReportingVisualization(models.Model):
             default=["title"],
         )
         fields = GraphQLMetaBase.Fields(
-            read_only=["created_at", "updated_at"],
+            read_only=["created_at", "updated_at", "origin", "created_by", "updated_by"],
         )
         access = GraphQLMetaBase.AccessControl(
             roles=_reporting_roles(),

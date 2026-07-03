@@ -12,7 +12,9 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
+
+from django.db import transaction
 
 from .types import ReportingError, ReportingExecutionContext
 
@@ -28,6 +30,30 @@ class ReportingService:
     Toutes les méthodes acceptent des identifiants (code, ID) ou des
     instances de modèles pour une flexibilité maximale.
     """
+
+    @staticmethod
+    def list_reports(context: ReportingExecutionContext) -> list[dict[str, Any]]:
+        """Return reports visible to the current user."""
+        from .models import ReportingReport
+        from .security import report_is_visible_to_user
+
+        user = getattr(context, "user", None)
+        reports = ReportingReport.objects.prefetch_related(
+            "blocks__visualization__dataset"
+        )
+        return [
+            {
+                "id": str(report.pk),
+                "code": report.code,
+                "title": report.title,
+                "description": report.description,
+                "theme": report.theme,
+                "updated_at": str(report.updated_at),
+                "export_formats": ReportingService.get_available_export_formats(),
+            }
+            for report in reports
+            if report_is_visible_to_user(report, user)
+        ]
 
     @staticmethod
     def execute_dataset(
@@ -274,18 +300,184 @@ class ReportingService:
         from .models import ReportingReport
 
         try:
-            report = ReportingReport.objects.get(code=report_code)
+            report = ReportingReport.objects.prefetch_related(
+                "blocks__visualization__dataset"
+            ).get(code=report_code)
         except ReportingReport.DoesNotExist as exc:
             raise ReportingError(
                 f"Rapport introuvable: '{report_code}'."
             ) from exc
 
-        return report.build_payload(
+        from .security import report_is_visible_to_user
+
+        if not report_is_visible_to_user(report, getattr(context, "user", None)):
+            raise ReportingError("Vous n'etes pas autorise a consulter ce rapport.")
+        payload = report.build_payload(
             context=context,
             quick=quick,
             limit=limit,
             filters=filters,
         )
+        payload["export_formats"] = ReportingService.get_available_export_formats()
+        return payload
+
+    @staticmethod
+    def create_report_export(
+        context: ReportingExecutionContext,
+        report_code: str,
+        *,
+        format_name: str,
+        filters: Optional[dict] = None,
+    ):
+        """Create and synchronously execute an owner-scoped report export."""
+        from .models import ReportingExportJob, ReportingReport
+        from .security import report_is_visible_to_user
+
+        user = getattr(context, "user", None)
+        try:
+            report = ReportingReport.objects.prefetch_related(
+                "blocks__visualization__dataset"
+            ).get(code=report_code)
+        except ReportingReport.DoesNotExist as exc:
+            raise ReportingError(f"Rapport introuvable: '{report_code}'.") from exc
+        if not report_is_visible_to_user(report, user):
+            raise ReportingError("Vous n'etes pas autorise a exporter ce rapport.")
+        if format_name not in ReportingService.get_available_export_formats():
+            raise ReportingError(f"Format d'export indisponible: '{format_name}'.")
+        job = ReportingExportJob.objects.create(
+            title=report.title,
+            report=report,
+            format=format_name,
+            filters=filters or {},
+            requested_by=user,
+        )
+        job.run_export(context=context)
+        return job
+
+    @staticmethod
+    @transaction.atomic
+    def sync_catalog(
+        datasets: Iterable[dict],
+        visualizations: Iterable[dict],
+        reports: Iterable[dict],
+        *,
+        overwrite: bool = False,
+    ) -> dict[str, dict[str, int]]:
+        """Create or deliberately overwrite a declarative reporting catalog."""
+        from .models import (
+            ReportingDataset,
+            ReportingReport,
+            ReportingReportBlock,
+            ReportingVisualization,
+        )
+
+        result = {
+            name: {"created": 0, "updated": 0, "skipped": 0}
+            for name in ("datasets", "visualizations", "reports")
+        }
+
+        def persist(model, lookup, defaults, bucket):
+            instance = model.objects.filter(**lookup).first()
+            if instance and not overwrite:
+                result[bucket]["skipped"] += 1
+                return instance, False
+            instance, created = model.objects.update_or_create(
+                **lookup, defaults=defaults
+            )
+            result[bucket]["created" if created else "updated"] += 1
+            return instance, created
+
+        for item in datasets:
+            defaults = {
+                key: item.get(key, default)
+                for key, default in {
+                    "title": "",
+                    "description": "",
+                    "source_kind": "model",
+                    "source_app_label": "",
+                    "source_model": "",
+                    "default_filters": [],
+                    "dimensions": [],
+                    "metrics": [],
+                    "computed_fields": [],
+                    "ordering": [],
+                    "preview_limit": 50,
+                    "metadata": {},
+                    "allowed_roles": [],
+                }.items()
+            }
+            defaults["allowed_roles"] = item.get(
+                "allowed_roles",
+                (item.get("metadata") or {}).get("allowed_roles", []),
+            )
+            defaults["origin"] = ReportingDataset.Origin.CATALOG
+            persist(
+                ReportingDataset,
+                {"code": item["code"]},
+                defaults,
+                "datasets",
+            )
+
+        for item in visualizations:
+            dataset = ReportingDataset.objects.get(code=item["dataset_code"])
+            defaults = {
+                key: item.get(key, default)
+                for key, default in {
+                    "title": "",
+                    "description": "",
+                    "kind": "table",
+                    "config": {},
+                    "default_filters": [],
+                    "options": {},
+                    "is_default": False,
+                }.items()
+            }
+            defaults.update(
+                dataset=dataset, origin=ReportingVisualization.Origin.CATALOG
+            )
+            persist(
+                ReportingVisualization,
+                {"dataset": dataset, "code": item["code"]},
+                defaults,
+                "visualizations",
+            )
+
+        for item in reports:
+            defaults = {
+                key: item.get(key, default)
+                for key, default in {
+                    "title": "",
+                    "description": "",
+                    "layout": {},
+                    "filters": [],
+                    "theme": "light",
+                    "allowed_roles": [],
+                }.items()
+            }
+            defaults["origin"] = ReportingReport.Origin.CATALOG
+            report, created = persist(
+                ReportingReport,
+                {"code": item["code"]},
+                defaults,
+                "reports",
+            )
+            if created or overwrite:
+                report.blocks.all().delete()
+                ReportingReportBlock.objects.bulk_create(
+                    [
+                        ReportingReportBlock(
+                            report=report,
+                            visualization=ReportingVisualization.objects.get(
+                                code=block["visualization_code"]
+                            ),
+                            position=block["position"],
+                            layout=block.get("layout", {}),
+                            title_override=block.get("title_override", ""),
+                        )
+                        for block in item.get("blocks", [])
+                    ]
+                )
+        return result
 
 
 __all__ = ["ReportingService"]

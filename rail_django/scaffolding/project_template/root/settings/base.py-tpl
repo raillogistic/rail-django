@@ -285,6 +285,12 @@ LOGGING = {
     },
 }
 
+RAIL_DJANGO_REPORTING = {
+    "viewer_roles": ["sales_viewer"],
+    "author_roles": ["report_manager"],
+    "admin_roles": ["report_manager"],
+}
+
 
 # Rail Django Configuration
 # Overriding defaults from rail_django.config.defaults
@@ -320,9 +326,12 @@ RAIL_DJANGO_GRAPHQL = {
         # Show metadata fields in schema
         "show_metadata": True,
         # List of custom query extension classes to add
-        "query_extensions": [],
+        "query_extensions": [
+               "rail_django.extensions.reporting.ReportingQuery",
+        ],
         "mutation_extensions": [
             "users.apps.mutations.UsersMutations",
+            "rail_django.extensions.reporting.ReportingMutation",
         ],
         # Allowlist root query fields (None = no filtering)
         "query_field_allowlist": None,

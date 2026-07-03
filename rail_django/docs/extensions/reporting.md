@@ -1,128 +1,110 @@
 # Reporting & BI
 
-Rail Django includes a reporting and business intelligence module for defining analytical datasets, dimensions, metrics, and visualizations directly on top of your Django models.
+Rail-Django provides persisted datasets, visualizations, reports, exports, and a
+metadata-authorized report studio.
 
-## Overview
+## Installation
 
-The reporting extension lets you:
-- Define **Datasets** as data sources (models or custom queries).
-- Configure **Dimensions** for grouping (by date, category, status, etc.).
-- Define **Metrics** for aggregation (sum, count, average, etc.).
-- Execute high-performance analytical queries via GraphQL.
-- Define **Visualizations** (charts, KPIs, tables).
-- Create and save **Reports** combining multiple widgets.
-
-## Dataset Definition
-
-A dataset is the source of truth for your analytical queries.
+Register the reusable GraphQL extensions:
 
 ```python
-from rail_django.extensions.reporting import ReportingDataset
+RAIL_DJANGO_GRAPHQL = {
+    "schema_settings": {
+        "query_extensions": [
+            "rail_django.extensions.reporting.ReportingQuery",
+        ],
+        "mutation_extensions": [
+            "rail_django.extensions.reporting.ReportingMutation",
+        ],
+    },
+}
 
-class OrderDataset(ReportingDataset):
-    name = "orders"
-    source_model = "store.Order"
-    description = "Order analysis and metrics"
-
-    # Base filters always applied to this dataset
-    base_filters = {
-        "status__in": ["completed", "shipped"],
-    }
-
-    # Date field used for time-based analysis
-    date_field = "created_at"
-```
-
-## Dimensions
-
-Dimensions are the attributes you use to group your data.
-
-| Type | Example | Description |
-|------|---------|-------------|
-| **Field** | `"customer__name"` | Direct value from a model field. |
-| **Date Part** | `"created_at:month"` | Truncated date (day, week, month, year). |
-| **Bucket** | `"price:bucket:0,100,500"` | Numeric ranges for distribution analysis. |
-
-### Date Transformations
-
-| Transform | Output Example |
-|-----------|----------------|
-| `trunc:day` | `2026-01-16` |
-| `trunc:month` | `2026-01` |
-| `extract:dow` | `4` (Thursday) |
-
-## Metrics
-
-Metrics are the aggregated measures of your data.
-
-| Aggregation | Description |
-|-------------|-------------|
-| `count` | Record count. |
-| `sum` | Sum of numeric values. |
-| `avg` | Arithmetic mean. |
-| `distinct` | Count of unique values. |
-
-### Calculated Metrics
-You can define metrics that depend on other metrics:
-```python
-{
-    "name": "margin_percent",
-    "expression": "(revenue - cost) / revenue * 100",
-    "label": "Margin %",
-    "format": "percent",
+RAIL_DJANGO_REPORTING = {
+    "viewer_roles": ["sales_viewer"],
+    "author_roles": ["report_manager"],
+    "admin_roles": ["report_manager"],
 }
 ```
 
-## GraphQL API
+Models used as reporting sources should expose a scoped queryset:
 
-### Available Datasets
-Query the registry to see what's available for reporting:
+```python
+@staticmethod
+def filter_reporting_queryset(queryset, user):
+    return queryset.filter(organization=user.organization)
+```
+
+Studio datasets without that method are restricted to the current author's
+reporting roles.
+
+## Catalogs
+
+Projects keep their domain definitions and synchronize them through the public
+service:
+
+```python
+from rail_django.extensions.reporting import ReportingService
+
+result = ReportingService.sync_catalog(
+    DATASETS,
+    VISUALIZATIONS,
+    REPORTS,
+    overwrite=True,
+)
+```
+
+The safe default creates missing assets and skips existing ones. Pass
+`overwrite=True` only when the project catalog is the source of truth.
+
+Dataset definitions may declare `allowed_roles` directly. For older catalogs,
+`metadata.allowed_roles` is migrated automatically. Reports may also declare an
+audience with `allowed_roles`; access requires both report and dataset access.
+
+## Runtime API
+
+The public Python API is `ReportingService`:
+
+- `list_reports(context)`
+- `build_report_payload(context, report_code, filters={})`
+- `create_report_export(context, report_code, format_name="xlsx", filters={})`
+- `execute_dataset`, `preview_dataset`, and `render_visualization`
+
+Report filters are an allowlist. Multi-dataset filters declare a target per
+dataset and Rail-Django maps runtime values to the correct ORM field; unknown
+filter names are rejected.
+
+The corresponding GraphQL fields are:
 
 ```graphql
-query AvailableDatasets {
-  reportingDatasets {
-    code
-    name
-    dimensions { name label type }
-    metrics { name label aggregation }
+query Reports {
+  reportingReportList
+  reportingExportJobList
+}
+
+mutation Build($code: String!, $filters: GenericScalar) {
+  reportingReportBuildPayload(code: $code, filters: $filters) {
+    status
+    message
+    data
   }
 }
 ```
 
-### Executing a Report Query
-Use the `reportQuery` to fetch aggregated data:
+`GenericScalar` values are objects, not JSON-encoded strings.
 
-```graphql
-query SalesByCategory {
-  reportQuery(
-    dataset: "orders"
-    dimensions: ["category"]
-    metrics: ["revenue", "orderCount"]
-    orderBy: "-revenue"
-  ) {
-    columns { name type label }
-    rows { values }
-    totals { metric value }
-  }
-}
-```
+## Report Studio
 
-## Visualizations & Reports
+`ReportingStudioService` validates every source model and field against the
+Rail-Django metadata visible to the current user. It exposes dataset,
+visualization, and report preview/save/delete operations. Catalog assets can be
+edited but cannot be deleted through the studio; studio assets record their
+creator and last editor.
 
-You can combine queries into structured reports with various visualization types:
-- **Charts**: Bar, Line, Area, Pie, Donut, Heatmap.
-- **KPIs**: Single big numbers for key indicators.
-- **Tables**: Detailed aggregated data.
+Reusable GraphQL fields use the `reportingStudio*` prefix, including
+`reportingStudioCapabilities`, asset lists, and preview/save/delete mutations.
 
-## Best Practices
+## Exports
 
-1. **Database Indexing**: Always index fields used as dimensions, especially date fields.
-2. **Limit Results**: Use the `limit` argument to prevent huge result sets from hitting the frontend.
-3. **Caching**: Analytical queries can be heavy. Use Rail's query caching or external caching for frequently accessed reports.
-4. **Materialized Views**: For extremely large datasets, consider using database materialized views as the source for your datasets.
-
-## See Also
-
-- [Exporting](./exporting.md) - To download report data as Excel/CSV.
-- [Templating](./templating.md) - To generate PDF reports.
-- [Observability](./observability.md) - To monitor query performance.
+CSV and XLSX exports select the first table/records block, falling back to the
+first block. Export jobs are always assigned to the requesting user and job
+queries are owner-scoped. Available formats depend on installed renderer extras.
