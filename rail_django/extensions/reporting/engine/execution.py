@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from django.core.cache import cache
+from django.db.models import IntegerField, Value
 
 from ..types import ReportingError
 from ..utils import (
@@ -49,8 +50,8 @@ class ExecutionMixin:
         quick_search = str(spec.get("quick") or "")
         limit = _coerce_int(spec.get("limit"), default=self.dataset.preview_limit)
         offset = _coerce_int(spec.get("offset"), default=0)
-        ordering = _to_ordering(spec.get("ordering")) or _to_ordering(
-            self.dataset.ordering
+        ordering = _to_ordering(
+            spec.get("ordering") if "ordering" in spec else self.dataset.ordering
         )
         where = spec.get("filters") if "filters" in spec else spec.get("where")
         having = spec.get("having")
@@ -177,10 +178,12 @@ class ExecutionMixin:
             fields = [pk_field]
 
         allowed_record_fields = self._record_field_allowlist()
+        annotated_fields = set(queryset.query.annotations)
         selected_fields = self._normalize_field_list(
             fields,
             warnings=warnings,
             allowlist=allowed_record_fields,
+            annotated_fields=annotated_fields,
             label="Champ",
         )
         if not selected_fields and fields_specified and meta_fields:
@@ -188,6 +191,7 @@ class ExecutionMixin:
                 meta_fields,
                 warnings=warnings,
                 allowlist=allowed_record_fields,
+                annotated_fields=annotated_fields,
                 label="Champ",
             )
         if not selected_fields:
@@ -203,7 +207,10 @@ class ExecutionMixin:
         resolved_ordering: list[str] = []
         for token in ordering:
             name = token.lstrip("-")
-            if not self._validate_field_path(name):
+            if (
+                not self._validate_field_path(name)
+                and name not in annotated_fields
+            ):
                 warnings.append(f"Tri invalide: {token}")
                 continue
             if allowed_record_fields is not None and name not in allowed_record_fields:
@@ -299,6 +306,10 @@ class ExecutionMixin:
         fallback_fields: list[str] = []
         if simple_dimension_fields or alias_exprs:
             queryset = queryset.values(*simple_dimension_fields, **alias_exprs)
+        elif annotations:
+            queryset = queryset.order_by().annotate(
+                _reporting_group=Value(1, output_field=IntegerField())
+            ).values("_reporting_group")
         elif not annotations:
             fallback_fields = self._normalize_field_list(
                 self._meta().get("fields") or [self._default_pk_field()],
@@ -370,6 +381,8 @@ class ExecutionMixin:
             queryset = queryset[:bounded_limit]
 
         rows = list(queryset)
+        for row in rows:
+            row.pop("_reporting_group", None)
         self._apply_computed_fields_runtime(rows, computed_fields)
 
         payload: dict[str, Any] = {

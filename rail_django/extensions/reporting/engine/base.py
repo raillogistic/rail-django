@@ -191,14 +191,19 @@ class DatasetExecutionEngineBase:
         *,
         warnings: list[str],
         allowlist: Optional[set[str]] = None,
+        annotated_fields: Optional[set[str]] = None,
         label: str = "Champ",
     ) -> list[str]:
+        annotated_fields = annotated_fields or set()
         normalized: list[str] = []
         for value in fields:
             if not value:
                 continue
             field_name = str(value)
-            if not self._validate_field_path(field_name):
+            if (
+                not self._validate_field_path(field_name)
+                and field_name not in annotated_fields
+            ):
                 warnings.append(f"{label} invalide: {field_name}")
                 continue
             if allowlist is not None and field_name not in allowlist:
