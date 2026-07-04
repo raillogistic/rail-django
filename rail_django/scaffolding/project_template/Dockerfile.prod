@@ -1,0 +1,70 @@
+ARG PYTHON_VERSION=3.12
+
+FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        git \
+        libcairo2 \
+        libffi8 \
+        libgdk-pixbuf-2.0-0 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpq-dev \
+        libpq5 \
+        netcat-openbsd \
+        tzdata \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home
+
+COPY requirements/base.txt requirements/prod.txt requirements/rail-django.txt requirements/
+
+RUN python -m venv /opt/venv \
+    && pip install \
+        -r requirements/prod.txt \
+        -r requirements/rail-django.txt
+
+FROM python:${PYTHON_VERSION}-slim-bookworm AS app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        curl \
+        libcairo2 \
+        libffi8 \
+        libgdk-pixbuf-2.0-0 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpq5 \
+        netcat-openbsd \
+        tzdata \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /home
+
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh \
+    && mkdir -p /home/app
+
+COPY . /home/app/
+
+ENTRYPOINT ["./entrypoint.sh"]

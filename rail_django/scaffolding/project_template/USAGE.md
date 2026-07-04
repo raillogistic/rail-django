@@ -1800,173 +1800,70 @@ This guide explains how to manually deploy your `rail-django` application using 
 3.  **Domain Name / Internal DNS**: Configured to point to your VM's IP address (e.g., `app.internal.corp`).
 
 ### 1. Environment Configuration
+### 1. Environment Configuration
 
-Use `.env.prod` for deployment in your project root and update the variables:
+Use .env.prod for deployment in your project root and update the variables:
 
-```bash
+`ash
 nano .env.prod
-```
+`
 
 **Key variables to set:**
 
-- `DJANGO_DEBUG=False`
-- `DJANGO_SECRET_KEY`: A long, random string.
-- `DATABASE_URL`: Pointing to your external machine (e.g., `postgres://user:pass@192.168.1.50:5432/my_db`). Also used by deploy/backup.sh.
-- `DJANGO_ALLOWED_HOSTS`: Your internal domain (e.g., `app.internal.corp`) or IP.
-- `DJANGO_SETTINGS_MODULE`: `root.settings.production`
-- `LOG_PATH`: Host path for log files (absolute or relative to `deploy/docker/`).
-- `RAIL_ENABLE_PROD_GRAPHIQL=False`
-- `RAIL_ENABLE_PROD_INTROSPECTION=False`
-- Optional: `DEPLOY_REFRESH_DEPS` (force dependency rebuild on deploy).
+- DJANGO_DEBUG=False
+- DJANGO_SECRET_KEY: A long, random string.
+- DATABASE_URL: Pointing to your external machine (e.g., postgres://user:pass@192.168.1.50:5432/my_db).
+- DJANGO_ALLOWED_HOSTS: Your internal domain (e.g., pp.internal.corp) or IP.
+- DJANGO_SETTINGS_MODULE: oot.settings.production
+- RAIL_ENABLE_PROD_GRAPHIQL=False
+- RAIL_ENABLE_PROD_INTROSPECTION=False
 
-### 2. Deployment Steps
+### 2. Deployment Steps (Dokploy / Container Platforms)
 
-Run these commands from your project root:
+This template is configured to be deployed easily using platforms like **Dokploy**, Coolify, or pure Docker.
 
-#### A. Build web and nginx images
+#### A. Configure your Platform
 
-Build the Python and Nginx images before running schema tasks.
+1. Create a new Application in Dokploy (or your preferred PaaS).
+2. Point it to your Git repository.
+3. Set the build type to **Dockerfile**.
+4. Set the Dockerfile path to Dockerfile.prod.
+5. Expose port 8000 (the default port Gunicorn runs on).
+6. Set the Environment Variables exactly as in your .env.prod.
 
-```bash
-docker-compose -f deploy/docker/docker-compose.yml build web nginx
-```
-The default web runtime is ASGI, so GraphQL subscriptions are available
-without switching servers.
+#### B. Build & Deploy
 
-#### B. Run Migrations
+When the deployment starts, the platform will:
+1. Build the Docker image from Dockerfile.prod.
+2. Run ./entrypoint.sh automatically when the container starts.
 
-Apply database schema changes to your external database:
+The entrypoint.sh script automatically:
+1. Collects static files using collectstatic.
+2. Runs database migrations (migrate).
+3. Starts the ASGI server via Gunicorn on port 8000.
 
-```bash
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
-```
+*Note: Static files are served directly by the Python application using WhiteNoise, which is extremely fast and optimized for container deployments.*
 
-#### C. Collect Static Files
+#### C. Create Superuser (Optional)
 
-Prepare CSS, JS, and images for Nginx to serve:
+Once the application is running, you can connect to the container shell via your PaaS dashboard (e.g. Dokploy's terminal tab) and run:
 
-```bash
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
-```
-
-#### D. Start Services
-
-Start the Web and Nginx containers.
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d
-```
-
-#### E. Create Superuser (Optional)
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml exec web python manage.py createsuperuser
-```
-
-### 3. Directory Structure
-
-- **`deploy/docker/`**: Contains the Dockerfile and Compose configuration.
-- **`deploy/nginx/`**: Contains the Nginx reverse proxy configuration.
-- **`backups/`**: Database backups are written here by `deploy/backup.sh`.
-
-### 4. Maintenance
-
-#### Viewing Logs
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml logs -f
-```
-Log files are also written to `/home/app/web/logs` inside the container. If you
-set `LOG_PATH`, read them directly on the host.
-
-#### Stopping the Application
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml down
-```
-
-#### Updating the Application
-
-1. Pull your latest code changes.
-2. Re-run build, schema tasks, and startup:
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml build web nginx
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py migrate
-docker-compose -f deploy/docker/docker-compose.yml run --rm --entrypoint python web manage.py collectstatic --no-input
-docker-compose -f deploy/docker/docker-compose.yml up -d
-```
-Set `DEPLOY_REFRESH_DEPS=1` or use `deploy/deploy.sh --refresh-deps` when you
-need to rebuild base dependencies. The `rail-django` Git install is refreshed
-on every build.
+`ash
+python manage.py createsuperuser
+`
 
 ### Production GraphiQL policy
 
 In scaffolded production settings, GraphiQL and introspection stay disabled
 unless you explicitly enable both:
 
-```bash
+`ash
 RAIL_ENABLE_PROD_GRAPHIQL=True
 RAIL_ENABLE_PROD_INTROSPECTION=True
-```
+`
 
-GraphiQL remains restricted to superusers from loopback hosts.
-
-### 5. Security Recommendations
-
-1.  **SSL/TLS**: Mandatory. Use company-issued certificates or self-signed certs for internal traffic.
-2.  **Firewall**: Configure `ufw` on your Ubuntu VM to allow traffic only from trusted internal subnets.
-    ```bash
-    ufw allow from 10.0.0.0/8 to any port 8000
-    ufw allow ssh
-    ufw enable
-    ```
-3.  **Secrets**: Never commit your `.env.dev` or `.env.prod` files to version control.
-4.  **Updates**: Keep the VM OS updated (`apt update && apt upgrade`).
-
-### 6. Setup HTTPS (Internal Network / Enterprise)
-
-Since this server is inside a private company network, you cannot use standard Let's Encrypt challenges. Terminate TLS in the bundled Nginx container and bake your certificates into the scaffolded Nginx image.
-
-#### Step 1: Obtain Certificates
-
-You have two options:
-
-**Option A: Official Company Certificate (Recommended)**
-Ask your IT/Security team for the SSL certificate for your internal domain (e.g., `app.corp.local`). Place the files here:
-
-- `deploy/nginx/certs/server.crt`
-- `deploy/nginx/certs/server.key`
-
-**Option B: Self-Signed Certificate (For Testing)**
-If you don't have an official cert, generate a self-signed one:
-
-```bash
-mkdir -p deploy/nginx/certs
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout deploy/nginx/certs/server.key \
-  -out deploy/nginx/certs/server.crt \
-  -subj "/CN=app.internal.corp"
-```
-
-#### Step 2: Configure Nginx
-
-Update `deploy/nginx/default.conf` and set `server_name` to your internal domain or IP. The template serves HTTPS directly on port 8000.
-
-#### Step 3: Activate
-
-```bash
-docker-compose -f deploy/docker/docker-compose.yml up -d --build
-```
-
-When certificates or `deploy/nginx/default.conf` change, rebuild Nginx:
-```bash
-docker-compose -f deploy/docker/docker-compose.yml build nginx
-docker-compose -f deploy/docker/docker-compose.yml up -d
-```
+GraphiQL remains restricted to superusers.
 
 ---
 
 **Rail Django** - _Build faster, scale better._
-
-
