@@ -3,3 +3,5 @@
 # uvloop: C-based event loop, 2-5x faster than default asyncio
 # httptools: C-based HTTP parser, near-zero overhead
 uvicorn[standard]>=0.30.0
+uvicorn-worker>=0.3.0
+whitenoise>=6.7.0
