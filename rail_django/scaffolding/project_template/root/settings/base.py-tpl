@@ -263,25 +263,59 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': LOG_DIR / 'django.log',
+            'filename': str(LOG_DIR / 'django.log'),
+            'formatter': 'verbose',
+        },
+        'security_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'security.log'),
+            'formatter': 'verbose',
+        },
+        'audit_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'audit.log'),
+            'formatter': 'verbose',
+        },
+        'celery_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'celery.log'),
             'formatter': 'verbose',
         },
     },
     'loggers': {
+        "": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+        },
         "django": {
             "handlers": ["console", "file"],
             "level": "INFO",
-            "propagate": True,
+            "propagate": False,
         },
         "rail_django": {
             "handlers": ["console", "file"],
             "level": env("RAIL_DJANGO_LOG_LEVEL", default="WARNING"),
-            "propagate": True,
+            "propagate": False,
         },
         "audit": {
-            "handlers": ["console", "file"],
+            "handlers": ["console", "audit_file"],
             "level": "INFO",
-            "propagate": True,
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console", "security_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "rail_django.security": {
+            "handlers": ["console", "security_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery": {
+            "handlers": ["console", "celery_file"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }
