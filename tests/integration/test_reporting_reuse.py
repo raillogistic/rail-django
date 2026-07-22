@@ -42,6 +42,7 @@ def catalog():
         {
             "code": "orders_table",
             "title": "Orders",
+            "description": "Decision-ready order detail.",
             "dataset_code": "orders",
             "kind": "table",
             "config": {"query": {"mode": "records", "fields": ["id"]}},
@@ -99,6 +100,10 @@ def test_visibility_and_multi_dataset_filter_allowlist():
     )
     assert (
         payload["visualizations"][0]["dataset"]["applied_filters"][0]["field"] == "id"
+    )
+    assert (
+        payload["visualizations"][0]["visualization"]["description"]
+        == "Decision-ready order detail."
     )
     with pytest.raises(GraphQLError):
         ReportingService.build_report_payload(

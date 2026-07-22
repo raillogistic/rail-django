@@ -48,8 +48,11 @@ class ExecutionMixin:
         spec = dict(spec or {})
         mode = str(spec.get("mode") or "aggregate").lower()
         quick_search = str(spec.get("quick") or "")
-        limit = _coerce_int(spec.get("limit"), default=self.dataset.preview_limit)
-        offset = _coerce_int(spec.get("offset"), default=0)
+        limit = max(
+            0,
+            _coerce_int(spec.get("limit"), default=self.dataset.preview_limit),
+        )
+        offset = max(0, _coerce_int(spec.get("offset"), default=0))
         ordering = _to_ordering(
             spec.get("ordering") if "ordering" in spec else self.dataset.ordering
         )
@@ -82,11 +85,10 @@ class ExecutionMixin:
                 )
             rows = self._source_adapter.get_base_queryset(context=getattr(self, "context", None))
             bounded_limit = min(int(limit), self._max_limit())
-            if offset:
-                rows = rows[offset : offset + bounded_limit]
-            else:
-                rows = rows[:bounded_limit]
-            
+            page = rows[offset : offset + bounded_limit + 1]
+            has_more = len(page) > bounded_limit
+            rows = page[:bounded_limit]
+
             payload = {
                 "mode": "records",
                 "rows": rows,
@@ -95,6 +97,8 @@ class ExecutionMixin:
                 "ordering": [],
                 "limit": bounded_limit,
                 "offset": offset,
+                "returned_count": len(rows),
+                "has_more": has_more,
                 "warnings": warnings,
                 "source": {
                     "app_label": self.dataset.source_app_label,
@@ -221,19 +225,22 @@ class ExecutionMixin:
             queryset = queryset.order_by(*resolved_ordering)
 
         bounded_limit = min(int(limit), self._max_limit())
-        if offset:
-            queryset = queryset[offset : offset + bounded_limit]
-        else:
-            queryset = queryset[:bounded_limit]
+        page = list(
+            queryset.values(*selected_fields)[offset : offset + bounded_limit + 1]
+        )
+        has_more = len(page) > bounded_limit
+        rows = page[:bounded_limit]
 
         payload = {
             "mode": "records",
-            "rows": list(queryset.values(*selected_fields)),
+            "rows": rows,
             "fields": selected_fields,
             "applied_filters": [spec.__dict__ for spec in applied_filters],
             "ordering": resolved_ordering,
             "limit": bounded_limit,
             "offset": offset,
+            "returned_count": len(rows),
+            "has_more": has_more,
             "warnings": warnings,
             "source": {
                 "app_label": self.dataset.source_app_label,
@@ -375,12 +382,9 @@ class ExecutionMixin:
             queryset = queryset.order_by(*resolved_ordering)
 
         bounded_limit = min(int(limit), self._max_limit())
-        if offset:
-            queryset = queryset[offset : offset + bounded_limit]
-        else:
-            queryset = queryset[:bounded_limit]
-
-        rows = list(queryset)
+        page = list(queryset[offset : offset + bounded_limit + 1])
+        has_more = len(page) > bounded_limit
+        rows = page[:bounded_limit]
         for row in rows:
             row.pop("_reporting_group", None)
         self._apply_computed_fields_runtime(rows, computed_fields)
@@ -396,6 +400,8 @@ class ExecutionMixin:
             "ordering": resolved_ordering,
             "limit": bounded_limit,
             "offset": offset,
+            "returned_count": len(rows),
+            "has_more": has_more,
             "warnings": warnings,
             "source": {
                 "app_label": self.dataset.source_app_label,

@@ -73,6 +73,10 @@ Report filters are an allowlist. Multi-dataset filters declare a target per
 dataset and Rail-Django maps runtime values to the correct ORM field; unknown
 filter names are rejected.
 
+Dataset query payloads include `returned_count` and `has_more`. Pagination uses
+`offset` and a non-negative, dataset-capped `limit`; `has_more` is determined by
+fetching one extra row, so it does not run a separate count query.
+
 The corresponding GraphQL fields are:
 
 ```graphql

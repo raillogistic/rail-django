@@ -198,6 +198,7 @@ class ReportingVisualization(models.Model):
                 "id": self.id,
                 "code": self.code,
                 "title": self.title,
+                "description": self.description,
                 "kind": self.kind,
                 "config": self.config,
                 "options": self.options,
