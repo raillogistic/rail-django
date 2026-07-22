@@ -55,10 +55,8 @@ if "RAIL_DJANGO_GRAPHQL_SCHEMAS" in globals():
         }
     )
 
-# Database performance: Keep connections alive for 10 minutes.
-# CONN_HEALTH_CHECKS (Django 4.1+) validates recycled connections before use,
-# avoiding "server closed the connection unexpectedly" errors.
-DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=600)
+# ASGI must not keep per-worker database connections open between requests.
+DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=0)
 DATABASES['default']['CONN_HEALTH_CHECKS'] = env.bool('CONN_HEALTH_CHECKS', default=True)
 
 # =============================================================================

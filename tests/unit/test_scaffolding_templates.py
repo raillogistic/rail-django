@@ -54,6 +54,14 @@ def test_env_prod_sets_asgi_runtime_defaults() -> None:
     assert "ASGI_PORT=8000" in text
 
 
+def test_production_template_disables_persistent_database_connections_for_asgi() -> None:
+    settings_text = _project_template_file("root", "settings", "production.py-tpl")
+    env_text = _project_template_file(".env.prod-tpl")
+
+    assert "CONN_MAX_AGE', default=0" in settings_text
+    assert "CONN_MAX_AGE=0" in env_text
+
+
 def test_env_prod_exposes_backup_retention_override() -> None:
     text = _project_template_file(".env.prod-tpl")
 
