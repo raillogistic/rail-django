@@ -5,6 +5,7 @@ These views are protected and require authentication + admin privileges.
 """
 
 import logging
+from collections import deque
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -467,7 +468,9 @@ class SecurityReportView(View):
 
             # Timeline of high severity events
             high_severity_timeline = list(
-                queryset.filter(severity__in=[Severity.ERROR.value, Severity.CRITICAL.value])
+                queryset.filter(
+                    severity__in=[Severity.ERROR.value, Severity.CRITICAL.value]
+                )
                 .order_by("-timestamp")
                 .values(
                     "event_type",
@@ -641,13 +644,16 @@ class LogViewerAPIView(View):
         """
         Read the last N lines of a log file.
         """
-        import os
         from pathlib import Path
 
         filename = request.GET.get("file", "django.log")
-        lines_count = int(request.GET.get("lines", 100))
-        if lines_count > 5000:
-            lines_count = 5000
+        try:
+            lines_count = int(request.GET.get("lines", 100))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "lines must be an integer"}, status=400)
+        if lines_count <= 0:
+            return JsonResponse({"error": "lines must be greater than 0"}, status=400)
+        lines_count = min(lines_count, 5000)
 
         # Whitelist allowed log files for security
         ALLOWED_LOGS = {"django.log", "security.log", "audit.log", "celery.log"}
@@ -664,27 +670,22 @@ class LogViewerAPIView(View):
         file_path = Path(log_dir) / filename
 
         if not file_path.exists():
-            return JsonResponse({"error": "Log file not found", "path": str(file_path)}, status=404)
+            return JsonResponse(
+                {"error": "Log file not found", "path": str(file_path)}, status=404
+            )
 
         try:
             # Read last N lines efficiently
             lines = self._tail(file_path, lines_count)
             return JsonResponse({"logs": lines, "file": filename})
-        except Exception as e:
-            logger.error(f"Error reading log file: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Unable to read log file")
+            return JsonResponse({"error": "Unable to read log file"}, status=500)
 
     def _tail(self, file_path, n):
         """Read the last n lines of a file."""
-        # Simple implementation using readlines for now.
-        # For huge files, a seek-based approach is better.
-        try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                # Read all lines is memory intensive for massive files but fine for rotated logs < 10MB
-                # Optimization: Seek to end and read backwards if needed
-                return f.readlines()[-n:]
-        except Exception:
-            return []
+        with open(file_path, "r", encoding="utf-8", errors="replace") as log_file:
+            return list(deque(log_file, maxlen=n))
 
 
 def get_audit_urls():
@@ -702,7 +703,15 @@ def get_audit_urls():
         path("audit/logs/api/", LogViewerAPIView.as_view(), name="log_viewer_api"),
         path("audit/", AuditAPIView.as_view(), name="audit_api"),
         path("audit/stats/", AuditStatsView.as_view(), name="audit_stats"),
-        path("audit/security-report/", SecurityReportView.as_view(), name="audit_security_report"),
-        path("audit/event/<int:event_id>/", AuditEventDetailView.as_view(), name="audit_event_detail"),
+        path(
+            "audit/security-report/",
+            SecurityReportView.as_view(),
+            name="audit_security_report",
+        ),
+        path(
+            "audit/event/<int:event_id>/",
+            AuditEventDetailView.as_view(),
+            name="audit_event_detail",
+        ),
         path("audit/meta/", AuditEventTypesView.as_view(), name="audit_event_types"),
     ]

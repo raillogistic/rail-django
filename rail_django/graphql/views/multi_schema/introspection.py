@@ -3,6 +3,8 @@ Introspection handling for MultiSchemaGraphQLView.
 """
 
 import logging
+import json
+from hashlib import sha256
 from typing import Any, Dict
 
 from django.conf import settings
@@ -58,14 +60,20 @@ class IntrospectionMixin:
             return False
         return True
 
-    def _get_introspection_cache_key(self, schema_name: str) -> str:
+    def _get_introspection_cache_key(self, schema_name: str, query: str,
+                                     variables=None, operation_name=None, user_id=None) -> str:
+        """Separate cached selections, variables, operations and authenticated users."""
         version = "0"
         try:
             from ....core.registry import schema_registry
             builder = schema_registry.get_schema_builder(schema_name)
             version = str(builder.get_schema_version())
         except Exception: pass
-        return f"rail_django:introspection:{schema_name}:{version}"
+        payload = json.dumps({"query": query, "variables": variables or {},
+                              "operation": operation_name, "user": user_id},
+                             sort_keys=True, separators=(",", ":"))
+        digest = sha256(payload.encode("utf-8")).hexdigest()
+        return f"rail_django:introspection:{schema_name}:{version}:{digest}"
 
     def _allow_introspection(self, request: HttpRequest, schema_info: dict[str, Any]) -> bool:
         schema_settings = _get_effective_schema_settings(schema_info)

@@ -244,7 +244,9 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
         if self._should_cache_introspection(request, query):
             schema_name = self._get_schema_name(request)
             if schema_name:
-                cache_key = self._get_introspection_cache_key(schema_name)
+                user = self._resolve_request_user(request)
+                cache_key = self._get_introspection_cache_key(
+                    schema_name, query, variables, operation_name, getattr(user, "pk", None))
                 try: cached = cache.get(cache_key)
                 except Exception as exc: logger.debug("Failed to read introspection cache: %s", exc); cached = None
                 if cached is not None: return ExecutionResult(data=cached, errors=None)

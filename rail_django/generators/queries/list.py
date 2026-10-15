@@ -44,9 +44,12 @@ def _is_schema_error(exc: Exception) -> bool:
     if isinstance(exc, (ProgrammingError, OperationalError)):
         return True
     # Unwrap chained exceptions
-    if exc.__cause__ and isinstance(exc.__cause__, (ProgrammingError, OperationalError)):
+    if exc.__cause__ and isinstance(
+        exc.__cause__, (ProgrammingError, OperationalError)
+    ):
         return True
     return False
+
 
 def _get_nested_filter_generator(schema_name: str):
     """Lazy import to avoid circular dependencies. Returns singleton instance."""
@@ -97,9 +100,7 @@ def generate_single_query(
                     id=id,
                 )
             instance = queryset.get(pk=id)
-            self._enforce_tenant_access(
-                instance, info, model, operation="retrieve"
-            )
+            self._enforce_tenant_access(instance, info, model, operation="retrieve")
             graphql_meta.ensure_operation_access(
                 "retrieve", info=info, instance=instance
             )
@@ -179,9 +180,7 @@ def generate_list_query(
             graphql_meta.ensure_operation_access("list", info=info)
             manager = getattr(model, manager_name)
             queryset = manager.all()
-            queryset = self._apply_tenant_scope(
-                queryset, info, model, operation="list"
-            )
+            queryset = self._apply_tenant_scope(queryset, info, model, operation="list")
             return queryset
 
         return DjangoFilterConnectionField(
@@ -193,9 +192,7 @@ def generate_list_query(
 
     # Standard list query with offset/limit pagination
     @optimize_query()
-    def resolver(
-        root: Any, info: graphene.ResolveInfo, **kwargs
-    ) -> List[models.Model]:
+    def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> List[models.Model]:
         # Permission checks
         self._enforce_model_permission(info, model, "list", graphql_meta)
         graphql_meta.ensure_operation_access("list", info=info)
@@ -203,9 +200,7 @@ def generate_list_query(
         # Get base queryset
         manager = getattr(model, manager_name)
         queryset = manager.all()
-        queryset = self._apply_tenant_scope(
-            queryset, info, model, operation="list"
-        )
+        queryset = self._apply_tenant_scope(queryset, info, model, operation="list")
         if graphql_meta.has_custom_resolver("list"):
             queryset = graphql_meta.apply_custom_resolver(
                 "list",
@@ -252,13 +247,18 @@ def generate_list_query(
 
         # Apply pagination
         if self.settings.enable_pagination:
-            offset = kwargs.get("offset") or 0
-            limit = kwargs.get("limit") or self.settings.default_page_size
+            offset = max(0, kwargs.get("offset") or 0)
+            requested_limit = kwargs.get("limit")
+            limit = (
+                self.settings.default_page_size
+                if requested_limit is None
+                else max(1, min(requested_limit, self.settings.max_page_size))
+            )
 
             if items is not None:
-                items = items[offset:offset + limit]
+                items = items[offset : offset + limit]
             else:
-                queryset = queryset[offset:offset + limit]
+                queryset = queryset[offset : offset + limit]
                 try:
                     items = list(queryset)
                 except Exception as eval_exc:
@@ -283,7 +283,10 @@ def generate_list_query(
                         )
                         if graphql_meta.has_custom_resolver("list"):
                             plain_qs = graphql_meta.apply_custom_resolver(
-                                "list", plain_qs, info, **kwargs,
+                                "list",
+                                plain_qs,
+                                info,
+                                **kwargs,
                             )
                         context_retry = QueryContext(
                             model=model,
@@ -309,10 +312,10 @@ def generate_list_query(
                             skip_count=False,
                         )
                         if items is None:
-                            plain_qs = plain_qs[offset:offset + limit]
+                            plain_qs = plain_qs[offset : offset + limit]
                             items = list(plain_qs)
                         else:
-                            items = items[offset:offset + limit]
+                            items = items[offset : offset + limit]
                     else:
                         raise
         elif items is None:

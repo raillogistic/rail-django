@@ -231,16 +231,10 @@ TWILIO_FROM_NUMBER = env('TWILIO_FROM_NUMBER', default='')
 # CONFIGURATION DE CACHE
 # =============================================================================
 
-# Note: Les fonctionnalités GraphQL internes n'exigent pas de cache externe.
-# Utilisez LocMemCache pendant le développement/test si votre projet a besoin
-# d'un cache pour d'autres composants. Les vérifications de santé utilisent
-# des caches en mémoire par processus avec TTL.
-
-# Dual-cache architecture for production:
-#   • "default" — LocMemCache: fast per-process in-memory cache for general use,
-#     JWT validation, user lookups, and query memoization. Zero I/O overhead.
-#   • "shared" — FileBasedCache: cross-process coordination for async exports,
-#     rate limiting, and other multi-worker state. Uses disk I/O but works without Redis.
+# The default cache must be shared by all Gunicorn workers because it stores
+# rate limits, async job state, and refresh-token rotation data. FileBasedCache
+# is the dependency-free single-host default; configure Redis for multi-host
+# deployments.
 CACHE_PATH = env('CACHE_PATH', default=str(BASE_DIR / 'cache'))
 CACHE_PATH = Path(CACHE_PATH)
 if not CACHE_PATH.is_absolute():
@@ -248,19 +242,21 @@ if not CACHE_PATH.is_absolute():
 CACHE_PATH = CACHE_PATH.resolve()
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'rail-django-locmem',
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(CACHE_PATH),
         'KEY_PREFIX': 'rail_django',
-        'TIMEOUT': 300,
-        'OPTIONS': {
-            'MAX_ENTRIES': 5000,
-        },
+        'TIMEOUT': 3600,
     },
     'shared': {
         'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
         'LOCATION': str(CACHE_PATH),
-        'KEY_PREFIX': 'rail_shared',
+        'KEY_PREFIX': 'rail_django',
         'TIMEOUT': 3600,
+    },
+    'local': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'rail-django-local',
+        'TIMEOUT': 300,
     },
 }
 

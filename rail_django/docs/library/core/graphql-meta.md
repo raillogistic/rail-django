@@ -43,6 +43,10 @@ class Product(models.Model):
 
 ## Available config classes
 
+`Fields.exclude` also applies to reverse FK and many-to-many accessors. Their
+generated lists, counts, statistics and nested inputs must remain absent from
+the schema, including fields DjangoObjectType would otherwise generate.
+
 Use these aliases from `GraphQLMeta` inside your inner meta class.
 
 | Alias | Dataclass | Purpose |

@@ -247,6 +247,28 @@ def test_table_rows_returns_paginated_items(monkeypatch):
     assert len(response["items"]) == 1
 
 
+def test_table_rows_reapply_custom_scope_before_count_and_pagination(monkeypatch):
+    """The same user and request cannot reuse rows after their scope changes."""
+    from rail_django.extensions.table.services import data_resolver
+    scope = [1]
+    monkeypatch.setattr(data_resolver, "resolve_table_model", lambda app, model: FakeModel)
+    monkeypatch.setattr(data_resolver, "get_table_permissions", lambda user, model: ALLOWED_TABLE_PERMISSIONS)
+    monkeypatch.setattr(data_resolver, "get_visible_table_fields", lambda user, model: (["id", "name"], set(), {}))
+    monkeypatch.setattr(data_resolver, "get_model_graphql_meta", lambda model: SimpleNamespace(
+        has_custom_resolver=lambda name: name == "list",
+        apply_custom_resolver=lambda name, qs, info: qs.filter(pk__in=scope),
+    ))
+    monkeypatch.setattr(data_resolver, "get_cache", lambda key: {"items": [{"id": 999}]})
+    request = {"app": "tests", "model": "TestCustomer", "pageSize": 1}
+    first = data_resolver.resolve_table_rows(request)
+    assert first["items"] == [{"id": 1, "name": "A"}]
+    assert first["pageInfo"]["totalCount"] == 1
+    scope[:] = [2]
+    second = data_resolver.resolve_table_rows(request)
+    assert second["items"] == [{"id": 2, "name": "B"}]
+    assert second["pageInfo"]["totalCount"] == 1
+
+
 def test_table_action_delete_removes_rows(monkeypatch):
     monkeypatch.setattr(
         "rail_django.extensions.table.services.action_executor.resolve_table_model",

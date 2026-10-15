@@ -1,6 +1,7 @@
 """
 Field-level filter applicator methods for regular fields, count, computed, array, and FTS filters.
 """
+
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -9,6 +10,7 @@ from typing import Any, Dict, Optional, Type
 from django.db import models
 from django.db.models import Count, Exists, F, OuterRef, Q
 from django.core.exceptions import FieldDoesNotExist
+from graphql import GraphQLError
 
 logger = logging.getLogger(__name__)
 DEFAULT_MAX_REGEX_LENGTH = 500
@@ -72,10 +74,14 @@ class FieldFilterApplicatorMixin:
                             non_matching = related_model.objects.filter(
                                 **{fk_field: OuterRef("pk")}
                             ).exclude(matching_q)
-                            has_children = related_model.objects.filter(**{fk_field: OuterRef("pk")})
+                            has_children = related_model.objects.filter(
+                                **{fk_field: OuterRef("pk")}
+                            )
                             return Q(Exists(has_children)) & ~Q(Exists(non_matching))
             except (FieldDoesNotExist, AttributeError, TypeError, ValueError) as e:
-                logger.debug(f"Could not build optimized _every filter for {base_field}: {e}")
+                logger.debug(
+                    f"Could not build optimized _every filter for {base_field}: {e}"
+                )
             relation_field = self._get_relation_field(model, base_field)
             related_model = getattr(relation_field, "related_model", None)
             return self._build_q_from_where(
@@ -97,7 +103,9 @@ class FieldFilterApplicatorMixin:
             )
 
         if field_name.endswith("_cond_agg"):
-            return self._build_conditional_aggregation_q(full_field_path[:-9], filter_value)
+            return self._build_conditional_aggregation_q(
+                full_field_path[:-9], filter_value
+            )
 
         if field_name.endswith("_agg"):
             return self._build_aggregation_q(full_field_path[:-4], filter_value)
@@ -107,6 +115,7 @@ class FieldFilterApplicatorMixin:
             field_obj = model._meta.get_field(field_name)
             try:
                 from django.contrib.postgres.fields import ArrayField
+
                 if isinstance(field_obj, ArrayField):
                     return self._build_array_field_q(full_field_path, filter_value)
             except ImportError:
@@ -152,18 +161,37 @@ class FieldFilterApplicatorMixin:
                 max_regex_len = DEFAULT_MAX_REGEX_LENGTH
                 reject_unsafe = True
                 if self.filtering_settings:
-                    max_regex_len = getattr(self.filtering_settings, "max_regex_length", max_regex_len)
-                    reject_unsafe = getattr(self.filtering_settings, "reject_unsafe_regex", True)
+                    max_regex_len = getattr(
+                        self.filtering_settings, "max_regex_length", max_regex_len
+                    )
+                    reject_unsafe = getattr(
+                        self.filtering_settings, "reject_unsafe_regex", True
+                    )
                 try:
-                    op_value = validate_regex_pattern(op_value, max_length=max_regex_len, check_redos=reject_unsafe)
+                    op_value = validate_regex_pattern(
+                        op_value, max_length=max_regex_len, check_redos=reject_unsafe
+                    )
                 except FilterSecurityError as e:
                     logger.warning(f"Rejected unsafe regex filter: {e}")
                     continue
 
-            if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
+            if (
+                lookup == "between"
+                and isinstance(op_value, list)
+                and len(op_value) == 2
+            ):
                 q &= Q(**{f"{full_field_path}__gte": op_value[0]})
                 q &= Q(**{f"{full_field_path}__lte": op_value[1]})
-            elif lookup in ("today", "yesterday", "this_week", "past_week", "this_month", "past_month", "this_year", "past_year"):
+            elif lookup in (
+                "today",
+                "yesterday",
+                "this_week",
+                "past_week",
+                "this_month",
+                "past_month",
+                "this_year",
+                "past_year",
+            ):
                 if op_value:
                     date_q = self._build_temporal_q(full_field_path, lookup)
                     if date_q:
@@ -203,6 +231,21 @@ class FieldFilterApplicatorMixin:
             self._freeze_filter_value(filter_value),
         )
         if cache_key not in cache:
+            max_results = getattr(
+                self.filtering_settings,
+                "max_property_filtering_results",
+                2000,
+            )
+            candidate_count = property_context.get("candidate_count")
+            if candidate_count is None:
+                candidate_count = base_queryset.count()
+                property_context["candidate_count"] = candidate_count
+            if candidate_count > max_results:
+                raise GraphQLError(
+                    f"Property filters are limited to {max_results} candidate rows. "
+                    "Use a database field or computed filter for larger datasets."
+                )
+
             matching_ids: list[Any] = []
             for instance in base_queryset:
                 try:
@@ -363,7 +406,9 @@ class FieldFilterApplicatorMixin:
             if value is None:
                 return False
             try:
-                return re.search(str(operand), str(value), flags=re.IGNORECASE) is not None
+                return (
+                    re.search(str(operand), str(value), flags=re.IGNORECASE) is not None
+                )
             except re.error:
                 return False
         if lookup == "between":
@@ -455,7 +500,11 @@ class FieldFilterApplicatorMixin:
             lookup = self._get_lookup_for_operator(op)
             if not lookup:
                 continue
-            if lookup == "between" and isinstance(op_value, list) and len(op_value) == 2:
+            if (
+                lookup == "between"
+                and isinstance(op_value, list)
+                and len(op_value) == 2
+            ):
                 q &= Q(**{f"{field_path}__gte": op_value[0]})
                 q &= Q(**{f"{field_path}__lte": op_value[1]})
             elif lookup == "in":
@@ -499,9 +548,10 @@ class FieldFilterApplicatorMixin:
         return queryset
 
     def _collect_count_annotations(
-        self, where_input: Dict[str, Any],
+        self,
+        where_input: Dict[str, Any],
         annotations: Optional[Dict[str, str]] = None,
-        model: Optional[Type[models.Model]] = None
+        model: Optional[Type[models.Model]] = None,
     ) -> Dict[str, str]:
         """Collect all count annotations needed."""
         if annotations is None:
@@ -526,11 +576,15 @@ class FieldFilterApplicatorMixin:
         return annotations
 
     def prepare_queryset_for_computed_filters(
-        self, queryset: models.QuerySet, where_input: Dict[str, Any], model: Type[models.Model]
+        self,
+        queryset: models.QuerySet,
+        where_input: Dict[str, Any],
+        model: Type[models.Model],
     ) -> models.QuerySet:
         """Prepare queryset with annotations for computed fields."""
         try:
             from ....core.meta import get_model_graphql_meta
+
             graphql_meta = get_model_graphql_meta(model)
             computed_defs = getattr(graphql_meta, "computed_filters", {})
         except Exception:
@@ -579,7 +633,9 @@ class FieldFilterApplicatorMixin:
         """Build full-text search Q object and annotations."""
         from django.db import connection
 
-        query_text = search_input.get("query") if isinstance(search_input, dict) else None
+        query_text = (
+            search_input.get("query") if isinstance(search_input, dict) else None
+        )
         if not query_text:
             return Q(), {}
 
@@ -602,7 +658,9 @@ class FieldFilterApplicatorMixin:
             self.filtering_settings.fts_config if self.filtering_settings else "english"
         )
         search_type = search_input.get("search_type") or (
-            self.filtering_settings.fts_search_type if self.filtering_settings else "websearch"
+            self.filtering_settings.fts_search_type
+            if self.filtering_settings
+            else "websearch"
         )
         if search_type is not None and not isinstance(search_type, str):
             search_type = getattr(search_type, "value", str(search_type))
@@ -612,10 +670,18 @@ class FieldFilterApplicatorMixin:
 
         if connection.vendor == "postgresql":
             try:
-                from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+                from django.contrib.postgres.search import (
+                    SearchQuery,
+                    SearchRank,
+                    SearchVector,
+                )
+
                 vector = SearchVector(*fields, config=config)
                 query = SearchQuery(query_text, config=config, search_type=search_type)
-                annotations = {"_search_vector": vector, "_search_rank": SearchRank(vector, query)}
+                annotations = {
+                    "_search_vector": vector,
+                    "_search_rank": SearchRank(vector, query),
+                }
                 q = Q(_search_vector=query)
                 if rank_threshold is not None:
                     q &= Q(_search_rank__gte=rank_threshold)
@@ -626,7 +692,9 @@ class FieldFilterApplicatorMixin:
         fallback_q = Q()
         for field_path in fields:
             field = self._get_quick_mixin()._get_field_from_path(model, field_path)
-            if field and isinstance(field, (models.CharField, models.TextField, models.EmailField)):
+            if field and isinstance(
+                field, (models.CharField, models.TextField, models.EmailField)
+            ):
                 fallback_q |= Q(**{f"{field_path}__icontains": query_text})
         return fallback_q, {}
 
@@ -659,7 +727,14 @@ class FieldFilterApplicatorMixin:
         if offset is not None:
             right_expr = right_expr + offset
 
-        operator_map = {"eq": "exact", "neq": "exact", "gt": "gt", "gte": "gte", "lt": "lt", "lte": "lte"}
+        operator_map = {
+            "eq": "exact",
+            "neq": "exact",
+            "gt": "gt",
+            "gte": "gte",
+            "lt": "lt",
+            "lte": "lte",
+        }
         lookup = operator_map.get(operator)
         if not lookup:
             return q

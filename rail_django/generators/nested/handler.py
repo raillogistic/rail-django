@@ -19,7 +19,6 @@ from ...core.meta import get_model_graphql_meta
 from ...core.services import get_query_optimizer
 from ...core.security import get_authz_manager, get_input_validator
 from ...core.settings import MutationGeneratorSettings
-from ..mutations.exceptions import NestedOperationDisabledError
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +87,8 @@ class NestedOperationHandlerBase:
         self, model, field_name: str, operation: str
     ) -> None:
         if not self._is_relation_operation_allowed(model, field_name, operation):
+            from ..mutations.exceptions import NestedOperationDisabledError
+
             raise NestedOperationDisabledError(model.__name__, field_name)
 
     def _ensure_operation_access(

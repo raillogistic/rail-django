@@ -31,7 +31,9 @@ class Migration(migrations.Migration):
                 ("password", models.CharField(max_length=128, verbose_name="password")),
                 (
                     "last_login",
-                    models.DateTimeField(blank=True, null=True, verbose_name="last login"),
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="last login"
+                    ),
                 ),
                 (
                     "is_superuser",
@@ -44,17 +46,36 @@ class Migration(migrations.Migration):
                 (
                     "username",
                     models.CharField(
-                        error_messages={"unique": "A user with that username already exists."},
+                        error_messages={
+                            "unique": "A user with that username already exists."
+                        },
                         help_text="Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
                         max_length=150,
                         unique=True,
-                        validators=[django.contrib.auth.validators.UnicodeUsernameValidator()],
+                        validators=[
+                            django.contrib.auth.validators.UnicodeUsernameValidator()
+                        ],
                         verbose_name="username",
                     ),
                 ),
-                ("first_name", models.CharField(blank=True, max_length=150, verbose_name="first name")),
-                ("last_name", models.CharField(blank=True, max_length=150, verbose_name="last name")),
-                ("email", models.EmailField(blank=True, max_length=254, verbose_name="email address")),
+                (
+                    "first_name",
+                    models.CharField(
+                        blank=True, max_length=150, verbose_name="first name"
+                    ),
+                ),
+                (
+                    "last_name",
+                    models.CharField(
+                        blank=True, max_length=150, verbose_name="last name"
+                    ),
+                ),
+                (
+                    "email",
+                    models.EmailField(
+                        blank=True, max_length=254, verbose_name="email address"
+                    ),
+                ),
                 (
                     "is_staff",
                     models.BooleanField(
@@ -73,7 +94,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "date_joined",
-                    models.DateTimeField(default=django.utils.timezone.now, verbose_name="date joined"),
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, verbose_name="date joined"
+                    ),
                 ),
                 (
                     "groups",
@@ -119,10 +142,11 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
-                ("code", models.CharField(max_length=6)),
+                ("code", models.CharField(max_length=128)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("expires_at", models.DateTimeField()),
                 ("is_used", models.BooleanField(default=False)),
+                ("failed_attempts", models.PositiveSmallIntegerField(default=0)),
                 (
                     "user",
                     models.ForeignKey(
@@ -132,6 +156,14 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
+            options={
+                "indexes": [
+                    models.Index(
+                        fields=["user", "is_used", "expires_at"],
+                        name="users_passw_user_id_a9295d_idx",
+                    )
+                ]
+            },
         ),
         migrations.CreateModel(
             name="UserProfile",
@@ -146,8 +178,18 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("bio", models.TextField(blank=True, help_text="User biography")),
-                ("birth_date", models.DateField(blank=True, help_text="User birth date", null=True)),
-                ("phone_number", models.CharField(blank=True, help_text="User phone number", max_length=20)),
+                (
+                    "birth_date",
+                    models.DateField(
+                        blank=True, help_text="User birth date", null=True
+                    ),
+                ),
+                (
+                    "phone_number",
+                    models.CharField(
+                        blank=True, help_text="User phone number", max_length=20
+                    ),
+                ),
                 (
                     "user",
                     models.OneToOneField(
@@ -174,15 +216,44 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
-                ("theme", models.CharField(default="default", help_text="UI Theme", max_length=50)),
-                ("mode", models.CharField(default="light", help_text="UI Mode (light/dark)", max_length=20)),
-                ("layout", models.CharField(default="vertical", help_text="UI Layout", max_length=20)),
+                (
+                    "theme",
+                    models.CharField(
+                        default="default", help_text="UI Theme", max_length=50
+                    ),
+                ),
+                (
+                    "mode",
+                    models.CharField(
+                        default="light", help_text="UI Mode (light/dark)", max_length=20
+                    ),
+                ),
+                (
+                    "layout",
+                    models.CharField(
+                        default="vertical", help_text="UI Layout", max_length=20
+                    ),
+                ),
                 (
                     "sidebar_collapse_mode",
-                    models.CharField(default="offcanvas", help_text="Sidebar collapse mode", max_length=20),
+                    models.CharField(
+                        default="offcanvas",
+                        help_text="Sidebar collapse mode",
+                        max_length=20,
+                    ),
                 ),
-                ("font_size", models.CharField(default="md", help_text="Font size", max_length=10)),
-                ("font_family", models.CharField(default="inter", help_text="Font family", max_length=50)),
+                (
+                    "font_size",
+                    models.CharField(
+                        default="md", help_text="Font size", max_length=10
+                    ),
+                ),
+                (
+                    "font_family",
+                    models.CharField(
+                        default="inter", help_text="Font family", max_length=50
+                    ),
+                ),
                 (
                     "user",
                     models.OneToOneField(

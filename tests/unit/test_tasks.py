@@ -6,6 +6,7 @@ import graphene
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from rail_django.extensions.tasks import TaskExecution, task_mutation
 from rail_django.testing import RailGraphQLTestClient, build_schema
@@ -44,6 +45,10 @@ class TestTaskOrchestration(TestCase):
                 "enabled": True,
                 "backend": "sync",
                 "emit_subscriptions": False,
+            },
+            "query_settings": {
+                "default_page_size": 1,
+                "max_page_size": 2,
             },
         }
         harness = build_schema(
@@ -113,3 +118,29 @@ class TestTaskOrchestration(TestCase):
         other_result = other_client.execute(query)
         self.assertIsNotNone(other_result.get("errors"))
 
+    def test_task_list_filters_in_database_and_caps_limit(self):
+        for index in range(3):
+            TaskExecution.objects.create(
+                name=f"visible-{index}",
+                owner_id=str(self.user.id),
+                metadata={"schema_name": "task_test"},
+            )
+        TaskExecution.objects.create(
+            name="expired",
+            owner_id=str(self.user.id),
+            metadata={"schema_name": "task_test"},
+            expires_at=timezone.now(),
+        )
+        TaskExecution.objects.create(
+            name="other-schema",
+            owner_id=str(self.user.id),
+            metadata={"schema_name": "other"},
+        )
+
+        result = self._client(self.user).execute("query { tasks(limit: 999) { name } }")
+
+        self.assertIsNone(result.get("errors"))
+        self.assertEqual(len(result["data"]["tasks"]), 2)
+        self.assertTrue(
+            all(task["name"].startswith("visible-") for task in result["data"]["tasks"])
+        )

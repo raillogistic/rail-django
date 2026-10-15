@@ -24,6 +24,6 @@ class UserSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(PasswordResetOTP)
 class PasswordResetOTPAdmin(admin.ModelAdmin):
-    list_display = ("user", "code", "expires_at", "is_used")
-    search_fields = ("user__username", "user__email", "code")
+    list_display = ("user", "expires_at", "is_used", "failed_attempts")
+    search_fields = ("user__username", "user__email")
     list_filter = ("is_used",)

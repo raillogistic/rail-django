@@ -79,13 +79,20 @@ def has_table_permission(user: Any, model_cls: type[models.Model], action: str) 
 
 
 def get_table_permissions(user: Any, model_cls: type[models.Model]) -> TablePermissionSnapshot:
-    can_view = has_table_permission(user, model_cls, "view")
+    def allowed(action: str) -> bool:
+        """Model operation guards may restrict, but never grant, table permissions."""
+        operation = "list" if action == "view" else action
+        return has_table_permission(user, model_cls, action) and _graphql_guard_allows_table_read(
+            user, model_cls, operation=operation
+        ) is not False
+
+    can_view = allowed("view")
     return TablePermissionSnapshot(
         can_view=can_view,
-        can_create=has_table_permission(user, model_cls, "create"),
-        can_update=has_table_permission(user, model_cls, "update"),
-        can_delete=has_table_permission(user, model_cls, "delete"),
-        can_export=has_table_permission(user, model_cls, "export") and can_view,
+        can_create=allowed("create"),
+        can_update=allowed("update"),
+        can_delete=allowed("delete"),
+        can_export=allowed("export") and can_view,
     )
 
 

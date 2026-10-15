@@ -12,6 +12,13 @@ from ..security.access import (
 
 def preview_bulk_edit(app: str, model: str, row_ids: list, changes: dict, *, user=None) -> dict:
     model_cls = resolve_table_model(app, model)
+    if not get_table_permissions(user, model_cls).can_update:
+        return {
+            "ok": False,
+            "affectedCount": 0,
+            "previewChanges": [],
+            "errors": [to_error(TableErrorCode.PERMISSION, "Update permission required")],
+        }
     qs = model_cls.objects.filter(pk__in=row_ids)
     writable_fields = get_writable_table_fields(user, model_cls)
     previews = []

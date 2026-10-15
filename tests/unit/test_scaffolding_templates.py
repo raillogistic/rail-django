@@ -1,4 +1,4 @@
-"""Unit tests for scaffolded deployment templates."""
+"""Unit tests for project scaffolding templates."""
 
 from importlib import resources
 
@@ -54,7 +54,9 @@ def test_env_prod_sets_asgi_runtime_defaults() -> None:
     assert "ASGI_PORT=8000" in text
 
 
-def test_production_template_disables_persistent_database_connections_for_asgi() -> None:
+def test_production_template_disables_persistent_database_connections_for_asgi() -> (
+    None
+):
     settings_text = _project_template_file("root", "settings", "production.py-tpl")
     env_text = _project_template_file(".env.prod-tpl")
 
@@ -62,76 +64,15 @@ def test_production_template_disables_persistent_database_connections_for_asgi()
     assert "CONN_MAX_AGE=0" in env_text
 
 
-def test_env_prod_exposes_backup_retention_override() -> None:
-    text = _project_template_file(".env.prod-tpl")
-
-    assert "BACKUP_RETENTION_DAYS=30" in text
-
-
 def test_entrypoint_defaults_to_asgi_server_with_wsgi_fallback() -> None:
-    text = _project_template_file("deploy", "docker", "entrypoint.sh")
+    text = _project_template_file("entrypoint.sh")
 
-    assert "SERVER_MODE=${DJANGO_SERVER_MODE:-asgi}" in text
-    assert 'if [ "$SERVER_MODE" = "wsgi" ]; then' in text
-    assert "exec daphne \\" in text
-
-
-def test_backup_script_does_not_use_pipeline_success_for_pg_dump() -> None:
-    text = _project_template_file("deploy", "backup.sh")
-
-    assert '--dbname="$DATABASE_URL"' in text
-    assert '--file="$BACKUP_FILE"' in text
-    assert "--format=custom" in text
-    assert "| gzip >" not in text
-
-
-def test_backup_script_checks_pg_dump_major_against_server_major() -> None:
-    text = _project_template_file("deploy", "backup.sh")
-
-    assert "SHOW server_version_num;" in text
-    assert "pg_dump major version (" in text
-    assert "DATABASE_URL is required in .env.prod." in text
-
-
-def test_compose_healthcheck_uses_http_readiness_probe() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert "/health/ready/" in text
-    assert "socket.socket()" not in text
-
-
-def test_compose_does_not_include_backup_service() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert "\n  backup:\n" not in text
-
-
-def test_compose_exposes_nginx_on_port_8000_only() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert '- "8000:8000"' in text
-    assert '- "80:80"' not in text
-    assert '- "443:443"' not in text
-
-
-def test_compose_mounts_cache_directory_for_shared_runtime_cache() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert "${CACHE_PATH:-../../cache}:/home/app/web/cache" in text
-
-
-def test_compose_builds_nginx_image_from_scaffold_template() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert "dockerfile: deploy/nginx/Dockerfile" in text
-    assert "../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" not in text
-    assert "../nginx/certs:/etc/nginx/certs:ro" not in text
-
-
-def test_compose_uses_env_prod_file() -> None:
-    text = _project_template_file("deploy", "docker", "docker-compose.yml")
-
-    assert "../../.env.prod" in text
+    assert '${DJANGO_SERVER_MODE:-asgi}" = "wsgi"' in text
+    assert "root.wsgi:application" in text
+    assert "root.asgi:application" in text
+    assert "uvicorn_worker.UvicornWorker" in text
+    assert "${RUN_MIGRATIONS:-false}" in text
+    assert "${RUN_COLLECTSTATIC:-false}" in text
 
 
 def test_env_dev_uses_development_settings_module() -> None:
@@ -139,75 +80,6 @@ def test_env_dev_uses_development_settings_module() -> None:
 
     assert "DJANGO_DEBUG=True" in text
     assert "DJANGO_SETTINGS_MODULE=root.settings.development" in text
-
-
-def test_deploy_script_runs_schema_tasks_before_up() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    migrate_cmd = "run --rm --entrypoint python web manage.py migrate"
-    up_cmd = '"${COMPOSE[@]}" -f "$COMPOSE_FILE" up -d'
-    collectstatic_cmd = (
-        "run --rm --entrypoint python web manage.py collectstatic --noinput"
-    )
-
-    assert migrate_cmd in text
-    assert collectstatic_cmd in text
-    assert up_cmd in text
-    assert text.index(migrate_cmd) < text.index(up_cmd)
-    assert text.index(collectstatic_cmd) < text.index(up_cmd)
-
-
-def test_deploy_script_validates_runtime_storage_before_schema_tasks() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    validation_step = 'note "Validating runtime storage permissions..."'
-    migrate_cmd = "run --rm --entrypoint python web manage.py migrate"
-
-    assert "ensure_runtime_mount_writable" in text
-    assert "/home/app/web/mediafiles" in text
-    assert "/home/app/web/logs" in text
-    assert "/home/app/web/cache" in text
-    assert validation_step in text
-    assert text.index(validation_step) < text.index(migrate_cmd)
-
-
-def test_deploy_script_waits_for_https_readiness_probe_via_nginx() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    assert "RAIL_READINESS_HOST" in text
-    assert '"https://nginx:8000/health/ready/"' in text
-    assert 'headers={"Host": host}' in text
-    assert (
-        'candidates = [host] if host == "localhost" else [host, "localhost"]'
-        not in text
-    )
-    assert "ssl._create_unverified_context()" in text
-    assert "print('ready')" not in text
-
-
-def test_deploy_script_non_interactive_superuser_is_idempotent() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    assert "Ensuring superuser exists (non-interactive)" in text
-    assert "get_or_create" in text
-    assert "check_password" in text
-
-
-def test_deploy_script_ensures_cache_directory_exists() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    assert 'cache_path="$(read_env CACHE_PATH)"' in text
-    assert 'ensure_dir "$SCRIPT_DIR/docker/$cache_path"' in text
-
-
-def test_deploy_script_bootstraps_secret_and_rejects_weak_superuser_password() -> None:
-    text = _project_template_file("deploy", "deploy.sh")
-
-    assert 'if is_insecure_secret "$secret_key"; then' in text
-    assert "generating a secure value in .env.prod" in text
-    assert 'set_env_value "DJANGO_SECRET_KEY" "$secret_key"' in text
-    assert 'if is_insecure_secret "$su_password"; then' in text
-    assert "DJANGO_SUPERUSER_PASSWORD appears to use a placeholder" in text
 
 
 def test_project_template_gitignore_covers_runtime_artifacts() -> None:
@@ -236,7 +108,9 @@ def test_base_settings_allow_csrf_trusted_origins_override() -> None:
     assert "default=CORS_ALLOWED_ORIGINS" in text
 
 
-def test_users_settings_template_allows_owner_updates_without_model_permissions() -> None:
+def test_users_settings_template_allows_owner_updates_without_model_permissions() -> (
+    None
+):
     text = _project_template_file("apps", "users", "models.py")
 
     assert "class GraphQLMeta(GraphQLMetaBase):" in text
@@ -250,62 +124,14 @@ def test_users_access_control_template_has_own_settings_update_guard() -> None:
     text = _project_template_file("apps", "users", "access_control.py")
 
     assert "def can_update_own_settings" in text
-    assert 'deny_message="Operation \'update\' is not permitted on UserSettings."' in text
+    assert (
+        "deny_message=\"Operation 'update' is not permitted on UserSettings.\"" in text
+    )
     assert "condition=can_update_own_settings" in text
 
 
-def test_project_template_dockerignore_keeps_nginx_tls_assets_for_build() -> None:
-    text = _project_template_file(".dockerignore")
-
-    assert "deploy/nginx/certs/*.crt" not in text
-    assert "deploy/nginx/certs/*.key" not in text
-
-
-def test_nginx_template_restricts_sensitive_health_diagnostics() -> None:
-    text = _project_template_file("deploy", "nginx", "default.conf")
-
-    assert "listen 8000 ssl;" in text
-    assert "listen 443 ssl;" not in text
-    assert "listen 80;" not in text
-    assert "location ~ ^/health/(api|metrics|components|history)/?$ {" in text
-    assert "location ~ ^/api/v1/health/?$ {" in text
-    assert "allow 127.0.0.1;" in text
-    assert "deny all;" in text
-
-
-def test_nginx_dockerfile_embeds_config_and_tls_assets() -> None:
-    text = _project_template_file("deploy", "nginx", "Dockerfile")
-
-    assert "FROM nginx:1.25-alpine" in text
-    assert "COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf" in text
-    assert "COPY deploy/nginx/certs/ /etc/nginx/certs/" in text
-
-
-def test_deploy_usage_manual_steps_run_schema_tasks_before_starting_services() -> None:
-    text = _project_template_file("deploy", "USAGE.md")
-
-    build_cmd = "docker-compose -f deploy/docker/docker-compose.yml build web nginx"
-    migrate_cmd = (
-        "docker-compose -f deploy/docker/docker-compose.yml run --rm "
-        "--entrypoint python web manage.py migrate"
-    )
-    collectstatic_cmd = (
-        "docker-compose -f deploy/docker/docker-compose.yml run --rm "
-        "--entrypoint python web manage.py collectstatic --no-input"
-    )
-    up_cmd = "docker-compose -f deploy/docker/docker-compose.yml up -d"
-
-    assert build_cmd in text
-    assert migrate_cmd in text
-    assert collectstatic_cmd in text
-    assert up_cmd in text
-    assert text.index(build_cmd) < text.index(migrate_cmd)
-    assert text.index(migrate_cmd) < text.index(collectstatic_cmd)
-    assert text.index(collectstatic_cmd) < text.index(up_cmd)
-
-
 def test_runtime_dockerfile_excludes_dev_editors_and_libffi_dev() -> None:
-    text = _project_template_file("deploy", "docker", "Dockerfile")
+    text = _project_template_file("Dockerfile.prod")
 
     assert "libffi8" in text
     assert "libffi-dev" not in text
@@ -418,3 +244,25 @@ def test_users_mutation_retries_locked_sqlite_writes_for_table_config_upsert() -
     assert "def _upsert_table_config_with_retry" in text
     assert "database is locked" in text
     assert "Database is busy, please retry in a moment." in text
+
+
+def test_users_password_reset_stores_only_hashed_bounded_codes() -> None:
+    mutations = _project_template_file("apps", "users", "mutations.py")
+    model = _project_template_file("apps", "users", "models.py")
+    admin = _project_template_file("apps", "users", "admin.py")
+
+    assert "secrets.randbelow" in mutations
+    assert "make_password(code)" in mutations
+    assert "check_password(code, otp.code)" in mutations
+    assert "select_for_update()" in mutations
+    assert "PASSWORD_RESET_MAX_ATTEMPTS" in mutations
+    assert "failed_attempts = models.PositiveSmallIntegerField" in model
+    assert '"code"' not in admin.split("class PasswordResetOTPAdmin", 1)[1]
+
+
+def test_production_default_cache_is_shared_between_workers() -> None:
+    text = _project_template_file("root", "settings", "production.py-tpl")
+    default_cache = text.split("'default':", 1)[1].split("'shared':", 1)[0]
+
+    assert "FileBasedCache" in default_cache
+    assert "LocMemCache" not in default_cache

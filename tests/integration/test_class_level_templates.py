@@ -85,7 +85,7 @@ def test_model_templates_query_detects_class_level_excel_template(gql_client):
     from test_app.models import Product
 
     original_excel_templates = excel_template_registry.all()
-    original_excel_meta = getattr(Product, "_excel_template_meta", None)
+    original_excel_meta = getattr(Product, "_excel_template_metas", None)
 
     # Decorate the class
     model_excel_template(
@@ -119,10 +119,10 @@ def test_model_templates_query_detects_class_level_excel_template(gql_client):
 
     finally:
         if original_excel_meta is None:
-            if hasattr(Product, "_excel_template_meta"):
-                delattr(Product, "_excel_template_meta")
+            if hasattr(Product, "_excel_template_metas"):
+                delattr(Product, "_excel_template_metas")
         else:
-            Product._excel_template_meta = original_excel_meta
+            Product._excel_template_metas = original_excel_meta
 
         excel_template_registry._templates = dict(original_excel_templates)
         invalidate_metadata_cache(app="test_app", model="Product")

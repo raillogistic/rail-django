@@ -359,7 +359,8 @@ def convert_method_to_mutation(
 
     # Preserve decorator metadata
     mutation_attrs = {
-        "__doc__": method.__doc__ or f"Execute {method_name} on {model_name}"
+        "__doc__": method.__doc__ or f"Execute {method_name} on {model_name}",
+        "_rail_method_input_fields": frozenset(signature.parameters) - {"self", _CONTEXT_PARAMETER},
     }
 
     # Check for business_logic decorator metadata
@@ -406,8 +407,6 @@ def generate_method_mutation(
     # Create input type for method arguments
     if custom_input_type:
         input_type = custom_input_type
-    elif action_kind == "confirm":
-        input_type = None
     else:
         input_fields = {}
         for param_name, param in signature.parameters.items():
@@ -589,7 +588,8 @@ def generate_method_mutation(
     mutation_class = type(
         mutation_name,
         (MethodMutation,),
-        {"__doc__": description or f"Execute {method_name} on {model_name}"},
+        {"__doc__": description or f"Execute {method_name} on {model_name}",
+         "_rail_method_input_fields": frozenset(signature.parameters) - {"self", _CONTEXT_PARAMETER}},
     )
 
     # Add business logic metadata

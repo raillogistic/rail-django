@@ -409,6 +409,11 @@ Notes:
 
 ## Introspection and GraphiQL
 
+Introspection cache entries are scoped to the schema version, exact query,
+variables, selected operation and authenticated user. Authorization is checked
+before a cache lookup. A `__type` response must never be reused for another
+selection or type name.
+
 Production should disable introspection and GraphiQL:
 
 ```python
@@ -504,6 +509,15 @@ signature in the `X-Rail-Signature` header.
 
 If you use `auth_token_path` to fetch tokens, treat auth secrets and tokens as
 sensitive data and rotate them regularly.
+
+## Generic table authorization
+
+Table v3 permissions are restricted by the model's operation guards, including
+bulk edits, previews, deletion and export. Bootstrap checks current list access
+before returning cached metadata. Row queries apply a custom `list` resolver
+before counting and pagination. Models with a custom list resolver do not reuse
+table row or bootstrap caches, so changes to membership-based scopes take effect
+on the next request.
 
 ## Recommended Django security settings
 

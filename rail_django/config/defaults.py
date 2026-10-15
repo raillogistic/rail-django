@@ -70,6 +70,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "max_filter_depth": 5,
         "max_filter_clauses": 50,
         "max_regex_length": 500,
+        "max_property_filtering_results": 2000,
         "reject_unsafe_regex": True,
     },
     "mutation_settings": {
@@ -195,8 +196,7 @@ LIBRARY_DEFAULTS: dict[str, Any] = {
         "input_failure_severity": "high",
         "input_pattern_scan_limit": 10000,
     },
-    "middleware_settings": {
-    },
+    "middleware_settings": {},
     "plugin_settings": {
         "enable_schema_hooks": True,
         "enable_execution_hooks": True,
@@ -379,6 +379,17 @@ def validate_settings(settings: dict[str, Any]) -> list[str]:
     if default_page_size and max_page_size and default_page_size > max_page_size:
         errors.append(
             "query_settings.default_page_size cannot be greater than max_page_size"
+        )
+
+    max_property_filtering_results = settings.get("filtering_settings", {}).get(
+        "max_property_filtering_results"
+    )
+    if (
+        max_property_filtering_results is not None
+        and max_property_filtering_results <= 0
+    ):
+        errors.append(
+            "filtering_settings.max_property_filtering_results must be greater than 0"
         )
 
     return errors

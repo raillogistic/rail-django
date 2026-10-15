@@ -883,10 +883,10 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
         )
 
         def make_custom_field_resolver(method, accepts_info):
-            def resolver(self, info):
+            def resolver(self, info, **kwargs):
                 if accepts_info:
-                    return method(self, info)
-                return method(self)
+                    return method(self, info, **kwargs)
+                return method(self, **kwargs)
 
             return resolver
 

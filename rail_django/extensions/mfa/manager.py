@@ -4,10 +4,13 @@ MFA Manager implementation.
 
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from datetime import timedelta
+from typing import TYPE_CHECKING, Optional
 
 from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
+from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone as django_timezone
 
 from .models import MFADevice, MFABackupCode, TrustedDevice
@@ -34,8 +37,7 @@ class MFAManager:
         self.sms_token_validity = getattr(
             settings, "MFA_SMS_TOKEN_VALIDITY", 300
         )  # 5 minutes
-        # In-memory SMS token store: {"userId_deviceId": (token, expires_ts)}
-        self._sms_tokens: dict[str, tuple[str, float]] = {}
+        self.sms_max_attempts = getattr(settings, "MFA_SMS_MAX_ATTEMPTS", 5)
 
     def setup_totp_device(
         self, user: "AbstractUser", device_name: str
@@ -80,7 +82,7 @@ class MFAManager:
         Returns:
             True si l'activation a réussi
         """
-        if device.verify_token(token):
+        if device.verify_token(token, valid_window=self.totp_validity_window):
             device.is_active = True
             device.last_used = django_timezone.now()
             device.save()
@@ -136,15 +138,15 @@ class MFAManager:
             [str(secrets.randbelow(10)) for _ in range(self.sms_token_length)]
         )
 
-        # Stocker le token en mémoire (TTL)
-        cache_key = f"sms_token_{device.user.id}_{device.id}"
-        self._sms_tokens[cache_key] = (
-            token,
-            django_timezone.now().timestamp() + float(self.sms_token_validity),
-        )
+        if not self._send_sms(device.phone_number, token):
+            return False
 
-        # Envoyer le SMS (implémentation dépendante du fournisseur)
-        return self._send_sms(device.phone_number, token)
+        cache.set(
+            self._sms_cache_key(device.user_id, device.id),
+            {"token": token, "attempts": 0},
+            timeout=self.sms_token_validity,
+        )
+        return True
 
     def verify_mfa_token(
         self, user: "AbstractUser", token: str, device_id: Optional[int] = None
@@ -160,28 +162,38 @@ class MFAManager:
         Returns:
             True si le token est valide
         """
-        devices = user.mfa_devices.filter(is_active=True)
+        if (
+            len(token) == 8
+            and token.isdigit()
+            and self._consume_backup_code(user, token, device_id)
+        ):
+            return True
 
+        devices = user.mfa_devices.filter(is_active=True)
         if device_id:
             devices = devices.filter(id=device_id)
 
         for device in devices:
             if device.device_type == "sms":
-                key = f"sms_token_{user.id}_{device.id}"
-                stored = self._sms_tokens.get(key)
-                if stored:
-                    stored_token, expires_ts = stored
-                    if (
-                        django_timezone.now().timestamp() <= expires_ts
-                        and stored_token == token
-                    ):
-                        # consume token
-                        self._sms_tokens.pop(key, None)
-                        device.last_used = django_timezone.now()
-                        device.save()
-                        return True
-            # Fallback to device's verify for non-SMS or if no stored token
-            if device.verify_token(token):
+                key = self._sms_cache_key(user.id, device.id)
+                stored = cache.get(key)
+                if not stored:
+                    continue
+                if secrets.compare_digest(stored["token"], token):
+                    cache.delete(key)
+                    device.last_used = django_timezone.now()
+                    device.save()
+                    return True
+                stored["attempts"] += 1
+                if stored["attempts"] >= self.sms_max_attempts:
+                    cache.delete(key)
+                else:
+                    cache.set(key, stored, timeout=self.sms_token_validity)
+                continue
+
+            if device.device_type == "totp" and device.verify_token(
+                token, valid_window=self.totp_validity_window
+            ):
                 device.last_used = django_timezone.now()
                 device.save()
                 return True
@@ -300,15 +312,8 @@ class MFAManager:
         Returns:
             Liste des codes de récupération
         """
-        backup_device = user.mfa_devices.filter(
-            device_type="backup", is_active=True
-        ).first()
-
-        if not backup_device:
-            return []
-
-        backup_codes = backup_device.backup_codes.filter(is_used=False)
-        return [code.code for code in backup_codes]
+        # Backup codes are deliberately shown only when generated.
+        return []
 
     def regenerate_backup_codes(self, user: "AbstractUser") -> list[str]:
         """
@@ -354,9 +359,35 @@ class MFAManager:
             code = "".join([str(secrets.randbelow(10)) for _ in range(8)])
             codes.append(code)
 
-            MFABackupCode.objects.create(device=device, code=code)
+            MFABackupCode.objects.create(device=device, code=make_password(code))
 
         return codes
+
+    @staticmethod
+    def _sms_cache_key(user_id: int, device_id: int) -> str:
+        return f"mfa:sms:{user_id}:{device_id}"
+
+    def _consume_backup_code(
+        self, user: "AbstractUser", token: str, device_id: Optional[int]
+    ) -> bool:
+        with transaction.atomic():
+            codes = MFABackupCode.objects.select_for_update().filter(
+                device__user=user,
+                device__is_active=True,
+                is_used=False,
+            )
+            if device_id:
+                codes = codes.filter(device_id=device_id)
+
+            for backup_code in codes:
+                if check_password(token, backup_code.code):
+                    backup_code.is_used = True
+                    backup_code.save(update_fields=["is_used"])
+                    MFADevice.objects.filter(pk=backup_code.device_id).update(
+                        last_used=django_timezone.now()
+                    )
+                    return True
+        return False
 
     def _send_sms(self, phone_number: str, token: str) -> bool:
         """
@@ -380,10 +411,14 @@ class MFAManager:
                 return self._send_sms_twilio(phone_number, token)
             elif sms_provider == "aws_sns":
                 return self._send_sms_aws(phone_number, token)
-            else:
-                # Mode développement - logger le token
-                logger.info(f"Token SMS pour {phone_number}: {token}")
+            elif getattr(settings, "DEBUG", False) and getattr(
+                settings, "MFA_SMS_LOG_TOKENS", False
+            ):
+                logger.debug("Development SMS token for %s: %s", phone_number, token)
                 return True
+            else:
+                logger.error("No MFA SMS provider is configured")
+                return False
 
         except Exception as e:
             logger.error(f"Erreur lors de l'envoi SMS: {e}")

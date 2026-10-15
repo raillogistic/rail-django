@@ -93,8 +93,8 @@ class TestNestedOperationHandler:
 class TestCircularReferenceDetection:
     """Tests for circular reference detection."""
 
-    def test_has_circular_reference_simple_case(self):
-        """Should detect simple circular references."""
+    def test_finite_self_reference_is_not_treated_as_circular(self):
+        """Finite self-references are valid nested input trees."""
         from rail_django.generators.nested import NestedOperationHandler
 
         handler = NestedOperationHandler()
@@ -112,8 +112,7 @@ class TestCircularReferenceDetection:
         # Self-referencing data
         input_data = {"author": {"author": {}}}
 
-        # Should detect circular reference
-        assert handler._has_circular_reference(mock_model, input_data) is True
+        assert handler._has_circular_reference(mock_model, input_data) is False
 
     def test_has_circular_reference_no_cycle(self):
         """Should not detect circular reference when there is none."""

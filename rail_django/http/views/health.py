@@ -9,14 +9,13 @@ import json
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from functools import wraps
 
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from rail_django.extensions.health import HealthChecker
@@ -24,6 +23,27 @@ from rail_django.extensions.health import HealthChecker
 logger = logging.getLogger(__name__)
 
 
+def require_health_access(view_func):
+    """Protect diagnostic data while keeping liveness endpoints public."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if getattr(settings, "HEALTH_DIAGNOSTICS_PUBLIC", False):
+            return view_func(request, *args, **kwargs)
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return JsonResponse({"error": "Authentication required"}, status=401)
+        if not (
+            getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        ):
+            return JsonResponse({"error": "Staff privileges required"}, status=403)
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+@method_decorator(require_health_access, name="dispatch")
 class HealthDashboardView(View):
     """
     Vue principale pour afficher le tableau de bord de santé du système.
@@ -58,13 +78,13 @@ class HealthDashboardView(View):
 
             return render(request, "health_dashboard.html", context)
 
-        except Exception as e:
-            logger.error(f"Erreur lors du chargement du tableau de bord: {e}")
+        except Exception:
+            logger.exception("Unable to load the health dashboard")
             return render(
                 request,
                 "health_dashboard.html",
                 {
-                    "error": str(e),
+                    "error": "Health data is unavailable.",
                     "initial_data": "{}",
                     "refresh_interval": 30,
                     "auto_refresh_enabled": True,
@@ -72,6 +92,7 @@ class HealthDashboardView(View):
             )
 
 
+@method_decorator(require_health_access, name="dispatch")
 class HealthAPIView(View):
     """
     API endpoint pour récupérer les données de santé du système.
@@ -79,10 +100,6 @@ class HealthAPIView(View):
     Fournit des données JSON pour les requêtes AJAX du tableau de bord
     et les intégrations externes.
     """
-
-    @method_decorator(csrf_exempt)
-    def dispatch(self, *args, **kwargs):
-        return super().dispatch(*args, **kwargs)
 
     def get(self, request):
         """
@@ -111,11 +128,11 @@ class HealthAPIView(View):
 
             return JsonResponse(health_data, safe=False)
 
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération des données de santé: {e}")
+        except Exception:
+            logger.exception("Unable to retrieve health data")
             return JsonResponse(
                 {
-                    "error": str(e),
+                    "error": "Health data is unavailable.",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "status": "error",
                 },
@@ -143,13 +160,22 @@ class HealthAPIView(View):
             response_data = {"data": {}}
             needs_report = any(
                 key in query
-                for key in ("healthStatus", "schemaHealth", "databaseHealth", "cacheHealth")
+                for key in (
+                    "healthStatus",
+                    "schemaHealth",
+                    "databaseHealth",
+                    "cacheHealth",
+                )
             )
             comprehensive_report = (
-                health_checker.get_comprehensive_health_report() if needs_report else None
+                health_checker.get_comprehensive_health_report()
+                if needs_report
+                else None
             )
             components = (
-                comprehensive_report.get("components", {}) if comprehensive_report else {}
+                comprehensive_report.get("components", {})
+                if comprehensive_report
+                else {}
             )
 
             if "healthStatus" in query:
@@ -184,9 +210,22 @@ class HealthAPIView(View):
             return JsonResponse(
                 {"errors": [{"message": "Invalid JSON in request body"}]}, status=400
             )
-        except Exception as e:
-            logger.error(f"Erreur lors du traitement de la requête GraphQL: {e}")
-            return JsonResponse({"errors": [{"message": str(e)}]}, status=500)
+        except Exception:
+            logger.exception("Unable to process a health API request")
+            return JsonResponse(
+                {"errors": [{"message": "Health data is unavailable."}]}, status=500
+            )
+
+
+@require_http_methods(["GET"])
+def health_liveness_endpoint(request):
+    """Return a dependency-free process liveness response."""
+    return JsonResponse(
+        {
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 
 @require_http_methods(["GET"])
@@ -230,18 +269,18 @@ def health_check_endpoint(request):
             status=status_code,
         )
 
-    except Exception as e:
-        logger.error(f"Erreur lors de la vérification de santé: {e}")
+    except Exception:
+        logger.exception("Health check failed")
         return JsonResponse(
             {
                 "status": "unhealthy",
-                "error": str(e),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             status=503,
         )
 
 
+@require_health_access
 @require_http_methods(["GET"])
 def health_metrics_endpoint(request):
     """
@@ -266,14 +305,18 @@ def health_metrics_endpoint(request):
             }
         )
 
-    except Exception as e:
-        logger.error(f"Erreur lors de la collecte des métriques: {e}")
+    except Exception:
+        logger.exception("Unable to collect health metrics")
         return JsonResponse(
-            {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()},
+            {
+                "error": "Health metrics are unavailable.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
             status=500,
         )
 
 
+@require_health_access
 @require_http_methods(["GET"])
 def health_components_endpoint(request):
     """
@@ -304,14 +347,18 @@ def health_components_endpoint(request):
             }
         )
 
-    except Exception as e:
-        logger.error(f"Erreur lors de la vérification des composants: {e}")
+    except Exception:
+        logger.exception("Unable to inspect health components")
         return JsonResponse(
-            {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()},
+            {
+                "error": "Health components are unavailable.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
             status=500,
         )
 
 
+@method_decorator(require_health_access, name="dispatch")
 class HealthHistoryView(View):
     """
     Vue pour l'historique des données de santé.
@@ -331,82 +378,13 @@ class HealthHistoryView(View):
         Returns:
             JsonResponse: Données historiques
         """
-        try:
-            hours = int(request.GET.get("hours", 24))
-            interval_minutes = int(request.GET.get("interval", 5))
-
-            # Dans une implémentation réelle, ceci viendrait d'une base de données
-            # Pour l'instant, on génère des données d'exemple
-            historical_data = self._generate_sample_history(hours, interval_minutes)
-
-            return JsonResponse(
-                {
-                    "history": historical_data,
-                    "period_hours": hours,
-                    "interval_minutes": interval_minutes,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-
-        except ValueError as e:
-            return JsonResponse(
-                {
-                    "error": f"Paramètres invalides: {e}",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=400,
-            )
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération de l'historique: {e}")
-            return JsonResponse(
-                {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()},
-                status=500,
-            )
-
-    def _generate_sample_history(
-        self, hours: int, interval_minutes: int
-    ) -> list[dict[str, Any]]:
-        """
-        Génère des données d'historique d'exemple.
-
-        Args:
-            hours: Nombre d'heures d'historique
-            interval_minutes: Intervalle entre les points
-
-        Returns:
-            List[Dict]: Données historiques d'exemple
-        """
-        import random
-        from datetime import timedelta
-
-        history = []
-        current_time = datetime.now(timezone.utc)
-
-        # Générer des points de données
-        total_points = (hours * 60) // interval_minutes
-
-        for i in range(total_points):
-            timestamp = current_time - timedelta(minutes=i * interval_minutes)
-
-            # Générer des métriques réalistes avec des variations
-            base_cpu = 25 + random.uniform(-10, 15)
-            base_memory = 60 + random.uniform(-20, 25)
-
-            history.append(
-                {
-                    "timestamp": timestamp.isoformat(),
-                    "cpu_usage_percent": max(0, min(100, base_cpu)),
-                    "memory_usage_percent": max(0, min(100, base_memory)),
-                    "cache_hit_rate": max(70, min(100, 85 + random.uniform(-10, 10))),
-                    "active_connections": max(0, int(50 + random.uniform(-20, 30))),
-                    "response_time_ms": max(10, int(100 + random.uniform(-50, 100))),
-                    "healthy_components": random.choice([3, 4, 4, 4]),  # Mostly healthy
-                    "degraded_components": random.choice([0, 0, 1, 0]),
-                    "unhealthy_components": random.choice([0, 0, 0, 1]),
-                }
-            )
-
-        return list(reversed(history))  # Chronological order
+        return JsonResponse(
+            {
+                "error": "Health history storage is not configured.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=501,
+        )
 
 
 # Fonction utilitaire pour l'intégration avec les URLs
@@ -423,7 +401,7 @@ def get_health_urls():
         path("health/", HealthDashboardView.as_view(), name="health_dashboard"),
         path("health/api/", HealthAPIView.as_view(), name="health_api"),
         path("health/check/", health_check_endpoint, name="health_check"),
-        path("health/live/", health_check_endpoint, name="health_live"),
+        path("health/live/", health_liveness_endpoint, name="health_live"),
         path("health/ready/", health_check_endpoint, name="health_ready"),
         path("health/metrics/", health_metrics_endpoint, name="health_metrics"),
         path(

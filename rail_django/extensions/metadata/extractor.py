@@ -48,9 +48,7 @@ def _project_section_value(value: Any, allowed_keys: set[str] | None) -> Any:
         return _fast_copy(value)
     if isinstance(value, dict):
         return {
-            key: _fast_copy(item)
-            for key, item in value.items()
-            if key in allowed_keys
+            key: _fast_copy(item) for key, item in value.items() if key in allowed_keys
         }
     if isinstance(value, list):
         projected: list[Any] = []
@@ -258,9 +256,8 @@ class ModelSchemaExtractor(
 
         from graphene.utils.str_converters import to_camel_case
 
-        from ..templating.access import evaluate_template_access
         from ..templating.config import _url_prefix as _pdf_url_prefix
-        from ..templating.registry import _register_model_templates, template_registry
+        from ..templating.registry import _register_model_templates
 
         try:
             from ..excel.access import evaluate_excel_template_access

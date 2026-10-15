@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.db import connection
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from rail_django.extensions.health import HealthChecker, HealthStatus, SystemMetrics
@@ -103,11 +103,14 @@ class HealthCheckerTestCase(TestCase):
 
     def test_check_schema_health_fallback_to_available_schema(self):
         """Uses the next schema candidate when 'default' is not available."""
-        with patch.object(
-            self.health_checker,
-            "_get_health_schema_candidates",
-            return_value=["default", "gql"],
-        ), patch("rail_django.core.schema.get_schema") as mock_get_schema:
+        with (
+            patch.object(
+                self.health_checker,
+                "_get_health_schema_candidates",
+                return_value=["default", "gql"],
+            ),
+            patch("rail_django.core.schema.get_schema") as mock_get_schema,
+        ):
             fake_schema = MagicMock()
 
             class FakeResult:
@@ -170,9 +173,11 @@ class HealthCheckerTestCase(TestCase):
 
     def test_get_system_metrics(self):
         """Test de récupération des métriques système."""
-        with patch("psutil.cpu_percent", return_value=25.5), patch(
-            "psutil.virtual_memory"
-        ) as mock_memory, patch("psutil.disk_usage") as mock_disk:
+        with (
+            patch("psutil.cpu_percent", return_value=25.5),
+            patch("psutil.virtual_memory") as mock_memory,
+            patch("psutil.disk_usage") as mock_disk,
+        ):
             # Configuration des mocks
             mock_memory.return_value = MagicMock(
                 percent=60.0,
@@ -194,13 +199,11 @@ class HealthCheckerTestCase(TestCase):
 
     def test_summarize_health_report(self):
         """Test de génération du rapport de santé complet."""
-        with patch.object(
-            self.health_checker, "check_schema_health"
-        ) as mock_schema, patch.object(
-            self.health_checker, "check_database_health"
-        ) as mock_db, patch.object(
-            self.health_checker, "check_cache_health"
-        ) as mock_cache:
+        with (
+            patch.object(self.health_checker, "check_schema_health") as mock_schema,
+            patch.object(self.health_checker, "check_database_health") as mock_db,
+            patch.object(self.health_checker, "check_cache_health") as mock_cache,
+        ):
             # Configuration des mocks avec objets dataclass
             mock_schema.return_value = HealthStatus(
                 component="schema",
@@ -228,7 +231,9 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
+            result = self.health_checker.summarize_report(
+                self.health_checker.get_comprehensive_health_report(use_cache=False)
+            )
 
             self.assertIsInstance(result, dict)
             self.assertEqual(result["overall_status"], "degraded")
@@ -239,13 +244,11 @@ class HealthCheckerTestCase(TestCase):
 
     def test_health_report_all_healthy(self):
         """Test du rapport de santé avec tous les composants sains."""
-        with patch.object(
-            self.health_checker, "check_schema_health"
-        ) as mock_schema, patch.object(
-            self.health_checker, "check_database_health"
-        ) as mock_db, patch.object(
-            self.health_checker, "check_cache_health"
-        ) as mock_cache:
+        with (
+            patch.object(self.health_checker, "check_schema_health") as mock_schema,
+            patch.object(self.health_checker, "check_database_health") as mock_db,
+            patch.object(self.health_checker, "check_cache_health") as mock_cache,
+        ):
             # Tous les composants sont sains
             mock_schema.return_value = HealthStatus(
                 component="schema",
@@ -273,7 +276,9 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
+            result = self.health_checker.summarize_report(
+                self.health_checker.get_comprehensive_health_report(use_cache=False)
+            )
 
             self.assertEqual(result["overall_status"], "healthy")
             self.assertEqual(result["healthy_components"], 3)
@@ -282,13 +287,11 @@ class HealthCheckerTestCase(TestCase):
 
     def test_health_report_with_unhealthy_components(self):
         """Test du rapport de santé avec des composants défaillants."""
-        with patch.object(
-            self.health_checker, "check_schema_health"
-        ) as mock_schema, patch.object(
-            self.health_checker, "check_database_health"
-        ) as mock_db, patch.object(
-            self.health_checker, "check_cache_health"
-        ) as mock_cache:
+        with (
+            patch.object(self.health_checker, "check_schema_health") as mock_schema,
+            patch.object(self.health_checker, "check_database_health") as mock_db,
+            patch.object(self.health_checker, "check_cache_health") as mock_cache,
+        ):
             # Un composant défaillant
             mock_schema.return_value = HealthStatus(
                 component="schema",
@@ -316,7 +319,9 @@ class HealthCheckerTestCase(TestCase):
                 )
             ]
 
-            result = self.health_checker.summarize_report(self.health_checker.get_comprehensive_health_report(use_cache=False))
+            result = self.health_checker.summarize_report(
+                self.health_checker.get_comprehensive_health_report(use_cache=False)
+            )
 
             self.assertEqual(result["overall_status"], "unhealthy")
             self.assertEqual(result["healthy_components"], 1)
@@ -324,6 +329,7 @@ class HealthCheckerTestCase(TestCase):
             self.assertEqual(result["unhealthy_components"], 1)
 
 
+@override_settings(HEALTH_DIAGNOSTICS_PUBLIC=True)
 class HealthViewsTestCase(TestCase):
     """
     Tests pour les vues du système de santé.
@@ -438,6 +444,13 @@ class HealthViewsTestCase(TestCase):
             data = json.loads(response.content)
             self.assertEqual(data["status"], "unhealthy")
 
+    def test_liveness_does_not_run_dependency_checks(self):
+        with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
+            response = self.client.get("/health/live/")
+
+        self.assertEqual(response.status_code, 200)
+        mock_checker.assert_not_called()
+
     def test_health_metrics_endpoint(self):
         """Test de l'endpoint des métriques système."""
         with patch("rail_django.http.views.health.HealthChecker") as mock_checker:
@@ -486,31 +499,35 @@ class HealthViewsTestCase(TestCase):
         """Test de la vue d'historique de santé."""
         response = self.client.get("/health/history/")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 501)
         data = json.loads(response.content)
-        self.assertIn("history", data)
-        self.assertIn("period_hours", data)
-        self.assertEqual(data["period_hours"], 24)  # Valeur par défaut
+        self.assertEqual(data["error"], "Health history storage is not configured.")
 
     def test_health_history_view_with_parameters(self):
         """Test de la vue d'historique avec paramètres personnalisés."""
         response = self.client.get("/health/history/?hours=12&interval=10")
 
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
-        self.assertEqual(data["period_hours"], 12)
-        self.assertEqual(data["interval_minutes"], 10)
+        self.assertEqual(response.status_code, 501)
 
     def test_health_history_view_invalid_parameters(self):
         """Test de la vue d'historique avec paramètres invalides."""
         response = self.client.get("/health/history/?hours=invalid&interval=bad")
 
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.content)
-        self.assertIn("error", data)
-        self.assertIn("Paramètres invalides", data["error"])
+        self.assertEqual(response.status_code, 501)
+
+    @override_settings(HEALTH_DIAGNOSTICS_PUBLIC=False)
+    def test_detailed_health_endpoints_require_authentication(self):
+        for path in (
+            "/health/",
+            "/health/api/",
+            "/health/metrics/",
+            "/health/components/",
+            "/health/history/",
+        ):
+            self.assertEqual(self.client.get(path).status_code, 401)
 
 
+@override_settings(HEALTH_DIAGNOSTICS_PUBLIC=True)
 class HealthSystemIntegrationTestCase(TestCase):
     """
     Tests d'intégration pour le système de santé complet.
@@ -561,7 +578,7 @@ class HealthSystemIntegrationTestCase(TestCase):
 
             data = json.loads(response.content)
             self.assertEqual(data["status"], "unhealthy")
-            self.assertIn("error", data)
+            self.assertNotIn("error", data)
 
     def test_health_dashboard_javascript_integration(self):
         """Test de l'intégration JavaScript du tableau de bord."""
@@ -586,8 +603,7 @@ class HealthSystemIntegrationTestCase(TestCase):
     def test_health_api_graphql_integration(self):
         """Test de l'intégration GraphQL de l'API de santé."""
         # Test avec une requête GraphQL valide
-        valid_query = {
-            "query": """
+        valid_query = {"query": """
                 query {
                     healthStatus {
                         overallStatus
@@ -598,8 +614,7 @@ class HealthSystemIntegrationTestCase(TestCase):
                         memoryUsagePercent
                     }
                 }
-            """
-        }
+            """}
 
         response = self.client.post(
             "/health/api/",
@@ -649,4 +664,3 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
-

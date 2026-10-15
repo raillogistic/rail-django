@@ -172,6 +172,11 @@ class TypeGenerator:
         all_fields = introspector.get_model_fields()
         valid_field_names = set(all_fields.keys())
         valid_field_names.update(introspector.get_model_relationships().keys())
+        # DjangoObjectType also generates reverse fields; their exclusions must reach Meta.
+        for relation in model._meta.related_objects:
+            if not relation.hidden:
+                valid_field_names.add(relation.name)
+                valid_field_names.add(relation.get_accessor_name())
         valid_field_names.update(introspector.get_model_properties().keys())
         get_custom_fields = getattr(introspector, "get_model_custom_fields", None)
         if callable(get_custom_fields):

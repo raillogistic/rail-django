@@ -6,13 +6,13 @@ from django.core.management.base import BaseCommand, CommandError
 from django.http import HttpRequest
 
 from rail_django.extensions.templating import (
-    _build_template_context,
-    _render_template,
-    _sanitize_filename,
     render_pdf,
     render_template_html,
     template_registry,
 )
+from rail_django.extensions.templating.access import _build_template_context
+from rail_django.extensions.templating.jobs import _sanitize_filename
+from rail_django.extensions.templating.rendering.html import _render_template
 
 
 class Command(BaseCommand):
@@ -20,7 +20,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("template_path", help="Template URL path to render")
-        parser.add_argument("--pk", required=True, help="Primary key for model templates")
+        parser.add_argument(
+            "--pk", required=True, help="Primary key for model templates"
+        )
         parser.add_argument(
             "--output",
             "-o",

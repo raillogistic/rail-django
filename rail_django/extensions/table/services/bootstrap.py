@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from graphql import GraphQLError
+from ....core.meta import get_model_graphql_meta
 
 from ..cache.keys import table_bootstrap_key
 from ..cache.store import get_cache, set_cache
@@ -57,10 +58,6 @@ def build_table_bootstrap_payload(
         user_scope=_table_user_scope(user),
         persistence_scope=normalized_persistence_key,
     )
-    cached = get_cache(cache_key)
-    if isinstance(cached, dict):
-        return cached
-
     model_cls = resolve_table_model(app, model)
     permissions = get_table_permissions(user, model_cls)
     if not can_read_table_model(
@@ -71,6 +68,11 @@ def build_table_bootstrap_payload(
         permission_snapshot=permissions,
     ):
         raise GraphQLError("Permission denied.")
+
+    scoped = get_model_graphql_meta(model_cls).has_custom_resolver("list")
+    cached = get_cache(cache_key) if not scoped else None
+    if isinstance(cached, dict):
+        return cached
 
     visible_fields, editable_fields, _masked_fields = get_visible_table_fields(
         user,
@@ -132,5 +134,6 @@ def build_table_bootstrap_payload(
             "canExport": permissions.can_export,
         },
     }
-    set_cache(cache_key, payload, ttl_seconds=120)
+    if not scoped:
+        set_cache(cache_key, payload, ttl_seconds=120)
     return payload

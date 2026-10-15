@@ -1,21 +1,25 @@
-import graphene
+import datetime
 import json
+import logging
+import secrets
 import time
+
+import graphene
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.db import OperationalError, transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.core.exceptions import ValidationError
-from django.contrib.auth.password_validation import validate_password
-from django.db import OperationalError, transaction
 from graphene.types.generic import GenericScalar
+
 from .models import PasswordResetOTP, UserSettings
-from django.conf import settings
-import random
-import string
-import datetime
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class SimplePayload(graphene.ObjectType):
@@ -86,6 +90,32 @@ def _upsert_table_config_with_retry(user, table_key, parsed_config):
     raise OperationalError("database is locked")
 
 
+def _verify_reset_code(user, code, *, consume=False):
+    max_attempts = getattr(settings, "PASSWORD_RESET_MAX_ATTEMPTS", 5)
+
+    with transaction.atomic():
+        otp = (
+            PasswordResetOTP.objects.select_for_update()
+            .filter(user=user, is_used=False, expires_at__gt=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp or otp.failed_attempts >= max_attempts:
+            return False
+
+        if not check_password(code, otp.code):
+            otp.failed_attempts += 1
+            if otp.failed_attempts >= max_attempts:
+                otp.is_used = True
+            otp.save(update_fields=["failed_attempts", "is_used"])
+            return False
+
+        if consume:
+            otp.is_used = True
+            otp.save(update_fields=["is_used"])
+        return True
+
+
 class ChangePasswordMutation(graphene.Mutation):
     class Arguments:
         old_password = graphene.String(required=True)
@@ -121,21 +151,24 @@ class RequestPasswordResetMutation(graphene.Mutation):
     Output = SimplePayload
 
     def mutate(self, info, email):
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
             # Return success even if user not found to prevent enumeration
             return SimplePayload(ok=True, errors=[])
 
-        # Generate code
-        code = "".join(random.choices(string.digits, k=6))
+        code = f"{secrets.randbelow(1_000_000):06d}"
         expires_at = timezone.now() + datetime.timedelta(minutes=15)
 
-        # Invalidate existing codes
-        PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
-
-        # Create new code
-        PasswordResetOTP.objects.create(user=user, code=code, expires_at=expires_at)
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=user.pk)
+            PasswordResetOTP.objects.filter(user=user, is_used=False).update(
+                is_used=True
+            )
+            otp = PasswordResetOTP.objects.create(
+                user=user,
+                code=make_password(code),
+                expires_at=expires_at,
+            )
 
         # Send email
         context = {
@@ -154,10 +187,11 @@ class RequestPasswordResetMutation(graphene.Mutation):
                 [email],
                 fail_silently=False,
             )
-        except Exception as e:
-            return SimplePayload(
-                ok=False, errors=[f"Erreur lors de l'envoi de l'email: {str(e)}"]
-            )
+        except Exception:
+            otp.is_used = True
+            otp.save(update_fields=["is_used"])
+            logger.exception("Unable to send a password-reset email")
+            return SimplePayload(ok=False, errors=["Unable to send reset email."])
 
         return SimplePayload(ok=True, errors=[])
 
@@ -170,18 +204,10 @@ class ValidateResetCodeMutation(graphene.Mutation):
     Output = SimplePayload
 
     def mutate(self, info, email, code):
-        try:
-            user = User.objects.get(email=email)
-            otp = PasswordResetOTP.objects.filter(
-                user=user, code=code, is_used=False, expires_at__gt=timezone.now()
-            ).first()
-
-            if otp:
-                return SimplePayload(ok=True, errors=[])
-            else:
-                return SimplePayload(ok=False, errors=["Code invalide ou expiré."])
-        except User.DoesNotExist:
-            return SimplePayload(ok=False, errors=["Utilisateur non trouvé."])
+        user = User.objects.filter(email__iexact=email).first()
+        if user and _verify_reset_code(user, code):
+            return SimplePayload(ok=True, errors=[])
+        return SimplePayload(ok=False, errors=["Code invalide ou expiré."])
 
 
 class ConfirmPasswordResetMutation(graphene.Mutation):
@@ -193,33 +219,24 @@ class ConfirmPasswordResetMutation(graphene.Mutation):
     Output = SimplePayload
 
     def mutate(self, info, email, code, new_password):
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            return SimplePayload(ok=False, errors=["Code invalide ou expiré."])
+
         try:
-            user = User.objects.get(email=email)
-            otp = PasswordResetOTP.objects.filter(
-                user=user, code=code, is_used=False, expires_at__gt=timezone.now()
-            ).first()
+            validate_password(new_password, user)
+        except ValidationError as e:
+            return SimplePayload(ok=False, errors=e.messages)
 
-            if not otp:
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=user.pk)
+            if not _verify_reset_code(user, code, consume=True):
                 return SimplePayload(ok=False, errors=["Code invalide ou expiré."])
-
-            try:
-                validate_password(new_password, user)
-            except ValidationError as e:
-                return SimplePayload(ok=False, errors=e.messages)
-
             user.set_password(new_password)
-            user.save()
-
-            # Mark code as used
-            otp.is_used = True
-            otp.save()
-
-            # Mark all other codes as used
+            user.save(update_fields=["password"])
             PasswordResetOTP.objects.filter(user=user).update(is_used=True)
 
-            return SimplePayload(ok=True, errors=[])
-        except User.DoesNotExist:
-            return SimplePayload(ok=False, errors=["Utilisateur non trouvé."])
+        return SimplePayload(ok=True, errors=[])
 
 
 class UpsertUserTableConfigMutation(graphene.Mutation):

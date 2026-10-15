@@ -8,8 +8,8 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
-from ....security_config import setup_security_middleware
-from .generator import generate_settings_content
+from ...security.config import setup_security_middleware
+from .security_settings_generator import generate_settings_content
 
 
 class Command(BaseCommand):

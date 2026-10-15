@@ -211,8 +211,8 @@ class TestMutationGenerator(TestCase):
 
             fields = input_type._meta.fields
 
-            self.assertEqual(fields["starts_on"].type.__name__, "Date")
-            self.assertEqual(fields["starts_at"].type.__name__, "DateTime")
+            self.assertEqual(fields["starts_on"].type.of_type.__name__, "Date")
+            self.assertEqual(fields["starts_at"].type.of_type.__name__, "DateTime")
             self.assertEqual(fields["reminder_at"].type.__name__, "Time")
         finally:
             if original_method is None and hasattr(Category, "schedule_window"):
@@ -479,4 +479,3 @@ class TestCustomMethodMutationContracts:
             else:
                 Category.rename = original_method
             ModelIntrospector.clear_cache()
-

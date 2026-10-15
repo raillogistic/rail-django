@@ -87,12 +87,20 @@ JWT_REFRESH_TOKEN_LIFETIME = 86400
 JWT_ROTATE_REFRESH_TOKENS = True
 JWT_REFRESH_REUSE_DETECTION = True
 JWT_REFRESH_TOKEN_CACHE = "default"
+JWT_INCLUDE_PERMISSIONS = True
 
 JWT_AUTH_COOKIE = "jwt"
 JWT_REFRESH_COOKIE = "refresh_token"
 JWT_COOKIE_SECURE = True
 JWT_COOKIE_SAMESITE = "Lax"
 ```
+
+Set `JWT_INCLUDE_PERMISSIONS = False` for cookie authentication when permission
+snapshots would exceed browser cookie or HTTP header limits. Permissions remain
+available in login/refresh responses and the `me` query; authorization continues
+to resolve the authenticated user's permissions on the server. Clients using
+compact tokens must obtain permissions from these responses rather than decode
+them from the access token. The default preserves existing token claims.
 
 ## MFA login flow
 
@@ -117,6 +125,15 @@ MFA policy and behavior are controlled by `MFA_*` settings, including:
 - `MFA_REQUIRED_FOR_STAFF`
 - `MFA_TOTP_VALIDITY_WINDOW`
 - `MFA_BACKUP_CODES_COUNT`
+- `MFA_SMS_MAX_ATTEMPTS`
+- `MFA_SMS_TOKEN_VALIDITY`
+
+Backup codes are returned once during setup or regeneration, stored as
+password hashes, and consumed atomically. They cannot be retrieved later.
+SMS challenges are stored in Django's default cache, so production deployments
+must use a cache shared by every web worker. A missing SMS provider fails
+closed; development token logging requires both `DEBUG = True` and
+`MFA_SMS_LOG_TOKENS = True`.
 
 ## Session revocation
 

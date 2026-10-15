@@ -14,7 +14,9 @@ _examples_path = _repo_root / "examples"
 if _examples_path.is_dir() and str(_examples_path) not in sys.path:
     sys.path.insert(0, str(_examples_path))
 
-INSTALLED_APPS = list(INSTALLED_APPS) + ["test_app", "tests"]  # noqa: F405
+INSTALLED_APPS = list(
+    dict.fromkeys([*INSTALLED_APPS, "test_app", "tests"])
+)  # noqa: F405
 ROOT_URLCONF = "rail_django.urls"
 ENVIRONMENT = "testing"
 GRAPHQL_SCHEMA_API_AUTH_REQUIRED = True

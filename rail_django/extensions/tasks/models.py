@@ -40,6 +40,16 @@ class TaskExecution(models.Model):
         verbose_name = "Task Execution"
         verbose_name_plural = "Task Executions"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["owner_id", "-created_at"],
+                name="rail_task_owner_created_idx",
+            ),
+            models.Index(
+                fields=["status", "-created_at"],
+                name="rail_task_status_created_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.status})"

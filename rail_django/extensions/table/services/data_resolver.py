@@ -7,6 +7,7 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Q
 from graphql import GraphQLError
+from ....core.meta import get_model_graphql_meta
 
 from ..cache.keys import table_rows_key
 from ..cache.store import get_cache, set_cache
@@ -127,6 +128,9 @@ def resolve_table_rows(input_data: dict, *, info=None) -> dict:
     ):
         raise GraphQLError("Permission denied.")
 
+    graphql_meta = get_model_graphql_meta(model_cls)
+    scoped = graphql_meta.has_custom_resolver("list")
+
     visible_fields, _editable_fields, masked_fields = get_visible_table_fields(
         user,
         model_cls,
@@ -163,11 +167,13 @@ def resolve_table_rows(input_data: dict, *, info=None) -> dict:
         user_scope=_table_user_scope(user),
         payload=cache_payload,
     )
-    cached = get_cache(cache_key)
+    cached = get_cache(cache_key) if not scoped else None
     if isinstance(cached, dict):
         return cached
 
     qs = model_cls.objects.all()
+    if scoped:
+        qs = graphql_meta.apply_custom_resolver("list", qs, info)
 
     if quick_search:
         text_fields = [
@@ -220,5 +226,6 @@ def resolve_table_rows(input_data: dict, *, info=None) -> dict:
         "cacheControl": stale_while_revalidate(),
         "aggregate": build_query_hints(page_size),
     }
-    set_cache(cache_key, payload, ttl_seconds=30)
+    if not scoped:
+        set_cache(cache_key, payload, ttl_seconds=30)
     return payload

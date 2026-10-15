@@ -13,6 +13,7 @@ from rail_django.http.views.health import (
     HealthHistoryView,
     health_check_endpoint,
     health_components_endpoint,
+    health_liveness_endpoint,
     health_metrics_endpoint,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "HealthDashboardView",
     "HealthAPIView",
     "health_check_endpoint",
+    "health_liveness_endpoint",
     "health_metrics_endpoint",
     "health_components_endpoint",
     "HealthHistoryView",

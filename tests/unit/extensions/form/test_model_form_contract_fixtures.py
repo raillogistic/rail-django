@@ -1,5 +1,6 @@
 import pytest
 from types import SimpleNamespace
+from django.test.utils import isolate_apps
 
 from rail_django.extensions.form.extractors.model_form_contract_extractor import (
     ModelFormContractExtractor,
@@ -301,6 +302,7 @@ def test_model_form_contract_extractor_includes_help_text():
     assert fields[0]["help_text"] == "Choisissez le statut de la commande."
 
 
+@isolate_apps("test_app")
 def test_field_extractor_extracts_constraints_from_validators():
     """
     Vérifie que l'extracteur de champs extrait correctement les contraintes
@@ -383,5 +385,4 @@ def test_field_extractor_extracts_constraints_from_validators():
     )
     assert res_file is not None
     assert res_file["constraints"]["allowed_extensions"] == ["pdf", "docx"]
-
 

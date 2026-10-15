@@ -11,6 +11,41 @@ from rail_django.extensions.table.services import action_executor, data_resolver
 pytestmark = [pytest.mark.unit]
 
 
+def test_table_permissions_cannot_bypass_model_operation_guards(monkeypatch):
+    """Django permissions alone cannot grant a guarded update, delete or export."""
+    monkeypatch.setattr(access, "has_table_permission", lambda user, model, action: True)
+    monkeypatch.setattr(access, "get_model_graphql_meta", lambda model: SimpleNamespace(
+        describe_operation_guard=lambda operation, **kwargs: {"guarded": True, "allowed": operation == "list"},
+    ))
+    permissions = access.get_table_permissions(SimpleNamespace(), SimpleNamespace())
+    assert permissions.can_view
+    assert not permissions.can_create
+    assert not permissions.can_update
+    assert not permissions.can_delete
+    assert not permissions.can_export
+
+
+def test_bulk_preview_does_not_disclose_values_without_update_permission(monkeypatch):
+    """The preview must check model authorization before reading selected rows."""
+    from rail_django.extensions.table.services import bulk_edit
+    monkeypatch.setattr(bulk_edit, "resolve_table_model", lambda app, model: SimpleNamespace())
+    monkeypatch.setattr(bulk_edit, "get_table_permissions", lambda user, model: SimpleNamespace(can_update=False))
+    result = bulk_edit.preview_bulk_edit("tests", "Model", [1], {"name": "change"})
+    assert not result["ok"]
+    assert result["previewChanges"] == []
+
+
+def test_bootstrap_rechecks_authority_before_returning_cached_metadata(monkeypatch):
+    """Cached table metadata cannot survive a revoked list guard."""
+    from rail_django.extensions.table.services import bootstrap
+    monkeypatch.setattr(bootstrap, "get_cache", lambda key: {"permissions": {"canView": True}})
+    monkeypatch.setattr(bootstrap, "resolve_table_model", lambda app, model: SimpleNamespace())
+    monkeypatch.setattr(bootstrap, "get_table_permissions", lambda user, model: SimpleNamespace(can_view=False))
+    monkeypatch.setattr(bootstrap, "can_read_table_model", lambda *args, **kwargs: False)
+    with pytest.raises(GraphQLError, match="Permission denied"):
+        bootstrap.build_table_bootstrap_payload("tests", "Model")
+
+
 def test_table_rows_cache_key_varies_by_user_and_payload():
     key_a = table_rows_key(
         "inventory",

@@ -347,7 +347,7 @@ class TestTemplatingRendering(TestCase):
         def printable_base(self):
             return {"ok": True}
 
-        meta = printable_base._pdf_template_meta
+        meta = printable_base._pdf_template_metas[-1]
         self.assertIsNone(meta.repeat_header)
         self.assertIsNone(meta.repeat_footer)
 
@@ -364,7 +364,9 @@ class TestTemplatingRendering(TestCase):
                 renderer="wkhtmltopdf",
             )
 
-        self.assertIn("cannot enforce Rail Django URL fetch allowlists", str(exc.exception))
+        self.assertIn(
+            "cannot enforce Rail Django URL fetch allowlists", str(exc.exception)
+        )
 
     @patch("rail_django.extensions.templating.rendering.renderers.subprocess.run")
     @patch("rail_django.extensions.templating.rendering.renderers.shutil.which")
@@ -479,5 +481,6 @@ class TestTemplateCatalogView(TestCase):
         self.assertIn("text/html", response["Content-Type"])
         body = response.content.decode("utf-8")
         self.assertIn("PDF Templates Catalog", body)
-        self.assertIn("/api/v1/templates/testapp/dummy/printable_base/&lt;pk&gt;/", body)
-
+        self.assertIn(
+            "/api/v1/templates/testapp/dummy/printable_base/&lt;pk&gt;/", body
+        )

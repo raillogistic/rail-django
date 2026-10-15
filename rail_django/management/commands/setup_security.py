@@ -1,10 +1,5 @@
-"""
-Management command to setup security.
+"""Django command for generating a secure project configuration."""
 
-This module is a backward-compatibility facade. The implementation has been
-refactored into the `rail_django.management.commands.setup_security` package.
-"""
-
-from .setup_security.command import Command
+from .setup_security_command import Command
 
 __all__ = ["Command"]

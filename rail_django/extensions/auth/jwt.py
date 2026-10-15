@@ -10,6 +10,7 @@ import threading
 import time
 import uuid
 from datetime import timedelta
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Optional
 
 import jwt
@@ -142,9 +143,7 @@ class RefreshTokenStore:
         """
         self._cache_set(self._revoked_key(family_id), True, ttl)
 
-    def ensure_active(
-        self, family_id: str, token_id: str, ttl: Optional[int]
-    ) -> bool:
+    def ensure_active(self, family_id: str, token_id: str, ttl: Optional[int]) -> bool:
         """
         Ensure a token is the currently active one in its family.
 
@@ -182,14 +181,25 @@ class RefreshTokenStore:
         self._cache_set(self._family_key(family_id), token_id, ttl)
 
 
+@lru_cache(maxsize=8)
+def _get_refresh_token_store(
+    enable_rotation: bool, enable_reuse_detection: bool, cache_alias: str
+) -> RefreshTokenStore:
+    return RefreshTokenStore()
+
+
 def get_refresh_token_store() -> RefreshTokenStore:
     """
     Get a RefreshTokenStore instance.
 
     Returns:
-        A new RefreshTokenStore instance configured with current settings.
+        A process-local singleton configured with current settings.
     """
-    return RefreshTokenStore()
+    return _get_refresh_token_store(
+        bool(getattr(settings, "JWT_ROTATE_REFRESH_TOKENS", True)),
+        bool(getattr(settings, "JWT_REFRESH_REUSE_DETECTION", True)),
+        getattr(settings, "JWT_REFRESH_TOKEN_CACHE", "default"),
+    )
 
 
 class JWTManager:
@@ -346,8 +356,9 @@ class JWTManager:
             "iat": now,
             "type": "access",
             "roles": role_snapshot,
-            "permissions": permission_snapshot,
         }
+        if getattr(settings, "JWT_INCLUDE_PERMISSIONS", True):
+            payload["permissions"] = permission_snapshot
         # Only include 'exp' if token should expire
         if expiration is not None:
             payload["exp"] = expiration

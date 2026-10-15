@@ -150,9 +150,11 @@ class BasePipelineMutation(graphene.Mutation):
             return cls.build_response(ctx)
 
         except ValidationError as exc:
+            transaction.set_rollback(True)
             return cls(ok=False, errors=build_validation_errors(exc))
 
         except GraphQLAutoError as exc:
+            transaction.set_rollback(True)
             return cls(ok=False, errors=build_graphql_auto_errors(exc))
 
         except IntegrityError as exc:

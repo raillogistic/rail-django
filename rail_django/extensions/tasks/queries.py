@@ -4,9 +4,12 @@ GraphQL query types for tasks.
 
 from typing import Optional
 import graphene
+from django.db.models import Q
+from django.utils import timezone
 from graphene.types.generic import GenericScalar
 from graphql import GraphQLError
 
+from ...config_proxy import get_setting
 from .models import TaskExecution
 from .config import get_task_settings
 from .utils import (
@@ -59,32 +62,52 @@ class TaskQuery(graphene.ObjectType):
         limit=graphene.Int(required=False),
     )
 
-    @staticmethod
-    def resolve_task(root, info, id: str):
+    def resolve_task(self, info, id: str):
         schema_name = _resolve_schema_name(info)
         settings = get_task_settings(schema_name)
         if not settings.enabled:
             raise GraphQLError("Task orchestration is disabled.")
 
         task = TaskExecution.objects.filter(pk=id).first()
-        if not task or _task_is_expired(task) or not _task_matches_schema(task, schema_name):
+        if (
+            not task
+            or _task_is_expired(task)
+            or not _task_matches_schema(task, schema_name)
+        ):
             raise GraphQLError("Task not found.")
         if not _task_access_allowed(info.context, task, schema_name):
             raise GraphQLError("Task not found.")
         return task
 
-    @staticmethod
-    def resolve_tasks(root, info, status: Optional[str] = None, limit: Optional[int] = None):
+    def resolve_tasks(
+        self,
+        info,
+        status: Optional[str] = None,
+        limit: Optional[int] = None,
+    ):
         schema_name = _resolve_schema_name(info)
         settings = get_task_settings(schema_name)
         if not settings.enabled:
             raise GraphQLError("Task orchestration is disabled.")
 
-        queryset = TaskExecution.objects.all()
+        queryset = TaskExecution.objects.filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        )
         if status:
             queryset = queryset.filter(status=str(status).upper())
         queryset = _filter_queryset_for_user(info.context, queryset, schema_name)
-        tasks = [task for task in queryset if _task_matches_schema(task, schema_name)]
-        if limit:
-            tasks = tasks[: int(limit)]
-        return tasks
+        if schema_name == "default":
+            queryset = queryset.filter(
+                Q(metadata__schema_name="default")
+                | Q(metadata__schema_name__isnull=True)
+            )
+        else:
+            queryset = queryset.filter(metadata__schema_name=schema_name)
+
+        max_limit = int(get_setting("query_settings.max_page_size", 100, schema_name))
+        default_limit = int(
+            get_setting("query_settings.default_page_size", 20, schema_name)
+        )
+        resolved_limit = default_limit if limit is None else int(limit)
+        resolved_limit = max(1, min(resolved_limit, max_limit))
+        return list(queryset[:resolved_limit])

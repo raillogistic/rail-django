@@ -503,9 +503,12 @@ class FormConfigExtractor(
                 except Exception:
                     pass
 
-            path = f"{prefix}{field_name}" if prefix else field_name
             is_multi_relation = bool(field.many_to_many or field.one_to_many)
             should_prefetch = force_prefetch or is_multi_relation
+            lookup_name = field_name
+            if should_prefetch and field.auto_created and hasattr(field, "get_accessor_name"):
+                lookup_name = field.get_accessor_name()
+            path = f"{prefix}{lookup_name}" if prefix else lookup_name
             if should_prefetch:
                 prefetch_related_paths.add(path)
             else:

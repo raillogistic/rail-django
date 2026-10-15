@@ -59,13 +59,16 @@ class MFADevice(models.Model):
     def __str__(self) -> str:
         return f"{self.device_name} ({self.get_device_type_display()})"
 
-    def verify_token(self, token: str) -> bool:
+    def verify_token(self, token: str, *, valid_window: int = 0) -> bool:
         """Vérifie un token TOTP."""
         if self.device_type != "totp" or not self.secret_key:
             return False
 
-        totp = pyotp.TOTP(self.secret_key)
-        return totp.verify(token)
+        try:
+            totp = pyotp.TOTP(self.secret_key)
+            return totp.verify(token, valid_window=valid_window)
+        except (TypeError, ValueError):
+            return False
 
     def generate_qr_code(self) -> str:
         """Génère un QR code pour l'appareil TOTP en base64."""
@@ -99,7 +102,7 @@ class MFABackupCode(models.Model):
         related_name="backup_codes",
         verbose_name="Appareil MFA",
     )
-    code = models.CharField(max_length=20, verbose_name="Code de récupération")
+    code = models.CharField(max_length=128, verbose_name="Code de récupération")
     is_used = models.BooleanField(default=False, verbose_name="Est utilisé")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
 

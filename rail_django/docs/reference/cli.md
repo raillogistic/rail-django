@@ -98,26 +98,6 @@ Options:
 - `--enable-alerts`
 - `--alert-recipients <email ...>`
 
-### `run_performance_benchmarks`
-
-Run performance benchmark suites.
-
-```bash
-python manage.py run_performance_benchmarks [options]
-```
-
-Options:
-
-- `--test n_plus_one|caching|load|complexity|all`
-- `--output-dir <path>`
-- `--data-sizes <csv>`
-- `--concurrent-users <csv>`
-- `--requests-per-user <int>`
-- `--query-depths <csv>`
-- `--cache-scenarios <csv>`
-- `--verbose`
-- `--no-cleanup`
-
 ### `render_pdf`
 
 Render a registered template to PDF or HTML.

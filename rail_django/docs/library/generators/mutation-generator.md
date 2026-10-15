@@ -172,6 +172,13 @@ class Mutation(graphene.ObjectType):
     locals().update(mutation_gen.generate_all_mutations(Product))
 ```
 
+## Transactions
+
+Pipeline mutations run atomically. A handled model `ValidationError` or
+`GraphQLAutoError` marks the transaction for rollback before returning `ok: false`.
+This also rolls back valid earlier nested writes when a later child is rejected.
+The transaction regression is covered by `tests/unit/test_pipeline_transactions.py`.
+
 ## Related pages
 
 - [Type generator](./type-generator.md)

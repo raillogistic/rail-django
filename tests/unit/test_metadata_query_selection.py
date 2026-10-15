@@ -60,8 +60,7 @@ class TestMetadataQuerySelection(TestCase):
         self.assertNotIn("templates", result)
 
     def test_collect_requested_subfields_handles_nested_and_fragment(self):
-        document = parse(
-            """
+        document = parse("""
             query TestQuery {
               modelSchema(app: "inventory", model: "Product") {
                 fields { name }
@@ -73,13 +72,11 @@ class TestMetadataQuerySelection(TestCase):
               filterConfig { supportsQuick }
               metadataVersion
             }
-            """
-        )
+            """)
         operation = document.definitions[0]
         model_schema_field = operation.selection_set.selections[0]
         fragments = {
-            definition.name.value: definition
-            for definition in document.definitions[1:]
+            definition.name.value: definition for definition in document.definitions[1:]
         }
         info = SimpleNamespace(field_nodes=[model_schema_field], fragments=fragments)
 
@@ -95,10 +92,12 @@ class TestMetadataQuerySelection(TestCase):
         self.assertIn("supports_quick", section_subfields["filter_config"])
 
     @patch("rail_django.extensions.metadata.queries._collect_requested_subfields")
-    @patch("rail_django.extensions.metadata.queries._collect_requested_section_subfields")
-    @patch("rail_django.extensions.metadata.queries.ModelSchemaExtractor")
-    @patch("rail_django.extensions.metadata.queries._user_can_discover_model")
-    @patch("rail_django.extensions.metadata.queries.apps.get_model")
+    @patch(
+        "rail_django.extensions.metadata.queries._collect_requested_section_subfields"
+    )
+    @patch("rail_django.extensions.metadata.services.ModelSchemaExtractor")
+    @patch("rail_django.extensions.metadata.services.user_can_discover_model")
+    @patch("rail_django.extensions.metadata.services.apps.get_model")
     def test_query_forwards_requested_sections_to_extractor(
         self,
         mock_get_model,
@@ -111,12 +110,13 @@ class TestMetadataQuerySelection(TestCase):
         mock_get_model.return_value = mock_model
         mock_can_discover.return_value = True
         mock_collect_sections.return_value = {"fields", "filter_config"}
-        mock_collect_section_subfields.return_value = {
-            "fields": {"name", "field_name"}
-        }
+        mock_collect_section_subfields.return_value = {"fields": {"name", "field_name"}}
 
         extractor_instance = mock_extractor_cls.return_value
-        extractor_instance.extract.return_value = {"app": "inventory", "model": "Product"}
+        extractor_instance.extract.return_value = {
+            "app": "inventory",
+            "model": "Product",
+        }
 
         info = SimpleNamespace(
             context=SimpleNamespace(user=MagicMock(), schema_name="default"),
@@ -129,6 +129,7 @@ class TestMetadataQuerySelection(TestCase):
         )
 
         self.assertEqual(result["model"], "Product")
+        mock_extractor_cls.assert_called_once_with(schema_name="default")
         extractor_instance.extract.assert_called_once_with(
             "inventory",
             "Product",

@@ -8,7 +8,8 @@ The generator uses a pipeline-based architecture for improved testability and cu
 """
 
 from datetime import date, datetime, time
-from typing import Any, Optional, Union, get_origin
+from types import UnionType
+from typing import Any, Optional, Union, get_args, get_origin
 
 import graphene
 from django.db import models
@@ -438,9 +439,10 @@ class MutationGenerator:
             python_type = dict
         elif origin in {list, tuple, set}:
             python_type = list
-        elif origin is Union:
-            args = getattr(python_type, "__args__", ())
-            non_none_types = [arg for arg in args if arg is not type(None)]
+        elif origin in {Union, UnionType}:
+            non_none_types = [
+                arg for arg in get_args(python_type) if arg is not type(None)
+            ]
             if non_none_types:
                 return self._convert_python_type_to_graphql(non_none_types[0])
 
@@ -458,15 +460,6 @@ class MutationGenerator:
             Any: GenericScalar,
             type(None): graphene.String,
         }
-
-        # Handle Union types (e.g., Optional[str])
-        if hasattr(python_type, "__origin__"):
-            if python_type.__origin__ is Union:
-                # For Optional types, use the non-None type
-                args = python_type.__args__
-                non_none_types = [arg for arg in args if arg is not type(None)]
-                if non_none_types:
-                    return self._convert_python_type_to_graphql(non_none_types[0])
 
         return type_mapping.get(python_type, graphene.String)
 

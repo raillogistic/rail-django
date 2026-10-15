@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from django.db import models
+from django.test.utils import isolate_apps
 
 from rail_django.core.meta.config import OperationGuardConfig
 from rail_django.core.meta.graphql_meta import GraphQLMeta, get_model_graphql_meta
@@ -47,6 +48,7 @@ def test_evaluate_mutation_access_accepts_role_derived_permissions(monkeypatch):
     assert decision["allowed"] is True
 
 
+@isolate_apps("test_app")
 def test_operation_guard_accepts_role_derived_permissions(monkeypatch):
     monkeypatch.setattr(
         "rail_django.core.meta.api.load_security_components",

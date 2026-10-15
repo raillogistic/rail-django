@@ -425,6 +425,18 @@ class FieldPermissionMiddleware(BaseMiddleware):
         if model_class is None:
             return kwargs
 
+        graphql_type = self._unwrap_graphql_type(getattr(info, "return_type", None))
+        mutation_type = getattr(graphql_type, "graphene_type", None)
+        method_fields = getattr(mutation_type, "_rail_method_input_fields", None)
+        if method_fields is not None:
+            # Method arguments are a business-action contract, not ordinary model CRUD.
+            # Generated method guards and the method itself still authorize the operation.
+            payload = self._normalize_payload(kwargs.get("input")) or {}
+            unexpected = set(payload) - method_fields
+            if unexpected:
+                raise GraphQLError(f"Undeclared action inputs: {', '.join(sorted(unexpected))}")
+            return kwargs
+
         operation = self._resolve_operation_type(info)
         if operation == "delete":
             return kwargs

@@ -177,8 +177,9 @@ class InputSanitizer:
         )
         issues: list[ValidationIssue] = []
 
-        if self.settings.enable_sql_injection_protection and not self._is_safe_enum_token(
-            scan_value, field
+        if self.settings.enable_sql_injection_protection and not (
+            self._is_safe_enum_token(scan_value, field)
+            or self._is_verified_refresh_token(value, field)
         ):
             for pattern in self._sql_patterns:
                 if pattern.search(scan_value):
@@ -206,6 +207,21 @@ class InputSanitizer:
                     break
 
         return issues
+
+    @staticmethod
+    def _is_verified_refresh_token(value: str, field: Optional[str]) -> bool:
+        """Signed, unexpired refresh JWTs may contain '--' in their base64url signature.
+
+        Only this credential field is exempt from SQL text heuristics. Authentication
+        still checks refresh-session rotation/revocation after input validation.
+        """
+        if not field or field.rsplit(".", 1)[-1].replace("_", "").lower() != "refreshtoken":
+            return False
+        if len(value) > 4096 or not re.fullmatch(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value):
+            return False
+        from rail_django.extensions.auth.jwt import JWTManager
+
+        return JWTManager.verify_token(value, expected_type="refresh") is not None
 
     @staticmethod
     def _is_safe_enum_token(value: str, field: Optional[str]) -> bool:

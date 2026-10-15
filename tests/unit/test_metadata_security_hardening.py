@@ -17,12 +17,13 @@ def _build_model(app_label: str, model_name: str):
         model_name=model_name.lower(),
         verbose_name=model_name,
         verbose_name_plural=f"{model_name}s",
+        abstract=False,
     )
     return SimpleNamespace(_meta=meta, __name__=model_name)
 
 
 class TestMetadataSecurityHardening(TestCase):
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
     def test_available_models_filters_by_user_capabilities(self, mock_get_meta):
         model_allowed = _build_model("inventory", "Product")
         model_denied = _build_model("inventory", "Secret")
@@ -43,7 +44,7 @@ class TestMetadataSecurityHardening(TestCase):
         info = SimpleNamespace(context=SimpleNamespace(user=user))
 
         with patch(
-            "rail_django.extensions.metadata.queries.apps.get_models",
+            "rail_django.extensions.metadata.services.apps.get_models",
             return_value=[model_allowed, model_denied],
         ):
             results = ModelSchemaQuery().resolve_availableModels(info)
@@ -51,7 +52,7 @@ class TestMetadataSecurityHardening(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["model"], "Product")
 
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
     def test_available_models_allows_anonymous_only_when_guard_explicitly_allows(
         self, mock_get_meta
     ):
@@ -65,14 +66,16 @@ class TestMetadataSecurityHardening(TestCase):
 
         def get_meta(model):
             meta = MagicMock()
-            meta.describe_operation_guard.side_effect = lambda *_args, **_kwargs: describe_for_model(model)
+            meta.describe_operation_guard.side_effect = (
+                lambda *_args, **_kwargs: describe_for_model(model)
+            )
             return meta
 
         mock_get_meta.side_effect = get_meta
 
         info = SimpleNamespace(context=SimpleNamespace(user=None))
         with patch(
-            "rail_django.extensions.metadata.queries.apps.get_models",
+            "rail_django.extensions.metadata.services.apps.get_models",
             return_value=[model_public, model_private],
         ):
             results = ModelSchemaQuery().resolve_availableModels(info)
@@ -80,9 +83,11 @@ class TestMetadataSecurityHardening(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["model"], "PublicItem")
 
-    @patch("rail_django.extensions.metadata.queries.apps.get_model")
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
-    def test_model_schema_denies_undiscoverable_model(self, mock_get_meta, mock_get_model):
+    @patch("rail_django.extensions.metadata.services.apps.get_model")
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
+    def test_model_schema_denies_undiscoverable_model(
+        self, mock_get_meta, mock_get_model
+    ):
         model = _build_model("inventory", "Product")
         mock_get_model.return_value = model
         mock_meta = MagicMock()
@@ -100,11 +105,15 @@ class TestMetadataSecurityHardening(TestCase):
 
         info = SimpleNamespace(context=SimpleNamespace(user=user))
         with self.assertRaises(GraphQLError):
-            ModelSchemaQuery().resolve_modelSchema(info, app="inventory", model="Product")
+            ModelSchemaQuery().resolve_modelSchema(
+                info, app="inventory", model="Product"
+            )
 
     @patch("rail_django.extensions.metadata.queries.apps.get_model")
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
-    def test_filter_schema_returns_empty_for_undiscoverable_model(self, mock_get_meta, mock_get_model):
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
+    def test_filter_schema_returns_empty_for_undiscoverable_model(
+        self, mock_get_meta, mock_get_model
+    ):
         model = _build_model("inventory", "Product")
         mock_get_model.return_value = model
         mock_meta = MagicMock()
@@ -119,16 +128,22 @@ class TestMetadataSecurityHardening(TestCase):
         user.is_authenticated = True
         user.is_superuser = False
         user.has_perm.return_value = False
-        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+        info = SimpleNamespace(
+            context=SimpleNamespace(user=user, schema_name="default")
+        )
 
         self.assertEqual(
-            ModelSchemaQuery().resolve_filterSchema(info, app="inventory", model="Product"),
+            ModelSchemaQuery().resolve_filterSchema(
+                info, app="inventory", model="Product"
+            ),
             [],
         )
 
     @patch("rail_django.extensions.metadata.queries.apps.get_model")
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
-    def test_field_filter_schema_returns_none_for_undiscoverable_model(self, mock_get_meta, mock_get_model):
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
+    def test_field_filter_schema_returns_none_for_undiscoverable_model(
+        self, mock_get_meta, mock_get_model
+    ):
         model = _build_model("inventory", "Product")
         mock_get_model.return_value = model
         mock_meta = MagicMock()
@@ -143,7 +158,9 @@ class TestMetadataSecurityHardening(TestCase):
         user.is_authenticated = True
         user.is_superuser = False
         user.has_perm.return_value = False
-        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+        info = SimpleNamespace(
+            context=SimpleNamespace(user=user, schema_name="default")
+        )
 
         self.assertIsNone(
             ModelSchemaQuery().resolve_fieldFilterSchema(
@@ -162,9 +179,11 @@ class TestMetadataSecurityHardening(TestCase):
         self.assertFalse(perms["can_delete"])
         self.assertFalse(perms["can_export"])
 
-    @patch("rail_django.extensions.metadata.queries.get_model_graphql_meta")
+    @patch("rail_django.extensions.metadata.services.get_model_graphql_meta")
     @patch("rail_django.extensions.metadata.queries.apps.get_app_config")
-    def test_app_schemas_skips_undiscoverable_models(self, mock_get_app_config, mock_get_meta):
+    def test_app_schemas_skips_undiscoverable_models(
+        self, mock_get_app_config, mock_get_meta
+    ):
         model_allowed = _build_model("inventory", "Product")
         model_denied = _build_model("inventory", "Secret")
 
@@ -193,9 +212,13 @@ class TestMetadataSecurityHardening(TestCase):
         user.is_authenticated = True
         user.is_superuser = False
         user.has_perm.side_effect = lambda perm: perm == "inventory.view_product"
-        info = SimpleNamespace(context=SimpleNamespace(user=user, schema_name="default"))
+        info = SimpleNamespace(
+            context=SimpleNamespace(user=user, schema_name="default")
+        )
 
-        with patch.object(ModelSchemaExtractor, "extract", return_value={"model": "Product"}):
+        with patch.object(
+            ModelSchemaExtractor, "extract", return_value={"model": "Product"}
+        ):
             results = ModelSchemaQuery().resolve_appSchemas(info, app="inventory")
 
         self.assertEqual(results, [{"model": "Product"}])
@@ -289,7 +312,9 @@ class TestMetadataSecurityHardening(TestCase):
         templates = extractor._extract_templates(model, user=MagicMock(), instance=None)
 
         self.assertEqual(len(templates), 2)
-        pdf_template = next(item for item in templates if item["template_type"] == "pdf")
+        pdf_template = next(
+            item for item in templates if item["template_type"] == "pdf"
+        )
         excel_template = next(
             item for item in templates if item["template_type"] == "excel"
         )

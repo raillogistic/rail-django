@@ -38,6 +38,7 @@ RAIL_DJANGO_GRAPHQL = {
         "fts_config": "english",
         "fts_search_type": "websearch",
         "fts_rank_threshold": None,
+        "max_property_filtering_results": 2000,
     },
     "mutation_settings": {
         "enable_create": True,
@@ -812,5 +813,9 @@ max_depth = get_setting("performance_settings.max_query_depth", 10)
 - Use `schema_settings.graphiql_superuser_only` and
   `schema_settings.graphiql_allowed_hosts` on the `graphiql` schema to gate
   GraphiQL in production. Leave the allowlist empty to permit any host.
-- Caching helpers were removed, but rate limiting uses Django cache; configure
-  `CACHES` with a shared backend in production.
+- Rate limiting, async job state, SMS challenges, and refresh-token rotation
+  use Django's default cache. Configure a shared backend in production;
+  `LocMemCache` is not safe with multiple workers.
+- Python property filters are evaluated in application code and stop when the
+  candidate queryset exceeds `filtering_settings.max_property_filtering_results`.
+  Use a database field or a computed ORM filter for larger datasets.

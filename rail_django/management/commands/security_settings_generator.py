@@ -1,8 +1,4 @@
-"""
-Security settings generator.
-"""
-
-from ....security_config import SecurityConfig
+"""Generate the settings file used by the setup_security command."""
 
 
 def generate_settings_content(enable_mfa: bool = False) -> str:
@@ -15,11 +11,6 @@ def generate_settings_content(enable_mfa: bool = False) -> str:
     Returns:
         Contenu du fichier de paramètres
     """
-    config = SecurityConfig()
-    # Note: We aren't using config.get_recommended_django_settings() directly in the output string
-    # because the original code constructs a Python file string.
-    # We maintain the original behavior of generating a complete python file.
-
     content = '''"""
 Paramètres de sécurité recommandés pour Django GraphQL Auto-Generation.
 
@@ -157,14 +148,12 @@ MFA_ENABLED = False
 # CONFIGURATION DE CACHE
 # =============================================================================
 
-# Note: Les fonctionnalités GraphQL internes n'exigent pas de cache externe.
-# Utilisez LocMemCache pendant le développement/test si votre projet a besoin
-# d'un cache pour d'autres composants. Les vérifications de santé utilisent
-# des caches en mémoire par processus avec TTL.
-
+# Le cache par défaut doit être partagé entre les processus pour la limitation
+# de débit, les tâches asynchrones et la rotation des jetons.
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(BASE_DIR / 'cache'),
         'KEY_PREFIX': 'rail_django_security',
         'TIMEOUT': 3600,
     }
