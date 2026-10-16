@@ -4,6 +4,8 @@ Tenant resolution logic.
 
 from typing import Any, Optional
 from django.db import models
+from django.utils.module_loading import import_string
+from graphql import GraphQLError
 from .settings import get_multitenancy_settings
 
 _TENANT_ID_ATTR = "_rail_tenant_id"
@@ -108,9 +110,23 @@ def resolve_tenant_id(
 
     if tenant_id is None and settings.tenant_header:
         tenant_id = _get_header_value(request, settings.tenant_header)
-
+        untrusted = tenant_id is not None
+    else:
+        untrusted = False
     if tenant_id is None and settings.tenant_subdomain:
         tenant_id = _extract_subdomain(request)
+        untrusted = tenant_id is not None
+    if untrusted:
+        authorizer = settings.tenant_authorizer
+        if isinstance(authorizer, str):
+            authorizer = import_string(authorizer)
+        user = getattr(request, "user", None)
+        if (
+            not user or not getattr(user, "is_authenticated", False)
+            or not callable(authorizer)
+            or authorizer(request, tenant_id, schema_name=schema_name) is not True
+        ):
+            raise GraphQLError("Tenant selection is not authorized")
 
     cache[cache_key] = tenant_id
     if cache_key == "default":

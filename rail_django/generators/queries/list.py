@@ -9,6 +9,7 @@ import logging
 from typing import Any, List, Optional, Type, Union
 
 import graphene
+from graphql import GraphQLError
 from django.core.exceptions import FieldDoesNotExist, ImproperlyConfigured
 from django.db import models
 from django.db.utils import OperationalError, ProgrammingError
@@ -245,101 +246,25 @@ def generate_list_query(
             skip_count=False,
         )
 
-        # Apply pagination
         if self.settings.enable_pagination:
             offset = max(0, kwargs.get("offset") or 0)
             requested_limit = kwargs.get("limit")
             limit = (
-                self.settings.default_page_size
-                if requested_limit is None
+                self.settings.default_page_size if requested_limit is None
                 else max(1, min(requested_limit, self.settings.max_page_size))
             )
-
             if items is not None:
                 items = items[offset : offset + limit]
             else:
                 queryset = queryset[offset : offset + limit]
-                try:
-                    items = list(queryset)
-                except Exception as eval_exc:
-                    # Guard against prefetch_related failures caused by
-                    # missing DB columns (e.g. unapplied GenericRelation
-                    # migrations).  Strip prefetch and retry.
-                    if (
-                        queryset.query.select_related
-                        or getattr(queryset, "_prefetch_related_lookups", None)
-                    ) and _is_schema_error(eval_exc):
-                        logger.warning(
-                            "Prefetch/select_related failed for %s "
-                            "(possible unapplied migration): %s.  "
-                            "Retrying without prefetch.  "
-                            "Run 'manage.py migrate' to fix.",
-                            model.__name__,
-                            eval_exc,
-                        )
-                        plain_qs = manager.all()
-                        plain_qs = self._apply_tenant_scope(
-                            plain_qs, info, model, operation="list"
-                        )
-                        if graphql_meta.has_custom_resolver("list"):
-                            plain_qs = graphql_meta.apply_custom_resolver(
-                                "list",
-                                plain_qs,
-                                info,
-                                **kwargs,
-                            )
-                        context_retry = QueryContext(
-                            model=model,
-                            queryset=plain_qs,
-                            info=info,
-                            kwargs=kwargs,
-                            graphql_meta=graphql_meta,
-                            filter_applicator=nested_filter_applicator,
-                            filter_class=filter_class,
-                            ordering_config=ordering_config,
-                            settings=self.settings,
-                            schema_name=self.schema_name,
-                        )
-                        pipeline_retry = QueryFilterPipeline(context_retry)
-                        plain_qs = pipeline_retry.apply_all()
-                        ordering_helper_retry = QueryOrderingHelper(
-                            self, model, ordering_config, self.settings
-                        )
-                        plain_qs, items, _, _ = ordering_helper_retry.apply(
-                            plain_qs,
-                            kwargs.get("order_by"),
-                            kwargs.get("distinct_on"),
-                            skip_count=False,
-                        )
-                        if items is None:
-                            plain_qs = plain_qs[offset : offset + limit]
-                            items = list(plain_qs)
-                        else:
-                            items = items[offset : offset + limit]
-                    else:
-                        raise
-        elif items is None:
+        if items is None:
             try:
                 items = list(queryset)
-            except Exception as eval_exc:
-                if (
-                    queryset.query.select_related
-                    or getattr(queryset, "_prefetch_related_lookups", None)
-                ) and _is_schema_error(eval_exc):
-                    logger.warning(
-                        "Prefetch/select_related failed for %s "
-                        "(possible unapplied migration): %s.  "
-                        "Retrying without prefetch.",
-                        model.__name__,
-                        eval_exc,
-                    )
-                    plain_qs = manager.all()
-                    plain_qs = self._apply_tenant_scope(
-                        plain_qs, info, model, operation="list"
-                    )
-                    items = list(plain_qs)
-                else:
-                    raise
+            except (OperationalError, ProgrammingError) as exc:
+                logger.exception("Database read failed for %s", model._meta.label)
+                raise GraphQLError(
+                    "Unable to retrieve records. Check database migrations and configuration."
+                ) from exc
 
         return self._apply_field_masks(items, info, model)
 

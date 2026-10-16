@@ -98,7 +98,7 @@ class RegistrationMixin:
             name = to_snake_case(mutation_class.__name__)
         
         with self._lock:
-            self._mutation_fields[name] = mutation_class.Field()
+            self._custom_mutation_fields[name] = mutation_class.Field()
             self.rebuild_schema()
             
         logger.info(

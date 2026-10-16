@@ -31,6 +31,9 @@ class TestMultiTenancy(TestCase):
                 "tenant_header": "X-Tenant-ID",
                 "default_tenant_field": "organization",
                 "require_tenant": True,
+                "tenant_authorizer": lambda request, tenant_id, **kwargs: (
+                    request.user.pk == self.user.pk and str(tenant_id) == str(self.org1.pk)
+                ),
             },
             "mutation_settings": {
                 "generate_bulk": True,

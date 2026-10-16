@@ -44,10 +44,12 @@ class Order(models.Model):
 
 ## How It Works
 
-1.  **Context**: The middleware extracts the Vendor ID from the `X-Vendor-ID` header.
+1. **Context**: Use trusted request/JWT tenant context. Header/subdomain selection requires an authenticated user and an explicit `multitenancy_settings.tenant_authorizer` membership check.
 2.  **Queries**: Rail Django automatically appends `WHERE vendor_id = <current_vendor>` to all product and order queries.
 3.  **Mutations**: New orders and products are automatically assigned to the current vendor.
-4.  **Security**: Attempting to query an ID belonging to another vendor will return `404 Not Found`.
+4. **Security**: The selected tenant restricts rows. Cross-tenant GraphQL operations are denied or return no matching result according to their response contract. A universal HTTP 404 is not promised.
+
+See [the tenant migration contract](../operations/audit-security-update.md#tenant-selection-rd-004). Client header examples below work only after the authorizer validates membership.
 
 ## Client Usage
 

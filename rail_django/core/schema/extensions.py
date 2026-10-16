@@ -353,11 +353,12 @@ class ExtensionsMixin:
         5. Registers the schema in the registry
         """
         with self._lock:
+            self._is_building = True
             try:
                 # Clear existing schema
                 self._schema = None
                 self._query_fields = {}
-                self._mutation_fields = {}
+                self._mutation_fields = dict(self._custom_mutation_fields)
                 self._subscription_fields = {}
                 build_context = {
                     "schema_name": self.schema_name,
@@ -534,3 +535,5 @@ class ExtensionsMixin:
                     exc_info=True,
                 )
                 raise
+            finally:
+                self._is_building = False

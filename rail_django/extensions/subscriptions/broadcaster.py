@@ -5,10 +5,13 @@ Broadcast model events to subscription groups.
 from __future__ import annotations
 
 import logging
+import json
+from datetime import date, datetime, time
 from typing import Any, Dict
 
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save
+from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -21,7 +24,13 @@ def _snapshot_instance(instance) -> dict[str, Any]:
     for field in instance._meta.concrete_fields:
         key = getattr(field, "attname", field.name)
         try:
-            data[key] = field.value_from_object(instance)
+            value = field.value_from_object(instance)
+            if isinstance(value, (date, datetime, time)):
+                value = value.isoformat()
+            try:
+                data[key] = json.loads(json.dumps(value, cls=DjangoJSONEncoder))
+            except TypeError:
+                data[key] = field.value_to_string(instance)
         except Exception:
             data[key] = getattr(instance, key, None)
     return data
@@ -65,13 +74,14 @@ def _schedule_broadcast(instance, event: str) -> None:
     if not subscriptions:
         return
 
+    payload = {
+        "event": event,
+        "pk": str(instance.pk) if instance.pk is not None else None,
+        "snapshot": _snapshot_instance(instance),
+        "timestamp": timezone.now().isoformat(),
+    }
+
     def _broadcast() -> None:
-        payload = {
-            "event": event,
-            "pk": getattr(instance, "pk", None),
-            "snapshot": _snapshot_instance(instance),
-            "timestamp": timezone.now(),
-        }
         for schema_name, subscription_class in subscriptions:
             try:
                 group_name = getattr(subscription_class, "group_name", None)

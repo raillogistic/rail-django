@@ -5,8 +5,8 @@ This guide covers the requirements and steps to install Rail Django and set up y
 ## Prerequisites
 
 - **Python**: 3.11 or higher
-- **Django**: 4.2 or higher
-- **Graphene**: 3.3 or higher
+- **Django**: 5.2.18 or higher (5.2 LTS is tested)
+- **Graphene**: resolved by graphene-django; scaffold uses 3.4.1 or higher
 - **Database**: PostgreSQL (recommended), MySQL, or SQLite (for development)
 - **Redis** (optional): Highly recommended for caching, rate limiting, and subscriptions.
 
@@ -19,17 +19,14 @@ pip install rail-django
 ```
 
 ### Optional Dependencies
-Some features require additional packages. You can install them using extras:
+The subscriptions extra is available. Application integrations in scaffold requirements are separate from the library runtime dependencies:
 
 ```bash
 # For GraphQL Subscriptions
 pip install rail-django[subscriptions]
 
-# For PDF Generation
-pip install rail-django[templating]
-
-# All optional features
-pip install rail-django[all]
+# For PDF generation, install the renderer separately
+pip install weasyprint
 ```
 
 ## Creating a New Project

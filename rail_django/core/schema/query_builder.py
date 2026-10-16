@@ -171,7 +171,7 @@ class QueryBuilderMixin:
         Args:
             models_list: List of Django models to generate mutations for
         """
-        self._mutation_fields = {}
+        self._mutation_fields = dict(self._custom_mutation_fields)
 
         for model in models_list:
             mutations = self.mutation_generator.generate_all_mutations(model)

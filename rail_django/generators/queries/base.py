@@ -183,22 +183,20 @@ class QueryFilterPipeline:
         """
         from ...saved_filter import SavedFilter
 
-        # Try ID first
-        if str(name_or_id).isdigit():
-            saved = SavedFilter.objects.filter(pk=name_or_id).first()
-            if saved:
-                return saved
-
-        # Try name with access control
         user = getattr(self.context.info.context, "user", None)
-        q = models.Q(name=name_or_id, model_name=self.context.model.__name__)
+        q = models.Q(model_name=self.context.model.__name__)
 
         if user and getattr(user, "is_authenticated", False):
             q &= models.Q(is_shared=True) | models.Q(created_by=user)
         else:
             q &= models.Q(is_shared=True)
 
-        return SavedFilter.objects.filter(q).first()
+        visible = SavedFilter.objects.filter(q)
+        if str(name_or_id).isdigit():
+            saved = visible.filter(pk=name_or_id).first()
+            if saved:
+                return saved
+        return visible.filter(name=name_or_id).first()
 
     def _update_usage_stats(self, saved) -> None:
         """

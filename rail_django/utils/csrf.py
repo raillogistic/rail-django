@@ -30,8 +30,7 @@ def is_session_authenticated_request(request: HttpRequest) -> bool:
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    auth_header = (request.META.get("HTTP_AUTHORIZATION", "") or "").strip().lower()
-    return not (auth_header.startswith("bearer ") or auth_header.startswith("token "))
+    return getattr(request, "auth_method", None) != "header_token"
 
 
 def enforce_csrf_for_session_auth(

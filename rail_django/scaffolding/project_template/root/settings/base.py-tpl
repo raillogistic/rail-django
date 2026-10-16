@@ -365,7 +365,7 @@ RAIL_DJANGO_GRAPHQL = {
                "rail_django.extensions.reporting.ReportingQuery",
         ],
         "mutation_extensions": [
-            "users.apps.mutations.UsersMutations",
+            "apps.users.mutations.UsersMutations",
             "rail_django.extensions.reporting.ReportingMutation",
         ],
         # Allowlist root query fields (None = no filtering)

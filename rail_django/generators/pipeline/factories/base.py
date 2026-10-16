@@ -145,6 +145,8 @@ class BasePipelineMutation(graphene.Mutation):
 
             # Execute pipeline
             ctx = cls.execute_pipeline(ctx)
+            if ctx.should_abort:
+                transaction.set_rollback(True)
 
             # Build response
             return cls.build_response(ctx)

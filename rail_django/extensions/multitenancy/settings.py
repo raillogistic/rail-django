@@ -20,6 +20,7 @@ class MultitenancySettings:
     tenant_subdomain: bool
     reject_mismatched_tenant_input: bool
     tenant_model: Optional[str]
+    tenant_authorizer: Any = None
 
 
 @dataclass(frozen=True)
@@ -64,10 +65,9 @@ def get_multitenancy_settings(
         get_setting("multitenancy_settings.isolation_mode", "row", schema_name),
         "row",
     ).lower()
-    tenant_header = _coerce_str(
-        get_setting("multitenancy_settings.tenant_header", "X-Tenant-ID", schema_name),
-        "X-Tenant-ID",
-    )
+    tenant_header = str(get_setting(
+        "multitenancy_settings.tenant_header", "X-Tenant-ID", schema_name
+    ) or "").strip()
     tenant_claim = _coerce_str(
         get_setting("multitenancy_settings.tenant_claim", "tenant_id", schema_name),
         "tenant_id",
@@ -122,4 +122,5 @@ def get_multitenancy_settings(
         tenant_subdomain=tenant_subdomain,
         reject_mismatched_tenant_input=reject_mismatched_tenant_input,
         tenant_model=tenant_model,
+        tenant_authorizer=get_setting("multitenancy_settings.tenant_authorizer", None, schema_name),
     )

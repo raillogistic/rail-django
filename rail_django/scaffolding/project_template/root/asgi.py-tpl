@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
 import os
 
 from channels.auth import AuthMiddlewareStack
+from channels.security.websocket import AllowedHostsOriginValidator
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import path
@@ -24,13 +25,13 @@ from rail_django.extensions.subscriptions import get_subscription_consumer
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": AuthMiddlewareStack(
+        "websocket": AllowedHostsOriginValidator(AuthMiddlewareStack(
             URLRouter(
                 [
-                    path("graphql/", get_subscription_consumer("gql")),
-                    path("graphql/graphiql/", get_subscription_consumer("graphiql")),
+                    path("graphql/", get_subscription_consumer("gql").as_asgi()),
+                    path("graphql/graphiql/", get_subscription_consumer("graphiql").as_asgi()),
                 ]
             )
-        ),
+        )),
     }
 )

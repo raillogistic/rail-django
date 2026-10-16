@@ -97,6 +97,7 @@ class AuthenticationMixin:
             if request is not None:
                 request.user = user
                 request.jwt_payload = payload
+                request.auth_method = "header_token"
             return True
         except Exception as e:
             logger.warning(f"Token validation failed: {str(e)}")

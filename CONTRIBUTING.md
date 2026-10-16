@@ -8,7 +8,7 @@ Thank you for your interest in contributing to Rail Django!
 2.  **Clone** your fork locally.
 3.  **Install** dependencies:
     ```bash
-    pip install -e .[dev]
+    pip install -e ".[subscriptions]" pytest pytest-django black weasyprint
     ```
 
 ## Development Workflow

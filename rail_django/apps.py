@@ -44,7 +44,13 @@ class AppConfig(AppConfig):
 
                 schema_registry.discover_schemas()
             except Exception as exc:
+                if getattr(settings, "RAIL_DJANGO_DATABASE_REGISTRY_REQUIRED", False):
+                    raise
                 logger.debug("Deferred schema discovery at startup: %s", exc)
+        post_migrate.connect(
+            _retry_database_registry, sender=self,
+            dispatch_uid="rail_django.database_registry_retry",
+        )
         _prebuild_graphql_schemas_on_startup()
         mode = getattr(settings, "RAIL_METADATA_DEPLOY_VERSION", {}).get(
             "mode", "command"
@@ -68,6 +74,14 @@ class AppConfig(AppConfig):
                 logger.warning(
                     "Failed to bump metadata deploy version on startup: %s", exc
                 )
+
+
+def _retry_database_registry(**kwargs) -> None:
+    from rail_django.core.registry import schema_registry
+    from rail_django.core.registry.discovery import _register_schemas_from_database
+
+    if getattr(schema_registry, "_database_discovery_pending", False):
+        _register_schemas_from_database(schema_registry)
 
 
 def _bump_on_migrate(**kwargs) -> None:
@@ -119,6 +133,8 @@ def _prebuild_graphql_schemas_on_startup() -> None:
         try:
             schema_registry.discover_schemas()
         except Exception as exc:
+            if getattr(settings, "RAIL_DJANGO_DATABASE_REGISTRY_REQUIRED", False):
+                raise
             logger.debug("Deferred schema prebuild discovery at startup: %s", exc)
             return
 

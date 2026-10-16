@@ -101,6 +101,7 @@ class BaseAPIView(View):
             if not user: return self.error_response("User not found or inactive", status=401)
             request.user = user
             request.jwt_payload = payload
+            request.auth_method = "header_token"
             return None
         except Exception as exc:
             logger.warning("API authentication failed: %s", exc)

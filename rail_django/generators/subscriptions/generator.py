@@ -118,15 +118,23 @@ class SubscriptionGenerator:
                 filter_input, required=False, description="Filter events using model field lookups.",
             )
 
-        skip_marker = getattr(base_class, "SKIP", None)
-
-        def _skip(): return skip_marker
+        def _skip(): return None
 
         def subscribe(root, info, filters: Optional[dict[str, Any]] = None, **kwargs):
             self._ensure_authentication(info)
+            ensure_model_permission(info)
             graphql_meta.ensure_operation_access("list", info=info)
             graphql_meta.ensure_operation_access("subscribe", info=info)
             return [group_name]
+
+        def ensure_model_permission(info):
+            from ...core.settings import QueryGeneratorSettings
+
+            if QueryGeneratorSettings.from_schema(schema_name).require_model_permissions:
+                user = _get_context_user(info)
+                permission = f"{model._meta.app_label}.view_{model._meta.model_name}"
+                if not user or not user.has_perm(permission):
+                    raise GraphQLError("Permission denied")
 
         def publish(payload, info, filters: Optional[dict[str, Any]] = None, **kwargs):
             # Check if we are in publication phase
@@ -136,7 +144,16 @@ class SubscriptionGenerator:
 
             instance = _build_instance_from_payload(model, payload)
             if instance is None: return _skip()
-            try: self._ensure_authentication(info)
+            try:
+                self._ensure_authentication(info)
+                ensure_model_permission(info)
+                from ...extensions.multitenancy import ensure_tenant_access
+                ensure_tenant_access(instance, info, model, schema_name=schema_name)
+                from ...core.security import get_authz_manager
+                if not get_authz_manager(schema_name).check_object_permission(
+                    _get_context_user(info), instance, action="view"
+                ):
+                    return _skip()
             except GraphQLError: return _skip()
             try:
                 graphql_meta.ensure_operation_access("retrieve", info=info, instance=instance)
@@ -147,11 +164,15 @@ class SubscriptionGenerator:
                 return _skip()
 
             instance = _apply_field_masks(instance, info, model)
+            timestamp = payload.get("timestamp")
+            if isinstance(timestamp, str):
+                from django.utils.dateparse import parse_datetime
+                timestamp = parse_datetime(timestamp)
             return {
                 "event": event,
                 "node": instance,
                 "id": str(getattr(instance, "pk", None) or ""),
-                "timestamp": payload.get("timestamp"),
+                "timestamp": timestamp,
             }
 
         class_name = f"{model.__name__}{event.title()}Subscription"
@@ -234,7 +255,9 @@ class SubscriptionGenerator:
                 def resolver(root, info, **kwargs):
                     context = info.context
                     if getattr(context, "is_subscription", False):
-                        return s_class.subscribe(root, info, **kwargs)
+                        groups = s_class.subscribe(root, info, **kwargs)
+                        context.subscription_groups.update(groups)
+                        return None
                     if getattr(context, "is_publication", False):
                         return s_class.publish(root, info, **kwargs)
                     return None

@@ -203,3 +203,7 @@ const splitLink = split(
 - [Webhooks](./webhooks.md) - For server-to-server event notifications.
 - [Permissions](../security/permissions.md) - For authorization details.
 - [Production Deployment](../operations/deployment.md) - For ASGI server setup.
+
+## Authentication and delivery contract
+
+Use graphql-transport-ws with connection_init, a valid header/session identity, and deployment-appropriate origin validation. Generated publication enforces configured model/object/field policies and tenant access on each event. See [migration and rollback guidance](../operations/audit-security-update.md#subscriptions-rd-010).

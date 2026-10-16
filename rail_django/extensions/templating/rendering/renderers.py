@@ -93,7 +93,7 @@ class WkhtmltopdfRenderer(PdfRenderer):
         binary = shutil.which("wkhtmltopdf")
         if not binary:
             raise RuntimeError("wkhtmltopdf is not installed")
-        if url_fetcher is not None and not self._allows_unrestricted_fetch(config):
+        if not self._allows_unrestricted_fetch(config):
             raise RuntimeError(
                 "wkhtmltopdf cannot enforce Rail Django URL fetch allowlists. "
                 "Use the weasyprint renderer or explicitly opt in with "

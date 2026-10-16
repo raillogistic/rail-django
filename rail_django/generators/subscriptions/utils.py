@@ -141,11 +141,12 @@ def _build_instance_from_payload(
         return instance
     snapshot = payload.get("snapshot") or payload.get("instance_data") or payload.get("data")
     if isinstance(snapshot, dict):
-        field_names = {field.attname for field in model._meta.concrete_fields}
+        fields = {field.attname: field for field in model._meta.concrete_fields}
         instance = model()
         for key, value in snapshot.items():
             if key == "pk": key = model._meta.pk.attname
-            if key in field_names: setattr(instance, key, value)
+            if key in fields:
+                setattr(instance, key, fields[key].to_python(value))
         if getattr(instance, "pk", None) is not None:
             instance._state.adding = False
         return instance

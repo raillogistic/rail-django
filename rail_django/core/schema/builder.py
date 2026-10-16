@@ -88,6 +88,7 @@ class SchemaBuilderCore:
         # Schema state
         self._schema = None
         self._query_fields: dict[str, Union[graphene.Field, graphene.List]] = {}
+        self._custom_mutation_fields = {}
         self._mutation_fields: dict[str, type[graphene.Mutation]] = {}
         self._subscription_fields: dict[str, graphene.Field] = {}
         self._registered_models: set[type[models.Model]] = set()
@@ -453,6 +454,29 @@ class SchemaBuilderCore:
             List: List of middleware instances
         """
         return getattr(self, "_middleware", [])
+
+    def invalidate_configuration(self) -> None:
+        """Reload configuration while preserving builder references and custom mutations."""
+        from ...config_proxy import get_core_schema_settings
+        from ..settings import SchemaSettings
+        from ..middleware.stack import clear_middleware_cache
+
+        with self._lock:
+            values = get_core_schema_settings(self.schema_name) or {}
+            self.settings = SchemaSettings(**{
+                key: value for key, value in values.items()
+                if key in SchemaSettings.__dataclass_fields__
+            })
+            self._raw_settings = {"schema_settings": values}
+            self._type_generator = self._query_generator = None
+            self._mutation_generator = self._subscription_generator = None
+            self._model_validation_cache.clear()
+            self._validation_settings_key = None
+            self._cached_validation_settings = None
+            self.clear_schema()
+            self.disconnect_signals()
+            self._connect_signals()
+            clear_middleware_cache()
 
     def clear_schema(self) -> None:
         """Clears the current schema, forcing a rebuild on next access."""

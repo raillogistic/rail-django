@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from threading import RLock
 from unittest.mock import Mock, patch
 
 import pytest
@@ -43,6 +44,7 @@ def test_get_schema_instance_records_post_build_version():
     registry.register_schema("default")
 
     builder = Mock()
+    builder._lock = RLock()
     builder._schema = None
     builder.get_schema.return_value = "schema"
     builder.get_schema_version.side_effect = [0, 1, 1]

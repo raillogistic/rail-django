@@ -3,12 +3,12 @@ Discovery logic for SchemaRegistry.
 """
 
 import logging
+from importlib import import_module
 from typing import Any, Callable, Optional
 
 from django.apps import apps
 from django.conf import settings as django_settings
 from django.db.utils import OperationalError, ProgrammingError
-from django.utils.module_loading import import_string
 
 from .registry import SchemaRegistry
 
@@ -58,15 +58,18 @@ def _discover_app_schemas(registry: SchemaRegistry, app_config) -> None:
     ]
     for module_path in schema_modules:
         try:
-            module = import_string(module_path)
+            module = import_module(module_path)
+        except ModuleNotFoundError as exc:
+            if exc.name == module_path or module_path.startswith(f"{exc.name}."):
+                continue
+            raise
+        else:
             if hasattr(module, "SCHEMA_CONFIG"):
                 _register_from_config(registry, app_name, module.SCHEMA_CONFIG)
             if hasattr(module, "register_schema"):
                 module.register_schema(registry)
             logger.debug(f"Discovered schema configuration in {module_path}")
             break
-        except (ImportError, AttributeError):
-            continue
 
 
 def _register_from_config(registry: SchemaRegistry, app_name: str, config: dict[str, Any]) -> None:
@@ -90,10 +93,14 @@ def _register_schemas_from_database(registry: SchemaRegistry) -> int:
     except LookupError:
         return 0
     try:
-        entries = schema_model.objects.all()
+        entries = list(schema_model.objects.all())
     except (OperationalError, ProgrammingError) as exc:
+        if getattr(django_settings, "RAIL_DJANGO_DATABASE_REGISTRY_REQUIRED", False):
+            raise
         logger.debug("Skipping database schema registry: %s", exc)
+        registry._database_discovery_pending = True
         return 0
+    registry._database_discovery_pending = False
     registered = 0
     for entry in entries:
         try:

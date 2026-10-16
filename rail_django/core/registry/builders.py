@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 def get_schema_builder(registry: SchemaRegistry, name: str):
     """Get or create a schema builder for the given schema."""
+    info = registry.get_schema(name)
+    if info is None or not info.enabled:
+        raise ValueError(f"Schema '{name}' not found or disabled")
     if name not in registry._schema_builders:
         schema_info = registry.get_schema(name)
         if not schema_info:
@@ -78,19 +81,20 @@ def get_schema_builder(registry: SchemaRegistry, name: str):
 def get_schema_instance(registry: SchemaRegistry, name: str):
     """Get a cached schema instance for a schema name."""
     builder = get_schema_builder(registry, name)
-    current_version = getattr(builder, "get_schema_version", lambda: 0)()
-    cached = registry._schema_instance_cache.get(name)
-    if (
-        cached
-        and cached.get("version") == current_version
-        and getattr(builder, "_schema", None) is not None
-    ):
-        return cached.get("schema")
-    schema_instance = builder.get_schema()
-    current_version = getattr(builder, "get_schema_version", lambda: 0)()
-    with registry._lock:
-        registry._schema_instance_cache[name] = {
-            "version": current_version,
-            "schema": schema_instance,
-        }
-    return schema_instance
+    with builder._lock:
+        current_version = getattr(builder, "get_schema_version", lambda: 0)()
+        cached = registry._schema_instance_cache.get(name)
+        if (
+            cached
+            and cached.get("version") == current_version
+            and getattr(builder, "_schema", None) is not None
+        ):
+            return cached.get("schema")
+        schema_instance = builder.get_schema()
+        current_version = getattr(builder, "get_schema_version", lambda: 0)()
+        with registry._lock:
+            registry._schema_instance_cache[name] = {
+                "version": current_version,
+                "schema": schema_instance,
+            }
+        return schema_instance

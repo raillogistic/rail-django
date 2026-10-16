@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import pytest
 
 from rail_django.extensions.multitenancy.resolver import resolve_tenant_id
@@ -10,8 +11,8 @@ pytestmark = pytest.mark.unit
 
 def test_resolve_tenant_id_is_schema_aware():
     schema_settings = {
-        "schema_a": {"multitenancy_settings": {"tenant_header": "X-Tenant-A"}},
-        "schema_b": {"multitenancy_settings": {"tenant_header": "X-Tenant-B"}},
+        "schema_a": {"multitenancy_settings": {"tenant_header": "X-Tenant-A", "tenant_authorizer": lambda request, tenant_id, **kw: tenant_id == "tenant-a"}},
+        "schema_b": {"multitenancy_settings": {"tenant_header": "X-Tenant-B", "tenant_authorizer": lambda request, tenant_id, **kw: tenant_id == "tenant-b"}},
     }
     with override_rail_settings(schema_settings=schema_settings):
         request = build_request(
@@ -19,6 +20,7 @@ def test_resolve_tenant_id_is_schema_aware():
             headers={"X-Tenant-A": "tenant-a", "X-Tenant-B": "tenant-b"},
             data={},
         )
+        request.user = SimpleNamespace(is_authenticated=True)
         tenant_a = resolve_tenant_id(request, schema_name="schema_a")
         tenant_b = resolve_tenant_id(request, schema_name="schema_b")
 
@@ -43,6 +45,7 @@ def test_type_generator_tenant_filter_uses_settings():
             headers={"X-Tenant-ID": "123"},
             data={},
         )
+        context.tenant_id = "123"
         type_gen = TypeGenerator(schema_name="tenant_test")
         tenant_field, tenant_id, settings = type_gen._get_tenant_filter_for_model(
             context, TenantProject

@@ -264,8 +264,8 @@ class TestSchemaRegistry(TestCase):
         self.assertEqual(len(self.registry.list_schemas()), 50)
 
     @patch("rail_django.core.registry.discovery.apps")
-    @patch("rail_django.core.registry.discovery.import_string")
-    def test_auto_discover_schemas(self, mock_import_string, mock_apps):
+    @patch("rail_django.core.registry.discovery.import_module")
+    def test_auto_discover_schemas(self, mock_import_module, mock_apps):
         """Test la découverte automatique de schémas."""
         # Mock des applications Django
         mock_app1 = Mock()
@@ -299,9 +299,9 @@ class TestSchemaRegistry(TestCase):
             elif module_path == "test_app2.graphql_schema":
                 return mock_schema_module2
             else:
-                raise ImportError(f"No module named '{module_path}'")
+                raise ModuleNotFoundError(f"No module named '{module_path}'", name=module_path)
 
-        mock_import_string.side_effect = import_side_effect
+        mock_import_module.side_effect = import_side_effect
 
         # Exécuter la découverte automatique
         discovered_count = self.registry.auto_discover_schemas()

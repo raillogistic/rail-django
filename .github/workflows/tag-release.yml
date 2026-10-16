@@ -8,10 +8,17 @@ on:
       - master
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
   tag_release:
+    needs: validate
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -52,6 +59,8 @@ jobs:
         run: |
           TAG="v${{ steps.version.outputs.value }}"
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+            test "$(git rev-list -n1 "${TAG}")" = "${GITHUB_SHA}"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -82,6 +91,14 @@ jobs:
             echo "value=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build release artifacts
+        if: steps.publish_needed.outputs.value == 'true'
+        run: |
+          SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.value }} python -m build
+          python -m pip install dist/*.whl
+          cd "$(mktemp -d)"
+          python -c "import rail_django"
+
       - name: Create and push tag
         if: steps.tag_exists.outputs.exists == 'false'
         run: |
@@ -90,11 +107,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
           git push origin "$TAG"
-
-      - name: Build release artifacts
-        if: steps.publish_needed.outputs.value == 'true'
-        run: |
-          python -m build
 
       - name: Create or update GitHub Release
         if: steps.publish_needed.outputs.value == 'true'

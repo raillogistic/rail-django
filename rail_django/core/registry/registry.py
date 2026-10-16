@@ -4,6 +4,7 @@ SchemaRegistry implementation.
 
 import logging
 import threading
+from contextlib import nullcontext
 from typing import Any, Callable, Dict, List, Optional, Set, Type
 
 from django.apps import apps
@@ -102,35 +103,45 @@ class SchemaRegistry:
         settings_payload = self._apply_graphiql_defaults(name, settings_payload)
         modified_kwargs["settings"] = settings_payload
 
-        with self._lock:
-            if name in self._schemas:
-                logger.info("Schema '%s' already registered, updating...", name)
+        builder = self._schema_builders.get(name)
+        with builder._lock if builder is not None else nullcontext():
+            with self._lock:
+                previous = self._schemas.get(name)
+                if name in self._schemas:
+                    logger.info("Schema '%s' already registered, updating...", name)
 
-            schema_info = SchemaInfo(
-                name=name,
-                description=modified_kwargs.get("description", description),
-                version=modified_kwargs.get("version", version),
-                apps=modified_kwargs.get("apps", apps) or [],
-                models=modified_kwargs.get("models", models) or [],
-                exclude_models=modified_kwargs.get("exclude_models", exclude_models)
-                or [],
-                settings=modified_kwargs.get("settings", settings) or {},
-                schema_class=modified_kwargs.get("schema_class", schema_class),
-                auto_discover=modified_kwargs.get("auto_discover", auto_discover),
-                enabled=modified_kwargs.get("enabled", enabled),
-            )
-            self._schemas[name] = schema_info
-            self._schema_model_cache.pop(name, None)
-            self._schema_instance_cache.pop(name, None)
+                schema_info = SchemaInfo(
+                    name=name,
+                    description=modified_kwargs.get("description", description),
+                    version=modified_kwargs.get("version", version),
+                    apps=modified_kwargs.get("apps", apps) or [],
+                    models=modified_kwargs.get("models", models) or [],
+                    exclude_models=modified_kwargs.get("exclude_models", exclude_models)
+                    or [],
+                    settings=modified_kwargs.get("settings", settings) or {},
+                    schema_class=modified_kwargs.get("schema_class", schema_class),
+                    auto_discover=modified_kwargs.get("auto_discover", auto_discover),
+                    enabled=modified_kwargs.get("enabled", enabled),
+                )
+                self._schemas[name] = schema_info
+                self._schema_model_cache.pop(name, None)
+                self._schema_instance_cache.pop(name, None)
 
-            schema_settings = modified_kwargs.get("settings", settings) or {}
-            if schema_settings:
+                schema_settings = modified_kwargs.get("settings", settings) or {}
                 from ...config_proxy import configure_schema_settings
-                configure_schema_settings(name, clear_existing=True, **schema_settings)
+                if not getattr(builder, "_is_building", False) and (schema_settings or previous is not None):
+                    configure_schema_settings(name, clear_existing=True, **schema_settings)
+                if builder is not None:
+                    schema_info.builder = builder
+                    shaping = ("apps", "models", "exclude_models", "settings", "schema_class", "auto_discover")
+                    if not getattr(builder, "_is_building", False) and (previous is None or any(
+                        getattr(previous, key) != getattr(schema_info, key) for key in shaping
+                    )):
+                        builder.invalidate_configuration()
 
-            logger.info(f"Registered schema: {name}")
-            self._run_post_registration_hooks(schema_info)
-            return schema_info
+                logger.info(f"Registered schema: {name}")
+                self._run_post_registration_hooks(schema_info)
+                return schema_info
 
     def unregister_schema(self, name: str) -> bool:
         """Unregister a schema."""

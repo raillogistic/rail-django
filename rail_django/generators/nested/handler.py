@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 import graphene
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
 
 from ...core.meta import get_model_graphql_meta
@@ -510,6 +510,7 @@ class NestedOperationHandlerBase:
             setattr(instance, field_name, None)
             self._save_instance(instance)
 
+    @transaction.atomic
     def handle_set(self, instance, field_name, data, info, is_m2m, is_reverse):
         """Handle 'set' operation (replace all)."""
         model = type(instance)
@@ -556,11 +557,14 @@ class NestedOperationHandlerBase:
                     nullable=bool(rel.field.null),
                 )
 
-            if to_disconnect_ids:
-                manager.filter(pk__in=to_disconnect_ids).update(
-                    **{remote_field_name: None}
+            removed = [
+                self._resolve_related_instance(
+                    field_name=field_name, related_model=related_model,
+                    pk=pk, info=info, operation="update",
                 )
-
+                for pk in to_disconnect_ids
+            ]
+            targets = []
             for item in ids:
                 pk = self._coerce_pk(item)
                 if pk in (None, ""):
@@ -572,6 +576,11 @@ class NestedOperationHandlerBase:
                     info=info,
                     operation="update",
                 )
+                targets.append(obj)
+            for obj in removed:
+                setattr(obj, remote_field_name, None)
+                self._save_instance(obj)
+            for obj in targets:
                 setattr(obj, remote_field_name, instance)
                 self._save_instance(obj)
         else:
