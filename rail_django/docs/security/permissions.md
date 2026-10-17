@@ -107,6 +107,12 @@ query Explain($permission: String!, $modelName: String) {
 
 ## Best practices
 
+Generated prefetched many-to-many, reverse, and generic collections are subject
+to tenant scope, including generic relation counts. Do not return an unscoped
+prefetched queryset from a custom resolver. The October 2026 correction can
+reduce previously exposed related rows or raise a missing-tenant error; see
+[tenant enforcement during eager loading](../operations/graphql-performance.md#tenant-enforcement-on-prefetched-collections).
+
 - Keep `authentication_required` enabled for production schemas.
 - Prefer role assignment over direct user permission grants.
 - Keep model and mutation permission checks enabled.

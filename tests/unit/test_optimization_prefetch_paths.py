@@ -22,7 +22,7 @@ def test_analyzer_ignores_invalid_wrapper_paths_for_prefetch():
 
     prefetch_fields = analyzer._get_prefetch_related_fields(Product, requested_fields)
 
-    assert prefetch_fields == ["order_items"]
+    assert prefetch_fields == ["order_items__product"]
     assert "items__tags" not in prefetch_fields
 
 
@@ -47,3 +47,9 @@ def test_optimizer_filters_invalid_prefetch_paths():
 
     assert valid == ["order_items"]
     assert invalid == ["items__tags"]
+
+
+@pytest.mark.parametrize("depth, expected", [(0, []), (1, ["order_items"])])
+def test_nested_prefetch_respects_configured_depth(depth, expected):
+    analyzer = QueryAnalyzer(QueryOptimizationConfig(max_prefetch_depth=depth))
+    assert analyzer._get_prefetch_related_fields(Product, {"order_items__product__name"}) == expected

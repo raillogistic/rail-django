@@ -100,6 +100,7 @@ def generate_single_query(
                     info,
                     id=id,
                 )
+            queryset = self.optimizer.optimize_queryset(queryset, info, model)
             instance = queryset.get(pk=id)
             self._enforce_tenant_access(instance, info, model, operation="retrieve")
             graphql_meta.ensure_operation_access(
@@ -243,7 +244,7 @@ def generate_list_query(
             queryset,
             kwargs.get("order_by"),
             kwargs.get("distinct_on"),
-            skip_count=False,
+            skip_count=True,
         )
 
         if self.settings.enable_pagination:

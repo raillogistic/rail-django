@@ -381,6 +381,10 @@ def generate_paginated_query(
             per_page = self.settings.default_page_size
         per_page = max(1, min(per_page, self.settings.max_page_size))
         skip_count = bool(kwargs.get("skip_count"))
+        requested_fields = self.optimizer.analyzer._extract_requested_fields(info)
+        load_items = not getattr(info, "field_nodes", None) or any(
+            path == "items" or path.startswith("items__") for path in requested_fields
+        )
         count_mode = _normalize_count_mode(
             kwargs.get(
                 "count_mode",
@@ -430,6 +434,9 @@ def generate_paginated_query(
             if items is not None:
                 has_next_page = len(items) > end
                 items = items[start:end]
+            elif not load_items:
+                has_next_page = queryset[end : end + 1].exists()
+                items = []
             else:
                 items = list(queryset[start : end + 1])
                 has_next_page = len(items) > per_page
@@ -482,7 +489,9 @@ def generate_paginated_query(
         start = (page - 1) * per_page
         end = start + per_page
 
-        if items is not None:
+        if not load_items:
+            items = []
+        elif items is not None:
             items = items[start:end]
         else:
             items = list(queryset[start:end])

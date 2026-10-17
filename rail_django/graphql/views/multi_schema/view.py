@@ -36,6 +36,7 @@ from .authentication import AuthenticationMixin
 from .introspection import IntrospectionMixin
 from .responses import ResponseMixin
 from ....utils.csrf import enforce_csrf_for_session_auth
+from ....core.execution import RailExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,8 @@ class MultiSchemaGraphQLView(AuthenticationMixin, IntrospectionMixin, ResponseMi
             self.__class__._placeholder_schema = graphene.Schema(query=_PlaceholderQuery)
 
         schema = kwargs.pop("schema", None) or self._placeholder_schema
+        if kwargs.get("execution_context_class") is None and self.execution_context_class is None:
+            kwargs["execution_context_class"] = RailExecutionContext
         super().__init__(schema=schema, **kwargs)
         self._schema_cache = {}
 

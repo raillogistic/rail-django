@@ -12,7 +12,7 @@ from django.db import models
 from .base import BasePipelineMutation
 from ..builder import PipelineBuilder
 from ...mutations.errors import MutationError
-
+from ...mutations.utils import _resolve_mutation_output
 
 def create_mutation_factory(
     model: Type[models.Model],
@@ -60,7 +60,7 @@ def create_mutation_factory(
         class Arguments:
             input = input_type(required=True)
 
-        object = graphene.Field(model_type)
+        object = graphene.Field(model_type, resolver=_resolve_mutation_output)
 
         @classmethod
         def build_response(cls, ctx):

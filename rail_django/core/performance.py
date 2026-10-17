@@ -185,6 +185,7 @@ class QueryComplexityAnalyzer:
         schema: Optional[Any] = None,
         document: Optional[Any] = None,
         user: Optional[Any] = None,
+        metrics: Optional[Any] = None,
     ) -> list[str]:
         """Validate query against performance limits."""
         errors: list[str] = []
@@ -217,6 +218,12 @@ class QueryComplexityAnalyzer:
             )
             if schema is not None and (enable_depth or enable_complexity):
                 result = analyzer.analyze_query(doc, schema, user=user)
+                if metrics is not None:
+                    try:
+                        metrics.query_depth = result.depth
+                        metrics.query_complexity = result.complexity
+                    except Exception:
+                        pass
                 errors.extend(result.blocked_reasons)
                 return errors
         except Exception:
@@ -224,6 +231,12 @@ class QueryComplexityAnalyzer:
             pass
 
         depth, complexity = self.analyze_query(query)
+        if metrics is not None:
+            try:
+                metrics.query_depth = depth
+                metrics.query_complexity = complexity
+            except Exception:
+                pass
         if enable_depth and depth > self.settings.max_query_depth:
             errors.append(
                 f"Query depth {depth} exceeds maximum allowed depth {self.settings.max_query_depth}"

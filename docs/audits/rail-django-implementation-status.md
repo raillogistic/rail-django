@@ -107,6 +107,11 @@ TEMP_ROOT denotes the full disposable working root above; TEMP denotes the Windo
 
 ## Performance and optional work
 
+Subsequent cache-free query and mutation work, including isolated PostgreSQL
+before/after measurements, is recorded in
+[the 17 October performance report](rail-django-performance-report-2026-10-17.md).
+The observations below remain the earlier audit-implementation baseline.
+
 The related-list workload remains bounded at two SQL queries for 50 Posts with FK/M2M fields from 100 rows. A final six-run sample measured 6.974, 5.411, 4.972, 4.986, 6.350 and 4.764 ms. This is a small warm SQLite workload; it is not a claimed production speedup.
 
 A second local SQLite workload measured the corrected reverse-set removal path for 1, 10 and 100 synthetic Product children. With an already constructed handler, ABAC disabled and an authorized superuser context, query counts were 5, 23 and 203; elapsed times were 2.102, 7.421 and 65.501 ms respectively. Each workload was measured once; setup was excluded. This demonstrates the linear lookup/validated-save cost of preserving child authorization and hooks. It does not justify reverting to unchecked bulk updates. All three workloads verified that every child was detached only after the permitted operation.

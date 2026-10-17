@@ -9,7 +9,14 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
-from graphql import GraphQLResolveInfo
+from graphql import (
+    GraphQLResolveInfo,
+    GraphQLIncludeDirective,
+    GraphQLSkipDirective,
+    get_directive_values,
+    get_named_type,
+)
+from graphene.utils.str_converters import to_snake_case
 from graphql.language.ast import FieldNode, FragmentSpreadNode, InlineFragmentNode
 
 try:
@@ -61,16 +68,17 @@ class QueryAnalyzer:
 
         # Extract requested fields from GraphQL query
         result.requested_fields = self._extract_requested_fields(info)
+        model_fields = self._model_field_paths(info, model, result.requested_fields)
 
         # Analyze relationships for optimization
         result.select_related_fields = self._get_select_related_fields(
-            model, result.requested_fields
+            model, model_fields, model_relative=True
         )
         result.prefetch_related_fields = self._get_prefetch_related_fields(
-            model, result.requested_fields
+            model, model_fields, model_relative=True
         )
         result.only_fields = self._get_only_fields(
-            model, result.requested_fields
+            model, model_fields, model_relative=True
         )
 
         # Calculate complexity and depth
@@ -79,10 +87,44 @@ class QueryAnalyzer:
 
         # Estimate number of queries without optimization
         result.estimated_queries = self._estimate_query_count(
-            model, result.requested_fields
+            model, model_fields, model_relative=True
         )
 
         return result
+
+    def _model_field_paths(self, info, model, requested_fields):
+        """Unwrap actual GraphQL payload types, independently of selected siblings."""
+
+        def prefixes(graphql_type, path=(), ancestors=()):
+            named = get_named_type(graphql_type)
+            if named in ancestors:
+                return []
+            meta = getattr(getattr(named, "graphene_type", None), "_meta", None)
+            if getattr(meta, "model", None) is model:
+                return [path]
+            found = []
+            fields = getattr(named, "fields", {})
+            if not isinstance(fields, dict):
+                return found
+            for name in ("items", "edges", "node", "object", "objects"):
+                if name in fields:
+                    found.extend(
+                        prefixes(fields[name].type, (*path, name), (*ancestors, named))
+                    )
+            return found
+
+        paths = prefixes(getattr(info, "return_type", None))
+        if not paths:
+            return self._normalize_model_field_paths(requested_fields)
+        normalized = set()
+        for path in paths:
+            prefix = "__".join(path)
+            for field_path in requested_fields:
+                if not prefix:
+                    normalized.add(field_path)
+                elif field_path.startswith(prefix + "__"):
+                    normalized.add(field_path[len(prefix) + 2 :])
+        return normalized
 
     def _extract_requested_fields(self, info: GraphQLResolveInfo) -> set[str]:
         """Extract requested fields from GraphQL query including nested fields."""
@@ -94,6 +136,13 @@ class QueryAnalyzer:
                 return
 
             for selection in selection_set.selections:
+                variables = getattr(info, "variable_values", None) or {}
+                skip = get_directive_values(GraphQLSkipDirective, selection, variables)
+                include = get_directive_values(
+                    GraphQLIncludeDirective, selection, variables
+                )
+                if (skip and skip["if"]) or (include and not include["if"]):
+                    continue
                 if isinstance(selection, FieldNode):
                     field_name = selection.name.value
                     if field_name.startswith("__"):
@@ -181,7 +230,10 @@ class QueryAnalyzer:
         GenericRelation fields from ``django.contrib.contenttypes``.
         """
         try:
-            field = current_model._meta.get_field(segment)
+            try:
+                field = current_model._meta.get_field(segment)
+            except FieldDoesNotExist:
+                field = current_model._meta.get_field(to_snake_case(segment))
             if getattr(field, "is_relation", False):
                 return field, getattr(field, "related_model", None)
             # GenericRelation has is_relation=True on modern Django,
@@ -194,7 +246,7 @@ class QueryAnalyzer:
 
         if hasattr(current_model._meta, "related_objects"):
             for rel in current_model._meta.related_objects:
-                if rel.get_accessor_name() == segment:
+                if rel.get_accessor_name() in {segment, to_snake_case(segment)}:
                     return rel, rel.related_model
 
         return None, None
@@ -226,11 +278,19 @@ class QueryAnalyzer:
                     self._walk_selection_set(fragment.selection_set, fragments, depth, on_field)
 
     def _get_select_related_fields(
-        self, model: type[models.Model], requested_fields: set[str]
+        self,
+        model: type[models.Model],
+        requested_fields: set[str],
+        *,
+        model_relative=False,
     ) -> list[str]:
         """Determine which fields should use select_related, including nested ones."""
         select_related: list[str] = []
-        normalized_paths = self._normalize_model_field_paths(requested_fields)
+        normalized_paths = (
+            requested_fields
+            if model_relative
+            else self._normalize_model_field_paths(requested_fields)
+        )
 
         for field_path in normalized_paths:
             # We only care about potential relationship paths
@@ -256,7 +316,7 @@ class QueryAnalyzer:
                     is_valid_chain = False
                     break
 
-                valid_path.append(part)
+                valid_path.append(relation.name)
                 current_model = related_model
 
             if is_valid_chain and valid_path:
@@ -286,26 +346,38 @@ class QueryAnalyzer:
         return kept
 
     def _get_prefetch_related_fields(
-        self, model: type[models.Model], requested_fields: set[str]
+        self,
+        model: type[models.Model],
+        requested_fields: set[str],
+        *,
+        model_relative=False,
     ) -> list[str]:
         """Determine which fields should use prefetch_related."""
         prefetch_related: list[str] = []
-        normalized_paths = self._normalize_model_field_paths(requested_fields)
+        normalized_paths = (
+            requested_fields
+            if model_relative
+            else self._normalize_model_field_paths(requested_fields)
+        )
 
         for field_path in normalized_paths:
             parts = field_path.split("__")
             current_model = model
             current_path = []
+            needs_prefetch = False
 
             # Traverse the path to find where we hit a ManyToMany or Reverse Relation
             for part in parts:
+                if len(current_path) >= self.config.max_prefetch_depth:
+                    break
                 relation, related_model = self._resolve_relation_segment(
                     current_model, part
                 )
                 if relation is None or related_model is None:
                     break
 
-                current_path.append(part)
+                accessor = getattr(relation, "get_accessor_name", None)
+                current_path.append(accessor() if callable(accessor) else relation.name)
                 is_prefetch_needed = isinstance(relation, ManyToManyField) or bool(
                     getattr(relation, "many_to_many", False)
                     or getattr(relation, "one_to_many", False)
@@ -313,13 +385,13 @@ class QueryAnalyzer:
                 # GenericRelation always requires prefetch_related
                 if not is_prefetch_needed and _GenericRelation is not None:
                     is_prefetch_needed = isinstance(relation, _GenericRelation)
-                if is_prefetch_needed:
+                needs_prefetch = needs_prefetch or is_prefetch_needed
+                if needs_prefetch:
                     prefetch_related.append("__".join(current_path))
-                    break
 
                 current_model = related_model
 
-        return self._dedupe_paths(prefetch_related)
+        return self._remove_subsumed_paths(self._dedupe_paths(prefetch_related))
 
     def _calculate_complexity(self, info: GraphQLResolveInfo) -> int:
         """Calculate query complexity score."""
@@ -361,12 +433,20 @@ class QueryAnalyzer:
             return 1
 
     def _estimate_query_count(
-        self, model: type[models.Model], requested_fields: set[str]
+        self,
+        model: type[models.Model],
+        requested_fields: set[str],
+        *,
+        model_relative=False,
     ) -> int:
         """Estimate number of database queries without optimization."""
         query_count = 1  # Base query
 
-        normalized_paths = self._normalize_model_field_paths(requested_fields)
+        normalized_paths = (
+            requested_fields
+            if model_relative
+            else self._normalize_model_field_paths(requested_fields)
+        )
         for field_name in normalized_paths:
             root_field = field_name.split("__", 1)[0]
             relation, _ = self._resolve_relation_segment(model, root_field)
@@ -376,7 +456,11 @@ class QueryAnalyzer:
         return query_count
 
     def _get_only_fields(
-        self, model: type[models.Model], requested_fields: set[str]
+        self,
+        model: type[models.Model],
+        requested_fields: set[str],
+        *,
+        model_relative=False,
     ) -> list[str]:
         """Extract concrete model column names for ``QuerySet.only()``.
 
@@ -392,7 +476,11 @@ class QueryAnalyzer:
             List of concrete column names, or empty list if extraction
             is impossible (in which case the caller should skip ``only()``).
         """
-        normalized = self._normalize_model_field_paths(requested_fields)
+        normalized = (
+            requested_fields
+            if model_relative
+            else self._normalize_model_field_paths(requested_fields)
+        )
         if not normalized:
             return []
 
@@ -407,13 +495,16 @@ class QueryAnalyzer:
 
         for field_name in top_level_names:
             try:
-                field = model._meta.get_field(field_name)
+                try:
+                    field = model._meta.get_field(field_name)
+                except FieldDoesNotExist:
+                    field = model._meta.get_field(to_snake_case(field_name))
             except FieldDoesNotExist:
                 # Computed/property/reverse — not a concrete field; skip.
                 # If the selection includes non-concrete fields we cannot
                 # safely use only() because the property may access any
                 # number of columns.  Return empty to fall back to SELECT *.
-                continue
+                return []
 
             if not getattr(field, "concrete", False):
                 continue
@@ -422,7 +513,7 @@ class QueryAnalyzer:
             if getattr(field, "is_relation", False) and hasattr(field, "attname"):
                 concrete_names.append(field.attname)
             else:
-                concrete_names.append(field.column if hasattr(field, "column") else field.name)
+                concrete_names.append(field.attname)
 
         # Deduplicate while preserving order
         seen: set[str] = set()

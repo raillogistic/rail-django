@@ -63,6 +63,7 @@ Use optional modules and implementation guides to fit your architecture.
 Use these references for day-to-day implementation and production maintenance.
 
 - [Deployment](operations/deployment.md)
+- [GraphQL performance without result caching](operations/graphql-performance.md)
 - [API reference](reference/api.md)
 - [CLI reference](reference/cli.md)
 - [GraphQLMeta reference](reference/meta.md)

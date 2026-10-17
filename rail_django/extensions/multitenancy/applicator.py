@@ -7,7 +7,14 @@ from django.db import models
 from graphql import GraphQLError
 
 from ...core.meta import get_model_graphql_meta
-from .settings import MultitenancySettings, TenantFieldConfig, get_multitenancy_settings
+from ...config_proxy import get_setting
+from .settings import (
+    MultitenancySettings,
+    TenantFieldConfig,
+    get_multitenancy_settings,
+    _coerce_bool,
+    _coerce_str,
+)
 from .resolver import resolve_tenant_id, _normalize_tenant_input_value
 
 
@@ -48,7 +55,12 @@ def get_tenant_field_config(
             tenant_field = getattr(graphql_meta, "tenant_field", None)
 
     if not tenant_field:
-        tenant_field = get_multitenancy_settings(schema_name).default_tenant_field
+        tenant_field = _coerce_str(
+            get_setting(
+                "multitenancy_settings.default_tenant_field", "tenant", schema_name
+            ),
+            "tenant",
+        )
 
     if not tenant_field:
         return None
@@ -105,12 +117,15 @@ def apply_tenant_queryset(
     schema_name: Optional[str] = None,
     operation: str = "read",
 ) -> models.QuerySet:
-    settings = get_multitenancy_settings(schema_name)
-    if not settings.enabled or settings.isolation_mode != "row":
+    if not _coerce_bool(
+        get_setting("multitenancy_settings.enabled", False, schema_name), False
+    ):
         return _strip_tenant_marker(queryset)
-
     tenant_field = get_tenant_field_config(model, schema_name=schema_name)
     if tenant_field is None:
+        return _strip_tenant_marker(queryset)
+    settings = get_multitenancy_settings(schema_name)
+    if not settings.enabled or settings.isolation_mode != "row":
         return _strip_tenant_marker(queryset)
 
     if _is_cross_tenant_allowed(info, settings):

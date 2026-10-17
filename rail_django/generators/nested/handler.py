@@ -357,6 +357,55 @@ class NestedOperationHandlerBase:
         )
         return instance
 
+    def _resolve_related_instances(
+        self, *, field_name, related_model, pks, info, operation
+    ):
+        """Batch preflight reads while retaining ordered, per-object access checks."""
+        pks = list(pks)
+        if not pks:
+            return []
+
+        def individually():
+            return [
+                self._resolve_related_instance(
+                    field_name=field_name,
+                    related_model=related_model,
+                    pk=pk,
+                    info=info,
+                    operation=operation,
+                )
+                for pk in pks
+            ]
+
+        # Preserve custom lookup overrides and independent duplicate instances.
+        if (
+            getattr(self._resolve_related_instance, "__func__", None)
+            is not NestedOperationHandlerBase._resolve_related_instance
+        ):
+            return individually()
+        try:
+            keys = [related_model._meta.pk.to_python(pk) for pk in pks]
+            if len(set(keys)) != len(keys):
+                return individually()
+        except (TypeError, ValueError, ValidationError):
+            return individually()
+        found = self._get_tenant_queryset(
+            related_model, info, operation=operation
+        ).in_bulk(keys)
+        instances = []
+        for raw_pk, key in zip(pks, keys):
+            instance = found.get(key)
+            if instance is None:
+                self._raise_related_object_not_found(field_name, related_model, raw_pk)
+            self._ensure_operation_access(
+                related_model, operation, info, instance=instance
+            )
+            self._enforce_tenant_access(
+                instance, info, related_model, operation=operation
+            )
+            instances.append(instance)
+        return instances
+
     def _assert_reverse_relation_nullable(
         self,
         *,
@@ -518,17 +567,13 @@ class NestedOperationHandlerBase:
             field = model._meta.get_field(field_name)
             manager = getattr(instance, field_name)
             ids = data if isinstance(data, list) else [data]
-            objs = []
-            for item in ids:
-                pk = self._coerce_pk(item)
-                obj = self._resolve_related_instance(
-                    field_name=field_name,
-                    related_model=field.related_model,
-                    pk=pk,
-                    info=info,
-                    operation="retrieve",
-                )
-                objs.append(obj)
+            objs = self._resolve_related_instances(
+                field_name=field_name,
+                related_model=field.related_model,
+                pks=[self._coerce_pk(item) for item in ids],
+                info=info,
+                operation="retrieve",
+            )
             manager.set(objs)
         elif is_reverse:
             rel = self._get_reverse_relations(model).get(field_name)
@@ -557,26 +602,24 @@ class NestedOperationHandlerBase:
                     nullable=bool(rel.field.null),
                 )
 
-            removed = [
-                self._resolve_related_instance(
-                    field_name=field_name, related_model=related_model,
-                    pk=pk, info=info, operation="update",
-                )
-                for pk in to_disconnect_ids
-            ]
-            targets = []
-            for item in ids:
-                pk = self._coerce_pk(item)
-                if pk in (None, ""):
-                    continue
-                obj = self._resolve_related_instance(
-                    field_name=field_name,
-                    related_model=related_model,
-                    pk=pk,
-                    info=info,
-                    operation="update",
-                )
-                targets.append(obj)
+            removed = self._resolve_related_instances(
+                field_name=field_name,
+                related_model=related_model,
+                pks=to_disconnect_ids,
+                info=info,
+                operation="update",
+            )
+            targets = self._resolve_related_instances(
+                field_name=field_name,
+                related_model=related_model,
+                pks=[
+                    self._coerce_pk(item)
+                    for item in ids
+                    if self._coerce_pk(item) not in (None, "")
+                ],
+                info=info,
+                operation="update",
+            )
             for obj in removed:
                 setattr(obj, remote_field_name, None)
                 self._save_instance(obj)

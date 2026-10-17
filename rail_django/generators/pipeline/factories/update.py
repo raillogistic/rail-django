@@ -10,6 +10,7 @@ import graphene
 from django.db import models
 
 from .base import BasePipelineMutation
+from ...mutations.utils import _resolve_mutation_output
 from ..builder import PipelineBuilder
 from ...mutations.errors import MutationError
 
@@ -61,7 +62,7 @@ def update_mutation_factory(
             id = graphene.ID(required=True)
             input = input_type(required=True)
 
-        object = graphene.Field(model_type)
+        object = graphene.Field(model_type, resolver=_resolve_mutation_output)
 
         @classmethod
         def build_context(cls, info, input_data, instance_id=None):

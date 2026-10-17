@@ -313,7 +313,12 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                         and hasattr(self, "_prefetched_objects_cache")
                         and field_name in self._prefetched_objects_cache
                     ):
-                        return self._prefetched_objects_cache[field_name]
+                        return apply_tenant_scope(
+                            self._prefetched_objects_cache[field_name],
+                            info,
+                            related_model,
+                            operation="read",
+                        )
 
                     related_obj = getattr(self, field_name)
                     # For OneToOne fields, return the single object or None
@@ -431,7 +436,12 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                     and hasattr(self, "_prefetched_objects_cache")
                     and accessor_name in self._prefetched_objects_cache
                 ):
-                    return self._prefetched_objects_cache[accessor_name]
+                    return apply_tenant_scope(
+                        self._prefetched_objects_cache[accessor_name],
+                        info,
+                        related_model,
+                        operation="read",
+                    )
 
                 # For OneToOne reverse relationships, handle DoesNotExist exceptions
                 if is_one_to_one:
@@ -684,7 +694,12 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                     and hasattr(self, "_prefetched_objects_cache")
                     and field_name in self._prefetched_objects_cache
                 ):
-                    return self._prefetched_objects_cache[field_name]
+                    return apply_tenant_scope(
+                        self._prefetched_objects_cache[field_name],
+                        info,
+                        related_model,
+                        operation="read",
+                    )
 
                 # GenericRelatedObjectManager handles content_type scoping
                 related_manager = getattr(self, field_name)
@@ -714,7 +729,13 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
                     hasattr(self, "_prefetched_objects_cache")
                     and field_name in self._prefetched_objects_cache
                 ):
-                    return len(self._prefetched_objects_cache[field_name])
+                    queryset = apply_tenant_scope(
+                        self._prefetched_objects_cache[field_name],
+                        info,
+                        related_model,
+                        operation="read",
+                    )
+                    return queryset.count()
 
                 related_manager = getattr(self, field_name)
                 queryset = related_manager.all()
@@ -977,4 +998,3 @@ def generate_object_type(self, model: type[models.Model]) -> type[DjangoObjectTy
 
     self._type_registry[model] = model_type
     return model_type
-

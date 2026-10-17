@@ -640,11 +640,11 @@ class TestDatabaseOperationsAdvanced:
         from django.db import connection
 
         # Vérifier que les tables existent
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'tests_%'"
-            )
-            tables = cursor.fetchall()
+        tables = [
+            name
+            for name in connection.introspection.table_names()
+            if name.startswith("tests_")
+        ]
 
         # Vérifier qu'au moins une table de test existe
         assert len(tables) > 0
@@ -695,5 +695,3 @@ class TestDatabaseOperationsAdvanced:
             nom_client__startswith="Backup"
         ).count()
         assert restored_count == 5
-
-

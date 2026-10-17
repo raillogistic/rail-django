@@ -18,7 +18,7 @@ from .errors import (
     build_mutation_error,
     build_validation_errors,
 )
-from .utils import sanitize_error_message
+from .utils import sanitize_error_message, _resolve_mutation_output
 from .methods import _wrap_with_audit
 
 
@@ -48,7 +48,7 @@ def generate_bulk_create_mutation(
 
         # Standardized return type
         ok = graphene.Boolean()
-        objects = graphene.List(model_type)  # Using 'objects' for multiple items
+        objects = graphene.List(model_type, resolver=_resolve_mutation_output)
         errors = graphene.List(MutationError)
 
         @classmethod
@@ -195,7 +195,7 @@ def generate_bulk_update_mutation(
 
         # Standardized return type
         ok = graphene.Boolean()
-        objects = graphene.List(model_type)  # Using 'objects' for multiple items
+        objects = graphene.List(model_type, resolver=_resolve_mutation_output)
         errors = graphene.List(MutationError)
 
         @classmethod

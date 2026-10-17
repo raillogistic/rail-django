@@ -1,6 +1,10 @@
 # Performance & Optimization
 
-Rail Django is designed to be "Fast by Default". It includes multiple layers of optimization to ensure your GraphQL API remains performant even as your data grows.
+Rail Django includes selection-aware ORM loading and operation limits. Measure
+the queries your application actually runs; neither a small query count nor an
+internal test establishes production latency. See the
+[cache-free performance guide](../operations/graphql-performance.md) for the
+October 2026 behavior and reproducible workloads.
 
 ## Solving the N+1 Problem
 
@@ -10,7 +14,9 @@ The N+1 query problem is the most common performance issue in GraphQL. Rail Djan
 The framework analyzes the GraphQL selection set and automatically applies optimizations to the Django QuerySet:
 - **`select_related`**: Automatically added for requested `ForeignKey` and `OneToOne` fields.
 - **`prefetch_related`**: Automatically added for requested many-to-many and reverse relationships.
-- **`only()` / `defer()`**: The framework fetches only the columns requested in the GraphQL query, reducing database memory usage.
+- **`only()` / `defer()`**: Concrete selections can narrow loaded columns.
+  Computed fields with unknown dependencies and Python property ordering load
+  full rows to avoid deferred-column queries.
 
 ```python
 RAIL_DJANGO_GRAPHQL = {
@@ -70,11 +76,10 @@ You can define different limits for different contexts (for example, stricter li
 ## Caching Strategies
 
 ### Query Caching
-Cache the results of entire GraphQL queries for a short duration.
-```python
-"enable_query_caching": True,
-"query_cache_timeout": 60 # seconds
-```
+Automatic resolver result caching is bypassed, including when
+`enable_query_caching` is set. A result hit could skip resolver authorization.
+The cache-free optimizations do not restore it. See the
+[security update](../operations/audit-security-update.md#resolver-result-caching-rd-001).
 
 ### Field Caching
 Use Django's cache framework within specific resolvers for expensive calculations.

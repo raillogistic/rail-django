@@ -5,7 +5,7 @@ Query optimizer for applying optimizations to Django querysets.
 import logging
 from typing import Dict, List, Optional, Union
 
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Prefetch, QuerySet, prefetch_related_objects
 from django.db.models.fields.related import ManyToManyField
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -90,6 +90,20 @@ class QueryOptimizer:
                 pass
 
         return queryset
+
+    def optimize_results(self, instances, info, model):
+        """Load selected relations on existing output objects without rereading writes."""
+        if not self.config.auto_optimize_queries or not instances:
+            return
+        analysis = self.analyzer.analyze_query(info, model)
+        paths = []
+        if self.config.enable_select_related:
+            paths.extend(analysis.select_related_fields)
+        if self.config.enable_prefetch_related:
+            paths.extend(analysis.prefetch_related_fields)
+        paths, _ = self._filter_valid_prefetch_fields(model, paths)
+        if paths:
+            prefetch_related_objects(instances, *paths)
 
     def _filter_valid_prefetch_fields(
         self, model: type[models.Model], fields: list[str]

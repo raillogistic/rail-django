@@ -365,6 +365,7 @@ class TestQueryOrderingHelper:
         mock_queryset = Mock()
         mock_queryset.order_by = Mock(return_value=mock_queryset)
         mock_queryset.count = Mock(return_value=50)
+        mock_queryset.defer = Mock(return_value=mock_queryset)
         mock_queryset.__iter__ = Mock(return_value=iter([Mock(), Mock()]))
         mock_queryset.__getitem__ = Mock(return_value=mock_queryset)
 
@@ -386,6 +387,7 @@ class TestQueryOrderingHelper:
         mock_queryset = Mock()
         mock_queryset.order_by = Mock(return_value=mock_queryset)
         mock_queryset.count = Mock(side_effect=AssertionError("count should not run"))
+        mock_queryset.defer = Mock(return_value=mock_queryset)
         mock_queryset.__iter__ = Mock(return_value=iter([Mock(), Mock()]))
         mock_queryset.__getitem__ = Mock(return_value=mock_queryset)
 

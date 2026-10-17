@@ -410,3 +410,19 @@ def check_nested_depth(
 
     if current_depth > max_depth:
         raise NestedDepthError(max_depth, current_depth)
+
+
+def _resolve_mutation_output(payload, info):
+    """Eagerly load selected relations while preserving mutation output identity."""
+    from ...extensions.optimization import get_optimizer
+
+    value = getattr(payload, info.field_name, None)
+    model = getattr(payload, "model_class", None)
+    if model is not None and value:
+        instances = list(value) if isinstance(value, (list, tuple)) else [value]
+        instances = [
+            obj for obj in instances if isinstance(obj, model) and obj.pk is not None
+        ]
+        schema_name = getattr(getattr(info, "context", None), "schema_name", None)
+        get_optimizer(schema_name).optimize_results(instances, info, model)
+    return value

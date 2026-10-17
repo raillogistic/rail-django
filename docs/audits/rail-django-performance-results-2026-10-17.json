@@ -1,0 +1,817 @@
+{
+  "baseline_revision": "9d4b6baee8e68de0228d37b32aa74bee393dd1cc",
+  "final_revision": "uncommitted working tree based on baseline; see accompanying report",
+  "postgresql": "16.2",
+  "durability": {
+    "iteration_microbenchmarks": "fsync=off",
+    "final_comparisons": "fsync=on"
+  },
+  "conditions": {
+    "database": "isolated loopback PostgreSQL; synthetic test models only",
+    "query_dataset": 1000,
+    "microbenchmark_samples": 30,
+    "microbenchmark_warmups": 3,
+    "operation_samples": 100,
+    "operation_warmups": 5,
+    "http_samples": 100,
+    "http_warmups_per_scenario": 3,
+    "http_clients_concurrent": 4,
+    "cache_backend_http": "DummyCache",
+    "permission_cache_http": false,
+    "query_result_cache_http": false,
+    "http_rate_limit_fixture": false,
+    "timing": "warm schema; Windows local host; no percentile claims"
+  },
+  "http_durable": {
+    "baseline": {
+      "label": "baseline-9d4b6bae-http-fsync-on",
+      "samples": 100,
+      "dataset": 1000,
+      "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py",
+      "scenarios": {
+        "page_50": {
+          "median_ms": 176.74,
+          "queries": [
+            202
+          ],
+          "median_sql_ms": 37.001
+        },
+        "bulk_update_10": {
+          "median_ms": 84.366,
+          "queries": [
+            61
+          ],
+          "median_sql_ms": 14.171
+        },
+        "four_clients": {
+          "requests": 100,
+          "wall_seconds": 13.418,
+          "requests_per_second": 7.453
+        }
+      }
+    },
+    "final": {
+      "label": "final-durable-refined",
+      "samples": 100,
+      "dataset": 1000,
+      "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py",
+      "scenarios": {
+        "page_50": {
+          "median_ms": 64.2,
+          "queries": [
+            3
+          ],
+          "median_sql_ms": 3.236
+        },
+        "bulk_update_10": {
+          "median_ms": 65.591,
+          "queries": [
+            43
+          ],
+          "median_sql_ms": 10.588
+        },
+        "four_clients": {
+          "requests": 100,
+          "wall_seconds": 3.538,
+          "requests_per_second": 28.261
+        }
+      }
+    }
+  },
+  "final_durable": {
+    "baseline": {
+      "bulk-output": {
+        "label": "baseline-durable",
+        "samples": 30,
+        "scenarios": {
+          "10": {
+            "queries": [
+              52
+            ],
+            "median_ms": 29.717
+          },
+          "50": {
+            "queries": [
+              252
+            ],
+            "median_ms": 138.437
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py"
+      },
+      "operation-limits": {
+        "label": "baseline-durable",
+        "samples": 100,
+        "root_aliases": 20,
+        "validation_calls": [
+          20
+        ],
+        "median_ms": 6.9,
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py"
+      },
+      "pagination": {
+        "label": "baseline-durable",
+        "samples": 30,
+        "scenarios": {
+          "property_list": {
+            "queries": [
+              102
+            ],
+            "median_ms": 38.584
+          },
+          "metadata_exact": {
+            "queries": [
+              3
+            ],
+            "median_ms": 2.078
+          },
+          "metadata_skip": {
+            "queries": [
+              1
+            ],
+            "median_ms": 1.522
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py"
+      },
+      "reads": {
+        "label": "baseline-durable",
+        "dataset": 1000,
+        "samples": 30,
+        "scenarios": {
+          "list_10": {
+            "queries": [
+              2
+            ],
+            "median_ms": 3.43,
+            "min_ms": 3.056,
+            "max_ms": 4.385
+          },
+          "page_items_10": {
+            "queries": [
+              41
+            ],
+            "median_ms": 22.045,
+            "min_ms": 21.04,
+            "max_ms": 25.528
+          },
+          "page_info_10": {
+            "queries": [
+              2
+            ],
+            "median_ms": 4.404,
+            "min_ms": 3.705,
+            "max_ms": 5.681
+          },
+          "list_50": {
+            "queries": [
+              2
+            ],
+            "median_ms": 6.678,
+            "min_ms": 5.844,
+            "max_ms": 8.926
+          },
+          "page_items_50": {
+            "queries": [
+              201
+            ],
+            "median_ms": 91.39,
+            "min_ms": 86.546,
+            "max_ms": 108.059
+          },
+          "page_info_50": {
+            "queries": [
+              2
+            ],
+            "median_ms": 6.413,
+            "min_ms": 5.54,
+            "max_ms": 8.049
+          },
+          "single": {
+            "queries": [
+              3
+            ],
+            "median_ms": 2.73,
+            "min_ms": 2.436,
+            "max_ms": 3.585
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py"
+      },
+      "reverse-set": {
+        "label": "baseline-durable",
+        "samples": 30,
+        "scenarios": {
+          "1": {
+            "queries": [
+              5
+            ],
+            "median_ms": 1.686
+          },
+          "10": {
+            "queries": [
+              23
+            ],
+            "median_ms": 11.309
+          },
+          "100": {
+            "queries": [
+              203
+            ],
+            "median_ms": 105.733
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "C:\\Users\\khale\\AppData\\Local\\Temp\\rail-graphql-performance-20261017-5e54\\baseline\\rail_django\\__init__.py"
+      }
+    },
+    "final": {
+      "bulk-output": {
+        "label": "final-durable",
+        "samples": 30,
+        "scenarios": {
+          "10": {
+            "queries": [
+              34
+            ],
+            "median_ms": 20.566
+          },
+          "50": {
+            "queries": [
+              154
+            ],
+            "median_ms": 81.981
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py"
+      },
+      "operation-limits": {
+        "label": "final-durable",
+        "samples": 100,
+        "root_aliases": 20,
+        "validation_calls": [
+          1
+        ],
+        "median_ms": 5.481,
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py"
+      },
+      "pagination": {
+        "label": "final-durable",
+        "samples": 30,
+        "scenarios": {
+          "property_list": {
+            "queries": [
+              1
+            ],
+            "median_ms": 2.111
+          },
+          "metadata_exact": {
+            "queries": [
+              2
+            ],
+            "median_ms": 1.508
+          },
+          "metadata_skip": {
+            "queries": [
+              1
+            ],
+            "median_ms": 1.275
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py"
+      },
+      "reads": {
+        "label": "final-durable",
+        "dataset": 1000,
+        "samples": 30,
+        "scenarios": {
+          "list_10": {
+            "queries": [
+              2
+            ],
+            "median_ms": 3.81,
+            "min_ms": 3.246,
+            "max_ms": 4.918
+          },
+          "page_items_10": {
+            "queries": [
+              2
+            ],
+            "median_ms": 4.127,
+            "min_ms": 3.586,
+            "max_ms": 5.524
+          },
+          "page_info_10": {
+            "queries": [
+              2
+            ],
+            "median_ms": 4.351,
+            "min_ms": 3.68,
+            "max_ms": 5.894
+          },
+          "list_50": {
+            "queries": [
+              2
+            ],
+            "median_ms": 8.007,
+            "min_ms": 6.978,
+            "max_ms": 9.654
+          },
+          "page_items_50": {
+            "queries": [
+              2
+            ],
+            "median_ms": 8.536,
+            "min_ms": 7.481,
+            "max_ms": 11.12
+          },
+          "page_info_50": {
+            "queries": [
+              2
+            ],
+            "median_ms": 8.023,
+            "min_ms": 7.376,
+            "max_ms": 10.553
+          },
+          "single": {
+            "queries": [
+              2
+            ],
+            "median_ms": 2.87,
+            "min_ms": 2.388,
+            "max_ms": 4.692
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py"
+      },
+      "reverse-set": {
+        "label": "final-durable",
+        "samples": 30,
+        "scenarios": {
+          "1": {
+            "queries": [
+              5
+            ],
+            "median_ms": 1.848
+          },
+          "10": {
+            "queries": [
+              14
+            ],
+            "median_ms": 6.985
+          },
+          "100": {
+            "queries": [
+              104
+            ],
+            "median_ms": 50.419
+          }
+        },
+        "python": "3.11.0",
+        "django": "5.2.18",
+        "graphql": "3.2.3",
+        "database": "postgresql",
+        "source": "E:\\Projects\\libraries\\rail-django\\rail_django\\__init__.py"
+      }
+    }
+  },
+  "iteration_measurements": {
+    "baseline-queries": {
+      "label": "baseline",
+      "dataset": 1000,
+      "samples": 30,
+      "scenarios": {
+        "list_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 5.217,
+          "min_ms": 3.937,
+          "max_ms": 5.991
+        },
+        "page_items_10": {
+          "queries": [
+            41
+          ],
+          "median_ms": 26.852,
+          "min_ms": 19.835,
+          "max_ms": 28.227
+        },
+        "page_info_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.959,
+          "min_ms": 3.521,
+          "max_ms": 5.865
+        },
+        "list_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 6.856,
+          "min_ms": 6.009,
+          "max_ms": 84.409
+        },
+        "page_items_50": {
+          "queries": [
+            201
+          ],
+          "median_ms": 100.492,
+          "min_ms": 96.574,
+          "max_ms": 120.258
+        },
+        "page_info_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 6.711,
+          "min_ms": 5.788,
+          "max_ms": 11.364
+        },
+        "single": {
+          "queries": [
+            3
+          ],
+          "median_ms": 2.639,
+          "min_ms": 2.479,
+          "max_ms": 3.84
+        }
+      }
+    },
+    "iteration-1-queries": {
+      "label": "iteration-1-selection",
+      "dataset": 1000,
+      "samples": 30,
+      "scenarios": {
+        "list_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 3.875,
+          "min_ms": 3.352,
+          "max_ms": 68.458
+        },
+        "page_items_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.457,
+          "min_ms": 3.74,
+          "max_ms": 5.588
+        },
+        "page_info_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.396,
+          "min_ms": 3.987,
+          "max_ms": 6.187
+        },
+        "list_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 7.485,
+          "min_ms": 6.608,
+          "max_ms": 9.437
+        },
+        "page_items_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 7.716,
+          "min_ms": 6.932,
+          "max_ms": 9.802
+        },
+        "page_info_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 7.507,
+          "min_ms": 7.02,
+          "max_ms": 9.21
+        },
+        "single": {
+          "queries": [
+            3
+          ],
+          "median_ms": 3.315,
+          "min_ms": 2.81,
+          "max_ms": 5.917
+        }
+      }
+    },
+    "baseline-mutations": {
+      "label": "before-iteration-2",
+      "samples": 30,
+      "scenarios": {
+        "1": {
+          "queries": [
+            5
+          ],
+          "median_ms": 2.027
+        },
+        "10": {
+          "queries": [
+            23
+          ],
+          "median_ms": 12.758
+        },
+        "100": {
+          "queries": [
+            203
+          ],
+          "median_ms": 109.387
+        }
+      }
+    },
+    "iteration-2-mutations": {
+      "label": "iteration-2-batched-set",
+      "samples": 30,
+      "scenarios": {
+        "1": {
+          "queries": [
+            5
+          ],
+          "median_ms": 2.081
+        },
+        "10": {
+          "queries": [
+            14
+          ],
+          "median_ms": 7.965
+        },
+        "100": {
+          "queries": [
+            104
+          ],
+          "median_ms": 61.343
+        }
+      }
+    },
+    "baseline-responses": {
+      "label": "baseline-corrected-capture",
+      "samples": 30,
+      "scenarios": {
+        "10": {
+          "queries": [
+            52
+          ],
+          "median_ms": 37.101
+        },
+        "50": {
+          "queries": [
+            252
+          ],
+          "median_ms": 158.776
+        }
+      }
+    },
+    "iteration-3-responses": {
+      "label": "iteration-3-relations",
+      "samples": 30,
+      "scenarios": {
+        "10": {
+          "queries": [
+            34
+          ],
+          "median_ms": 24.565
+        },
+        "50": {
+          "queries": [
+            154
+          ],
+          "median_ms": 93.318
+        }
+      }
+    },
+    "iteration-3-queries-refined": {
+      "label": "iteration-3-scoping-refined",
+      "dataset": 1000,
+      "samples": 30,
+      "scenarios": {
+        "list_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.086,
+          "min_ms": 3.446,
+          "max_ms": 69.057
+        },
+        "page_items_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.215,
+          "min_ms": 3.736,
+          "max_ms": 6.687
+        },
+        "page_info_10": {
+          "queries": [
+            2
+          ],
+          "median_ms": 4.556,
+          "min_ms": 4.036,
+          "max_ms": 5.798
+        },
+        "list_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 7.997,
+          "min_ms": 7.554,
+          "max_ms": 11.105
+        },
+        "page_items_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 8.363,
+          "min_ms": 7.773,
+          "max_ms": 11.101
+        },
+        "page_info_50": {
+          "queries": [
+            2
+          ],
+          "median_ms": 8.374,
+          "min_ms": 7.841,
+          "max_ms": 10.312
+        },
+        "single": {
+          "queries": [
+            2
+          ],
+          "median_ms": 2.996,
+          "min_ms": 2.668,
+          "max_ms": 4.899
+        }
+      }
+    },
+    "baseline-pagination": {
+      "label": "before-iteration-4",
+      "samples": 30,
+      "scenarios": {
+        "property_list": {
+          "queries": [
+            102
+          ],
+          "median_ms": 46.863
+        },
+        "metadata_exact": {
+          "queries": [
+            3
+          ],
+          "median_ms": 2.583
+        },
+        "metadata_skip": {
+          "queries": [
+            1
+          ],
+          "median_ms": 1.844
+        }
+      }
+    },
+    "iteration-4-pagination": {
+      "label": "iteration-4-counts-materialization",
+      "samples": 30,
+      "scenarios": {
+        "property_list": {
+          "queries": [
+            1
+          ],
+          "median_ms": 2.068
+        },
+        "metadata_exact": {
+          "queries": [
+            2
+          ],
+          "median_ms": 1.667
+        },
+        "metadata_skip": {
+          "queries": [
+            1
+          ],
+          "median_ms": 1.407
+        }
+      }
+    },
+    "baseline-execution": {
+      "label": "before-iteration-5",
+      "samples": 100,
+      "root_aliases": 20,
+      "validation_calls": [
+        20
+      ],
+      "median_ms": 7.257
+    },
+    "iteration-5-execution": {
+      "label": "iteration-5-operation-execution",
+      "samples": 100,
+      "root_aliases": 20,
+      "validation_calls": [
+        1
+      ],
+      "median_ms": 5.745
+    }
+  },
+  "final_source_sha256": {
+    "rail_django/core/middleware/performance.py": "ce55748e5a45d86f3c96a33ae0cf269a5b5640f2ca933a802c5796b532629fdd",
+    "rail_django/core/performance.py": "f193b06378d9fdad49a7c268fe58dc75ba229a75833e0b8e56972bbd173d4d2d",
+    "rail_django/extensions/multitenancy/applicator.py": "456c33c3059f95301ffa0bd994d996daed20cf5790cb4f744034a453dad36691",
+    "rail_django/extensions/optimization/analyzer.py": "68e918abd2d9da99b306a86baee6ccc916919e4baa934ce33ee84357f7871d05",
+    "rail_django/extensions/optimization/optimizer.py": "4721f4c518be1d4142df8e0006e3c41db1cb25ad5396b6f94067eb0d41f8922e",
+    "rail_django/generators/mutations/bulk.py": "5d735fbea9cd7b08744a9f5f3f1fdca3513b6d3216f595b49d2644a13c6be39b",
+    "rail_django/generators/mutations/utils.py": "975f8ca43448398713bccd5a12acf5d3364c2fbd2c59d0bcf393f6a7af89fd15",
+    "rail_django/generators/nested/handler.py": "5d79a2ac66fcab00e2502db7daab508ef7ed180f1345795b284e80907a9926aa",
+    "rail_django/generators/pipeline/factories/create.py": "2bb11473aa0dfd491180ed9f8cb3534a03a63ab93a9be84e80a449118064efa8",
+    "rail_django/generators/pipeline/factories/update.py": "dc668a7506138c5d2090dfbcfc33255464782de9562e438f75a509f8c4d856c1",
+    "rail_django/generators/queries/base.py": "59f35aafdc8fc73b6fe8abb932be2551442ab92c86cd268e38aa89ff42359e1d",
+    "rail_django/generators/queries/list.py": "d72efea7e7cd3d161c26cc4631538c3e726c473d7669a079be4aedc5f1f4a42b",
+    "rail_django/generators/queries/pagination.py": "2425045a1fd65e8f6271d5ee7ca5505b9bf21afc4a489ad1abec9492f74f6348",
+    "rail_django/generators/types/objects.py": "8e50a6da48c88ea2ebc864c1ea99d81298c6486ec0e90606071d1f24d5458f6a",
+    "rail_django/graphql/views/multi_schema/view.py": "52affec46730ee4d61ada8fadc3da9ca5aea373c168f04cf4ec30ff3abbcb3ab",
+    "rail_django/core/execution.py": "ab5eb2cd25508e92f7606bd8d9f03166b0ce39226e9e6e9d1e037b5b34016419"
+  },
+  "benchmark_sha256": {
+    "tests/benchmarks/graphql_workloads.py": "6e00e2673f7ebef313301b86f81c5c36967efb75711e16b22f2c5df1eebcc170",
+    "tests/integration/test_graphql_http_performance.py": "7af5f6adefc1296d689dafce10e88bec14cf7c0944bae4281c7397a8dd0489f9"
+  },
+  "verification": {
+    "combined_sqlite": {
+      "passed": 1524,
+      "skipped": 10,
+      "warnings": 2,
+      "subtests_passed": 3,
+      "seconds": 682.61,
+      "excludes": [
+        "live HTTP file"
+      ],
+      "final_followups": "unit and PostgreSQL handoff include final added assertions"
+    },
+    "unit": {
+      "passed": 891,
+      "skipped": 2,
+      "deselected": 643,
+      "seconds": 32.75
+    },
+    "integration_postgresql_graphql_core_3_2_13": {
+      "passed": 244,
+      "deselected": 1292,
+      "seconds": 144.85
+    },
+    "postgresql_final_handoff": {
+      "passed": 44,
+      "seconds": 3.13
+    },
+    "django_runner": {
+      "tests": 417,
+      "skipped": 4,
+      "seconds": 6.511,
+      "status": "OK"
+    },
+    "wheel_focused": {
+      "passed": 10,
+      "seconds": 0.16
+    },
+    "representative_schema_sha256": "f9fc503237537b4fe27f1ee81ee946e2069eb084ecec3610f9580b400fec089e",
+    "owned_cluster": "stopped after verification",
+    "skill_validator": "incomplete, no errors, heuristic self-matches and stale manifest"
+  }
+}

@@ -435,6 +435,8 @@ class QueryOrderingHelper:
         """
         # Get true count before capping
         uncapped_total = None if skip_count else queryset.count()
+        # A Python property can read columns absent from the output selection.
+        queryset = queryset.defer(None)
 
         prop_limit = getattr(self.settings, "max_property_ordering_results", None)
         warn_on_cap = bool(
@@ -444,6 +446,13 @@ class QueryOrderingHelper:
         if prop_limit and (
             uncapped_total is None or uncapped_total > prop_limit
         ):
+            queryset = queryset[: prop_limit + int(skip_count)]
+
+        items = list(queryset)
+        was_capped = bool(prop_limit) and (
+            len(items) > prop_limit if skip_count else uncapped_total > prop_limit
+        )
+        if was_capped:
             if warn_on_cap:
                 logger.warning(
                     "Property ordering on %s capped at %s results (total: %s).",
@@ -451,9 +460,8 @@ class QueryOrderingHelper:
                     prop_limit,
                     uncapped_total if uncapped_total is not None else "unknown",
                 )
-            queryset = queryset[:prop_limit]
+            items = items[:prop_limit]
 
-        items = list(queryset)
         items = self.qg._apply_property_ordering(items, prop_specs)
 
         return queryset, items, uncapped_total

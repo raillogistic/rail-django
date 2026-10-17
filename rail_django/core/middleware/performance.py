@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any, Callable, Optional
 
-from graphql import DocumentNode
+from graphql import DocumentNode, print_ast
 
 from ...config_proxy import get_setting
 from .base import BaseMiddleware
@@ -139,8 +139,15 @@ class QueryComplexityMiddleware(BaseMiddleware):
         if not self._should_limit_query(info):
             return next_resolver(root, info, **kwargs)
 
-        # Analyze query complexity
-        query_string = str(info.operation)
+        validation_errors = self.validate_operation(info)
+        if validation_errors:
+            raise ValueError(
+                f"Query complexity validation failed: {'; '.join(validation_errors)}"
+            )
+        return next_resolver(root, info, **kwargs)
+
+    def validate_operation(self, info):
+        """Validate the existing operation AST and record metrics from that analysis."""
         fragments = list(getattr(info, "fragments", {}).values())
         document = (
             DocumentNode(definitions=[info.operation] + fragments)
@@ -148,34 +155,30 @@ class QueryComplexityMiddleware(BaseMiddleware):
             else None
         )
         try:
-            depth, complexity = self.complexity_analyzer.analyze_query(query_string)
-            metrics = getattr(info.context, "_graphql_metrics", None)
-            if metrics is not None:
-                metrics.query_depth = depth
-                metrics.query_complexity = complexity
-        except Exception:
-            pass
-        validation_errors = self.complexity_analyzer.validate_query_limits(
+            query_string = print_ast(document)
+        except (TypeError, AttributeError):
+            query_string = str(info.operation)
+        return self.complexity_analyzer.validate_query_limits(
             query_string,
             schema=getattr(info, "schema", None),
             document=document,
             user=getattr(getattr(info, "context", None), "user", None),
+            metrics=getattr(info.context, "_graphql_metrics", None),
         )
 
-        if validation_errors:
-            raise ValueError(f"Query complexity validation failed: {'; '.join(validation_errors)}")
-
-        return next_resolver(root, info, **kwargs)
-
-    def _should_limit_query(self, info: Any) -> bool:
-        """Apply query limits only to queries explicitly listed in settings."""
-        selectors = _normalize_query_selector_list(
+    def limited_query_selectors(self):
+        """Return current configured query selectors without retaining decisions."""
+        return _normalize_query_selector_list(
             get_setting(
                 "security_settings.limited_query_fields",
                 [],
                 schema_name=self.schema_name,
             )
         )
+
+    def _should_limit_query(self, info: Any) -> bool:
+        """Apply query limits only to queries explicitly listed in settings."""
+        selectors = self.limited_query_selectors()
         if not selectors:
             return False
 
